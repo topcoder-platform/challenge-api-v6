@@ -1,0 +1,4747 @@
+{
+	"info": {
+		"_postman_id": "51d151f8-d3f4-42b2-9ebe-6b76d419d750",
+		"name": "E2E Tests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "3014204"
+	},
+	"item": [
+		{
+			"name": "READ MY Pre-request Script",
+			"item": [],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"/*",
+							"Open Runner",
+							"Put E2E Test Folder inside Runner",
+							"Set \"Delay\" to 2000ms",
+							"Check \"Save Responses\"",
+							"Start Run",
+							"*/"
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Process a payment for a task",
+			"item": [
+				{
+					"name": "Create Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_PAYMENT', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')",
+									"    pm.expect(response.name).to.eq('Postman Task Test 1')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.task.isTask).to.be.true",
+									"    pm.expect(response.task.isAssigned).to.be.false",
+									"    pm.expect(response.task.memberId).to.be.null",
+									"    pm.expect(response.phases[0].name).to.eq('Submission')",
+									"    pm.expect(response.phases[1].name).to.eq('Iterative Review')",
+									"    pm.expect(response.phases[2].name).to.eq('Approval')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Development')",
+									"    pm.expect(response.type).to.eq('Task')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Task Test 1\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.false\r",
+									"    pm.expect(response.task.memberId).to.be.null\r",
+									"    pm.expect(response.phases[0].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Iterative Review')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Approval')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_PAYMENT}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_PAYMENT}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_PAYMENT_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_PAYMENT_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_PAYMENT_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_PAYMENT_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_PAYMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_PAYMENT}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var url = `${pm.environment.get('URL')}/challenges/${pm.environment.get('CHALLENGE_UUID_PAYMENT')}`\r",
+									"var retryDelay = 5000;\r",
+									"var retryLimit = 5;\r",
+									"var awaken = false\r",
+									"// wait for legacy challenge processor to finish it's work\r",
+									"function isProcessingComplete(retryCount) {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"GET\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    }}, function (err, response) {\r",
+									"        if(err) {\r",
+									"            if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                }\r",
+									"        } else {\r",
+									"            if(!response.json().legacyId) {\r",
+									"                if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                } else if (!awaken) {\r",
+									"                    wakeLegacyProcessor()\r",
+									"                    retryLimit *= 2\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay)\r",
+									"                }\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function wakeLegacyProcessor() {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"PATCH\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    },\r",
+									"    body: {status: \"Draft\"}\r",
+									"    }, function () {\r",
+									"        awaken= true\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"isProcessingComplete(1);"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('FIRST_2_FINISH')\r",
+									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.true\r",
+									"    pm.expect(Number(response.task.memberId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_MEMBER_ID')))\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Close task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('FIRST_2_FINISH')\r",
+									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Completed')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.true\r",
+									"    pm.expect(Number(response.task.memberId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_MEMBER_ID')))\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"    pm.expect(Number(response.winners[0].userId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_MEMBER_ID')))\r",
+									"    pm.expect(response.winners[0].handle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.winners[0].placement).to.eq(1)\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Completed\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Process a payment for a task with the \"pureV5Task\" set to true",
+			"item": [
+				{
+					"name": "Create Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_PAYMENT_V5', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')",
+									"    pm.expect(response.legacy.pureV5Task).to.be.true",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')",
+									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.task.isTask).to.be.true",
+									"    pm.expect(response.task.isAssigned).to.be.false",
+									"    pm.expect(response.task.memberId).to.be.null",
+									"    pm.expect(response.phases[0].name).to.eq('Submission')",
+									"    pm.expect(response.phases[1].name).to.eq('Iterative Review')",
+									"    pm.expect(response.phases[2].name).to.eq('Approval')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Development')",
+									"    pm.expect(response.type).to.eq('Task')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"pureV5Task\": true,\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Pure V5 Task Test 2\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT_V5'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.legacy.pureV5Task).to.be.true\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.false\r",
+									"    pm.expect(response.task.memberId).to.be.null\r",
+									"    pm.expect(response.phases[0].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Iterative Review')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Approval')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT_V5}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT_V5}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_V5_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_V5_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT_V5'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_PAYMENT_V5}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_V5_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_PAYMENT_V5_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT_V5'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_PAYMENT_V5}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_PAYMENT_V5_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_PAYMENT_V5_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_PAYMENT_V5_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_PAYMENT_V5_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_PAYMENT_V5}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_PAYMENT_V5}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT_V5'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.legacy.pureV5Task).to.be.true\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.true\r",
+									"    pm.expect(Number(response.task.memberId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_V5_MEMBER_ID')))\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"    pm.expect(response).to.not.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT_V5}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT_V5}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Close task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_PAYMENT_V5'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_TASK'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('INTERNAL')\r",
+									"    pm.expect(response.legacy.pureV5Task).to.be.true\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Completed')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.task.isTask).to.be.true\r",
+									"    pm.expect(response.task.isAssigned).to.be.true\r",
+									"    pm.expect(Number(response.task.memberId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_V5_MEMBER_ID')))\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Task')\r",
+									"    pm.expect(response).to.not.have.property('legacyId')\r",
+									"    pm.expect(Number(response.winners[0].userId)).to.eq(Number(pm.environment.get('CHALLENGE_PAYMENT_V5_MEMBER_ID')))\r",
+									"    pm.expect(response.winners[0].handle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.winners[0].placement).to.eq(1)\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Completed\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_V5_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_PAYMENT_V5}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_PAYMENT_V5}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Create and activate a challenge for development",
+			"item": [
+				{
+					"name": "Create Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_DEVELOPMENT', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')",
+									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')",
+									"    pm.expect(response.phases[2].name).to.eq('Review')",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('registrationStartDate')",
+									"    pm.expect(response).to.have.property('registrationEndDate')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Development')",
+									"    pm.expect(response.type).to.eq('Challenge')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Development Challenge Test 3\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DEVELOPMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DEVELOPMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DEVELOPMENT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DEVELOPMENT_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DEVELOPMENT_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DEVELOPMENT'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DEVELOPMENT}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DEVELOPMENT_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DEVELOPMENT_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DEVELOPMENT'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DEVELOPMENT}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DEVELOPMENT_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_DEVELOPMENT_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DEVELOPMENT_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_DEVELOPMENT_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_DEVELOPMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_DEVELOPMENT}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DEVELOPMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('CODE')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var url = `${pm.environment.get('URL')}/challenges/${pm.environment.get('CHALLENGE_UUID_DEVELOPMENT')}`\r",
+									"var retryDelay = 5000;\r",
+									"var retryLimit = 5;\r",
+									"var awaken = false\r",
+									"// wait for legacy challenge processor to finish it's work\r",
+									"function isProcessingComplete(retryCount) {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"GET\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    }}, function (err, response) {\r",
+									"        if(err) {\r",
+									"            if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                }\r",
+									"        } else {\r",
+									"            if(!response.json().legacyId) {\r",
+									"                if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                } else if (!awaken) {\r",
+									"                    wakeLegacyProcessor()\r",
+									"                    retryLimit *= 2\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay)\r",
+									"                }\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function wakeLegacyProcessor() {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"PATCH\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    },\r",
+									"    body: {status: \"Draft\"}\r",
+									"    }, function () {\r",
+									"        awaken= true\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"isProcessingComplete(1);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DEVELOPMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DEVELOPMENT}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Activated Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DEVELOPMENT'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DEVELOPMENT'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('CODE')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('terms')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Development')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DEVELOPMENT}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DEVELOPMENT}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Create and activate a challenge for design",
+			"item": [
+				{
+					"name": "Create Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_DESIGN', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DESIGN'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')",
+									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')",
+									"    pm.expect(response.phases[2].name).to.eq('Review')",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('registrationStartDate')",
+									"    pm.expect(response).to.have.property('registrationEndDate')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Design')",
+									"    pm.expect(response.type).to.eq('Challenge')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DESIGN}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Design Challenge Test 4\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DESIGN'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DESIGN'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Design')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DESIGN}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DESIGN}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DESIGN_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DESIGN_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DESIGN'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DESIGN}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DESIGN_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DESIGN_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DESIGN'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DESIGN}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DESIGN_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_DESIGN_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DESIGN_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_DESIGN_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_DESIGN}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_DESIGN}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DESIGN'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DESIGN'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('WEB_DESIGNS')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Design')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var url = `${pm.environment.get('URL')}/challenges/${pm.environment.get('CHALLENGE_UUID_DESIGN')}`\r",
+									"var retryDelay = 5000;\r",
+									"var retryLimit = 5;\r",
+									"var awaken = false\r",
+									"// wait for legacy challenge processor to finish it's work\r",
+									"function isProcessingComplete(retryCount) {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"GET\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    }}, function (err, response) {\r",
+									"        if(err) {\r",
+									"            if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                }\r",
+									"        } else {\r",
+									"            if(!response.json().legacyId) {\r",
+									"                if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                } else if (!awaken) {\r",
+									"                    wakeLegacyProcessor()\r",
+									"                    retryLimit *= 2\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay)\r",
+									"                }\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function wakeLegacyProcessor() {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"PATCH\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    },\r",
+									"    body: {status: \"Draft\"}\r",
+									"    }, function () {\r",
+									"        awaken= true\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"isProcessingComplete(1);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DESIGN}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DESIGN}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Activated Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DESIGN'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DESIGN'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('WEB_DESIGNS')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('terms')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Design')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DESIGN}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DESIGN}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Create and activate a challenge for qa",
+			"item": [
+				{
+					"name": "Create Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_QA', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_QA'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')",
+									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')",
+									"    pm.expect(response.phases[2].name).to.eq('Review')",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('registrationStartDate')",
+									"    pm.expect(response).to.have.property('registrationEndDate')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Quality Assurance')",
+									"    pm.expect(response.type).to.eq('Challenge')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_QA}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman QA Challenge Test 5\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_QA'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_QA'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Quality Assurance')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_QA}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_QA}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_QA_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_QA_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_QA'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_QA}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_QA_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_QA_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_QA'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_QA}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_QA_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_QA_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_QA_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_QA_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_QA}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_QA}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_QA'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_QA'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('BUG_HUNT')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Quality Assurance')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var url = `${pm.environment.get('URL')}/challenges/${pm.environment.get('CHALLENGE_UUID_QA')}`\r",
+									"var retryDelay = 5000;\r",
+									"var retryLimit = 5;\r",
+									"var awaken = false\r",
+									"// wait for legacy challenge processor to finish it's work\r",
+									"function isProcessingComplete(retryCount) {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"GET\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    }}, function (err, response) {\r",
+									"        if(err) {\r",
+									"            if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                }\r",
+									"        } else {\r",
+									"            if(!response.json().legacyId) {\r",
+									"                if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                } else if (!awaken) {\r",
+									"                    wakeLegacyProcessor()\r",
+									"                    retryLimit *= 2\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay)\r",
+									"                }\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function wakeLegacyProcessor() {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"PATCH\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    },\r",
+									"    body: {status: \"Draft\"}\r",
+									"    }, function () {\r",
+									"        awaken= true\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"isProcessingComplete(1);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_QA}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_QA}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Activated Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_QA'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_QA'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('BUG_HUNT')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('terms')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Quality Assurance')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_QA}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_QA}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Create and activate a challenge for ds",
+			"item": [
+				{
+					"name": "Create Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"if(pm.response.status === 'Created') {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set('CHALLENGE_UUID_DS', response.id);",
+									"    pm.expect(response).to.have.property('created')",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')",
+									"    pm.expect(response).to.have.property('updated')",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DS'))",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')",
+									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
+									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')",
+									"    pm.expect(response.tags[0]).to.eq('Other')",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))",
+									"    pm.expect(response).to.have.property('startDate')",
+									"    pm.expect(response.status).to.eq('Draft')",
+									"    pm.expect(response).to.have.property('billing')",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')",
+									"    pm.expect(response.phases[2].name).to.eq('Review')",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')",
+									"    pm.expect(response).to.have.property('endDate')",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)",
+									"    pm.expect(response).to.have.property('currentPhaseNames')",
+									"    pm.expect(response).to.have.property('registrationStartDate')",
+									"    pm.expect(response).to.have.property('registrationEndDate')",
+									"    pm.expect(response).to.have.property('submissionStartDate')",
+									"    pm.expect(response).to.have.property('submissionEndDate')",
+									"    pm.expect(response.track).to.eq('Data Science')",
+									"    pm.expect(response.type).to.eq('Challenge')",
+									"}",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DS}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman DS Challenge Test 6\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Created Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DS'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DS'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Draft')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(0)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Data Science')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DS}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DS}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DS_MEMBER_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DS_MEMBER_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DS'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DS}}\",\n    \"memberHandle\": \"{{MEMBER_HANDLE}}\",\n    \"roleId\": \"{{ROLE_SUBMITTER}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Copilot",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('CHALLENGE_DS_COPILOT_UUID', response.id);\r",
+									"    pm.environment.set('CHALLENGE_DS_COPILOT_ID', response.memberId);\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response).to.have.property('createdBy')\r",
+									"    pm.expect(response.challengeId).to.eq(pm.environment.get('CHALLENGE_UUID_DS'))\r",
+									"    pm.expect(response.memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(response.roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"challengeId\": \"{{CHALLENGE_UUID_DS}}\",\n    \"memberHandle\": \"{{COPILOT_HANDLE}}\",\n    \"roleId\": \"{{ROLE_COPILOT}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources on Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    const member = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DS_MEMBER_UUID')})\r",
+									"    pm.expect(member).to.have.length(1)\r",
+									"    pm.expect(member[0].memberId).to.eq(pm.environment.get('CHALLENGE_DS_MEMBER_ID'))\r",
+									"    pm.expect(member[0].memberHandle).to.eq(pm.collectionVariables.get('MEMBER_HANDLE'))\r",
+									"    pm.expect(member[0].roleId).to.eq(pm.collectionVariables.get('ROLE_SUBMITTER'))\r",
+									"    const copilot = _.filter(response, o => { return o.id === pm.environment.get('CHALLENGE_DS_COPILOT_UUID')})\r",
+									"    pm.expect(copilot).to.have.length(1)\r",
+									"    pm.expect(copilot[0].memberId).to.eq(pm.environment.get('CHALLENGE_DS_COPILOT_ID'))\r",
+									"    pm.expect(copilot[0].memberHandle).to.eq(pm.collectionVariables.get('COPILOT_HANDLE'))\r",
+									"    pm.expect(copilot[0].roleId).to.eq(pm.collectionVariables.get('ROLE_COPILOT'))\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"type": "text",
+								"value": "Bearer {{TOKEN}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources?challengeId={{CHALLENGE_UUID_DS}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources"
+							],
+							"query": [
+								{
+									"key": "challengeId",
+									"value": "{{CHALLENGE_UUID_DS}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Activate challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DS'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DS'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('CODE')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[0].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[0].description).to.eq('Challenge Prizes')\r",
+									"    pm.expect(response.prizeSets[0].type).to.eq('placement')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].type).to.eq('USD')\r",
+									"    pm.expect(response.prizeSets[1].prizes[0].value).to.eq(1)\r",
+									"    pm.expect(response.prizeSets[1].description).to.eq('Copilot Payment')\r",
+									"    pm.expect(response.prizeSets[1].type).to.eq('copilot')\r",
+									"    pm.expect(response.tags[0]).to.eq('Other')\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Data Science')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"var url = `${pm.environment.get('URL')}/challenges/${pm.environment.get('CHALLENGE_UUID_DS')}`\r",
+									"var retryDelay = 5000;\r",
+									"var retryLimit = 5;\r",
+									"var awaken = false\r",
+									"// wait for legacy challenge processor to finish it's work\r",
+									"function isProcessingComplete(retryCount) {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"GET\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    }}, function (err, response) {\r",
+									"        if(err) {\r",
+									"            if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                }\r",
+									"        } else {\r",
+									"            if(!response.json().legacyId) {\r",
+									"                if (retryCount < retryLimit) {\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay);\r",
+									"                } else if (!awaken) {\r",
+									"                    wakeLegacyProcessor()\r",
+									"                    retryLimit *= 2\r",
+									"                    setTimeout(function() {\r",
+									"                        isProcessingComplete(++retryCount);\r",
+									"                    }, retryDelay)\r",
+									"                }\r",
+									"            }\r",
+									"        }\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"function wakeLegacyProcessor() {\r",
+									"    pm.sendRequest({url: url,\r",
+									"    method: \"PATCH\",\r",
+									"    header: {\r",
+									"        \"content-type\": \"application/json\",\r",
+									"        \"accept\": \"application/json\",\r",
+									"        \"authorization\": `Bearer ${pm.environment.get(\"TOKEN\")}`\r",
+									"    },\r",
+									"    body: {status: \"Draft\"}\r",
+									"    }, function () {\r",
+									"        awaken= true\r",
+									"    });\r",
+									"}\r",
+									"\r",
+									"isProcessingComplete(1);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"Active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DS}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DS}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Activated Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.expect(response.id).to.eq(pm.environment.get('CHALLENGE_UUID_DS'))\r",
+									"    pm.expect(response).to.have.property('created')\r",
+									"    pm.expect(response.createdBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response).to.have.property('updated')\r",
+									"    pm.expect(response.updatedBy).to.eq('tcwebservice')\r",
+									"    pm.expect(response.typeId).to.eq(pm.collectionVariables.get('TYPE_CHALLENGE'))\r",
+									"    pm.expect(response.trackId).to.eq(pm.collectionVariables.get('TRACK_DS'))\r",
+									"    pm.expect(response.legacy.reviewType).to.eq('COMMUNITY')\r",
+									"    pm.expect(response.legacy.isTask).to.be.false\r",
+									"    pm.expect(response.legacy.subTrack).to.eq('CODE')\r",
+									"    pm.expect(response.legacy).to.have.property('directProjectId')\r",
+									"    pm.expect(response.legacy).to.have.property('forumId')\r",
+									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
+									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
+									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
+									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
+									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
+									"    pm.expect(response).to.have.property('startDate')\r",
+									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response).to.have.property('billing')\r",
+									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
+									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
+									"    pm.expect(response.phases[2].name).to.eq('Review')\r",
+									"    pm.expect(response.phases[3].name).to.eq('Appeals')\r",
+									"    pm.expect(response.phases[4].name).to.eq('Appeals Response')\r",
+									"    pm.expect(response).to.have.property('terms')\r",
+									"    pm.expect(response).to.have.property('endDate')\r",
+									"    pm.expect(response.overview.totalPrizes).to.eq(1)\r",
+									"    pm.expect(response.numOfSubmissions).to.eq(0)\r",
+									"    pm.expect(response.numOfRegistrants).to.eq(1)\r",
+									"    pm.expect(response).to.have.property('currentPhaseNames')\r",
+									"    pm.expect(response).to.have.property('registrationStartDate')\r",
+									"    pm.expect(response).to.have.property('registrationEndDate')\r",
+									"    pm.expect(response).to.have.property('submissionStartDate')\r",
+									"    pm.expect(response).to.have.property('submissionEndDate')\r",
+									"    pm.expect(response.track).to.eq('Data Science')\r",
+									"    pm.expect(response.type).to.eq('Challenge')\r",
+									"    pm.expect(response).to.have.property('legacyId')\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{CHALLENGE_UUID_DS}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{CHALLENGE_UUID_DS}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "All challenges",
+			"item": [
+				{
+					"name": "Get Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?status=Active&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Active"
+								},
+								{
+									"key": "tracks",
+									"value": "DS"
+								},
+								{
+									"key": "tracks",
+									"value": "QA"
+								},
+								{
+									"key": "tracks",
+									"value": "Des"
+								},
+								{
+									"key": "tracks",
+									"value": "Dev"
+								},
+								{
+									"key": "types",
+									"value": "CH"
+								},
+								{
+									"key": "types",
+									"value": "F2F"
+								},
+								{
+									"key": "types",
+									"value": "TSK"
+								},
+								{
+									"key": "events",
+									"value": "tco21",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get TCO Eligible Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?tco=true&status=Active",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "tco",
+									"value": "true"
+								},
+								{
+									"key": "status",
+									"value": "Active"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "My active challenges",
+			"item": [
+				{
+					"name": "Get Member Id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('MEMBER_ID', response[0].userId);\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/members?handle={{MEMBER_HANDLE}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"members"
+							],
+							"query": [
+								{
+									"key": "handle",
+									"value": "{{MEMBER_HANDLE}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Challenges of Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();\r",
+									"pm.environment.set('MEMBER_CHALLENGES', response);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources/{{MEMBER_ID}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources",
+								"{{MEMBER_ID}}",
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"_.forEach(pm.environment.get('MEMBER_CHALLENGES').slice(0, 10), challange => {\r",
+									"pm.request.addQueryParams(`ids[]=${challange}`)\r",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?status=Active",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Active"
+								},
+								{
+									"key": "tracks",
+									"value": "DS",
+									"disabled": true
+								},
+								{
+									"key": "tracks",
+									"value": "QA",
+									"disabled": true
+								},
+								{
+									"key": "tracks",
+									"value": "Des",
+									"disabled": true
+								},
+								{
+									"key": "tracks",
+									"value": "Dev",
+									"disabled": true
+								},
+								{
+									"key": "types",
+									"value": "CH",
+									"disabled": true
+								},
+								{
+									"key": "types",
+									"value": "F2F",
+									"disabled": true
+								},
+								{
+									"key": "types",
+									"value": "TSK",
+									"disabled": true
+								},
+								{
+									"key": "events",
+									"value": "tco21",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Open for registration challenges",
+			"item": [
+				{
+					"name": "Get Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?status=Active&currentPhaseName=Registration&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Active"
+								},
+								{
+									"key": "currentPhaseName",
+									"value": "Registration"
+								},
+								{
+									"key": "tracks",
+									"value": "DS"
+								},
+								{
+									"key": "tracks",
+									"value": "QA"
+								},
+								{
+									"key": "tracks",
+									"value": "Des"
+								},
+								{
+									"key": "tracks",
+									"value": "Dev"
+								},
+								{
+									"key": "types",
+									"value": "CH"
+								},
+								{
+									"key": "types",
+									"value": "F2F"
+								},
+								{
+									"key": "types",
+									"value": "TSK"
+								},
+								{
+									"key": "events",
+									"value": "tco21",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "All past challenges",
+			"item": [
+				{
+					"name": "Get Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?status=Completed&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Completed"
+								},
+								{
+									"key": "tracks",
+									"value": "DS"
+								},
+								{
+									"key": "tracks",
+									"value": "QA"
+								},
+								{
+									"key": "tracks",
+									"value": "Des"
+								},
+								{
+									"key": "tracks",
+									"value": "Dev"
+								},
+								{
+									"key": "types",
+									"value": "CH"
+								},
+								{
+									"key": "types",
+									"value": "F2F"
+								},
+								{
+									"key": "types",
+									"value": "TSK"
+								},
+								{
+									"key": "events",
+									"value": "tco21",
+									"disabled": true
+								},
+								{
+									"key": "endDateStart",
+									"value": "2020-04-05T00:00:00.000Z",
+									"disabled": true
+								},
+								{
+									"key": "startDateEnd",
+									"value": "2022-04-05T23:59:59.999Z",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "My past challenges",
+			"item": [
+				{
+					"name": "Get Member Id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});\r",
+									"if(pm.response.status === 'OK') {\r",
+									"    const response = pm.response.json();\r",
+									"    pm.environment.set('MEMBER_ID', response[0].userId);\r",
+									"}\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/members?handle={{MEMBER_HANDLE}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"members"
+							],
+							"query": [
+								{
+									"key": "handle",
+									"value": "{{MEMBER_HANDLE}}"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Challenges of Member",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();\r",
+									"pm.environment.set('MEMBER_CHALLENGES', response);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/resources/{{MEMBER_ID}}/challenges",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"resources",
+								"{{MEMBER_ID}}",
+								"challenges"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Challenges",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {\r",
+									"    pm.response.to.have.status(200);\r",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"_.forEach(pm.environment.get('MEMBER_CHALLENGES').slice(0, 10), challange => {\r",
+									"pm.request.addQueryParams(`ids[]=${challange}`)\r",
+									"})\r",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges?status=Completed&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Completed"
+								},
+								{
+									"key": "tracks",
+									"value": "DS"
+								},
+								{
+									"key": "tracks",
+									"value": "QA"
+								},
+								{
+									"key": "tracks",
+									"value": "Des"
+								},
+								{
+									"key": "tracks",
+									"value": "Dev"
+								},
+								{
+									"key": "types",
+									"value": "CH"
+								},
+								{
+									"key": "types",
+									"value": "F2F"
+								},
+								{
+									"key": "types",
+									"value": "TSK"
+								},
+								{
+									"key": "events",
+									"value": "tco21",
+									"disabled": true
+								},
+								{
+									"key": "endDateStart",
+									"value": "2020-04-05T00:00:00.000Z",
+									"disabled": true
+								},
+								{
+									"key": "startDateEnd",
+									"value": "2022-04-05T23:59:59.999Z",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"const moment = require('moment');",
+					"pm.environment.set(\"tenMinFromNow\", moment().add(10, 'minutes').format(\"YYYY-MM-DDTHH:mm:ss[Z]\"));"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "ROLE_SUBMITTER",
+			"value": "732339e7-8e30-49d7-9198-cccf9451e221"
+		},
+		{
+			"key": "ROLE_COPILOT",
+			"value": "cfe12b3f-2a24-4639-9d8b-ec86726f76bd"
+		},
+		{
+			"key": "ROLE_MANAGER",
+			"value": "0e9c6879-39e4-4eb6-b8df-92407890faf1"
+		},
+		{
+			"key": "ROLE_ITERATIVE_REVIEWER",
+			"value": "f6df7212-b9d6-4193-bfb1-b383586fce63"
+		},
+		{
+			"key": "ROLE_REVIEWER",
+			"value": "318b9c07-079a-42d9-a81f-b96be1dc1099"
+		},
+		{
+			"key": "ROLE_OBSERVER",
+			"value": "2a4dc376-a31c-4d00-b173-13934d89e286"
+		},
+		{
+			"key": "TRACK_DEVELOPMENT",
+			"value": "9b6fc876-f4d9-4ccb-9dfd-419247628825"
+		},
+		{
+			"key": "TRACK_DESIGN",
+			"value": "5fa04185-041f-49a6-bfd1-fe82533cd6c8"
+		},
+		{
+			"key": "TRACK_QA",
+			"value": "36e6a8d0-7e1e-4608-a673-64279d99c115"
+		},
+		{
+			"key": "TRACK_DS",
+			"value": "c0f5d461-8219-4c14-878a-c3a3f356466d"
+		},
+		{
+			"key": "TYPE_CHALLENGE",
+			"value": "927abff4-7af9-4145-8ba1-577c16e64e2e"
+		},
+		{
+			"key": "TYPE_F2F",
+			"value": "dc876fa4-ef2d-4eee-b701-b555fcc6544c"
+		},
+		{
+			"key": "TYPE_TASK",
+			"value": "ecd58c69-238f-43a4-a4bb-d172719b9f31"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_RUX",
+			"value": "2d0807fa-ece1-4328-a260-76f5f6b559e0"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_CHALLENGE",
+			"value": "7ebf1c69-f62f-4d3a-bdfb-fe9ddb56861c"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_DESIGN",
+			"value": "d4201ca4-8437-4d63-9957-3f7708184b07"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_TASK",
+			"value": "53a307ce-b4b3-4d6f-b9a1-3741a58f77e6"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_MM",
+			"value": "6969125a-a12f-4b89-8de6-e66b0056f36b"
+		},
+		{
+			"key": "TIMELINE_TEMPLATE_F2F",
+			"value": "0a0fed34-cb5a-47f5-b0cb-6e2ee7de8dcb"
+		},
+		{
+			"key": "PROJECT_ID",
+			"value": "17090"
+		},
+		{
+			"key": "MEMBER_HANDLE",
+			"value": "jcori30"
+		},
+		{
+			"key": "COPILOT_HANDLE",
+			"value": "TCConnCopilot"
+		}
+	]
+}
