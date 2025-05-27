@@ -1,6 +1,6 @@
 # Use the base image with Node.js
 FROM node:18.14.1-alpine3.17
-
+RUN apk add --no-cache git
 # Copy the current directory into the Docker image
 COPY . /challenge-api
 
