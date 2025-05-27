@@ -86,7 +86,7 @@ workflows:
         filters:
           branches:
             only:
-            - dev
+            - develop
             - feature/top-262-projectid-non-mandatory
             - TOP-2364
 
