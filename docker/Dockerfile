@@ -2,6 +2,8 @@
 FROM node:18.14.1-alpine3.17
 RUN apk add --no-cache git
 RUN apk add --update --no-cache openssh
+RUN echo "HOST *" > ~/.ssh/config
+RUN echo "StrictHostKeyChecking no" >> ~/.ssh/config
 # Copy the current directory into the Docker image
 COPY . /challenge-api
 
