@@ -26,6 +26,7 @@ save_cache_settings: &save_cache_settings
 finger_print_add: &finger_print_add
     fingerprints:
             - "62:fd:e9:40:a3:5f:8d:c7:55:36:f2:76:59:78:6e:f0"
+            - SHA256:KJYSvQh9CxkY9yRXxp+Geo6cllnfSiiKAH3LFQ/X9f4
 
 builddeploy_steps: &builddeploy_steps
 - add_ssh_keys: *finger_print_add 
