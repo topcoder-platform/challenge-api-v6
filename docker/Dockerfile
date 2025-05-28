@@ -1,5 +1,5 @@
 # Use the base image with Node.js
-FROM node:18.14.1-alpine3.17
+FROM node:18.20.8-alpine3.21
 RUN apk add --update --no-cache openssh-client git
 RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 # Copy the current directory into the Docker image
