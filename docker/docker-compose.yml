@@ -6,4 +6,4 @@ services:
       context: ../
       dockerfile: docker/Dockerfile
       ssh:
-        - default=${SSH_AUTH_SOCK}
+        - default=${SSH_FILE_PATH}
