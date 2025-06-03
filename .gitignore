@@ -64,3 +64,6 @@ typings/
 ecr-login.sh
 .npmrc
 test.js
+
+# pnpm lock
+pnpm-lock.yaml
