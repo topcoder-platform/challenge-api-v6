@@ -34,7 +34,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TYPE_FILE || 'challengeTypes.json'
+      filename: process.env.CHALLENGE_TYPE_FILE || 'ChallengeType_dynamo_data.json'
     },
 
     ChallengeTrack: {
@@ -47,7 +47,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TRACK_FILE || 'challengeTracks.json'
+      filename: process.env.CHALLENGE_TRACK_FILE || 'ChallengeTrack_dynamo_data.json'
     },
 
     TimelineTemplate: {
@@ -63,7 +63,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.TIMELINE_TEMPLATE_FILE || 'timelineTemplates.json'
+      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate_dynamo_data.json'
     },
 
     Phase: {
@@ -79,7 +79,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.PHASE_FILE || 'phases.json'
+      filename: process.env.PHASE_FILE || 'Phase_dynamo_data.json.json'
     },
 
     TimelineTemplatePhase: {
@@ -92,7 +92,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.TIMELINE_TEMPLATE_FILE || 'timelineTemplates.json'
+      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate_dynamo_data.json'
     },
 
     ChallengeTimelineTemplate: {
@@ -109,7 +109,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TIMELINE_TEMPLATE_FILE || 'challengeTimelineTemplates.json'
+      filename: process.env.CHALLENGE_TIMELINE_TEMPLATE_FILE || 'ChallengeTimelineTemplate_dynamo_data.json'
     },
 
     Challenge: {
@@ -129,7 +129,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     AuditLog: {
@@ -145,7 +145,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.AUDIT_LOG_FILE || 'auditLogs.json'
+      filename: process.env.AUDIT_LOG_FILE || 'AuditLog_dynamo_data.json'
     },
   
     Attachment: {
@@ -161,7 +161,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.ATTACHMENT_FILE || 'attachments.json'
+      filename: process.env.ATTACHMENT_FILE || 'Attachment_dynamo_data.json'
     },
 
     ChallengeBilling: {
@@ -180,7 +180,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeConstraint: {
@@ -198,7 +198,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeLegacy: {
@@ -220,7 +220,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeEvent: {
@@ -236,7 +236,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeDiscussion: {
@@ -252,7 +252,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeMetadata: {
@@ -267,7 +267,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengePrizeSet: {
@@ -283,7 +283,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengePhase: {
@@ -300,7 +300,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeWinner: {
@@ -315,7 +315,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeTerm: {
@@ -330,7 +330,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeSkill: {
@@ -345,7 +345,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengePhaseConstraint: {
@@ -360,7 +360,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     Prize: {
@@ -376,7 +376,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 
     ChallengeDiscussionOption: {
@@ -391,7 +391,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_FILE || 'challenges.json'
+      filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
   }, 
 };
