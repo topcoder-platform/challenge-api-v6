@@ -24,6 +24,7 @@ const logger = createLogger({
  * @param signature the signature
  */
 logger.logFullError = (err, signature) => {
+  try {
   if (!err) {
     return;
   }
@@ -35,13 +36,23 @@ logger.logFullError = (err, signature) => {
       `${err.name} details: ${JSON.stringify(err.details)} input:${JSON.stringify(err._object)}`
     );
   } else if (err.isAxiosError) {
-    logger.error(`${err.message} - ${JSON.stringify(err.response.data)}`);
+      try {
+        const responseData = err.response?.data || 'No response data';
+        logger.error(`${err.message} - ${JSON.stringify(responseData)}`);
+      } catch (logError) {
+        logger.error(`${err.message} - [Error serializing response data]`);
+      }
   } else if (err.httpStatus) {
     logger.error(err.message);
   } else if (!_.isUndefined(err.code) && err.details && err.metadata) {
     logger.error(JSON.stringify(err));
   } else {
     logger.error(util.inspect(err));
+    }
+  } catch (loggerError) {
+    // Fallback if logger itself has issues
+    console.error('Logger error:', loggerError.message);
+    console.error('Original error:', err?.message || 'Unknown error');
   }
 };
 

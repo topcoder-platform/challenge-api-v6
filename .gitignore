@@ -67,3 +67,6 @@ test.js
 
 # pnpm lock
 pnpm-lock.yaml
+
+.cursor
+.idea

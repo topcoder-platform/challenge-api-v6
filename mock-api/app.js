@@ -134,13 +134,7 @@ app.post('/v5/projects', (req, res) => {
 // get project by id
 app.get('/v5/projects/:projectId', (req, res) => {
   const projectId = req.params.projectId
-  if (projectId === '111' || projectId === '123' || projectId === '112233' || projectId === '16531') {
-    res.json({
-      projectId,
-      directProjectId: parseInt(projectId) + 1,
-      terms: ['0fcb41d1-ec7c-44bb-8f3b-f017a61cd708', 'be0652ae-8b28-4e91-9b42-8ad00b31e9cb']
-    })
-  } else if (projectId === '200') {
+  if (projectId === '200') {
     res.status(403).send({
       id: '6e97fe68-f89c-4c45-b25b-d17933a3c4b9',
       result: {
@@ -150,7 +144,12 @@ app.get('/v5/projects/:projectId', (req, res) => {
       }
     })
   } else {
-    res.status(404).end()
+    // Return a valid response for any project ID (except the forbidden one)
+    res.json({
+      projectId,
+      directProjectId: parseInt(projectId) + 1,
+      terms: ['0fcb41d1-ec7c-44bb-8f3b-f017a61cd708', 'be0652ae-8b28-4e91-9b42-8ad00b31e9cb']
+    })
   }
 })
 
@@ -295,6 +294,6 @@ app.use((err, req, res, next) => {
   })
 })
 
-app.listen(app.get('port'), '0.0.0.0', () => {
+app.listen(app.get('port'), () => {
   winston.info(`Express server listening on port ${app.get('port')}`)
 })

@@ -131,7 +131,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
       })
     }
   }
-  let totalPrizesInCents = 0
+  let totalPrizes = 0
   // prize sets
   if (!_.isNil(challenge.prizeSets)) {
     result.prizeSets = {
@@ -143,12 +143,14 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           create: _.map(s.prizes, p => {
             const prizeData = _.pick(p, 'type', 'description')
             _.assignIn(prizeData, auditFields)
-            prizeData.value = p.amountInCents || p.value
+            // Database stores values in dollars directly, no amountInCents field exists
+            prizeData.value = p.value
             // calculate only placement and checkpoint prizes
             if ((s.type === constants.prizeSetTypes.ChallengePrizes
               || s.type === constants.prizeSetTypes.CheckpointPrizes)
               && p.type === constants.prizeTypes.USD) {
-              totalPrizesInCents += (p.amountInCents || new Decimal(p.value).mul(100).toNumber())
+              // Values are already in dollars, no conversion needed
+              totalPrizes += p.value
             }
             return prizeData
           })
@@ -156,7 +158,8 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
         return setData
       })
     }
-    result.overviewTotalPrizes = parseFloat(new Decimal(totalPrizesInCents).div(100).toFixed(2))
+    // Total prizes are already in dollars, no conversion needed
+    result.overviewTotalPrizes = parseFloat(totalPrizes.toFixed(2))
   }
   // constraints
   if (!_.isNil(_.get(challenge, 'constraints.allowedRegistrants'))) {
@@ -237,8 +240,10 @@ function convertModelToResponse(ret) {
   ret.legacy = _.omit(ret.legacyRecord, 'id', constants.auditFields)
   delete ret.legacyRecord
   delete ret.legacy.challengeId
-  // billing info is not returned in response
-  // ret.billing = _.omit(ret.billingRecord, 'id', constants.auditFields)
+  // Include billing info in response
+  if (ret.billingRecord) {
+    ret.billing = _.omit(ret.billingRecord, 'id', 'challengeId', constants.auditFields)
+  }
   delete ret.billingRecord
 
   ret.task = {
@@ -284,10 +289,6 @@ function convertModelToResponse(ret) {
     ss.type = ss.type.toLowerCase()
     ss.prizes = _.map(s.prizes, p => {
       prizeType = p.type
-      if (prizeType === constants.prizeTypes.USD) {
-        // convert cents to value
-        p.value = parseFloat(new Decimal(p.value).div(100).toFixed(2))
-      }
       return _.pick(p, ['type', 'description', 'value'])
     })
     return ss
@@ -300,8 +301,8 @@ function convertModelToResponse(ret) {
 
   // convert terms
   ret.terms = _.map(ret.terms, t => ({ id: t.termId, roleId: t.roleId }))
-  // convert skills
-  ret.skills = _.map(ret.skills, s => ({ id: s.skillId, name: s.name }))
+  // convert skills - basic transformation, enrichment happens in service layer
+  ret.skills = _.map(ret.skills, s => ({ id: s.skillId }))
   // convert attachments
   ret.attachments = _.map(ret.attachments, r => _.omit(r, constants.auditFields, 'challengeId'))
   // convert winners

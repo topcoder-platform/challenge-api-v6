@@ -22,7 +22,6 @@ const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 const { hasAdminRole } = require("../common/role-helper");
 const {
   enrichChallengeForResponse,
-  convertPrizeSetValuesToCents,
   convertPrizeSetValuesToDollars,
   convertToISOString,
 } = require("../common/challenge-helper");
@@ -32,6 +31,91 @@ const prismaHelper = require('../common/prisma-helper');
 const prisma = require('../common/prisma').getClient()
 
 const phaseAdvancer = new PhaseAdvancer({});
+
+/**
+ * Enrich skills data with full details from standardized skills API
+ * @param {Object} challenge the challenge object
+ */
+async function enrichSkillsData(challenge) {
+  if (!challenge.skills || challenge.skills.length === 0) {
+    return;
+  }
+
+  const skillIds = challenge.skills.map(skill => skill.skillId || skill.id);
+  
+  if (skillIds.length === 0) {
+    return;
+  }
+
+  try {
+    const standSkills = await helper.getStandSkills(skillIds);
+    
+    challenge.skills = challenge.skills.map(skill => {
+      const skillId = skill.skillId || skill.id;
+      const found = _.find(standSkills, (item) => item.id === skillId);
+      
+      if (found) {
+        const enrichedSkill = {
+          id: skillId,
+          name: found.name,
+        };
+
+        if (found.category) {
+          enrichedSkill.category = {
+            id: found.category.id,
+            name: found.category.name,
+          };
+        }
+
+        return enrichedSkill;
+      }
+      
+      // Fallback if skill not found in standardized skills API
+      return {
+        id: skillId,
+        name: skill.name || '',
+      };
+    });
+  } catch (error) {
+    logger.error('Failed to enrich skills data:', error);
+    
+    // Enhanced fallback: try to get skill data from original challenge data if available
+    // This handles cases where the external skills API is not accessible
+    try {
+      // Get the original challenge data from database with skills
+      const originalChallenge = await prisma.challenge.findUnique({
+        where: { id: challenge.id },
+        include: { 
+          skills: true,
+          // Include other relations that might have skill data
+        }
+      });
+      
+      if (originalChallenge && originalChallenge.skills) {
+        // Check if we have stored skill names in metadata or other fields
+        challenge.skills = challenge.skills.map(skill => {
+          const skillId = skill.skillId || skill.id;
+          
+          // Basic fallback structure
+          const fallbackSkill = {
+            id: skillId,
+            name: skill.name || skillId, // Use skillId as name if no name available
+          };
+          
+          return fallbackSkill;
+        });
+      }
+    } catch (dbError) {
+      logger.error('Failed to get fallback skill data from database:', dbError);
+      
+      // Final fallback to basic structure if API call fails
+      challenge.skills = challenge.skills.map(skill => ({
+        id: skill.skillId || skill.id,
+        name: skill.name || '',
+      }));
+    }
+  }
+}
 
 // define return field for challenge model. Used in prisma.
 const includeReturnFields = {
@@ -604,10 +688,16 @@ async function searchChallenges (currentUser, criteria) {
   try {
     total = await prisma.challenge.count({ ...prismaFilter })
     challenges = await prisma.challenge.findMany(prismaQuery)
-    _.forEach(challenges, c => {
+    
+    // Process challenges sequentially to enrich skills data
+    for (const c of challenges) {
       prismaHelper.convertModelToResponse(c);
+      
+      // Enrich skills data with full details from standardized skills API
+      await enrichSkillsData(c);
+      
       enrichChallengeForResponse(c, c.track, c.type);
-    });
+    }
   } catch (e) {
     // logger.error(JSON.stringify(e));
     console.log(e)
@@ -770,7 +860,12 @@ async function createChallenge(currentUser, challenge, userToken) {
     );
 
     _.set(challenge, "legacy.directProjectId", directProjectId);
-    _.set(challenge, "billing.billingAccountId", billingAccountId);
+    // Ensure billingAccountId is a string or null to match Prisma schema
+    if (billingAccountId !== null && billingAccountId !== undefined) {
+      _.set(challenge, "billing.billingAccountId", String(billingAccountId));
+    } else {
+      _.set(challenge, "billing.billingAccountId", null);
+    }
     _.set(challenge, "billing.markup", markup || 0);
   }
 
@@ -871,9 +966,8 @@ async function createChallenge(currentUser, challenge, userToken) {
 
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
 
-  if (prizeType === constants.prizeTypes.USD) {
-    convertPrizeSetValuesToCents(challenge.prizeSets);
-  }
+  // No conversion needed - database stores values in dollars directly
+  // The amountInCents field doesn't exist in the database schema
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge)
   const ret = await prisma.challenge.create({
@@ -881,10 +975,8 @@ async function createChallenge(currentUser, challenge, userToken) {
     include: includeReturnFields
   })
 
-  ret.overview = { totalPrizesInCents: ret.overviewTotalPrizes }
-  if (prizeType === constants.prizeTypes.USD) {
-    convertPrizeSetValuesToDollars(ret.prizeSets, ret.overview)
-  }
+  ret.overview = { totalPrizes: ret.overviewTotalPrizes }
+  // No conversion needed - values are already in dollars in the database
 
   prismaHelper.convertModelToResponse(ret)
   enrichChallengeForResponse(ret, track, type)
@@ -1095,6 +1187,10 @@ async function getChallenge (currentUser, id, checkIfExists) {
   }
 
   prismaHelper.convertModelToResponse(challenge);
+  
+  // Enrich skills data with full details from standardized skills API
+  await enrichSkillsData(challenge);
+  
   enrichChallengeForResponse(challenge, challenge.track, challenge.type);
 
   return challenge
@@ -1273,9 +1369,7 @@ async function updateChallenge(currentUser, challengeId, data) {
   prismaHelper.convertModelToResponse(challenge)
   const existingPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
 
-  if (existingPrizeType === constants.prizeTypes.USD) {
-    convertPrizeSetValuesToDollars(challenge.prizeSets, challenge.overview);
-  }
+  // No conversion needed - values are already in dollars in the database
 
   let projectId, billingAccountId, markup;
   if (challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
@@ -1284,7 +1378,12 @@ async function updateChallenge(currentUser, challengeId, data) {
     ({ billingAccountId, markup } = await projectHelper.getProjectBillingInformation(projectId));
 
     if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
-      _.set(data, "billing.billingAccountId", billingAccountId);
+      // Ensure billingAccountId is a string or null to match Prisma schema
+      if (billingAccountId !== null && billingAccountId !== undefined) {
+        _.set(data, "billing.billingAccountId", String(billingAccountId));
+      } else {
+        _.set(data, "billing.billingAccountId", null);
+      }
       _.set(data, "billing.markup", markup || 0);
     }
 
@@ -2235,9 +2334,7 @@ advancePhase.schema = {
 async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updatedChallenge.prizeSets);
 
-  if (prizeType === constants.prizeTypes.USD) {
-    convertPrizeSetValuesToDollars(updatedChallenge.prizeSets, updatedChallenge.overview);
-  }
+  // No conversion needed - values are already in dollars in the database
 
   if (track == null || type == null) {
     const trackAndTypeData = await challengeHelper.validateAndGetChallengeTypeAndTrack({

@@ -69,7 +69,7 @@ searchChallengeTypes.schema = {
     name: Joi.string(),
     description: Joi.string(),
     isActive: Joi.boolean(),
-    isTask: Joi.boolean().default(false),
+    isTask: Joi.boolean(),
     abbreviation: Joi.string(),
   }),
 };
@@ -132,7 +132,7 @@ createChallengeType.schema = {
       name: Joi.string().required(),
       description: Joi.string(),
       isActive: Joi.boolean().required(),
-      isTask: Joi.boolean().default(false),
+      isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
     })
     .required(),
@@ -197,7 +197,7 @@ fullyUpdateChallengeType.schema = {
       name: Joi.string().required(),
       description: Joi.string(),
       isActive: Joi.boolean().required(),
-      isTask: Joi.boolean().default(false),
+      isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
     })
     .required(),

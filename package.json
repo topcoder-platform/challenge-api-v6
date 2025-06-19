@@ -42,7 +42,7 @@
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "aws-sdk": "^2.1145.0",
-    "axios": "^1.8.2",
+    "axios": "^1.10.0",
     "axios-retry": "^3.4.0",
     "bluebird": "^3.5.1",
     "body-parser": "^1.15.1",

@@ -170,7 +170,7 @@ class ChallengeHelper {
   async validateCreateChallengeRequest(currentUser, challenge) {
     // projectId is required for non self-service challenges
     if (
-      challenge.legacy.selfService == null &&
+      _.get(challenge, 'legacy.selfService') == null &&
       challenge.projectId == null &&
       this.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
@@ -419,38 +419,27 @@ class ChallengeHelper {
     }
   }
 
-  static convertPSValuesToCents(prizeSets) {
-    prizeSets.forEach((prizeSet) => {
-      prizeSet.prizes.forEach((prize) => {
-        prize.amountInCents = new Decimal(prize.value).mul(100).toNumber();
-        delete prize.value;
-      });
-    });
-  }
-
   convertToISOString(startDate) {
     return ChallengeHelper.convertDateToISOString(startDate);
   }
 
-  convertPrizeSetValuesToCents(prizeSets) {
-    return ChallengeHelper.convertPSValuesToCents(prizeSets);
-  }
-
   convertPrizeSetValuesToDollars(prizeSets, overview) {
+    // No conversion needed - the database already stores values in dollars in the 'value' field
+    // The 'amountInCents' field doesn't exist in the database schema
     prizeSets.forEach((prizeSet) => {
       prizeSet.prizes.forEach((prize) => {
+        // Prize values are already in dollars in the database, no conversion needed
+        // Remove any amountInCents field if it somehow exists (shouldn't in normal operation)
         if (prize.amountInCents != null) {
-          prize.value = parseFloat(new Decimal(prize.amountInCents).div(100).toFixed(2));
-
           delete prize.amountInCents;
         }
       });
     });
+    
+    // Handle overview totalPrizesInCents if it exists (though it shouldn't based on schema)
     if (overview && !_.isUndefined(overview.totalPrizesInCents)) {
-      overview.totalPrizes = parseFloat(
-        new Decimal(overview.totalPrizesInCents).div(100).toFixed(2)
-      );
-
+      // If this field exists, it's likely already in dollars despite the name
+      overview.totalPrizes = overview.totalPrizesInCents;
       delete overview.totalPrizesInCents;
     }
   }
