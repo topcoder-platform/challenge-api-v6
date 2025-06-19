@@ -827,7 +827,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets)
 
   console.log("TYPE", prizeTypeTmp);
-  if (challenge.legacy.selfService) {
+  if (challenge.legacy && challenge.legacy.selfService) {
     // if self-service, create a new project (what about if projectId is provided in the payload? confirm with business!)
     if (!challenge.projectId && challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
       const selfServiceProjectName = `Self service - ${currentUser.handle} - ${challenge.name}`;
@@ -853,6 +853,10 @@ async function createChallenge(currentUser, challenge, userToken) {
   /** Ensure project exists, and set direct project id, billing account id & markup */
   if (challengeHelper.isProjectIdRequired(challenge.timelineTemplateId) || challenge.projectId) {
     const { projectId } = challenge;
+
+    if (!projectId) { // fix of projectId undefined
+      throw new errors.BadRequestError('Project id must be provided');
+    }
 
     const { directProjectId } = await projectHelper.getProject(projectId, currentUser);
     const { billingAccountId, markup } = await projectHelper.getProjectBillingInformation(

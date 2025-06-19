@@ -82,7 +82,7 @@ async function createTimelineTemplate (authUser, timelineTemplate) {
   await checkName(timelineTemplate.name)
 
   // Do not validate phases for now
-  // await phaseHelper.validatePhases(timelineTemplate.phases);
+  await phaseHelper.validatePhases(timelineTemplate.phases);
 
   const phases = timelineTemplate.phases
   _.forEach(phases, p => {
