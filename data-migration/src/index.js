@@ -1,4 +1,5 @@
 const { MigrationManager } = require('./migrationManager');
+const { AuditLogMigrator } = require('./migrators/auditLogMigrator')
 const { ChallengeMigrator } = require('./migrators/challengeMigrator')
 const { ChallengeTypeMigrator } = require('./migrators/challengeTypeMigrator');
 const { ChallengeTrackMigrator } = require('./migrators/challengeTrackMigrator');
@@ -40,10 +41,10 @@ async function checkDatabaseConnection() {
 
 async function main() {
   // Check database connection first
-  const isConnected = await checkDatabaseConnection();
-  if (!isConnected) {
-    process.exit(1);
-  }
+  // const isConnected = await checkDatabaseConnection();
+  // if (!isConnected) {
+  //   process.exit(1);
+  // }
 
   try {
     // Create migration manager
@@ -51,6 +52,7 @@ async function main() {
     
     // Register migrators in any order (they'll be sorted by priority)
     manager
+      .registerMigrator(new AuditLogMigrator())
       .registerMigrator(new ChallengeConstraintMigrator())
       .registerMigrator(new ChallengeDiscussionOptionMigrator())
       .registerMigrator(new ChallengeEventMigrator())

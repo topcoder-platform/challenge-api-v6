@@ -79,7 +79,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.PHASE_FILE || 'Phase_dynamo_data.json.json'
+      filename: process.env.PHASE_FILE || 'Phase_dynamo_data.json'
     },
 
     TimelineTemplatePhase: {

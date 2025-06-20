@@ -9,6 +9,6 @@ COPY . /challenge-api
 WORKDIR /challenge-api
 
 # Install the dependencies from package.json
-RUN --mount=type=ssh yarn install
+RUN --mount=type=ssh pnpm install
 
 CMD node /challenge-api/app.js
