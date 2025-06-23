@@ -271,15 +271,15 @@ async function getChallengeResourcesCount(challengeId, roleId = null) {
 /**
  * Create challenge resources
  * @param {String} challengeId the challenge id
- * @param {String} memberHandle the user's member handle
+ * @param {String} memberId the user's member handle
  * @param {String} roleId the resource role ID to assign
  */
-async function createResource(challengeId, memberHandle, roleId) {
+async function createResource(challengeId, memberId, roleId) {
   const token = await m2mHelper.getM2MToken();
 
   const userObj = {
     challengeId,
-    memberHandle,
+    memberId,
     roleId,
   };
   const url = `${config.RESOURCES_API_URL}`;
