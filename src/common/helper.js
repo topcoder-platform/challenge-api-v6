@@ -1194,6 +1194,30 @@ function flushInternalCache() {
   internalCache.flushAll();
 }
 
+// remove null property from ret (recursively)
+function removeNullProperties(obj) {
+  if (typeof obj !== 'object' || obj === null || obj instanceof Date) {
+    return obj;
+  }
+
+  // Handle arrays (map recursively)
+  if (Array.isArray(obj)) {
+    return obj.map(removeNullProperties).filter(item => item !== null);
+  }
+
+  // Handle objects (remove null properties recursively)
+  const result = {};
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const value = removeNullProperties(obj[key]);
+      if (value !== null) {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
 module.exports = {
   wrapExpress,
   autoWrapExpress,
@@ -1243,6 +1267,7 @@ module.exports = {
   getFromInternalCache,
   setToInternalCache,
   flushInternalCache,
+  removeNullProperties
 };
 
 logger.buildService(module.exports);

@@ -741,6 +741,7 @@ async function searchChallenges (currentUser, criteria) {
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
       _.unset(element, "payments");
     }
+    helper.removeNullProperties(element);
   });
 
   return { total, page, perPage, result };
@@ -1001,7 +1002,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengeCreated, ret);
 
-  return ret;
+  return helper.removeNullProperties(ret);
 }
 createChallenge.schema = {
   currentUser: Joi.any(),
@@ -1197,7 +1198,7 @@ async function getChallenge (currentUser, id, checkIfExists) {
   
   enrichChallengeForResponse(challenge, challenge.track, challenge.type);
 
-  return challenge
+  return helper.removeNullProperties(challenge);
 }
 getChallenge.schema = {
   currentUser: Joi.any(),
@@ -1884,7 +1885,7 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
   }
 
-  return updatedChallenge;
+  return helper.removeNullProperties(updatedChallenge);
 }
 
 updateChallenge.schema = {
@@ -2238,7 +2239,7 @@ async function deleteChallenge (currentUser, challengeId) {
     id: challengeId,
   });
   prismaHelper.convertModelToResponse(challenge);
-  return challenge;
+  return helper.removeNullProperties(challenge);
 }
 
 deleteChallenge.schema = {
