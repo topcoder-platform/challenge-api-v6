@@ -3,8 +3,7 @@
  */
 const _ = require('lodash')
 const uuid = require('uuid/v4')
-const constants = require('../app-constants')
-const prisma = require('../src/common/prisma').getClient()
+const { ChallengeStatusEnum } = require('../src/common/prisma')
 
 let challengeTrack
 let challengeType
@@ -125,7 +124,7 @@ async function createData () {
     projectId: 111,
     legacyId: 222,
     startDate: new Date(),
-    status: constants.challengeStatuses.Completed.toUpperCase(),
+    status: ChallengeStatusEnum.COMPLETED,
     createdAt: new Date(),
     createdBy: 'admin',
     updatedBy: 'admin'
@@ -147,7 +146,7 @@ async function createData () {
     projectId: 111,
     legacyId: 222,
     startDate: new Date(),
-    status: constants.challengeStatuses.Completed.toUpperCase(),
+    status: ChallengeStatusEnum.COMPLETED,
     createdAt: new Date(),
     createdBy: 'admin',
     updatedBy: 'admin'

@@ -14,6 +14,7 @@ const app = require('../../app')
 const constants = require('../../app-constants')
 const AttachmentService = require('../../src/services/AttachmentService')
 const testHelper = require('../testHelper')
+const { ChallengeStatusEnum } = require('../src/common/prisma')
 
 const should = chai.should()
 chai.use(chaiHttp)
@@ -1308,7 +1309,7 @@ describe('challenge API E2E tests', () => {
 
     it('fully update challenge - Completed to Active status', async () => {
       const challengeData = _.cloneDeep(testCompletedChallengeData)
-      challengeData.status = constants.challengeStatuses.Active
+      challengeData.status = ChallengeStatusEnum.ACTIVE
       const response = await chai.request(app)
         .put(`${basePath}/${id2}`)
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
@@ -1792,7 +1793,7 @@ describe('challenge API E2E tests', () => {
       const response = await chai.request(app)
         .patch(`${basePath}/${id2}`)
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
-        .send({ status: constants.challengeStatuses.Active })
+        .send({ status: ChallengeStatusEnum.ACTIVE })
       should.equal(response.status, 400)
       should.equal(response.body.message, 'Cannot change Completed challenge status to Active status')
     })

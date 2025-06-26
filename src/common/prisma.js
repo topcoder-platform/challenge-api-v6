@@ -1,6 +1,6 @@
-const { PrismaClient } = require('@prisma/client')
+const { PrismaClient, ChallengeTrackEnum, ReviewTypeEnum, DiscussionTypeEnum, ChallengeStatusEnum, PrizeSetTypeEnum } = require('@prisma/client')
 
-const prisma = new PrismaClient({
+const prismaClient = new PrismaClient({
   log: [
     { level: 'query', emit: 'event' },
     { level: 'info', emit: 'event' },
@@ -11,9 +11,15 @@ const prisma = new PrismaClient({
 
 // By running the first query, prisma calls $connect() under the hood
 module.exports.prismaConnect = () => {
-  prisma.$connect()
+  prismaClient.$connect()
 }
 
 module.exports.getClient = () => {
-  return prisma
+  return prismaClient
 }
+
+module.exports.ChallengeTrackEnum = ChallengeTrackEnum;
+module.exports.ReviewTypeEnum = ReviewTypeEnum;
+module.exports.DiscussionTypeEnum = DiscussionTypeEnum;
+module.exports.ChallengeStatusEnum = ChallengeStatusEnum;
+module.exports.PrizeSetTypeEnum = PrizeSetTypeEnum;

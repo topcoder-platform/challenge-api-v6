@@ -10,8 +10,8 @@ const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
 const testHelper = require('../testHelper')
-const prisma = require('../../src/common/prisma').getClient()
-
+const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
+const prisma = getClient()
 const should = chai.should()
 
 describe('challenge service unit tests', () => {
@@ -702,7 +702,7 @@ describe('challenge service unit tests', () => {
           userId: 12345678,
           handle: 'thomaskranitsas',
           placement: 1,
-          type: constants.prizeSetTypes.ChallengePrizes
+          type: PrizeSetTypeEnum.PLACEMENT
         }]
       })
       should.equal(result.id, data.challenge.id)
@@ -724,7 +724,7 @@ describe('challenge service unit tests', () => {
       should.equal(result.winners[0].userId, winners[0].userId)
       should.equal(result.winners[0].handle, winners[0].handle)
       should.equal(result.winners[0].placement, winners[0].placement)
-      should.equal(result.winners[0].type, constants.prizeSetTypes.ChallengePrizes)
+      should.equal(result.winners[0].type, PrizeSetTypeEnum.PLACEMENT)
       should.equal(result.createdBy, 'admin')
       should.equal(result.updatedBy, '22838965')
       should.exist(result.startDate)
@@ -818,7 +818,7 @@ describe('challenge service unit tests', () => {
     it('update challenge - Completed to Active status', async () => {
       try {
         await service.updateChallenge({ isMachine: true, sub: 'sub3' }, data.challenge.id, {
-          status: constants.challengeStatuses.Active
+          status: ChallengeStatusEnum.ACTIVE
         })
       } catch (e) {
         should.equal(e.message.indexOf('Cannot change Completed challenge status to Active status') >= 0, true)
@@ -846,13 +846,13 @@ describe('challenge service unit tests', () => {
             userId: 12345678,
             handle: 'thomaskranitsas',
             placement: 1,
-            type: constants.prizeSetTypes.ChallengePrizes
+            type: PrizeSetTypeEnum.PLACEMENT
           },
           {
             userId: 12345678,
             handle: 'thomaskranitsas',
             placement: 1,
-            type: constants.prizeSetTypes.ChallengePrizes
+            type: PrizeSetTypeEnum.PLACEMENT
           }]
         })
       } catch (e) {
@@ -870,13 +870,13 @@ describe('challenge service unit tests', () => {
               userId: 12345678,
               handle: 'thomaskranitsas',
               placement: 1,
-              type: constants.prizeSetTypes.ChallengePrizes
+              type: PrizeSetTypeEnum.PLACEMENT
             },
             {
               userId: 3456789,
               handle: 'tonyj',
               placement: 1,
-              type: constants.prizeSetTypes.ChallengePrizes
+              type: PrizeSetTypeEnum.PLACEMENT
             }
           ]
         })
@@ -895,13 +895,13 @@ describe('challenge service unit tests', () => {
               userId: 12345678,
               handle: 'thomaskranitsas',
               placement: 1,
-              type: constants.prizeSetTypes.ChallengePrizes
+              type: PrizeSetTypeEnum.PLACEMENT
             },
             {
               userId: 12345678,
               handle: 'thomaskranitsas',
               placement: 2,
-              type: constants.prizeSetTypes.ChallengePrizes
+              type: PrizeSetTypeEnum.PLACEMENT
             }
           ]
         })

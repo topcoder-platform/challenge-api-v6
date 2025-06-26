@@ -6,12 +6,12 @@ const _ = require("lodash");
 const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
-const constants = require("../../app-constants");
 const axios = require("axios");
 const Decimal = require("decimal.js");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
+const { ChallengeStatusEnum } = require("@prisma/client");
 
 class ChallengeHelper {
   /**
@@ -128,7 +128,7 @@ class ChallengeHelper {
 
     const ids = _.uniq(_.map(challenge.skills, "id"));
 
-    if (oldChallenge && oldChallenge.status === constants.challengeStatuses.Completed) {
+    if (oldChallenge && oldChallenge.status === ChallengeStatusEnum.COMPLETED) {
       // Don't allow edit skills for Completed challenges
       if (!_.isEqual(ids, _.uniq(_.map(oldChallenge.skills, "id")))) {
         throw new errors.BadRequestError(
@@ -177,7 +177,7 @@ class ChallengeHelper {
       throw new errors.BadRequestError("projectId is required for non self-service challenges.");
     }
 
-    if (challenge.status === constants.challengeStatuses.Active) {
+    if (challenge.status === ChallengeStatusEnum.ACTIVE) {
       throw new errors.BadRequestError(
         "You cannot create an Active challenge. Please create a Draft challenge and then change the status to Active."
       );
@@ -286,11 +286,11 @@ class ChallengeHelper {
     }
 
     if (
-      (challenge.status === constants.challengeStatuses.Completed ||
-        challenge.status === constants.challengeStatuses.Cancelled) &&
+      (challenge.status === ChallengeStatusEnum.COMPLETED ||
+        challenge.status === ChallengeStatusEnum.CANCELLED) &&
       data.status &&
       data.status !== challenge.status &&
-      data.status !== constants.challengeStatuses.CancelledClientRequest
+      data.status !== ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST
     ) {
       throw new errors.BadRequestError(
         `Cannot change ${challenge.status} challenge status to ${data.status} status`
@@ -300,8 +300,8 @@ class ChallengeHelper {
     if (
       data.winners &&
       data.winners.length > 0 &&
-      challenge.status !== constants.challengeStatuses.Completed &&
-      data.status !== constants.challengeStatuses.Completed
+      challenge.status !== ChallengeStatusEnum.COMPLETED &&
+      data.status !== ChallengeStatusEnum.COMPLETED
     ) {
       throw new errors.BadRequestError(
         `Cannot set winners for challenge with non-completed ${challenge.status} status`

@@ -11,34 +11,9 @@ const UserRoles = {
   SelfServiceCustomer: "Self-Service Customer",
 };
 
-const prizeSetTypes = {
-  ChallengePrizes: "placement",
-  CopilotPayment: "copilot",
-  ReviewerPayment: "reviewer",
-  CheckpointPrizes: "checkpoint",
-};
-
 const prizeTypes = {
   USD: "USD",
   POINT: "POINT",
-};
-
-const challengeStatuses = {
-  New: "New",
-  Draft: "Draft",
-  Approved: "Approved",
-  Cancelled: "Cancelled",
-  Active: "Active",
-  Completed: "Completed",
-  Deleted: "Deleted",
-  CancelledFailedReview: "Cancelled - Failed Review",
-  CancelledFailedScreening: "Cancelled - Failed Screening",
-  CancelledZeroSubmissions: "Cancelled - Zero Submissions",
-  CancelledWinnerUnresponsive: "Cancelled - Winner Unresponsive",
-  CancelledClientRequest: "Cancelled - Client Request",
-  CancelledRequirementsInfeasible: "Cancelled - Requirements Infeasible",
-  CancelledZeroRegistrations: "Cancelled - Zero Registrations",
-  CancelledPaymentFailed: "Cancelled - Payment Failed",
 };
 
 const validChallengeParams = {
@@ -61,10 +36,6 @@ const validChallengeParams = {
 const EVENT_ORIGINATOR = "topcoder-challenges-api";
 
 const EVENT_MIME_TYPE = "application/json";
-
-const DiscussionTypes = {
-  Challenge: "challenge",
-};
 
 // using a testing topc, should be changed to use real topics in comments when they are created
 const Topics = {
@@ -96,21 +67,9 @@ const Topics = {
   Notifications: "notifications.action.create",
 };
 
-const challengeTracks = {
-  DEVELOP: "DEVELOP",
-  DESIGN: "DESIGN",
-  DATA_SCIENCE: "DATA_SCIENCE",
-  QA: "QA",
-};
-
 const challengeTextSortField = {
   Name: "name",
   TypeId: "typeId",
-};
-
-const reviewTypes = {
-  Community: "COMMUNITY",
-  Internal: "INTERNAL",
 };
 
 const SelfServiceNotificationTypes = {
@@ -162,17 +121,12 @@ const auditFields = [
 
 module.exports = {
   UserRoles,
-  prizeSetTypes,
   prizeTypes,
-  challengeStatuses,
   validChallengeParams,
   EVENT_ORIGINATOR,
   EVENT_MIME_TYPE,
   Topics,
-  challengeTracks,
   challengeTextSortField,
-  DiscussionTypes,
-  reviewTypes,
   SelfServiceNotificationTypes,
   SelfServiceNotificationSettings,
   PhaseFact,

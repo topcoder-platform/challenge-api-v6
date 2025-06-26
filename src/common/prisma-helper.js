@@ -1,7 +1,7 @@
 const _ = require('lodash');
 const Decimal = require("decimal.js");
 const constants = require('../../app-constants');
-
+const { PrizeSetTypeEnum } = require("@prisma/client");
 /**
  * Convert phases data to prisma model.
  *
@@ -146,8 +146,8 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             // Database stores values in dollars directly, no amountInCents field exists
             prizeData.value = p.value
             // calculate only placement and checkpoint prizes
-            if ((s.type === constants.prizeSetTypes.ChallengePrizes
-              || s.type === constants.prizeSetTypes.CheckpointPrizes)
+            if ((s.type === PrizeSetTypeEnum.PLACEMENT
+              || s.type === PrizeSetTypeEnum.CHECKPOINT)
               && p.type === constants.prizeTypes.USD) {
               // Values are already in dollars, no conversion needed
               totalPrizes += p.value
@@ -202,7 +202,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           ..._.pick(w, ['userId', 'handle', 'placement', 'type'])
         }
         if (_.isNil(t.type)) {
-          t.type = constants.prizeSetTypes.ChallengePrizes.toUpperCase()
+          t.type = PrizeSetTypeEnum.PLACEMENT
         } else {
           t.type = t.type.toUpperCase()
         }
@@ -236,7 +236,6 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
  * @returns response data
  */
 function convertModelToResponse(ret) {
-  ret.status = _.capitalize(ret.status.toLowerCase())
   ret.legacy = _.omit(ret.legacyRecord, 'id', constants.auditFields)
   delete ret.legacyRecord
   delete ret.legacy.challengeId
@@ -286,7 +285,7 @@ function convertModelToResponse(ret) {
   let prizeType;
   ret.prizeSets = _.map(ret.prizeSets, s => {
     const ss = _.pick(s, ['type', 'description'])
-    ss.type = ss.type.toLowerCase()
+
     ss.prizes = _.map(s.prizes, p => {
       prizeType = p.type
       return _.pick(p, ['type', 'description', 'value'])
@@ -308,7 +307,7 @@ function convertModelToResponse(ret) {
   // convert winners
   ret.winners = _.map(ret.winners, w => {
     const winner = _.pick(w, ['userId', 'handle', 'placement'])
-    winner.type = w.type.toLowerCase()
+
     return winner
   })
   // TODO: Set data from other API

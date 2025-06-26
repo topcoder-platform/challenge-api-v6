@@ -22,13 +22,13 @@ const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 const { hasAdminRole } = require("../common/role-helper");
 const {
   enrichChallengeForResponse,
-  convertPrizeSetValuesToDollars,
   convertToISOString,
 } = require("../common/challenge-helper");
 const deepEqual = require("deep-equal");
 const prismaHelper = require('../common/prisma-helper');
 
-const prisma = require('../common/prisma').getClient()
+const { getClient, ReviewTypeEnum, DiscussionTypeEnum, ChallengeStatusEnum, PrizeSetTypeEnum } = require('../common/prisma');
+const prisma = getClient();
 
 const phaseAdvancer = new PhaseAdvancer({});
 
@@ -734,7 +734,7 @@ async function searchChallenges (currentUser, criteria) {
   }
 
   _.each(result, async (element) => {
-    if (element.status !== constants.challengeStatuses.Completed) {
+    if (element.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(element, "winners");
     }
     // TODO: in the long run we wanna do a finer grained filtering of the payments
@@ -776,7 +776,7 @@ searchChallenges.schema = {
       projectId: Joi.number().integer().positive(),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
-      status: Joi.string().valid(_.values(constants.challengeStatuses)),
+      status: Joi.string().valid(_.values(ChallengeStatusEnum)),
       group: Joi.string(),
       startDateStart: Joi.date(),
       startDateEnd: Joi.date(),
@@ -879,7 +879,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   }
 
   if (!challenge.status) {
-    challenge.status = constants.challengeStatuses.New;
+    challenge.status = ChallengeStatusEnum.NEW;
   }
 
   if (!challenge.startDate) {
@@ -1012,9 +1012,9 @@ createChallenge.schema = {
       trackId: Joi.id(),
       legacy: Joi.object().keys({
         reviewType: Joi.string()
-          .valid(_.values(constants.reviewTypes))
+          .valid(_.values(ReviewTypeEnum))
           .insensitive()
-          .default(constants.reviewTypes.Internal),
+          .default(ReviewTypeEnum.INTERNAL),
         confidentialityType: Joi.string().default(config.DEFAULT_CONFIDENTIALITY_TYPE),
         forumId: Joi.number().integer(),
         directProjectId: Joi.number().integer(),
@@ -1079,7 +1079,7 @@ createChallenge.schema = {
         Joi.object().keys({
           id: Joi.optionalId(),
           name: Joi.string().required(),
-          type: Joi.string().required().valid(_.values(constants.DiscussionTypes)),
+          type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
           provider: Joi.string().required(),
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
@@ -1087,7 +1087,7 @@ createChallenge.schema = {
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
-          type: Joi.string().valid(_.values(constants.prizeSetTypes)).required(),
+          type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
           description: Joi.string(),
           prizes: Joi.array()
             .items(
@@ -1111,10 +1111,10 @@ createChallenge.schema = {
         .optional(),
       startDate: Joi.date().iso(),
       status: Joi.string().valid([
-        constants.challengeStatuses.Active,
-        constants.challengeStatuses.New,
-        constants.challengeStatuses.Draft,
-        constants.challengeStatuses.Approved,
+        ChallengeStatusEnum.ACTIVE,
+        ChallengeStatusEnum.NEW,
+        ChallengeStatusEnum.DRAFT,
+        ChallengeStatusEnum.APPROVED,
       ]),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
@@ -1182,7 +1182,7 @@ async function getChallenge (currentUser, id, checkIfExists) {
     _.unset(challenge, "privateDescription");
   }
 
-  if (challenge.status !== constants.challengeStatuses.Completed) {
+  if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
     _.unset(challenge, "winners");
   }
 
@@ -1265,7 +1265,7 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
  */
 async function validateWinners(winners, challengeResources) {
   const registrants = _.filter(challengeResources, (r) => r.roleId === config.SUBMITTER_ROLE_ID);
-  for (const prizeType of _.values(constants.prizeSetTypes)) {
+  for (const prizeType of _.values(PrizeSetTypeEnum)) {
     const filteredWinners = _.filter(winners, (w) => w.type === prizeType);
     for (const winner of filteredWinners) {
       if (!_.find(registrants, (r) => _.toString(r.memberId) === _.toString(winner.userId))) {
@@ -1322,13 +1322,13 @@ function validateTask(currentUser, challenge, data, challengeResources) {
 
   // Status changed to Active, indicating launch a Task
   const isLaunchTask =
-    data.status === constants.challengeStatuses.Active &&
-    challenge.status !== constants.challengeStatuses.Active;
+    data.status === ChallengeStatusEnum.ACTIVE &&
+    challenge.status !== ChallengeStatusEnum.ACTIVE;
 
   // Status changed to Completed, indicating complete a Task
   const isCompleteTask =
-    data.status === constants.challengeStatuses.Completed &&
-    challenge.status !== constants.challengeStatuses.Completed;
+    data.status === ChallengeStatusEnum.COMPLETED &&
+    challenge.status !== ChallengeStatusEnum.COMPLETED;
 
   // When complete a Task, input data should have winners
   if (isCompleteTask && (!data.winners || !data.winners.length)) {
@@ -1348,7 +1348,7 @@ function validateTask(currentUser, challenge, data, challengeResources) {
     if (assignedToCurrentUser) {
       throw new errors.ForbiddenError(
         `You are not allowed to ${
-          data.status === constants.challengeStatuses.Active ? "lanuch" : "complete"
+          data.status === ChallengeStatusEnum.ACTIVE ? "lanuch" : "complete"
         } task assigned to yourself. Please contact manager to operate.`
       );
     }
@@ -1424,7 +1424,7 @@ async function updateChallenge(currentUser, challengeId, data) {
 
   if (challenge.legacy.selfService) {
     // prettier-ignore
-    sendSubmittedEmail = data.status === constants.challengeStatuses.Draft && challenge.status !== constants.challengeStatuses.Draft;
+    sendSubmittedEmail = data.status === ChallengeStatusEnum.DRAFT && challenge.status !== ChallengeStatusEnum.DRAFT;
 
     if (data.metadata && data.metadata.length > 0) {
       let dynamicDescription = _.cloneDeep(data.description || challenge.description);
@@ -1437,9 +1437,9 @@ async function updateChallenge(currentUser, challengeId, data) {
 
     // check if it's a self service challenge and project needs to be activated first
     if (
-      (data.status === constants.challengeStatuses.Approved ||
-        data.status === constants.challengeStatuses.Active) &&
-      challenge.status !== constants.challengeStatuses.Active &&
+      (data.status === ChallengeStatusEnum.APPROVED ||
+        data.status === ChallengeStatusEnum.ACTIVE) &&
+      challenge.status !== ChallengeStatusEnum.ACTIVE &&
       challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
       try {
@@ -1456,14 +1456,14 @@ async function updateChallenge(currentUser, challengeId, data) {
           workItemSummary
         );
 
-        sendActivationEmail = data.status === constants.challengeStatuses.Active;
+        sendActivationEmail = data.status === ChallengeStatusEnum.ACTIVE;
       } catch (e) {
         await updateChallenge(
           currentUser,
           challengeId,
           {
             ...data,
-            status: constants.challengeStatuses.CancelledPaymentFailed,
+            status: ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
             cancelReason: `Failed to activate project. Error: ${e.message}. JSON: ${JSON.stringify(
               e
             )}`,
@@ -1477,7 +1477,7 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
 
     if (
-      data.status === constants.challengeStatuses.Draft &&
+      data.status === ChallengeStatusEnum.DRAFT &&
       challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
       try {
@@ -1492,8 +1492,8 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
 
     if (
-      (data.status === constants.challengeStatuses.CancelledRequirementsInfeasible ||
-        data.status === constants.challengeStatuses.CancelledPaymentFailed) &&
+      (data.status === ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE ||
+        data.status === ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED) &&
       challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
       try {
@@ -1510,18 +1510,18 @@ async function updateChallenge(currentUser, challengeId, data) {
   let isChallengeBeingActivated = false;
   let isChallengeBeingCancelled = false;
   if (data.status) {
-    if (data.status === constants.challengeStatuses.Active) {
+    if (data.status === ChallengeStatusEnum.ACTIVE) {
       // if activating a challenge, the challenge must have a billing account id
       if (
         (!billingAccountId || billingAccountId === null) &&
-        challenge.status === constants.challengeStatuses.Draft &&
+        challenge.status === ChallengeStatusEnum.DRAFT &&
         challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
       ) {
         throw new errors.BadRequestError(
           "Cannot Activate this project, it has no active billing account."
         );
       }
-      if (challenge.status === constants.challengeStatuses.Draft) {
+      if (challenge.status === ChallengeStatusEnum.DRAFT) {
         isChallengeBeingActivated = true;
       }
     }
@@ -1529,15 +1529,15 @@ async function updateChallenge(currentUser, challengeId, data) {
     if (
       _.includes(
         [
-          constants.challengeStatuses.Cancelled,
-          constants.challengeStatuses.CancelledRequirementsInfeasible,
-          constants.challengeStatuses.CancelledPaymentFailed,
-          constants.challengeStatuses.CancelledFailedReview,
-          constants.challengeStatuses.CancelledFailedScreening,
-          constants.challengeStatuses.CancelledZeroSubmissions,
-          constants.challengeStatuses.CancelledWinnerUnresponsive,
-          constants.challengeStatuses.CancelledClientRequest,
-          constants.challengeStatuses.CancelledZeroRegistrations,
+          ChallengeStatusEnum.CANCELLED,
+          ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE,
+          ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
+          ChallengeStatusEnum.CANCELLED_FAILED_REVIEW,
+          ChallengeStatusEnum.CANCELLED_FAILED_SCREENING,
+          ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
+          ChallengeStatusEnum.CANCELLED_WINNER_UNRESPONSIVE,
+          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
         ],
         data.status
       )
@@ -1545,11 +1545,11 @@ async function updateChallenge(currentUser, challengeId, data) {
       isChallengeBeingCancelled = true;
     }
 
-    if (data.status === constants.challengeStatuses.Completed) {
+    if (data.status === ChallengeStatusEnum.COMPLETED) {
       if (
         !_.get(challenge, "legacy.pureV5Task") &&
         !_.get(challenge, "legacy.pureV5") &&
-        challenge.status !== constants.challengeStatuses.Active
+        challenge.status !== ChallengeStatusEnum.ACTIVE
       ) {
         throw new errors.BadRequestError("You cannot mark a Draft challenge as Completed");
       }
@@ -1602,7 +1602,7 @@ async function updateChallenge(currentUser, challengeId, data) {
     !_.get(challenge, "legacy.pureV5")
   ) {
     if (
-      finalStatus !== constants.challengeStatuses.New &&
+      finalStatus !== ChallengeStatusEnum.NEW &&
       finalTimelineTemplateId !== challenge.timelineTemplateId
     ) {
       throw new errors.BadRequestError(
@@ -1618,7 +1618,7 @@ async function updateChallenge(currentUser, challengeId, data) {
   if (data.prizeSets) {
     if (
       isDifferentPrizeSets(data.prizeSets, challenge.prizeSets) &&
-      finalStatus === constants.challengeStatuses.Completed
+      finalStatus === ChallengeStatusEnum.COMPLETED
     ) {
       // Allow only M2M to update prizeSets for completed challenges
       if (!currentUser.isMachine || (challenge.task != null && challenge.task.isTask !== true)) {
@@ -1629,9 +1629,9 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
 
     const prizeSetsGroup = _.groupBy(data.prizeSets, "type");
-    if (prizeSetsGroup[constants.prizeSetTypes.ChallengePrizes]) {
+    if (prizeSetsGroup[PrizeSetTypeEnum.PLACEMENT]) {
       const totalPrizes = helper.sumOfPrizes(
-        prizeSetsGroup[constants.prizeSetTypes.ChallengePrizes][0].prizes
+        prizeSetsGroup[PrizeSetTypeEnum.PLACEMENT][0].prizes
       );
       _.assign(data, { overview: { totalPrizes } });
     }
@@ -1645,8 +1645,8 @@ async function updateChallenge(currentUser, challengeId, data) {
     !isChallengeBeingCancelled
   ) {
     if (
-      challenge.status === constants.challengeStatuses.Completed ||
-      challenge.status.indexOf(constants.challengeStatuses.Cancelled) > -1
+      challenge.status === ChallengeStatusEnum.COMPLETED ||
+      challenge.status.indexOf(ChallengeStatusEnum.CANCELLED) > -1
     ) {
       throw new BadRequestError(
         `Challenge phase/start date can not be modified for Completed or Cancelled challenges.`
@@ -1686,7 +1686,7 @@ async function updateChallenge(currentUser, challengeId, data) {
     await validateWinners(data.winners, challengeResources);
     if (_.get(challenge, "legacy.pureV5Task", false)) {
       _.each(data.winners, (w) => {
-        w.type = constants.prizeSetTypes.ChallengePrizes;
+        w.type = PrizeSetTypeEnum.PLACEMENT;
       });
     }
   }
@@ -1898,9 +1898,9 @@ updateChallenge.schema = {
           track: Joi.string(),
           subTrack: Joi.string(),
           reviewType: Joi.string()
-            .valid(_.values(constants.reviewTypes))
+            .valid(_.values(ReviewTypeEnum))
             .insensitive()
-            .default(constants.reviewTypes.Internal),
+            .default(ReviewTypeEnum.INTERNAL),
           confidentialityType: Joi.string()
             .allow(null, "")
             .empty(null, "")
@@ -1985,7 +1985,7 @@ updateChallenge.schema = {
           Joi.object().keys({
             id: Joi.optionalId(),
             name: Joi.string().required(),
-            type: Joi.string().required().valid(_.values(constants.DiscussionTypes)),
+            type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
             provider: Joi.string().required(),
             url: Joi.string(),
             options: Joi.array().items(Joi.object()),
@@ -1997,7 +1997,7 @@ updateChallenge.schema = {
         .items(
           Joi.object()
             .keys({
-              type: Joi.string().valid(_.values(constants.prizeSetTypes)).required(),
+              type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
               description: Joi.string(),
               prizes: Joi.array()
                 .items(
@@ -2021,7 +2021,7 @@ updateChallenge.schema = {
           allowedRegistrants: Joi.array().items(Joi.string().trim().lowercase()).optional(),
         })
         .optional(),
-      status: Joi.string().valid(_.values(constants.challengeStatuses)),
+      status: Joi.string().valid(_.values(ChallengeStatusEnum)),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -2041,7 +2041,7 @@ updateChallenge.schema = {
               userId: Joi.number().integer().positive().required(),
               handle: Joi.string().required(),
               placement: Joi.number().integer().positive().required(),
-              type: Joi.string().valid(_.values(constants.prizeSetTypes)),
+              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
             })
             .unknown(true)
         )
@@ -2075,7 +2075,7 @@ updateChallenge.schema = {
 async function sendNotifications(currentUser, challengeId) {
   const challenge = await getChallenge(currentUser, challengeId);
   const creator = await helper.getMemberByHandle(challenge.createdBy);
-  if (challenge.status === constants.challengeStatuses.Completed) {
+  if (challenge.status === ChallengeStatusEnum.COMPLETED) {
     await helper.sendSelfServiceNotification(
       constants.SelfServiceNotificationTypes.WORK_COMPLETED,
       [{ email: creator.email }],
@@ -2223,7 +2223,7 @@ function sanitizeData(data, challenge) {
  */
 async function deleteChallenge (currentUser, challengeId) {
   const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId, status: constants.challengeStatuses.New.toUpperCase() }
+    where: { id: challengeId, status: ChallengeStatusEnum.NEW }
   })
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(
@@ -2260,7 +2260,7 @@ async function advancePhase(currentUser, challengeId, data) {
   if (!_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
-  if (challenge.status !== constants.challengeStatuses.Active) {
+  if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
     throw new errors.BadRequestError(
       `Challenge with id: ${challengeId} is not in Active status.`
     );
@@ -2295,7 +2295,7 @@ async function advancePhase(currentUser, challengeId, data) {
   // TODO: This is a temporary solution to update the challenge status to Completed; We currently do not have a way to get winner list using v5 data
   // TODO: With the implementation of v5 review API we'll develop a mechanism to maintain the winner list in v5 data that challenge-api can use to create the winners list
   if (phaseAdvancerResult.hasWinningSubmission === true) {
-    newChallengeData.status = constants.challengeStatuses.Completed.toUpperCase()
+    newChallengeData.status = ChallengeStatusEnum.COMPLETED
   }
   await prisma.$transaction(async (tx) => {
     // upsert phases one by one
