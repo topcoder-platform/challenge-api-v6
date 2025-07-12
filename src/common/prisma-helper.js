@@ -12,7 +12,7 @@ const { PrizeSetTypeEnum } = require("@prisma/client");
 function convertChallengePhaseSchema(challenge, result, auditFields) {
   // keep phase data
   const phaseFields = ['name', 'description', 'isOpen', 'predecessor', 'duration',
-    'scheduledStartDate', 'scheduledEndDate', 'actualStartDate', 'actualEndDate'];
+    'scheduledStartDate', 'scheduledEndDate', 'actualStartDate', 'actualEndDate', 'challengeSource'];
   // current phase names
   result.currentPhaseNames = _.map(
     _.filter(challenge.phases, (p) => p.isOpen === true), "name"
@@ -61,7 +61,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
   }
   // keep primitive data
   const result = _.pick(challenge, [
-    'name', 'description', 'privateDescription', 'descriptionFormat', 'tags', 'projectId',
+    'name', 'description', 'privateDescription', 'challengeSource', 'descriptionFormat', 'tags', 'projectId',
     'startDate', 'groups', 'legacyId',
   ])
   // set legacy data

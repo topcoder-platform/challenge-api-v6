@@ -62,6 +62,7 @@
 									"    pm.expect(response.name).to.eq('Postman Task Test 1')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -119,7 +120,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Task Test 1\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Task Test 1\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -161,6 +162,7 @@
 									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -502,6 +504,7 @@
 									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -581,6 +584,7 @@
 									"    pm.expect(response.name).to.eq('Postman Task Test 1')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -669,6 +673,7 @@
 									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -726,7 +731,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"pureV5Task\": true,\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Pure V5 Task Test 2\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_TASK}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"pureV5Task\": true,\n        \"reviewType\": \"INTERNAL\"\n    },\n    \"name\": \"Postman Pure V5 Task Test 2\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_TASK}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -770,6 +775,7 @@
 									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -1052,6 +1058,7 @@
 									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -1132,6 +1139,7 @@
 									"    pm.expect(response.name).to.eq('Postman Pure V5 Task Test 2')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')\r",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -1218,6 +1226,7 @@
 									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -1276,7 +1285,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Development Challenge Test 3\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DEVELOPMENT}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Development Challenge Test 3\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1318,6 +1327,7 @@
 									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -1603,6 +1613,7 @@
 									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -1758,6 +1769,7 @@
 									"    pm.expect(response.name).to.eq('Postman Development Challenge Test 3')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -1857,6 +1869,7 @@
 									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -1915,7 +1928,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DESIGN}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Design Challenge Test 4\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DESIGN}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman Design Challenge Test 4\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1957,6 +1970,7 @@
 									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -2242,6 +2256,7 @@
 									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -2397,6 +2412,7 @@
 									"    pm.expect(response.name).to.eq('Postman Design Challenge Test 4')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -2496,6 +2512,7 @@
 									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -2554,7 +2571,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_QA}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman QA Challenge Test 5\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_QA}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman QA Challenge Test 5\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2596,6 +2613,7 @@
 									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -2881,6 +2899,7 @@
 									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -3036,6 +3055,7 @@
 									"    pm.expect(response.name).to.eq('Postman QA Challenge Test 5')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
@@ -3135,6 +3155,7 @@
 									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")",
 									"    pm.expect(response.privateDescription).to.eq('private description')",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')",
@@ -3193,7 +3214,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DS}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman DS Challenge Test 6\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
+							"raw": "{\n    \"typeId\": \"{{TYPE_CHALLENGE}}\",\n    \"trackId\": \"{{TRACK_DS}}\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Postman DS Challenge Test 6\",\n    \"description\": \"Here's a large description with **markdown**\",\n    \"privateDescription\": \"private description\",\n    \"challengeSource\": \"Topcoder\",\n    \"descriptionFormat\": \"markdown\",\n    \"timelineTemplateId\": \"{{TIMELINE_TEMPLATE_CHALLENGE}}\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        },\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Copilot Payment\",\n            \"type\": \"copilot\"\n        }\n    ],\n    \"tags\": [\n        \"Other\"\n    ],\n    \"projectId\": {{PROJECT_ID}},\n    \"startDate\": \"{{tenMinFromNow}}\",\n    \"status\": \"Draft\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -3235,6 +3256,7 @@
 									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -3520,6 +3542,7 @@
 									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.prizeSets[0].prizes[0].type).to.eq('USD')\r",
@@ -3675,6 +3698,7 @@
 									"    pm.expect(response.name).to.eq('Postman DS Challenge Test 6')\r",
 									"    pm.expect(response.description).to.eq(\"Here's a large description with **markdown**\")\r",
 									"    pm.expect(response.privateDescription).to.eq('private description')\r",
+									"    pm.expect(response.challengeSource).to.eq('Topcoder')",
 									"    pm.expect(response.descriptionFormat).to.eq('markdown')\r",
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",

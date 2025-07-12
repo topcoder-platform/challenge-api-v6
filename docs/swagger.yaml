@@ -2487,6 +2487,8 @@ definitions:
         type: string
       privateDescription:
         type: string
+      challengeSource:
+        type: string
       descriptionFormat:
         type: string
         default: markup
@@ -2749,6 +2751,8 @@ definitions:
         type: string
       privateDescription:
         type: string
+      challengeSource:
+        type: string
       descriptionFormat:
         type: string
         default: markup
@@ -2917,6 +2921,8 @@ definitions:
       description:
         type: string
       privateDescription:
+        type: string
+      challengeSource:
         type: string
       descriptionFormat:
         type: string
@@ -3112,6 +3118,8 @@ definitions:
       description:
         type: string
       privateDescription:
+        type: string
+      challengeSource:
         type: string
       descriptionFormat:
         type: string

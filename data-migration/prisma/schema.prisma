@@ -59,6 +59,7 @@ model Challenge {
   name                  String
   description           String?
   privateDescription    String?
+  challengeSource       String?
   descriptionFormat     String?
   projectId             Int?                 // frequently queried field
   typeId                String
