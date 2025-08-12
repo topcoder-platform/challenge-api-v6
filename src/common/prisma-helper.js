@@ -1,6 +1,5 @@
-const _ = require('lodash');
-const Decimal = require("decimal.js");
-const constants = require('../../app-constants');
+const _ = require("lodash");
+const constants = require("../../app-constants");
 const { PrizeSetTypeEnum } = require("@prisma/client");
 /**
  * Convert phases data to prisma model.
@@ -11,37 +10,50 @@ const { PrizeSetTypeEnum } = require("@prisma/client");
  */
 function convertChallengePhaseSchema(challenge, result, auditFields) {
   // keep phase data
-  const phaseFields = ['name', 'description', 'isOpen', 'predecessor', 'duration',
-    'scheduledStartDate', 'scheduledEndDate', 'actualStartDate', 'actualEndDate', 'challengeSource'];
+  const phaseFields = [
+    "name",
+    "description",
+    "isOpen",
+    "predecessor",
+    "duration",
+    "scheduledStartDate",
+    "scheduledEndDate",
+    "actualStartDate",
+    "actualEndDate",
+    "challengeSource",
+  ];
   // current phase names
   result.currentPhaseNames = _.map(
-    _.filter(challenge.phases, (p) => p.isOpen === true), "name"
+    _.filter(challenge.phases, (p) => p.isOpen === true),
+    "name"
   );
   // get registration date and submission date
-  _.forEach(challenge.phases, p => {
-    if (p.name === 'Registration') {
-      result.registrationStartDate = p.actualStartDate || p.scheduledStartDate
-      result.registrationEndDate = p.actualEndDate || p.scheduledEndDate
-    } else if (p.name === 'Submission') {
-      result.submissionStartDate = p.actualStartDate || p.scheduledStartDate
-      result.submissionEndDate = p.actualEndDate || p.scheduledEndDate
+  _.forEach(challenge.phases, (p) => {
+    if (p.name === "Registration") {
+      result.registrationStartDate = p.actualStartDate || p.scheduledStartDate;
+      result.registrationEndDate = p.actualEndDate || p.scheduledEndDate;
+    } else if (p.name === "Submission") {
+      result.submissionStartDate = p.actualStartDate || p.scheduledStartDate;
+      result.submissionEndDate = p.actualEndDate || p.scheduledEndDate;
     }
-  })
+  });
   // set phases array data
   if (!_.isEmpty(challenge.phases)) {
     result.phases = {
-      create: _.map(challenge.phases, p => {
+      create: _.map(challenge.phases, (p) => {
         const phaseData = {
           phase: { connect: { id: p.phaseId } },
           ..._.pick(p, phaseFields),
-          ...auditFields
-        }
+          ...auditFields,
+        };
         if (!_.isEmpty(p.constraints)) {
-          phaseData.constraints = { create: _.map(p.constraints, c => ({ ...c, ...auditFields })) }
+          phaseData.constraints = {
+            create: _.map(p.constraints, (c) => ({ ...c, ...auditFields })),
+          };
         }
-        return phaseData
-      })
-    }
+        return phaseData;
+      }),
+    };
   }
 }
 
@@ -54,179 +66,189 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
  */
 function convertChallengeSchemaToPrisma(currentUser, challenge) {
   // used id used in createdBy and updatedBy
-  const userId = _.toString(currentUser.userId)
+  const userId = _.toString(currentUser.userId);
   const auditFields = {
     createdBy: userId,
-    updatedBy: userId
-  }
+    updatedBy: userId,
+  };
   // keep primitive data
   const result = _.pick(challenge, [
-    'name', 'description', 'privateDescription', 'challengeSource', 'descriptionFormat', 'tags', 'projectId',
-    'startDate', 'groups', 'legacyId',
-  ])
+    "name",
+    "description",
+    "privateDescription",
+    "challengeSource",
+    "descriptionFormat",
+    "tags",
+    "projectId",
+    "startDate",
+    "groups",
+    "legacyId",
+    "wiproAllowed",
+  ]);
   // set legacy data
   if (!_.isNil(challenge.legacy)) {
     result.legacyRecord = {
       create: {
         ...challenge.legacy,
-        ...auditFields
-      }
-    }
+        ...auditFields,
+      },
+    };
   }
   // set billing
   if (!_.isNil(challenge.billing)) {
     result.billingRecord = {
       create: {
         ...challenge.billing,
-        ...auditFields
-      }
-    }
+        ...auditFields,
+      },
+    };
   }
   // set task
   if (!_.isNil(challenge.task)) {
-    result.taskIsTask = _.get(challenge, 'task.isTask')
-    result.taskIsAssigned = _.get(challenge, 'task.isAssigned')
-    const taskMemberId = _.get(challenge, 'task.memberId', null);
+    result.taskIsTask = _.get(challenge, "task.isTask");
+    result.taskIsAssigned = _.get(challenge, "task.isAssigned");
+    const taskMemberId = _.get(challenge, "task.memberId", null);
     if (!_.isNil(taskMemberId)) {
-      result.taskMemberId = String(taskMemberId)
+      result.taskMemberId = String(taskMemberId);
     }
   }
   // set metadata
   if (!_.isNil(challenge.metadata)) {
-    result.metadata = { create: _.map(challenge.metadata, m => ({ ...m, ...auditFields })) }
+    result.metadata = { create: _.map(challenge.metadata, (m) => ({ ...m, ...auditFields })) };
   }
-  convertChallengePhaseSchema(challenge, result, auditFields)
+  convertChallengePhaseSchema(challenge, result, auditFields);
   // set events
   if (!_.isNil(challenge.events)) {
     result.events = {
-      create: _.map(challenge.events, e => {
-        const ret = _.pick(e, ['name', 'key'])
-        _.assignIn(ret, auditFields)
-        ret.eventId = e.id
-        return ret
-      })
-    }
+      create: _.map(challenge.events, (e) => {
+        const ret = _.pick(e, ["name", "key"]);
+        _.assignIn(ret, auditFields);
+        ret.eventId = e.id;
+        return ret;
+      }),
+    };
   }
   // discussions
   if (!_.isNil(challenge.discussions)) {
     result.discussions = {
-      create: _.map(challenge.discussions, d => {
-        const dissData = _.pick(d, ['name', 'provider', 'url'])
-        dissData.discussionId = d.id
-        dissData.type = d.type.toUpperCase()
-        _.assignIn(dissData, auditFields)
+      create: _.map(challenge.discussions, (d) => {
+        const dissData = _.pick(d, ["name", "provider", "url"]);
+        dissData.discussionId = d.id;
+        dissData.type = d.type.toUpperCase();
+        _.assignIn(dissData, auditFields);
         if (!_.isEmpty(d.options)) {
-          dissData.options = { create: [] }
-          _.forEach(d.options, o => {
+          dissData.options = { create: [] };
+          _.forEach(d.options, (o) => {
             _.forIn(o, (v, k) => {
               dissData.options.create.push({
                 optionKey: k,
                 optionValue: v,
-                ...auditFields
-              })
-            })
-          })
+                ...auditFields,
+              });
+            });
+          });
         }
-        return dissData
-      })
-    }
+        return dissData;
+      }),
+    };
   }
-  let totalPrizes = 0
+  let totalPrizes = 0;
   // prize sets
   if (!_.isNil(challenge.prizeSets)) {
     result.prizeSets = {
-      create: _.map(challenge.prizeSets, s => {
-        const setData = _.pick(s, 'description')
-        setData.type = s.type.toUpperCase()
-        _.assignIn(setData, auditFields)
+      create: _.map(challenge.prizeSets, (s) => {
+        const setData = _.pick(s, "description");
+        setData.type = s.type.toUpperCase();
+        _.assignIn(setData, auditFields);
         setData.prizes = {
-          create: _.map(s.prizes, p => {
-            const prizeData = _.pick(p, 'type', 'description')
-            _.assignIn(prizeData, auditFields)
+          create: _.map(s.prizes, (p) => {
+            const prizeData = _.pick(p, "type", "description");
+            _.assignIn(prizeData, auditFields);
             // Database stores values in dollars directly, no amountInCents field exists
-            prizeData.value = p.value
+            prizeData.value = p.value;
             // calculate only placement and checkpoint prizes
-            if ((s.type === PrizeSetTypeEnum.PLACEMENT
-              || s.type === PrizeSetTypeEnum.CHECKPOINT)
-              && p.type === constants.prizeTypes.USD) {
+            if (
+              (s.type === PrizeSetTypeEnum.PLACEMENT || s.type === PrizeSetTypeEnum.CHECKPOINT) &&
+              p.type === constants.prizeTypes.USD
+            ) {
               // Values are already in dollars, no conversion needed
-              totalPrizes += p.value
+              totalPrizes += p.value;
             }
-            return prizeData
-          })
-        }
-        return setData
-      })
-    }
+            return prizeData;
+          }),
+        };
+        return setData;
+      }),
+    };
     // Total prizes are already in dollars, no conversion needed
-    result.overviewTotalPrizes = parseFloat(totalPrizes.toFixed(2))
+    result.overviewTotalPrizes = parseFloat(totalPrizes.toFixed(2));
   }
   // constraints
-  if (!_.isNil(_.get(challenge, 'constraints.allowedRegistrants'))) {
+  if (!_.isNil(_.get(challenge, "constraints.allowedRegistrants"))) {
     result.constraintRecord = {
       create: {
-        allowedRegistrants: _.get(challenge, 'constraints.allowedRegistrants'),
-        ...auditFields
-      }
-    }
+        allowedRegistrants: _.get(challenge, "constraints.allowedRegistrants"),
+        ...auditFields,
+      },
+    };
   }
   // status
   if (challenge.status) {
-    result.status = challenge.status.toUpperCase()
+    result.status = challenge.status.toUpperCase();
   }
   // terms
   if (!_.isNil(challenge.terms)) {
     result.terms = {
-      create: _.map(challenge.terms, t => ({
+      create: _.map(challenge.terms, (t) => ({
         ...auditFields,
         roleId: t.roleId,
-        termId: t.id
-      }))
-    }
+        termId: t.id,
+      })),
+    };
   }
   // skills
   if (!_.isNil(challenge.skills)) {
     result.skills = {
-      create: _.map(challenge.skills, s => ({
+      create: _.map(challenge.skills, (s) => ({
         ...auditFields,
-        skillId: s.id
-      }))
-    }
+        skillId: s.id,
+      })),
+    };
   }
   // winners
   if (!_.isNil(challenge.winners)) {
     result.winners = {
-      create: _.map(challenge.winners, w => {
+      create: _.map(challenge.winners, (w) => {
         const t = {
           ...auditFields,
-          ..._.pick(w, ['userId', 'handle', 'placement', 'type'])
-        }
+          ..._.pick(w, ["userId", "handle", "placement", "type"]),
+        };
         if (_.isNil(t.type)) {
-          t.type = PrizeSetTypeEnum.PLACEMENT
+          t.type = PrizeSetTypeEnum.PLACEMENT;
         } else {
-          t.type = t.type.toUpperCase()
+          t.type = t.type.toUpperCase();
         }
         return t;
-      })
-    }
+      }),
+    };
   }
   // relations
   if (challenge.typeId) {
-    result.type = { connect: { id: challenge.typeId } }
+    result.type = { connect: { id: challenge.typeId } };
   }
   if (challenge.trackId) {
-    result.track = { connect: { id: challenge.trackId } }
+    result.track = { connect: { id: challenge.trackId } };
   }
   if (challenge.timelineTemplateId) {
-    result.timelineTemplate = { connect: { id: challenge.timelineTemplateId } }
+    result.timelineTemplate = { connect: { id: challenge.timelineTemplateId } };
   }
-  _.assignIn(result, auditFields)
+  _.assignIn(result, auditFields);
   // keep createdAt to allow test data
   if (challenge.created) {
-    result.createdAt = challenge.created || new Date()
+    result.createdAt = challenge.created || new Date();
   }
-  result.updatedAt = new Date()
-  return result
+  result.updatedAt = new Date();
+  return result;
 }
 
 /**
@@ -236,84 +258,84 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
  * @returns response data
  */
 function convertModelToResponse(ret) {
-  ret.legacy = _.omit(ret.legacyRecord, 'id', constants.auditFields)
-  delete ret.legacyRecord
-  delete ret.legacy.challengeId
+  ret.legacy = _.omit(ret.legacyRecord, "id", constants.auditFields);
+  delete ret.legacyRecord;
+  delete ret.legacy.challengeId;
   // Include billing info in response
   if (ret.billingRecord) {
-    ret.billing = _.omit(ret.billingRecord, 'id', 'challengeId', constants.auditFields)
+    ret.billing = _.omit(ret.billingRecord, "id", "challengeId", constants.auditFields);
   }
-  delete ret.billingRecord
+  delete ret.billingRecord;
 
   ret.task = {
     isTask: ret.taskIsTask,
     isAssigned: ret.taskIsAssigned,
-    memberId: ret.taskMemberId
-  }
-  delete ret.taskIsTask
-  delete ret.taskIsAssigned
-  delete ret.taskMemberId
+    memberId: ret.taskMemberId,
+  };
+  delete ret.taskIsTask;
+  delete ret.taskIsAssigned;
+  delete ret.taskMemberId;
 
   // use original date field
-  ret.created = ret.createdAt
-  ret.updated = ret.updatedAt
-  delete ret.createdAt
-  delete ret.updatedAt
+  ret.created = ret.createdAt;
+  ret.updated = ret.updatedAt;
+  delete ret.createdAt;
+  delete ret.updatedAt;
 
   // convert metadata
-  ret.metadata = _.map(ret.metadata, m => _.pick(m, ['name', 'value']))
+  ret.metadata = _.map(ret.metadata, (m) => _.pick(m, ["name", "value"]));
   // convert phases
-  ret.phases = _.map(ret.phases, p => {
-    const t = _.omit(p, 'challengeId', constants.auditFields)
-    t.constraints = _.map(p.constraints, c => _.pick(c, 'name', 'value'))
-    return t
-  })
+  ret.phases = _.map(ret.phases, (p) => {
+    const t = _.omit(p, "challengeId", constants.auditFields);
+    t.constraints = _.map(p.constraints, (c) => _.pick(c, "name", "value"));
+    return t;
+  });
   // convert events
-  ret.events = _.map(ret.events, e => ({ id: e.eventId, name: e.name, key: e.key }))
+  ret.events = _.map(ret.events, (e) => ({ id: e.eventId, name: e.name, key: e.key }));
   // convert discussions
-  ret.discussions = _.map(ret.discussions, d => {
-    const r = _.pick(d, ['name', 'type', 'provider', 'url'])
-    r.id = d.discussionId
-    r.options = _.map(d.options, o => {
-      const x = {}
-      x[o.optionKey] = o.optionValue
-      return x
-    })
-    return r
-  })
+  ret.discussions = _.map(ret.discussions, (d) => {
+    const r = _.pick(d, ["name", "type", "provider", "url"]);
+    r.id = d.discussionId;
+    r.options = _.map(d.options, (o) => {
+      const x = {};
+      x[o.optionKey] = o.optionValue;
+      return x;
+    });
+    return r;
+  });
   // convert prize sets
   let prizeType;
-  ret.prizeSets = _.map(ret.prizeSets, s => {
-    const ss = _.pick(s, ['type', 'description'])
+  ret.prizeSets = _.map(ret.prizeSets, (s) => {
+    const ss = _.pick(s, ["type", "description"]);
 
-    ss.prizes = _.map(s.prizes, p => {
-      prizeType = p.type
-      return _.pick(p, ['type', 'description', 'value'])
-    })
-    return ss
-  })
+    ss.prizes = _.map(s.prizes, (p) => {
+      prizeType = p.type;
+      return _.pick(p, ["type", "description", "value"]);
+    });
+    return ss;
+  });
   ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   if (prizeType) {
     ret.overview.type = prizeType;
   }
-  delete ret.overviewTotalPrizes
+  delete ret.overviewTotalPrizes;
 
   // convert terms
-  ret.terms = _.map(ret.terms, t => ({ id: t.termId, roleId: t.roleId }))
+  ret.terms = _.map(ret.terms, (t) => ({ id: t.termId, roleId: t.roleId }));
   // convert skills - basic transformation, enrichment happens in service layer
-  ret.skills = _.map(ret.skills, s => ({ id: s.skillId }))
+  ret.skills = _.map(ret.skills, (s) => ({ id: s.skillId }));
   // convert attachments
-  ret.attachments = _.map(ret.attachments, r => _.omit(r, constants.auditFields, 'challengeId'))
+  ret.attachments = _.map(ret.attachments, (r) => _.omit(r, constants.auditFields, "challengeId"));
   // convert winners
-  ret.winners = _.map(ret.winners, w => {
-    const winner = _.pick(w, ['userId', 'handle', 'placement'])
+  ret.winners = _.map(ret.winners, (w) => {
+    const winner = _.pick(w, ["userId", "handle", "placement"]);
 
-    return winner
-  })
+    return winner;
+  });
   // TODO: Set data from other API
-  ret.numOfSubmissions = 0
-  ret.numOfCheckpointSubmissions = 0
-  ret.numOfRegistrants = 0
+  ret.numOfSubmissions = 0;
+  ret.numOfCheckpointSubmissions = 0;
+  ret.numOfRegistrants = 0;
 }
 
 module.exports = {

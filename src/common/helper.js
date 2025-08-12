@@ -1,7 +1,6 @@
 /**
  * This file defines helper methods
  */
-const Joi = require("joi");
 const _ = require("lodash");
 const querystring = require("querystring");
 const constants = require("../../app-constants");
@@ -30,14 +29,14 @@ AWS.config.update({
   region: config.AMAZON.AWS_REGION,
 });
 
-let s3
+let s3;
 
 // lazy initialization of S3 instance
 function getS3() {
   if (!s3) {
     s3 = new AWS.S3();
   }
-  return s3
+  return s3;
 }
 
 /**
@@ -816,7 +815,7 @@ async function getProjectDefaultTerms(projectId) {
  */
 async function validateChallengeTerms(terms = []) {
   if (terms.length === 0) {
-    return []
+    return [];
   }
   const listOfTerms = [];
   const token = await m2mHelper.getM2MToken();
@@ -1196,13 +1195,13 @@ function flushInternalCache() {
 
 // remove null property from ret (recursively)
 function removeNullProperties(obj) {
-  if (typeof obj !== 'object' || obj === null || obj instanceof Date) {
+  if (typeof obj !== "object" || obj === null || obj instanceof Date) {
     return obj;
   }
 
   // Handle arrays (map recursively)
   if (Array.isArray(obj)) {
-    return obj.map(removeNullProperties).filter(item => item !== null);
+    return obj.map(removeNullProperties).filter((item) => item !== null);
   }
 
   // Handle objects (remove null properties recursively)
@@ -1267,7 +1266,7 @@ module.exports = {
   getFromInternalCache,
   setToInternalCache,
   flushInternalCache,
-  removeNullProperties
+  removeNullProperties,
 };
 
 logger.buildService(module.exports);

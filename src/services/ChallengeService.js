@@ -20,14 +20,17 @@ const challengeHelper = require("../common/challenge-helper");
 const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 
 const { hasAdminRole } = require("../common/role-helper");
-const {
-  enrichChallengeForResponse,
-  convertToISOString,
-} = require("../common/challenge-helper");
+const { enrichChallengeForResponse, convertToISOString } = require("../common/challenge-helper");
 const deepEqual = require("deep-equal");
-const prismaHelper = require('../common/prisma-helper');
+const prismaHelper = require("../common/prisma-helper");
 
-const { getClient, ReviewTypeEnum, DiscussionTypeEnum, ChallengeStatusEnum, PrizeSetTypeEnum } = require('../common/prisma');
+const {
+  getClient,
+  ReviewTypeEnum,
+  DiscussionTypeEnum,
+  ChallengeStatusEnum,
+  PrizeSetTypeEnum,
+} = require("../common/prisma");
 const prisma = getClient();
 
 const phaseAdvancer = new PhaseAdvancer({});
@@ -41,19 +44,19 @@ async function enrichSkillsData(challenge) {
     return;
   }
 
-  const skillIds = challenge.skills.map(skill => skill.skillId || skill.id);
-  
+  const skillIds = challenge.skills.map((skill) => skill.skillId || skill.id);
+
   if (skillIds.length === 0) {
     return;
   }
 
   try {
     const standSkills = await helper.getStandSkills(skillIds);
-    
-    challenge.skills = challenge.skills.map(skill => {
+
+    challenge.skills = challenge.skills.map((skill) => {
       const skillId = skill.skillId || skill.id;
       const found = _.find(standSkills, (item) => item.id === skillId);
-      
+
       if (found) {
         const enrichedSkill = {
           id: skillId,
@@ -69,49 +72,49 @@ async function enrichSkillsData(challenge) {
 
         return enrichedSkill;
       }
-      
+
       // Fallback if skill not found in standardized skills API
       return {
         id: skillId,
-        name: skill.name || '',
+        name: skill.name || "",
       };
     });
   } catch (error) {
-    logger.error('Failed to enrich skills data:', error);
-    
+    logger.error("Failed to enrich skills data:", error);
+
     // Enhanced fallback: try to get skill data from original challenge data if available
     // This handles cases where the external skills API is not accessible
     try {
       // Get the original challenge data from database with skills
       const originalChallenge = await prisma.challenge.findUnique({
         where: { id: challenge.id },
-        include: { 
+        include: {
           skills: true,
           // Include other relations that might have skill data
-        }
+        },
       });
-      
+
       if (originalChallenge && originalChallenge.skills) {
         // Check if we have stored skill names in metadata or other fields
-        challenge.skills = challenge.skills.map(skill => {
+        challenge.skills = challenge.skills.map((skill) => {
           const skillId = skill.skillId || skill.id;
-          
+
           // Basic fallback structure
           const fallbackSkill = {
             id: skillId,
             name: skill.name || skillId, // Use skillId as name if no name available
           };
-          
+
           return fallbackSkill;
         });
       }
     } catch (dbError) {
-      logger.error('Failed to get fallback skill data from database:', dbError);
-      
+      logger.error("Failed to get fallback skill data from database:", dbError);
+
       // Final fallback to basic structure if API call fails
-      challenge.skills = challenge.skills.map(skill => ({
+      challenge.skills = challenge.skills.map((skill) => ({
         id: skill.skillId || skill.id,
-        name: skill.name || '',
+        name: skill.name || "",
       }));
     }
   }
@@ -124,19 +127,22 @@ const includeReturnFields = {
   metadata: true,
   phases: {
     // sort by start/end date
-    orderBy: [{
-      scheduledEndDate: 'asc'
-    }, {
-      scheduledStartDate: 'asc'
-    }],
-    include: { constraints: true }
+    orderBy: [
+      {
+        scheduledEndDate: "asc",
+      },
+      {
+        scheduledStartDate: "asc",
+      },
+    ],
+    include: { constraints: true },
   },
   discussions: {
-    include: { options: true }
+    include: { options: true },
   },
   events: true,
   prizeSets: {
-    include: { prizes: true }
+    include: { prizes: true },
   },
   terms: true,
   skills: true,
@@ -144,7 +150,7 @@ const includeReturnFields = {
   attachments: true,
   track: true,
   type: true,
-}
+};
 
 /**
  * Search challenges by legacyId
@@ -154,20 +160,20 @@ const includeReturnFields = {
  * @param {Number} perPage the perPage
  * @returns {Array} the search result
  */
-async function searchByLegacyId (currentUser, legacyId, page, perPage) {
+async function searchByLegacyId(currentUser, legacyId, page, perPage) {
   // Do not take nested objects, query will be faster
   const challenges = await prisma.challenge.findMany({
     take: perPage,
     skip: (page - 1) * perPage,
     where: { legacyId },
-    include: includeReturnFields
-  })
+    include: includeReturnFields,
+  });
 
-  _.forEach(challenges, c => {
+  _.forEach(challenges, (c) => {
     prismaHelper.convertModelToResponse(c);
     enrichChallengeForResponse(c, c.track, c.type);
   });
-  return challenges
+  return challenges;
 }
 
 /**
@@ -176,7 +182,7 @@ async function searchByLegacyId (currentUser, legacyId, page, perPage) {
  * @param {Object} criteria the search criteria
  * @returns {Object} the search result
  */
-async function searchChallenges (currentUser, criteria) {
+async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 20;
   if (!_.isUndefined(criteria.legacyId)) {
@@ -186,9 +192,9 @@ async function searchChallenges (currentUser, criteria) {
 
   const prismaFilter = {
     where: {
-      AND: []
-    }
-  }
+      AND: [],
+    },
+  };
 
   const matchPhraseKeys = [
     "id",
@@ -206,7 +212,7 @@ async function searchChallenges (currentUser, criteria) {
 
   if (criteria.type) {
     const typeSearchRes = await prisma.challengeType.findFirst({
-      where: {abbreviation: criteria.type}
+      where: { abbreviation: criteria.type },
     });
     if (typeSearchRes && _.get(typeSearchRes, "id")) {
       criteria.typeId = _.get(typeSearchRes, "id");
@@ -214,8 +220,8 @@ async function searchChallenges (currentUser, criteria) {
   }
   if (criteria.track) {
     const trackSearchRes = await prisma.challengeTrack.findFirst({
-      where: { abbreviation: criteria.track }
-    })
+      where: { abbreviation: criteria.track },
+    });
     if (trackSearchRes && _.get(trackSearchRes, "id")) {
       criteria.trackId = _.get(trackSearchRes, "id");
     }
@@ -223,19 +229,25 @@ async function searchChallenges (currentUser, criteria) {
   if (criteria.types) {
     const typeIds = await prisma.challengeType.findMany({
       where: { abbreviation: { in: criteria.types } },
-      select: { id: true }
+      select: { id: true },
     });
     if (typeIds.length > 0) {
-      includedTypeIds = _.concat(includedTypeIds, typeIds.map(t => t.id));
+      includedTypeIds = _.concat(
+        includedTypeIds,
+        typeIds.map((t) => t.id)
+      );
     }
   }
   if (criteria.tracks) {
     const trackIds = await prisma.challengeTrack.findMany({
       select: { id: true },
-      where: { abbreviation: { in: criteria.tracks } }
+      where: { abbreviation: { in: criteria.tracks } },
     });
     if (trackIds.length > 0) {
-      includedTrackIds = _.concat(includedTrackIds, trackIds.map(t => t.id));
+      includedTrackIds = _.concat(
+        includedTrackIds,
+        trackIds.map((t) => t.id)
+      );
     }
   }
   if (criteria.typeId) {
@@ -251,263 +263,267 @@ async function searchChallenges (currentUser, criteria) {
       f[key] = value;
       prismaFilter.where.AND.push(f);
     }
-  })
+  });
 
   // handle status
   if (!_.isNil(criteria.status)) {
     prismaFilter.where.AND.push({
-      status: criteria.status.toUpperCase()
-    })
+      status: criteria.status.toUpperCase(),
+    });
   }
 
   _.forEach(_.keys(criteria), (key) => {
-    if (_.toString(key).indexOf('meta.') > -1) {
+    if (_.toString(key).indexOf("meta.") > -1) {
       // Parse and use metadata key
       if (!_.isUndefined(criteria[key])) {
-        const metaKey = key.split('meta.')[1];
+        const metaKey = key.split("meta.")[1];
         prismaFilter.where.AND.push({
           metadata: {
             some: {
               name: { contains: metaKey },
-              value: { contains: _.toString(criteria[key]) }
-            }
-          }
-        })
+              value: { contains: _.toString(criteria[key]) },
+            },
+          },
+        });
       }
     }
-  })
+  });
 
   if (includedTypeIds.length > 0) {
     prismaFilter.where.AND.push({
-      typeId: { in: includedTypeIds }
-    })
+      typeId: { in: includedTypeIds },
+    });
   }
 
   if (includedTrackIds.length > 0) {
     prismaFilter.where.AND.push({
-      trackId: { in: includedTrackIds }
-    })
+      trackId: { in: includedTrackIds },
+    });
   }
 
   if (criteria.search) {
     prismaFilter.where.AND.push({
-      OR: [{
-        name: { contains: criteria.search }
-      }, {
-        description: { contains: criteria.search }
-      // TODO: Skills doesn't have name field in db.
-      /*
+      OR: [
+        {
+          name: { contains: criteria.search },
+        },
+        {
+          description: { contains: criteria.search },
+          // TODO: Skills doesn't have name field in db.
+          /*
       }, {
         skills: { some: { name: { contains: criteria.search } } }
       */
-      }, {
-        tags: { has: criteria.search }
-      }]
-    })
+        },
+        {
+          tags: { has: criteria.search },
+        },
+      ],
+    });
   } else {
     if (criteria.name) {
       prismaFilter.where.AND.push({
-        name: { contains: criteria.name }
-      })
+        name: { contains: criteria.name },
+      });
     }
 
     if (criteria.description) {
       prismaFilter.where.AND.push({
-        description: { contains: criteria.description }
-      })
+        description: { contains: criteria.description },
+      });
     }
   }
 
   if (criteria.tag) {
     prismaFilter.where.AND.push({
       tags: {
-        has: criteria.tag
-      }
-    })
+        has: criteria.tag,
+      },
+    });
   }
 
   if (criteria.tags) {
     if (criteria.includeAllTags) {
       prismaFilter.where.AND.push({
-        tags: { hasEvery: criteria.tags }
-      })
+        tags: { hasEvery: criteria.tags },
+      });
     } else {
       prismaFilter.where.AND.push({
-        tags: { hasSome: criteria.tags }
-      })
+        tags: { hasSome: criteria.tags },
+      });
     }
   }
 
   if (criteria.totalPrizesFrom || criteria.totalPrizesTo) {
     if (criteria.totalPrizesFrom) {
       prismaFilter.where.AND.push({
-        overviewTotalPrizes: { gte: criteria.totalPrizesFrom }
-      })
+        overviewTotalPrizes: { gte: criteria.totalPrizesFrom },
+      });
     }
     if (criteria.totalPrizesTo) {
       prismaFilter.where.AND.push({
-        overviewTotalPrizes: { lte: criteria.totalPrizesTo }
-      })
+        overviewTotalPrizes: { lte: criteria.totalPrizesTo },
+      });
     }
   }
   if (criteria.selfService) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { selfService: criteria.selfService }
-      }
-    })
+        is: { selfService: criteria.selfService },
+      },
+    });
   }
   if (criteria.selfServiceCopilot) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { selfServiceCopilot: criteria.selfServiceCopilot }
-      }
-    })
+        is: { selfServiceCopilot: criteria.selfServiceCopilot },
+      },
+    });
   }
   if (criteria.forumId) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { forumId: criteria.forumId }
-      }
-    })
+        is: { forumId: criteria.forumId },
+      },
+    });
   }
   if (criteria.reviewType) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { reviewType: criteria.reviewType.toUpperCase() }
-      }
-    })
+        is: { reviewType: criteria.reviewType.toUpperCase() },
+      },
+    });
   }
   if (criteria.confidentialityType) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { confidentialityType: criteria.confidentialityType }
-      }
-    })
+        is: { confidentialityType: criteria.confidentialityType },
+      },
+    });
   }
   if (criteria.directProjectId) {
     prismaFilter.where.AND.push({
       legacyRecord: {
-        is: { directProjectId: criteria.directProjectId }
-      }
-    })
+        is: { directProjectId: criteria.directProjectId },
+      },
+    });
   }
   if (criteria.currentPhaseName) {
-    if (criteria.currentPhaseName === 'Registration') {
+    if (criteria.currentPhaseName === "Registration") {
       prismaFilter.where.AND.push({
-        currentPhaseNames: { hasSome: ['Registration', 'Open'] }
-      })
+        currentPhaseNames: { hasSome: ["Registration", "Open"] },
+      });
     } else {
       prismaFilter.where.AND.push({
-        currentPhaseNames: { has: criteria.currentPhaseName }
-      })
+        currentPhaseNames: { has: criteria.currentPhaseName },
+      });
     }
   }
   if (criteria.createdDateStart) {
     prismaFilter.where.AND.push({
-      createdAt: { gte: criteria.createdDateStart }
-    })
+      createdAt: { gte: criteria.createdDateStart },
+    });
   }
   if (criteria.createdDateEnd) {
     prismaFilter.where.AND.push({
-      createdAt: { lte: criteria.createdDateEnd }
-    })
+      createdAt: { lte: criteria.createdDateEnd },
+    });
   }
   if (criteria.registrationStartDateStart) {
     prismaFilter.where.AND.push({
-      registrationStartDate: { gte: criteria.registrationStartDateStart }
-    })
+      registrationStartDate: { gte: criteria.registrationStartDateStart },
+    });
   }
   if (criteria.registrationStartDateEnd) {
     prismaFilter.where.AND.push({
-      registrationStartDate: { lte: criteria.registrationStartDateEnd }
-    })
+      registrationStartDate: { lte: criteria.registrationStartDateEnd },
+    });
   }
   if (criteria.registrationEndDateStart) {
     prismaFilter.where.AND.push({
-      registrationEndDate: { gte: criteria.registrationEndDateStart }
-    })
+      registrationEndDate: { gte: criteria.registrationEndDateStart },
+    });
   }
   if (criteria.registrationEndDateEnd) {
     prismaFilter.where.AND.push({
-      registrationEndDate: { lte: criteria.registrationEndDateEnd }
-    })
+      registrationEndDate: { lte: criteria.registrationEndDateEnd },
+    });
   }
   if (criteria.submissionStartDateStart) {
     prismaFilter.where.AND.push({
-      submissionStartDate: { gte: criteria.submissionStartDateStart }
-    })
+      submissionStartDate: { gte: criteria.submissionStartDateStart },
+    });
   }
   if (criteria.submissionStartDateEnd) {
     prismaFilter.where.AND.push({
-      submissionStartDate: { lte: criteria.submissionStartDateEnd }
-    })
+      submissionStartDate: { lte: criteria.submissionStartDateEnd },
+    });
   }
   if (criteria.submissionEndDateStart) {
     prismaFilter.where.AND.push({
-      submissionEndDate: { gte: criteria.submissionEndDateStart }
-    })
+      submissionEndDate: { gte: criteria.submissionEndDateStart },
+    });
   }
   if (criteria.submissionEndDateEnd) {
     prismaFilter.where.AND.push({
-      submissionEndDate: { lte: criteria.submissionEndDateEnd }
-    })
+      submissionEndDate: { lte: criteria.submissionEndDateEnd },
+    });
   }
   if (criteria.updatedDateStart) {
     prismaFilter.where.AND.push({
-      updatedAt: { gte: criteria.updatedDateStart }
-    })
+      updatedAt: { gte: criteria.updatedDateStart },
+    });
   }
   if (criteria.updatedDateEnd) {
     prismaFilter.where.AND.push({
-      updatedAt: { lte: criteria.updatedDateEnd }
-    })
+      updatedAt: { lte: criteria.updatedDateEnd },
+    });
   }
   if (criteria.startDateStart) {
     prismaFilter.where.AND.push({
-      startDate: { gte: criteria.startDateStart }
-    })
+      startDate: { gte: criteria.startDateStart },
+    });
   }
   if (criteria.startDateEnd) {
     prismaFilter.where.AND.push({
-      startDate: { lte: criteria.startDateEnd }
-    })
+      startDate: { lte: criteria.startDateEnd },
+    });
   }
   if (criteria.endDateStart) {
     prismaFilter.where.AND.push({
-      endDate: { gte: criteria.endDateStart }
-    })
+      endDate: { gte: criteria.endDateStart },
+    });
   }
   if (criteria.endDateEnd) {
     prismaFilter.where.AND.push({
-      endDate: { lte: criteria.endDateEnd }
-    })
+      endDate: { lte: criteria.endDateEnd },
+    });
   }
 
-  const sortByProp = criteria.sortBy ? criteria.sortBy : 'createdAt'
+  const sortByProp = criteria.sortBy ? criteria.sortBy : "createdAt";
 
-  const sortOrderProp = criteria.sortOrder ? criteria.sortOrder : 'desc'
+  const sortOrderProp = criteria.sortOrder ? criteria.sortOrder : "desc";
 
   if (criteria.tco) {
     prismaFilter.where.AND.push({
       events: {
-        some: { key: { contains: 'tco' }}
-      }
-    })
+        some: { key: { contains: "tco" } },
+      },
+    });
   }
 
   if (criteria.events) {
-    const eventQuery = _.map(criteria.events, e => ({
+    const eventQuery = _.map(criteria.events, (e) => ({
       events: {
-        some: { key: { contains: e } }
-      }
-    }))
+        some: { key: { contains: e } },
+      },
+    }));
     if (criteria.includeAllEvents) {
-      prismaFilter.where.AND = _.concat(prismaFilter.where.AND, eventQuery)
+      prismaFilter.where.AND = _.concat(prismaFilter.where.AND, eventQuery);
     } else {
       prismaFilter.where.AND.push({
-        OR: eventQuery
-      })
+        OR: eventQuery,
+      });
     }
   }
 
@@ -573,32 +589,35 @@ async function searchChallenges (currentUser, criteria) {
     if (_.isUndefined(currentUser)) {
       // If the user is not authenticated, only query challenges that don't have a group
       prismaFilter.where.AND.push({
-        groups: { isEmpty: true }
-      })
+        groups: { isEmpty: true },
+      });
     } else if (!currentUser.isMachine && !_hasAdminRole) {
       prismaFilter.where.AND.push({
-        OR: [{
-          // include public challenges
-          groups: { isEmpty: true }
-        }, {
-          // If the user is not M2M and is not an admin, return public + challenges from groups the user can access
-          groups: { hasSome: accessibleGroups }
-        }]
-      })
+        OR: [
+          {
+            // include public challenges
+            groups: { isEmpty: true },
+          },
+          {
+            // If the user is not M2M and is not an admin, return public + challenges from groups the user can access
+            groups: { hasSome: accessibleGroups },
+          },
+        ],
+      });
     }
   } else {
     prismaFilter.where.AND.push({
-      groups: { hasSome: groupsToFilter }
-    })
+      groups: { hasSome: groupsToFilter },
+    });
   }
 
   if (criteria.ids) {
     prismaFilter.where.AND.push({
-      id: { in: criteria.ids }
-    })
+      id: { in: criteria.ids },
+    });
   }
 
-  let memberChallengeIds
+  let memberChallengeIds;
 
   // FIXME: This is wrong!
   // if (!_.isUndefined(currentUser) && currentUser.handle) {
@@ -607,20 +626,20 @@ async function searchChallenges (currentUser, criteria) {
 
   if (criteria.memberId) {
     // logger.error(`memberId ${criteria.memberId}`)
-    memberChallengeIds = await helper.listChallengesByMember(criteria.memberId)
+    memberChallengeIds = await helper.listChallengesByMember(criteria.memberId);
     // logger.error(`response ${JSON.stringify(ids)}`)
     prismaFilter.where.AND.push({
-      id: { in: memberChallengeIds }
-    })
-  } else if (currentUser && !_hasAdminRole && !_.get(currentUser, 'isMachine', false)) {
-    memberChallengeIds = await helper.listChallengesByMember(currentUser.userId)
+      id: { in: memberChallengeIds },
+    });
+  } else if (currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
+    memberChallengeIds = await helper.listChallengesByMember(currentUser.userId);
   }
 
   // FIXME: Tech Debt
-  let excludeTasks = true
+  let excludeTasks = true;
   // if you're an admin or m2m, security rules wont be applied
-  if (currentUser && (_hasAdminRole || _.get(currentUser, 'isMachine', false))) {
-    excludeTasks = false
+  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+    excludeTasks = false;
   }
 
   /**
@@ -631,79 +650,79 @@ async function searchChallenges (currentUser, criteria) {
    * For admins/m2m:
    * - All tasks will be returned
    */
-  if (currentUser && (_hasAdminRole || _.get(currentUser, 'isMachine', false))) {
+  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
     // For admins/m2m, allow filtering based on task properties
     if (!_.isNil(criteria.isTask)) {
       prismaFilter.where.AND.push({
-        taskIsTask: criteria.isTask
-      })
+        taskIsTask: criteria.isTask,
+      });
     }
     if (!_.isNil(criteria.taskIsAssigned)) {
       prismaFilter.where.AND.push({
-        taskIsAssigned: criteria.taskIsAssigned
-      })
+        taskIsAssigned: criteria.taskIsAssigned,
+      });
     }
     if (!_.isNil(criteria.taskMemberId)) {
       prismaFilter.where.AND.push({
-        taskMemberId: criteria.taskMemberId
-      })
+        taskMemberId: criteria.taskMemberId,
+      });
     }
   } else if (excludeTasks) {
-    const taskFilter = []
+    const taskFilter = [];
     if (_.get(memberChallengeIds, "length", 0) > 0) {
       taskFilter.push({
-        id: { in: memberChallengeIds }
-      })
+        id: { in: memberChallengeIds },
+      });
     }
     taskFilter.push({
-      taskIsTask: false
-    })
+      taskIsTask: false,
+    });
     taskFilter.push({
       taskIsTask: true,
-      taskIsAssigned: false
-    })
-    if (currentUser && !_hasAdminRole && !_.get(currentUser, 'isMachine', false)) {
+      taskIsAssigned: false,
+    });
+    if (currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
       taskFilter.push({
-        taskMemberId: currentUser.userId
-      })
+        taskMemberId: currentUser.userId,
+      });
     }
     prismaFilter.where.AND.push({
-      OR: taskFilter
-    })
+      OR: taskFilter,
+    });
   }
 
-  const sortFilter = {}
-  sortFilter[sortByProp] = sortOrderProp
+  const sortFilter = {};
+  sortFilter[sortByProp] = sortOrderProp;
 
   const prismaQuery = {
     ...prismaFilter,
     take: criteria.perPage,
     skip: (criteria.page - 1) * criteria.perPage,
     orderBy: [sortFilter],
-    include: includeReturnFields
-  }
+    include: includeReturnFields,
+  };
 
-  let challenges = []
-  let total = 0
+  let challenges = [];
+  let total = 0;
   try {
-    total = await prisma.challenge.count({ ...prismaFilter })
-    challenges = await prisma.challenge.findMany(prismaQuery)
-    
+    total = await prisma.challenge.count({ ...prismaFilter });
+    challenges = await prisma.challenge.findMany(prismaQuery);
+
     // Process challenges sequentially to enrich skills data
     for (const c of challenges) {
       prismaHelper.convertModelToResponse(c);
-      
+
       // Enrich skills data with full details from standardized skills API
       await enrichSkillsData(c);
-      
+
       enrichChallengeForResponse(c, c.track, c.type);
     }
   } catch (e) {
     // logger.error(JSON.stringify(e));
-    console.log(e)
+    console.log(e);
   }
 
-  let result = challenges
+  let result = challenges;
 
   // Hide privateDescription for non-register challenges
   if (currentUser) {
@@ -825,7 +844,7 @@ searchChallenges.schema = {
  */
 async function createChallenge(currentUser, challenge, userToken) {
   await challengeHelper.validateCreateChallengeRequest(currentUser, challenge);
-  const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets)
+  const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
 
   console.log("TYPE", prizeTypeTmp);
   if (challenge.legacy && challenge.legacy.selfService) {
@@ -855,8 +874,9 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challengeHelper.isProjectIdRequired(challenge.timelineTemplateId) || challenge.projectId) {
     const { projectId } = challenge;
 
-    if (!projectId) { // fix of projectId undefined
-      throw new errors.BadRequestError('Project id must be provided');
+    if (!projectId) {
+      // fix of projectId undefined
+      throw new errors.BadRequestError("Project id must be provided");
     }
 
     const { directProjectId } = await projectHelper.getProject(projectId, currentUser);
@@ -974,17 +994,17 @@ async function createChallenge(currentUser, challenge, userToken) {
   // No conversion needed - database stores values in dollars directly
   // The amountInCents field doesn't exist in the database schema
 
-  const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge)
+  const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   const ret = await prisma.challenge.create({
     data: prismaModel,
-    include: includeReturnFields
-  })
+    include: includeReturnFields,
+  });
 
-  ret.overview = { totalPrizes: ret.overviewTotalPrizes }
+  ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   // No conversion needed - values are already in dollars in the database
 
-  prismaHelper.convertModelToResponse(ret)
-  enrichChallengeForResponse(ret, track, type)
+  prismaHelper.convertModelToResponse(ret);
+  enrichChallengeForResponse(ret, track, type);
 
   // If the challenge is self-service, add the creating user as the "client manager", *not* the manager
   // This is necessary for proper handling of the vanilla embed on the self-service work item dashboard
@@ -1043,6 +1063,7 @@ createChallenge.schema = {
       description: Joi.string(),
       privateDescription: Joi.string(),
       descriptionFormat: Joi.string(),
+      wiproAllowed: Joi.boolean().optional(),
       challengeSource: Joi.string(),
       metadata: Joi.array()
         .items(
@@ -1146,11 +1167,11 @@ createChallenge.schema = {
  * @param {Boolean} checkIfExists flag to check if challenge exists
  * @returns {Object} the challenge with given id
  */
-async function getChallenge (currentUser, id, checkIfExists) {
+async function getChallenge(currentUser, id, checkIfExists) {
   const challenge = await prisma.challenge.findUnique({
     where: { id },
-    include: includeReturnFields
-  })
+    include: includeReturnFields,
+  });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge of id ${id} is not found.`);
   }
@@ -1193,10 +1214,10 @@ async function getChallenge (currentUser, id, checkIfExists) {
   }
 
   prismaHelper.convertModelToResponse(challenge);
-  
+
   // Enrich skills data with full details from standardized skills API
   await enrichSkillsData(challenge);
-  
+
   enrichChallengeForResponse(challenge, challenge.track, challenge.type);
 
   return helper.removeNullProperties(challenge);
@@ -1323,8 +1344,7 @@ function validateTask(currentUser, challenge, data, challengeResources) {
 
   // Status changed to Active, indicating launch a Task
   const isLaunchTask =
-    data.status === ChallengeStatusEnum.ACTIVE &&
-    challenge.status !== ChallengeStatusEnum.ACTIVE;
+    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
 
   // Status changed to Completed, indicating complete a Task
   const isCompleteTask =
@@ -1366,13 +1386,13 @@ function validateTask(currentUser, challenge, data, challengeResources) {
 async function updateChallenge(currentUser, challengeId, data) {
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
-    include: includeReturnFields
-  })
+    include: includeReturnFields,
+  });
   if (!challenge || !challenge.id) {
-    throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`)
+    throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
   }
-  enrichChallengeForResponse(challenge)
-  prismaHelper.convertModelToResponse(challenge)
+  enrichChallengeForResponse(challenge);
+  prismaHelper.convertModelToResponse(challenge);
   const existingPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
 
   // No conversion needed - values are already in dollars in the database
@@ -1631,9 +1651,7 @@ async function updateChallenge(currentUser, challengeId, data) {
 
     const prizeSetsGroup = _.groupBy(data.prizeSets, "type");
     if (prizeSetsGroup[PrizeSetTypeEnum.PLACEMENT]) {
-      const totalPrizes = helper.sumOfPrizes(
-        prizeSetsGroup[PrizeSetTypeEnum.PLACEMENT][0].prizes
-      );
+      const totalPrizes = helper.sumOfPrizes(prizeSetsGroup[PrizeSetTypeEnum.PLACEMENT][0].prizes);
       _.assign(data, { overview: { totalPrizes } });
     }
   }
@@ -1781,10 +1799,13 @@ async function updateChallenge(currentUser, challengeId, data) {
   }
 
   // convert data to prisma models
-  const updateData = prismaHelper.convertChallengeSchemaToPrisma(currentUser, _.omit(data, ['cancelReason']))
-  updateData.updatedBy = _.toString(currentUser.userId)
+  const updateData = prismaHelper.convertChallengeSchemaToPrisma(
+    currentUser,
+    _.omit(data, ["cancelReason"])
+  );
+  updateData.updatedBy = _.toString(currentUser.userId);
   // reset createdBy
-  delete updateData.createdBy
+  delete updateData.createdBy;
 
   const newPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updateData.prizeSets);
   if (newPrizeType != null && existingPrizeType != null && newPrizeType !== existingPrizeType) {
@@ -1795,49 +1816,49 @@ async function updateChallenge(currentUser, challengeId, data) {
   const updatedChallenge = await prisma.$transaction(async (tx) => {
     // drop nested data if updated
     if (!_.isNil(updateData.legacyRecord)) {
-      await tx.challengeLegacy.deleteMany({ where: { challengeId } })
+      await tx.challengeLegacy.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.billingRecord)) {
-      await tx.challengeBilling.deleteMany({ where: { challengeId } })
+      await tx.challengeBilling.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.constraintRecord)) {
-      await tx.challengeConstraint.deleteMany({ where: { challengeId } })
+      await tx.challengeConstraint.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.events)) {
-      await tx.challengeEvent.deleteMany({ where: { challengeId } })
+      await tx.challengeEvent.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.discussions)) {
-      await tx.challengeDiscussion.deleteMany({ where: { challengeId } })
+      await tx.challengeDiscussion.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.metadata)) {
-      await tx.challengeMetadata.deleteMany({ where: { challengeId } })
+      await tx.challengeMetadata.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.phases)) {
-      await tx.challengePhase.deleteMany({ where: { challengeId } })
+      await tx.challengePhase.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.prizeSets)) {
-      await tx.challengePrizeSet.deleteMany({ where: { challengeId } })
+      await tx.challengePrizeSet.deleteMany({ where: { challengeId } });
     }
     if (_.isNil(updateData.winners)) {
-      await tx.challengeWinner.deleteMany({ where: { challengeId } })
+      await tx.challengeWinner.deleteMany({ where: { challengeId } });
     }
     if (_.isNil(updateData.attachment)) {
-      await tx.attachment.deleteMany({ where: { challengeId } })
+      await tx.attachment.deleteMany({ where: { challengeId } });
     }
     if (_.isNil(updateData.terms)) {
-      await tx.challengeTerm.deleteMany({ where: { challengeId } })
+      await tx.challengeTerm.deleteMany({ where: { challengeId } });
     }
     if (_.isNil(updateData.skills)) {
-      await tx.challengeSkill.deleteMany({ where: { challengeId } })
+      await tx.challengeSkill.deleteMany({ where: { challengeId } });
     }
 
     return await tx.challenge.update({
       data: updateData,
       where: { id: challengeId },
-      include: includeReturnFields
-    })
-  })
-  await indexChallengeAndPostToKafka(updatedChallenge, track, type)
+      include: includeReturnFields,
+    });
+  });
+  await indexChallengeAndPostToKafka(updatedChallenge, track, type);
 
   if (updatedChallenge.legacy.selfService) {
     const creator = await helper.getMemberByHandle(updatedChallenge.createdBy);
@@ -1936,6 +1957,7 @@ updateChallenge.schema = {
       description: Joi.string().optional(),
       privateDescription: Joi.string().allow("").optional(),
       descriptionFormat: Joi.string().optional(),
+      wiproAllowed: Joi.boolean().optional(),
       challengeSource: Joi.string().optional(),
       metadata: Joi.array()
         .items(
@@ -2063,7 +2085,7 @@ updateChallenge.schema = {
             .unknown(true)
         )
         .optional(),
-      overview: Joi.any().forbidden()      
+      overview: Joi.any().forbidden(),
     })
     .unknown(true)
     .required(),
@@ -2120,6 +2142,7 @@ function sanitizeChallenge(challenge) {
     "cancelReason",
     "constraints",
     "skills",
+    "wiproAllowed",
   ]);
   if (!_.isUndefined(sanitized.name)) {
     sanitized.name = xss(sanitized.name);
@@ -2224,10 +2247,10 @@ function sanitizeData(data, challenge) {
  * @param {String} challengeId the challenge id
  * @returns {Object} the deleted challenge
  */
-async function deleteChallenge (currentUser, challengeId) {
+async function deleteChallenge(currentUser, challengeId) {
   const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId, status: ChallengeStatusEnum.NEW }
-  })
+    where: { id: challengeId, status: ChallengeStatusEnum.NEW },
+  });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(
       `Challenge with id: ${challengeId} doesn't exist or is not in New status`
@@ -2236,7 +2259,7 @@ async function deleteChallenge (currentUser, challengeId) {
   // ensure user can modify challenge
   await helper.ensureUserCanModifyChallenge(currentUser, challenge);
   // delete DB record
-  await prisma.challenge.delete({ where: { id: challengeId } })
+  await prisma.challenge.delete({ where: { id: challengeId } });
 
   await helper.postBusEvent(constants.Topics.ChallengeDeleted, {
     id: challengeId,
@@ -2252,21 +2275,22 @@ deleteChallenge.schema = {
 
 async function advancePhase(currentUser, challengeId, data) {
   logger.info(`Advance Phase Request - ${challengeId} - ${JSON.stringify(data)}`);
-  const machineOrAdmin = currentUser && (currentUser.isMachine || hasAdminRole(currentUser))
+  const machineOrAdmin = currentUser && (currentUser.isMachine || hasAdminRole(currentUser));
   if (!machineOrAdmin) {
     throw new errors.ForbiddenError(
       `Admin role or an M2M token is required to advance the challenge phase.`
     );
   }
-  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId }, include: includeReturnFields })
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: includeReturnFields,
+  });
 
   if (!_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
-    throw new errors.BadRequestError(
-      `Challenge with id: ${challengeId} is not in Active status.`
-    );
+    throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in Active status.`);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
@@ -2279,26 +2303,31 @@ async function advancePhase(currentUser, challengeId, data) {
 
   const auditFields = {
     createdBy: _.toString(currentUser.userId),
-    updatedBy: _.toString(currentUser.userId)
-  }
+    updatedBy: _.toString(currentUser.userId),
+  };
   if (!phaseAdvancerResult.success) {
-    return phaseAdvancerResult
+    return phaseAdvancerResult;
   }
   // update phase if result is successful
-  const challengeData = {}
+  const challengeData = {};
   const updatedPhaseData = {
-    phases: phaseAdvancerResult.updatedPhases
-  }
-  prismaHelper.convertChallengePhaseSchema(updatedPhaseData, challengeData, auditFields)
+    phases: phaseAdvancerResult.updatedPhases,
+  };
+  prismaHelper.convertChallengePhaseSchema(updatedPhaseData, challengeData, auditFields);
   // Perform partially update for now
-  const newPhases = challengeData.phases
-  const newChallengeData = _.pick(challengeData, ['currentPhaseNames',
-    'registrationStartDate', 'registrationEndDate', 'submissionStartDate', 'submissionEndDate'])
+  const newPhases = challengeData.phases;
+  const newChallengeData = _.pick(challengeData, [
+    "currentPhaseNames",
+    "registrationStartDate",
+    "registrationEndDate",
+    "submissionStartDate",
+    "submissionEndDate",
+  ]);
 
   // TODO: This is a temporary solution to update the challenge status to Completed; We currently do not have a way to get winner list using v5 data
   // TODO: With the implementation of v5 review API we'll develop a mechanism to maintain the winner list in v5 data that challenge-api can use to create the winners list
   if (phaseAdvancerResult.hasWinningSubmission === true) {
-    newChallengeData.status = ChallengeStatusEnum.COMPLETED
+    newChallengeData.status = ChallengeStatusEnum.COMPLETED;
   }
   await prisma.$transaction(async (tx) => {
     // upsert phases one by one
@@ -2306,25 +2335,25 @@ async function advancePhase(currentUser, challengeId, data) {
       await tx.challengePhase.upsert({
         where: {
           challengeId,
-          phaseId: newPhase.phaseId
+          phaseId: newPhase.phaseId,
         },
         create: { ...newPhase, challengeId },
-        update: newPhase
-      })
+        update: newPhase,
+      });
     }
     await tx.challenge.update({
       where: { id: challengeId },
-      data: newChallengeData
-    })
-  })
-  const updatedChallenge = await tx.challenge.findUnique({ where: { id: challengeId } })
-  await indexChallengeAndPostToKafka(updatedChallenge)
+      data: newChallengeData,
+    });
+  });
+  const updatedChallenge = await tx.challenge.findUnique({ where: { id: challengeId } });
+  await indexChallengeAndPostToKafka(updatedChallenge);
 
   return {
     success: true,
     message: phaseAdvancerResult.message,
-    next: phaseAdvancerResult.next
-  }
+    next: phaseAdvancerResult.next,
+  };
   // Indexing in Kafka is not necessary here since domain-challenge will do it
 }
 

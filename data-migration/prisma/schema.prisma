@@ -68,6 +68,8 @@ model Challenge {
   overviewTotalPrizes   Float?                 // stored from overview.totalPrizes
   currentPhaseNames     String[]             // current phase names
 
+  wiproAllowed          Boolean              @default(false)
+
   // simple arrays for tags and groups (PostgreSQL native array type)
   tags                  String[]
   groups                String[]

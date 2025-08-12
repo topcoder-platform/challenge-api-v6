@@ -1,7 +1,7 @@
 swagger: "2.0"
 info:
   version: 1.0.0
-  title: Challenge V5 API
+  title: Challenge V6 API
   description: >
     ## Pagination
 
@@ -37,7 +37,7 @@ info:
 
     - Users can access attachments of a challenge only when the user can access the challenge itself.
 host: api.topcoder.com
-basePath: /v5
+basePath: /v6
 schemes:
   - http
   - https
@@ -2489,6 +2489,10 @@ definitions:
         type: string
       challengeSource:
         type: string
+      wiproAllowed:
+        type: boolean
+        default: false
+        description: Flag to indicate whether Wipro employees can join challenge
       descriptionFormat:
         type: string
         default: markup

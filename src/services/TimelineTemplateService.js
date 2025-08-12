@@ -10,7 +10,7 @@ const errors = require("../common/errors");
 
 const PhaseService = require("./PhaseService");
 
-const prisma = require('../common/prisma').getClient()
+const prisma = require("../common/prisma").getClient();
 
 module.exports = {};
 
@@ -20,18 +20,18 @@ module.exports = {};
  * @returns {Promise<Object>} the search result
  */
 async function searchTimelineTemplates(criteria) {
-  const searchFilter = getSearchFilter(_.omit(criteria, ['page', 'perPage']))
+  const searchFilter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
 
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 50;
   let items = await prisma.timelineTemplate.findMany({
     where: searchFilter,
-    include: { phases: true }
-  })
-  items = _.map(items, r => _.omit(r, constants.auditFields))
-  items.forEach(item => {
-    item.phases = _.map(item.phases, p => _.omit(p, constants.auditFields))
-  })
+    include: { phases: true },
+  });
+  items = _.map(items, (r) => _.omit(r, constants.auditFields));
+  items.forEach((item) => {
+    item.phases = _.map(item.phases, (p) => _.omit(p, constants.auditFields));
+  });
   const total = items.length;
   const result = items.slice((page - 1) * perPage, page * perPage);
 
@@ -44,12 +44,12 @@ async function searchTimelineTemplates(criteria) {
  * @param {Object} criteria search criteria
  * @returns filter used in prisma
  */
-function getSearchFilter (criteria) {
-  const ret = {}
+function getSearchFilter(criteria) {
+  const ret = {};
   if (!_.isEmpty(criteria.name)) {
-    ret.name = { equals: criteria.name }
+    ret.name = { equals: criteria.name };
   }
-  return ret
+  return ret;
 }
 
 searchTimelineTemplates.schema = {
@@ -65,11 +65,13 @@ searchTimelineTemplates.schema = {
  * @param {String} name timeline template name
  * @throws error if timeline template name exists in db
  */
-async function checkName (name) {
+async function checkName(name) {
   const existingByName = await prisma.timelineTemplate.findMany({
-    where: { name }
-  })
-  if (existingByName.length > 0) { throw new errors.ConflictError(`TimelineTemplate with name: ${name} already exist`) }
+    where: { name },
+  });
+  if (existingByName.length > 0) {
+    throw new errors.ConflictError(`TimelineTemplate with name: ${name} already exist`);
+  }
 }
 
 /**
@@ -78,28 +80,28 @@ async function checkName (name) {
  * @param {Object} timelineTemplate the timeline template to created
  * @returns {Object} the created timeline template
  */
-async function createTimelineTemplate (authUser, timelineTemplate) {
-  await checkName(timelineTemplate.name)
+async function createTimelineTemplate(authUser, timelineTemplate) {
+  await checkName(timelineTemplate.name);
 
   // Do not validate phases for now
   await phaseHelper.validatePhases(timelineTemplate.phases);
 
-  const phases = timelineTemplate.phases
-  _.forEach(phases, p => {
-    p.createdBy = authUser.userId
-    p.updatedBy = authUser.userId
-  })
-  timelineTemplate.createdBy = authUser.userId
-  timelineTemplate.updatedBy = authUser.userId
-  timelineTemplate.phases = { create: phases }
+  const phases = timelineTemplate.phases;
+  _.forEach(phases, (p) => {
+    p.createdBy = authUser.userId;
+    p.updatedBy = authUser.userId;
+  });
+  timelineTemplate.createdBy = authUser.userId;
+  timelineTemplate.updatedBy = authUser.userId;
+  timelineTemplate.phases = { create: phases };
 
   let ret = await prisma.timelineTemplate.create({
     data: timelineTemplate,
-    include: { phases: true }
-  })
+    include: { phases: true },
+  });
   // remove audit fields
-  ret = _.omit(ret, constants.auditFields)
-  ret.phases = _.map(ret.phases, p => _.omit(p, constants.auditFields))
+  ret = _.omit(ret, constants.auditFields);
+  ret.phases = _.map(ret.phases, (p) => _.omit(p, constants.auditFields));
   // post bus event
   await helper.postBusEvent(constants.Topics.TimelineTemplateCreated, ret);
   return ret;
@@ -134,14 +136,14 @@ createTimelineTemplate.schema = {
 async function getTimelineTemplate(timelineTemplateId) {
   let ret = await prisma.timelineTemplate.findUnique({
     where: { id: timelineTemplateId },
-    include: { phases: true }
-  })
+    include: { phases: true },
+  });
   if (!ret || _.isUndefined(ret.id)) {
-    throw new errors.NotFoundError(`TimelineTemplate with id: ${timelineTemplateId} doesn't exist`)
+    throw new errors.NotFoundError(`TimelineTemplate with id: ${timelineTemplateId} doesn't exist`);
   }
-  ret = _.omit(ret, constants.auditFields)
-  ret.phases = _.map(ret.phases, p => _.omit(p, constants.auditFields))
-  return ret
+  ret = _.omit(ret, constants.auditFields);
+  ret.phases = _.map(ret.phases, (p) => _.omit(p, constants.auditFields));
+  return ret;
 }
 
 getTimelineTemplate.schema = {
@@ -156,13 +158,13 @@ getTimelineTemplate.schema = {
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated timeline template
  */
-async function update (authUser, timelineTemplateId, data, isFull) {
-  const timelineTemplate = await getTimelineTemplate(timelineTemplateId)
+async function update(authUser, timelineTemplateId, data, isFull) {
+  const timelineTemplate = await getTimelineTemplate(timelineTemplateId);
 
   if (data.name && data.name.toLowerCase() !== timelineTemplate.name.toLowerCase()) {
     const existingByName = await prisma.timelineTemplate.findMany({
-      where: { name: data.name }
-    })
+      where: { name: data.name },
+    });
 
     if (existingByName.length > 1)
       throw new errors.ConflictError(`Timeline template with name ${data.name} already exists`);
@@ -177,38 +179,38 @@ async function update (authUser, timelineTemplateId, data, isFull) {
   if (isFull) {
     // description is optional field, can be undefined
     if (_.isUndefined(data.description)) {
-      data.description = null
+      data.description = null;
     }
   } else {
-    data = { ...timelineTemplate, ...data }
+    data = { ...timelineTemplate, ...data };
   }
-  data.updatedBy = authUser.userId
+  data.updatedBy = authUser.userId;
   data.phases = {
-    create: _.forEach(data.phases, p => {
-      p.createdBy = authUser.userId
-      p.updatedBy = authUser.userId
-      delete p.timelineTemplateId
-    })
-  }
+    create: _.forEach(data.phases, (p) => {
+      p.createdBy = authUser.userId;
+      p.updatedBy = authUser.userId;
+      delete p.timelineTemplateId;
+    }),
+  };
   let ret = await prisma.$transaction(async (tx) => {
     // remove old timelineTemplatePhase
-    await tx.timelineTemplatePhase.deleteMany({ where: { timelineTemplateId } })
+    await tx.timelineTemplatePhase.deleteMany({ where: { timelineTemplateId } });
     // update data and create new phases
     return await tx.timelineTemplate.update({
       where: { id: timelineTemplateId },
       data,
-      include: { phases: true }
-    })
-  })
-  ret = _.omit(ret, constants.auditFields)
-  ret.phases = _.map(ret.phases, p => _.omit(p, constants.auditFields))
+      include: { phases: true },
+    });
+  });
+  ret = _.omit(ret, constants.auditFields);
+  ret.phases = _.map(ret.phases, (p) => _.omit(p, constants.auditFields));
 
   // post bus event
   await helper.postBusEvent(
     constants.Topics.TimelineTemplateUpdated,
     isFull ? ret : _.assignIn({ id: timelineTemplateId }, ret)
   );
-  return ret
+  return ret;
 }
 
 /**
@@ -218,8 +220,8 @@ async function update (authUser, timelineTemplateId, data, isFull) {
  * @param {Object} data the timeline template data to be updated
  * @returns {Object} the updated timeline template
  */
-async function fullyUpdateTimelineTemplate (authUser, timelineTemplateId, data) {
-  return update(authUser, timelineTemplateId, data, true)
+async function fullyUpdateTimelineTemplate(authUser, timelineTemplateId, data) {
+  return update(authUser, timelineTemplateId, data, true);
 }
 
 fullyUpdateTimelineTemplate.schema = {
@@ -251,8 +253,8 @@ fullyUpdateTimelineTemplate.schema = {
  * @param {Object} data the timeline template data to be updated
  * @returns {Object} the updated timeline template
  */
-async function partiallyUpdateTimelineTemplate (authUser, timelineTemplateId, data) {
-  return update(authUser, timelineTemplateId, data)
+async function partiallyUpdateTimelineTemplate(authUser, timelineTemplateId, data) {
+  return update(authUser, timelineTemplateId, data);
 }
 
 partiallyUpdateTimelineTemplate.schema = {
@@ -282,12 +284,12 @@ partiallyUpdateTimelineTemplate.schema = {
  * @returns {Object} the deleted timeline template
  */
 async function deleteTimelineTemplate(timelineTemplateId) {
-  let ret = await getTimelineTemplate(timelineTemplateId)
+  let ret = await getTimelineTemplate(timelineTemplateId);
   // TimelineTemplatePhase will be deleted with cascade
-  await prisma.timelineTemplate.delete({ where: { id: timelineTemplateId } })
+  await prisma.timelineTemplate.delete({ where: { id: timelineTemplateId } });
   // post bus event
-  await helper.postBusEvent(constants.Topics.TimelineTemplateDeleted, ret)
-  return ret
+  await helper.postBusEvent(constants.Topics.TimelineTemplateDeleted, ret);
+  return ret;
 }
 
 deleteTimelineTemplate.schema = {

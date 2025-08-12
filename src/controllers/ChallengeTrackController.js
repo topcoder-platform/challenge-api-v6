@@ -42,7 +42,11 @@ async function getChallengeTrack(req, res) {
  * @param {Object} res the response
  */
 async function fullyUpdateChallengeTrack(req, res) {
-  const result = await service.fullyUpdateChallengeTrack(req.authUser, req.params.challengeTrackId, req.body);
+  const result = await service.fullyUpdateChallengeTrack(
+    req.authUser,
+    req.params.challengeTrackId,
+    req.body
+  );
   res.send(result);
 }
 
@@ -52,7 +56,11 @@ async function fullyUpdateChallengeTrack(req, res) {
  * @param {Object} res the response
  */
 async function partiallyUpdateChallengeTrack(req, res) {
-  const result = await service.partiallyUpdateChallengeTrack(req.authUser, req.params.challengeTrackId, req.body);
+  const result = await service.partiallyUpdateChallengeTrack(
+    req.authUser,
+    req.params.challengeTrackId,
+    req.body
+  );
   res.send(result);
 }
 

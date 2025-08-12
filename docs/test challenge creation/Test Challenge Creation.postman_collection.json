@@ -1,8 +1,10 @@
 {
 	"info": {
-		"_postman_id": "2c3e6ae7-6f87-4b5c-a6a9-4b66e9c49eac",
+		"_postman_id": "25aa29e4-5920-41b3-a031-af2ab3469655",
 		"name": "Test Challenge Creation",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "46836291",
+		"_collection_link": "https://pinoydream.postman.co/workspace/Pinoydream's-Workspace~f0c1fd49-90ba-45d1-852b-c1b0eabc86f7/collection/46836291-25aa29e4-5920-41b3-a031-af2ab3469655?action=share&source=collection_link&creator=46836291"
 	},
 	"item": [
 		{
@@ -14,7 +16,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "4f642519-d5a1-49f3-bc1d-fdb0c3e433a4",
 								"exec": [
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
@@ -58,7 +59,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "0c2c8744-135e-49df-83b6-f1c355445c73",
 								"exec": [
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
@@ -95,8 +95,7 @@
 					},
 					"response": []
 				}
-			],
-			"protocolProfileBehavior": {}
+			]
 		},
 		{
 			"name": "Development",
@@ -107,7 +106,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "64c7b049-ec8f-4ddc-866d-c20d9c22b7b5",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -116,7 +114,8 @@
 									"var jsonData = pm.response.json();",
 									"pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
 								],
-								"type": "text/javascript"
+								"type": "text/javascript",
+								"packages": {}
 							}
 						}
 					],
@@ -131,7 +130,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Draft\",\n    \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n    \"typeId\": \"927abff4-7af9-4145-8ba1-577c16e64e2e\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Test Development - Challenge\",\n    \"description\": \"description\",\n    \"projectId\": {{PROJECT_ID}},\n    \"timelineTemplateId\": \"7ebf1c69-f62f-4d3a-bdfb-fe9ddb56861c\",\n    \"phases\": [\n        {\n            \"phaseId\": \"a93544bc-c165-4af4-b55e-18f3593b457a\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n            \"duration\": 432000\n        },\n        {\n            \"phaseId\": \"aa5a3f78-79e0-4bf7-93ff-b11e8f5b398b\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"1c24cfb3-5b0a-4dbd-b6bd-4b0dff5349c6\",\n            \"duration\": 43200\n        },\n        {\n            \"phaseId\": \"797a6af7-cd3f-4436-9fca-9679f773bee9\",\n            \"duration\": 57600\n        }\n    ],\n    \"startDate\": \"2020-08-15T05:10:35Z\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"placement\"\n        }\n    ],\n    \"tags\": [\n        \"Heroku\"\n    ]\n}",
+							"raw": "{\n    \"status\": \"DRAFT\",\n    \"wiproAllowed\": false,\n    \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n    \"typeId\": \"927abff4-7af9-4145-8ba1-577c16e64e2e\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Test Development - Challenge\",\n    \"description\": \"description\",\n    \"projectId\": {{PROJECT_ID}},\n    \"timelineTemplateId\": \"7ebf1c69-f62f-4d3a-bdfb-fe9ddb56861c\",\n    \"phases\": [\n        {\n            \"phaseId\": \"a93544bc-c165-4af4-b55e-18f3593b457a\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n            \"duration\": 432000\n        },\n        {\n            \"phaseId\": \"aa5a3f78-79e0-4bf7-93ff-b11e8f5b398b\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"1c24cfb3-5b0a-4dbd-b6bd-4b0dff5349c6\",\n            \"duration\": 43200\n        },\n        {\n            \"phaseId\": \"797a6af7-cd3f-4436-9fca-9679f773bee9\",\n            \"duration\": 57600\n        }\n    ],\n    \"startDate\": \"2020-08-15T05:10:35Z\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"PLACEMENT\"\n        }\n    ],\n    \"tags\": [\n        \"Heroku\"\n    ]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -151,12 +150,11 @@
 					"response": []
 				},
 				{
-					"name": "Create First2Finish",
+					"name": "PUT Challenge",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
-								"id": "5bd16ae9-8424-4d0b-83b8-7d205d6e8efa",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -165,7 +163,149 @@
 									"var jsonData = pm.response.json();",
 									"pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
 								],
-								"type": "text/javascript"
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"DRAFT\",\n    \"wiproAllowed\": false,\n    \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n    \"typeId\": \"927abff4-7af9-4145-8ba1-577c16e64e2e\",\n    \"legacy\": {\n        \"reviewType\": \"COMMUNITY\"\n    },\n    \"name\": \"Test Development - Challenge\",\n    \"description\": \"description\",\n    \"projectId\": {{PROJECT_ID}},\n    \"timelineTemplateId\": \"7ebf1c69-f62f-4d3a-bdfb-fe9ddb56861c\",\n    \"phases\": [\n        {\n            \"phaseId\": \"a93544bc-c165-4af4-b55e-18f3593b457a\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n            \"duration\": 432000\n        },\n        {\n            \"phaseId\": \"aa5a3f78-79e0-4bf7-93ff-b11e8f5b398b\",\n            \"duration\": 172800\n        },\n        {\n            \"phaseId\": \"1c24cfb3-5b0a-4dbd-b6bd-4b0dff5349c6\",\n            \"duration\": 43200\n        },\n        {\n            \"phaseId\": \"797a6af7-cd3f-4436-9fca-9679f773bee9\",\n            \"duration\": 57600\n        }\n    ],\n    \"startDate\": \"2020-08-15T05:10:35Z\",\n    \"prizeSets\": [\n        {\n            \"prizes\": [\n                {\n                    \"type\": \"USD\",\n                    \"value\": 1\n                }\n            ],\n            \"description\": \"Challenge Prizes\",\n            \"type\": \"PLACEMENT\"\n        }\n    ],\n    \"tags\": [\n        \"Heroku\"\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{V5_CHALLENGE_UUID}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{V5_CHALLENGE_UUID}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Patch Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"//var jsonData = pm.response.json();",
+									"//pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"wiproAllowed\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{URL}}/challenges/{{V5_CHALLENGE_UUID}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{V5_CHALLENGE_UUID}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Challenge",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"//var jsonData = pm.response.json();",
+									"//pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{URL}}/challenges/{{V5_CHALLENGE_UUID}}",
+							"host": [
+								"{{URL}}"
+							],
+							"path": [
+								"challenges",
+								"{{V5_CHALLENGE_UUID}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create First2Finish",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
+								],
+								"type": "text/javascript",
+								"packages": {}
 							}
 						}
 					],
@@ -174,13 +314,13 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"status\": \"Draft\",\n  \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n  \"typeId\": \"dc876fa4-ef2d-4eee-b701-b555fcc6544c\",\n  \"legacy\": {\n    \"reviewType\": \"COMMUNITY\"\n  },\n  \"name\": \"Test Development - First2Finish\",\n  \"description\": \"description\",\n  \"projectId\": {{PROJECT_ID}},\n  \"timelineTemplateId\": \"0a0fed34-cb5a-47f5-b0cb-6e2ee7de8dcb\",\n  \"phases\": [\n    {\n      \"phaseId\": \"a93544bc-c165-4af4-b55e-18f3593b457a\",\n      \"duration\": 2592000\n    },\n    {\n      \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n      \"duration\": 2592000\n    },\n    {\n      \"phaseId\": \"003a4b14-de5d-43fc-9e35-835dbeb6af1f\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"ad985cff-ad3e-44de-b54e-3992505ba0ae\",\n      \"duration\": 86400\n    }\n  ],\n  \"startDate\": \"2020-08-15T05:10:35Z\",\n  \"prizeSets\": [\n    {\n      \"prizes\": [\n        {\n          \"type\": \"USD\",\n          \"value\": 1\n        }\n      ],\n      \"description\": \"Challenge Prizes\",\n      \"type\": \"placement\"\n    }\n  ],\n  \"tags\": [\n    \"Heroku\"\n  ]\n}",
+							"raw": "{\n  \"status\": \"DRAFT\",\n  \"wiproAllowed\": true,\n  \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n  \"typeId\": \"dc876fa4-ef2d-4eee-b701-b555fcc6544c\",\n  \"legacy\": {\n    \"reviewType\": \"COMMUNITY\"\n  },\n  \"name\": \"Test Development - First2Finish\",\n  \"description\": \"description\",\n  \"projectId\": {{PROJECT_ID}},\n  \"timelineTemplateId\": \"0a0fed34-cb5a-47f5-b0cb-6e2ee7de8dcb\",\n  \"phases\": [\n    {\n      \"phaseId\": \"a93544bc-c165-4af4-b55e-18f3593b457a\",\n      \"duration\": 2592000\n    },\n    {\n      \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n      \"duration\": 2592000\n    },\n    {\n      \"phaseId\": \"003a4b14-de5d-43fc-9e35-835dbeb6af1f\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"ad985cff-ad3e-44de-b54e-3992505ba0ae\",\n      \"duration\": 86400\n    }\n  ],\n  \"startDate\": \"2020-08-15T05:10:35Z\",\n  \"prizeSets\": [\n    {\n      \"prizes\": [\n        {\n          \"type\": \"USD\",\n          \"value\": 1\n        }\n      ],\n      \"description\": \"Challenge Prizes\",\n      \"type\": \"PLACEMENT\"\n    }\n  ],\n  \"tags\": [\n    \"Heroku\"\n  ]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -205,7 +345,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "07617fc5-576b-4e2f-bf62-c22abd5590e1",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -214,7 +353,8 @@
 									"var jsonData = pm.response.json();",
 									"pm.environment.set(\"V5_CHALLENGE_UUID\", jsonData.id);"
 								],
-								"type": "text/javascript"
+								"type": "text/javascript",
+								"packages": {}
 							}
 						}
 					],
@@ -223,13 +363,13 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"status\": \"Draft\",\n  \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n  \"typeId\": \"ecd58c69-238f-43a4-a4bb-d172719b9f31\",\n  \"legacy\": {\n    \"reviewType\": \"COMMUNITY\"\n  },\n  \"name\": \"Test Development - Task\",\n  \"description\": \"description\",\n  \"projectId\": {{PROJECT_ID}},\n  \"timelineTemplateId\": \"53a307ce-b4b3-4d6f-b9a1-3741a58f77e6\",\n  \"phases\": [\n    {\n      \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"003a4b14-de5d-43fc-9e35-835dbeb6af1f\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"ad985cff-ad3e-44de-b54e-3992505ba0ae\",\n      \"duration\": 86400\n    }\n  ],\n  \"startDate\": \"2020-08-15T05:10:35Z\",\n  \"prizeSets\": [\n    {\n      \"prizes\": [\n        {\n          \"type\": \"USD\",\n          \"value\": 1\n        }\n      ],\n      \"description\": \"Challenge Prizes\",\n      \"type\": \"placement\"\n    }\n  ],\n  \"tags\": [\n    \"Heroku\"\n  ]\n}",
+							"raw": "{\n  \"status\": \"DRAFT\",\n  \"trackId\": \"9b6fc876-f4d9-4ccb-9dfd-419247628825\",\n  \"typeId\": \"ecd58c69-238f-43a4-a4bb-d172719b9f31\",\n  \"legacy\": {\n    \"reviewType\": \"COMMUNITY\"\n  },\n  \"name\": \"Test Development - Task\",\n  \"description\": \"description\",\n  \"projectId\": {{PROJECT_ID}},\n  \"timelineTemplateId\": \"53a307ce-b4b3-4d6f-b9a1-3741a58f77e6\",\n  \"phases\": [\n    {\n      \"phaseId\": \"6950164f-3c5e-4bdc-abc8-22aaf5a1bd49\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"003a4b14-de5d-43fc-9e35-835dbeb6af1f\",\n      \"duration\": 86400\n    },\n    {\n      \"phaseId\": \"ad985cff-ad3e-44de-b54e-3992505ba0ae\",\n      \"duration\": 86400\n    }\n  ],\n  \"startDate\": \"2020-08-15T05:10:35Z\",\n  \"prizeSets\": [\n    {\n      \"prizes\": [\n        {\n          \"type\": \"USD\",\n          \"value\": 1\n        }\n      ],\n      \"description\": \"Challenge Prizes\",\n      \"type\": \"PLACEMENT\"\n    }\n  ],\n  \"tags\": [\n    \"Heroku\"\n  ]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -248,8 +388,7 @@
 					},
 					"response": []
 				}
-			],
-			"protocolProfileBehavior": {}
+			]
 		},
 		{
 			"name": "Design",
@@ -260,7 +399,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "2d283936-8908-4f6a-8e06-8148a2906ea4",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -309,7 +447,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "ffd63636-f859-49cf-86bd-a5d4bfe3cfb5",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -327,8 +464,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -358,7 +495,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "c9de6627-f88c-43a0-96ff-046c0b811517",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -376,8 +512,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -407,7 +543,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "587011e1-b5a5-4943-b865-259b2eacde2d",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -425,8 +560,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -456,7 +591,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "1a8486e6-73c0-4f98-a934-65f27a50160d",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -474,8 +608,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -499,8 +633,7 @@
 					},
 					"response": []
 				}
-			],
-			"protocolProfileBehavior": {}
+			]
 		},
 		{
 			"name": "QA",
@@ -511,7 +644,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "53895fd5-81b1-490d-91a6-7fe4361192a0",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -560,7 +692,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "12e5744c-2933-49ca-8650-ab71a3631848",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -578,8 +709,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -609,7 +740,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "7e3c0598-c5dd-4ca4-8b52-dde6241da92a",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -627,8 +757,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -652,8 +782,7 @@
 					},
 					"response": []
 				}
-			],
-			"protocolProfileBehavior": {}
+			]
 		},
 		{
 			"name": "Data Science",
@@ -664,7 +793,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "4f68e3c0-3356-4b61-80d5-5f7b0eec2ea6",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -713,7 +841,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "b967414b-4128-48ab-9fbe-0718bd1259b7",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -731,8 +858,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -762,7 +889,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "1f1f754e-fa62-4b5f-baa6-589704c21164",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -780,8 +906,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -811,7 +937,6 @@
 						{
 							"listen": "test",
 							"script": {
-								"id": "aeaf81bf-bc67-48f4-ae80-1dc64b4f6f55",
 								"exec": [
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
@@ -829,8 +954,8 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"type": "text",
-								"value": "Bearer {{TOKEN}}"
+								"value": "Bearer {{TOKEN}}",
+								"type": "text"
 							}
 						],
 						"body": {
@@ -854,9 +979,39 @@
 					},
 					"response": []
 				}
-			],
-			"protocolProfileBehavior": {}
+			]
 		}
 	],
-	"protocolProfileBehavior": {}
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Ik5VSkZORGd4UlRVME5EWTBOVVkzTlRkR05qTXlRamxETmpOQk5UYzVRVUV3UlRFeU56TTJRUSJ9.eyJpc3MiOiJodHRwczovL3RvcGNvZGVyLWRldi5hdXRoMC5jb20vIiwic3ViIjoiakdJZjJwZDNmNDRCMWpxdk9haTMwQklLVFphbllCZlVAY2xpZW50cyIsImF1ZCI6Imh0dHBzOi8vbTJtLnRvcGNvZGVyLWRldi5jb20vIiwiaWF0IjoxNzU0OTAyOTIzLCJleHAiOjE3NTQ5ODkzMjMsInNjb3BlIjoicmVhZDp1c2VyX2lkcF90b2tlbnMgdXBkYXRlOnVzZXJfcHJvZmlsZXMgZGVsZXRlOnVzZXJfcHJvZmlsZXMgd3JpdGU6dXNlcl9wcm9maWxlcyBjcmVhdGU6Y29ubmVjdF9wcm9qZWN0IGFsbDpjaGFsbGVuZ2VzIHJlYWQ6Y2hhbGxlbmdlcyB3cml0ZTpjaGFsbGVuZ2VzIGFsbDpncm91cHMgd3JpdGU6Z3JvdXBzIHJlYWQ6Z3JvdXBzIHVwZGF0ZTpzdWJtaXNzaW9uIHJlYWQ6c3VibWlzc2lvbiBkZWxldGU6c3VibWlzc2lvbiBjcmVhdGU6c3VibWlzc2lvbiBhbGw6c3VibWlzc2lvbiB1cGRhdGU6cmV2aWV3X3R5cGUgcmVhZDpyZXZpZXdfdHlwZSBkZWxldGU6cmV2aWV3X3R5cGUgYWxsOnJldmlld190eXBlIHVwZGF0ZTpyZXZpZXdfc3VtbWF0aW9uIHJlYWQ6cmV2aWV3X3N1bW1hdGlvbiBkZWxldGU6cmV2aWV3X3N1bW1hdGlvbiBjcmVhdGU6cmV2aWV3X3N1bW1hdGlvbiBhbGw6cmV2aWV3X3N1bW1hdGlvbiB1cGRhdGU6cmV2aWV3IHJlYWQ6cmV2aWV3IGRlbGV0ZTpyZXZpZXcgY3JlYXRlOnJldmlldyBhbGw6cmV2aWV3IHdyaXRlOnByb2plY3QgcmVhZDpwcm9qZWN0IGFsbDpjb25uZWN0X3Byb2plY3QgcmVhZDpidXNfdG9waWNzIHdyaXRlOmJ1c19hcGkgcmVhZDplbWFpbF90ZW1wbGF0ZXMgd3JpdGU6cm9sZXMgcmVhZDp1c2VyX3Byb2ZpbGVzIHJlYWQ6cm9sZXMgcmVhZDpwcmVmZXJlbmNlcyB1cGRhdGU6cHJlZmVyZW5jZXMgYWxsOnByZWZlcmVuY2VzIHJlYWQ6cHJvamVjdC11c2VyIHJlYWQ6cHJvamVjdC1wZXJtaXNzaW9uIHVwZGF0ZTpwcm9qZWN0LXBlcm1pc3Npb24gY3JlYXRlOnByb2plY3QgY3JlYXRlOnByb2plY3QtYmlsbGluZy1hY2NvdW50IGNyZWF0ZTpwcm9qZWN0LWNvcGlsb3QgY3JlYXRlOnByb2plY3QtbWlsZXN0b25lIGNyZWF0ZTpwcm9qZWN0LXBlcm1pc3Npb24gZGVsZXRlOnByb2plY3QtcGVybWlzc2lvbiBkZWxldGU6cHJvamVjdC1jb3BpbG90IGRlbGV0ZTpwcm9qZWN0LWJpbGxpbmctYWNjb3VudCByZWFkOmxvb2t1cHMgdXBkYXRlOmxvb2t1cHMgYWxsOmxvb2t1cHMgY3JlYXRlOmxvb2t1cHMgZGVsZXRlOmxvb2t1cHMgcmVhZDpyZXNvdXJjZXMgd3JpdGU6cmVzb3VyY2VzIGRlbGV0ZTpyZXNvdXJjZXMgdXBkYXRlOnJlc291cmNlcyBhbGw6cmVzb3VyY2VzIHJlYWQ6c3JtX3Byb2JsZW0gd3JpdGU6c3JtX3Byb2JsZW0gZGVsZXRlOnNybV9wcm9ibGVtIGFsbDpzcm1fcHJvYmxlbSBjcmVhdGU6bGVhZGVyYm9hcmQgdXBkYXRlOmxlYWRlcmJvYXJkIGRlbGV0ZTpsZWFkZXJib2FyZCBhbGw6bGVhZGVyYm9hcmQgcmVhZDp0ZXJtcyB3cml0ZTp0ZXJtcyB1cGRhdGU6dGVybXMgZGVsZXRlOnRlcm1zIGFsbDp0ZXJtcyBhbGw6cHJvamVjdHMgcmVhZDpwcm9qZWN0cyB3cml0ZTpwcm9qZWN0cyBhbGw6cHJvamVjdC1tZW1iZXJzIHJlYWQ6cHJvamVjdC1tZW1iZXJzIHdyaXRlOnByb2plY3QtbWVtYmVycyBhbGw6YWNoaWV2ZW1lbnRcdCBjcmVhdGU6YWNoaWV2ZW1lbnRcdCB1cGRhdGU6YWNoaWV2ZW1lbnQgcmVhZDphY2hpZXZlbWVudCBkZWxldGU6YWNoaWV2ZW1lbnQgcmVhZDphY2hpZXZlbWVudHNQcm92aWRlciBhbGw6YWNoaWV2ZW1lbnRzUHJvdmlkZXIgdXBkYXRlOmFjaGlldmVtZW50c1Byb3ZpZGVyIGRlbGV0ZTphY2hpZXZlbWVudHNQcm92aWRlciByZWFkOmF0dHJpYnV0ZSBhbGw6YXR0cmlidXRlIHVwZGF0ZTphdHRyaWJ1dGUgZGVsZXRlOmF0dHJpYnV0ZSByZWFkOmF0dHJpYnV0ZUdyb3VwIGFsbDphdHRyaWJ1dGVHcm91cCBjcmVhdGU6YXR0cmlidXRlR3JvdXAgdXBkYXRlOmF0dHJpYnV0ZUdyb3VwIGRlbGV0ZTphdHRyaWJ1dGVHcm91cCByZWFkOmV4dGVybmFsUHJvZmlsZSBhbGw6ZXh0ZXJuYWxQcm9maWxlIGNyZWF0ZTpleHRlcm5hbFByb2ZpbGUgZGVsZXRlOmV4dGVybmFsUHJvZmlsZSByZWFkOm9yZ2FuaXphdGlvbiBhbGw6b3JnYW5pemF0aW9uIGNyZWF0ZTpvcmdhbml6YXRpb24gZGVsZXRlOm9yZ2FuaXphdGlvbiByZWFkOnJvbGUgYWxsOnJvbGUgY3JlYXRlOnJvbGUgdXBkYXRlOnJvbGUgZGVsZXRlOnJvbGUgcmVhZDpza2lsbCBhbGw6c2tpbGwgY3JlYXRlOnNraWxsIHVwZGF0ZTpza2lsbCBkZWxldGU6c2tpbGwgcmVhZDpza2lsbHNQcm92aWRlciBhbGw6c2tpbGxzUHJvdmlkZXIgY3JlYXRlOnNraWxsc1Byb3ZpZGVyIHVwZGF0ZTpza2lsbHNQcm92aWRlciBkZWxldGU6c2tpbGxzUHJvdmlkZXIgcmVhZDp1c2VyQXR0cmlidXRlIGFsbDp1c2VyQXR0cmlidXRlIGNyZWF0ZTp1c2VyQXR0cmlidXRlIHVwZGF0ZTp1c2VyQXR0cmlidXRlIGRlbGV0ZTp1c2VyQXR0cmlidXRlIHJlYWQ6dXNlcnNSb2xlIGFsbDp1c2Vyc1JvbGUgY3JlYXRlOnVzZXJzUm9sZSB1cGRhdGU6dXNlcnNSb2xlIGRlbGV0ZTp1c2Vyc1JvbGUgcmVhZDp1c2Vyc1NraWxsIGFsbDp1c2Vyc1NraWxsIGNyZWF0ZTp1c2Vyc1NraWxsIGRlbGV0ZTp1c2Vyc1NraWxsIHJlYWQ6Z3JvdXAgYWxsOmdyb3VwIHVwZGF0ZTpncm91cCBjcmVhdGU6Z3JvdXAgZGVsZXRlOmdyb3VwIHVwZGF0ZTpleHRlcm5hbFByb2ZpbGUgdXBkYXRlOm9yZ2FuaXphdGlvbiBjcmVhdGU6YWNoaWV2ZW1lbnRzUHJvdmlkZXIgYWxsOnVzZXJfcHJvZmlsZXMgY3JlYXRlOnVzZXJfcHJvZmlsZXMgY3JlYXRlOmNoYWxsZW5nZXMgY3JlYXRlOnJlc291cmNlcyByZWFkOnVzZXIgYWxsOnVzZXIgcmVhZDp0YWFzLXRlYW1zIHJlYWQ6dGFhcy1qb2JzIGNyZWF0ZTp0YWFzLWpvYnMgZGVsZXRlOnRhYXMtam9icyB1cGRhdGU6dGFhcy1qb2JzIGFsbDp0YWFzLWpvYnMgcmVhZDp0YWFzLWpvYkNhbmRpZGF0ZXMgY3JlYXRlOnRhYXMtam9iQ2FuZGlkYXRlcyBkZWxldGU6dGFhcy1qb2JDYW5kaWRhdGVzIHVwZGF0ZTp0YWFzLWpvYkNhbmRpZGF0ZXMgYWxsOnRhYXMtam9iQ2FuZGlkYXRlcyByZWFkOnRhYXMtcmVzb3VyY2VCb29raW5ncyBjcmVhdGU6dGFhcy1yZXNvdXJjZUJvb2tpbmdzIGRlbGV0ZTp0YWFzLXJlc291cmNlQm9va2luZ3MgdXBkYXRlOnRhYXMtcmVzb3VyY2VCb29raW5ncyBhbGw6dGFhcy1yZXNvdXJjZUJvb2tpbmdzIHJlYWQ6cHJvamVjdC1pbnZpdGVzIHdyaXRlOnByb2plY3QtaW52aXRlcyBhbGw6c2NoZWR1bGVzIHJlYWQ6c2NoZWR1bGVzIGNyZWF0ZTpzY2hlZHVsZXMgdXBkYXRlOnNjaGVkdWxlcyBkZWxldGU6c2NoZWR1bGVzIHJlYWQ6cHJvamVjdC1iaWxsaW5nLWFjY291bnQtZGV0YWlscyB1cGRhdGU6Y2hhbGxlbmdlcyByZWFkOnRhYXMtd29ya1BlcmlvZFBheW1lbnRzIGNyZWF0ZTp0YWFzLXdvcmtQZXJpb2RQYXltZW50cyB1cGRhdGU6dGFhcy13b3JrUGVyaW9kUGF5bWVudHMgYWxsOnRhYXMtd29ya1BlcmlvZFBheW1lbnRzIHJlYWQ6dGFhcy1pbnRlcnZpZXdzIGNyZWF0ZTp0YWFzLWludGVydmlld3MgdXBkYXRlOnRhYXMtaW50ZXJ2aWV3cyBhbGw6dGFhcy1pbnRlcnZpZXdzIHJlYWQ6dGFhcy13b3JrUGVyaW9kcyBjcmVhdGU6dGFhcy13b3JrUGVyaW9kcyB1cGRhdGU6dGFhcy13b3JrUGVyaW9kcyBkZWxldGU6dGFhcy13b3JrUGVyaW9kcyBhbGw6dGFhcy13b3JrUGVyaW9kcyByZWFkOnNjb3JlX3N5c3RlbSB1cGRhdGU6c2NvcmVfc3lzdGVtIGFsbDpzY29yZV9zeXN0ZW0gcmVhZDpzY29yZWNhcmQgdXBkYXRlOnNjb3JlY2FyZCBhbGw6c2NvcmVjYXJkIGNyZWF0ZTp0YXhvbm9teSBhbGw6dGF4b25vbXkgYWxsOmN1c3RvbWVyLXBheW1lbnRzIGNyZWQ6dXNlcl8yZmEgdXBkYXRlOmNlcnRpZmljYXRpb25fcHJvZ3Jlc3MgcmVhZDpjZXJ0aWZpY2F0aW9uX3Byb2dyZXNzIHJlYWQ6bWF0Y2gtZW5naW5lLW1lbWJlcnMgcmVhZDptYXRjaC1lbmdpbmUtZG9tYWlucyByZWFkOm1hdGNoLWVuZ2luZS1yb2xlcyByZWFkOm1hdGNoLWVuZ2luZS1za2lsbHMgcmVhZDptYXRjaC1lbmdpbmUtam9icyBjcmVhdGU6dGFhcy1yb2xlcyB3cml0ZTplbXNpLXNraWxscy1nZW5lcmF0aW9uIHJlYWQ6ZW1zaS1za2lsbHMgY3JlYXRlOmVtc2ktc2tpbGxzIHVwZGF0ZTplbXNpLXNraWxscyBkZWxldGU6ZW1zaS1za2lsbHMgYWxsOmVtc2ktc2tpbGxzIHNldHVwOmVsYXN0aWNzZWFyY2ggd3JpdGU6cHJvamVjdHMtYmlsbGluZy1hY2NvdW50cyBhbGw6cmF0aW5ncyBjcmVhdGU6c3RhbmRhcmRpemVkLXNraWxscyByZWFkOnN0YW5kYXJkaXplZC1za2lsbHMgdXBkYXRlOnN0YW5kYXJkaXplZC1za2lsbHMgZGVsZXRlOnN0YW5kYXJkaXplZC1za2lsbHMgYWxsOnN0YW5kYXJkaXplZC1za2lsbHMgcmVhZDpmaWxlcyB3cml0ZTpmaWxlcyBhbGw6ZmlsZXMgY3JlYXRlOnBheW1lbnRzIHJlYWQ6cGF5bWVudHMgZGVsZXRlOmZpbGVzIGludm9rZTpqb2JzIGNyZWF0ZTphcHBlYWwgcmVhZDphcHBlYWwgdXBkYXRlOmFwcGVhbCBkZWxldGU6YXBwZWFsIGNyZWF0ZTphcHBlYWwtcmVzcG9uc2UgdXBkYXRlOmFwcGVhbC1yZXNwb25zZSBhbGw6YXBwZWFsIGNyZWF0ZTpjb250YWN0LXJlcXVlc3QgYWxsOmNvbnRhY3QtcmVxdWVzdCByZWFkOnByb2plY3QtcmVzdWx0IGFsbDpwcm9qZWN0LXJlc3VsdCBjcmVhdGU6cmV2aWV3LWl0ZW0gdXBkYXRlOnJldmlldy1pdGVtIGRlbGV0ZTpyZXZpZXctaXRlbSBjcmVhdGU6c2NvcmVjYXJkIiwiZ3R5IjoiY2xpZW50LWNyZWRlbnRpYWxzIiwiYXpwIjoiakdJZjJwZDNmNDRCMWpxdk9haTMwQklLVFphbllCZlUifQ.RDaZ3GFTWl0a4o1ABYMRAuqNXGmI88EOH3rKFQpp6PndEWnw-bJNj733z3anMiH-6b8GTFW1-_-_PZDVWQcfl7SKR4ge1szhJSg8w0JgWfi8d7F4US36_ESuSiOOK9BXTvSiKIVFGuDC7vv1djnb1-57ntYk8KG59LlRCNHgt457MPDyVtI0bdmLgg2HcR_qfKzYkG55vCeNCYD5ubEaX4EiRtpow9-zQstOQh8Gcmm0vy0wZBJEg8ndq_-RUfUdgHgv-qZK4qYDNjVpVp5Q182GoscjuTU4bTkJ4Q1p89WQSy5ORVW0WroSLHg_Soo0xMe6wWmG0Tz7Yvaxm9rFWA",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	]
 }

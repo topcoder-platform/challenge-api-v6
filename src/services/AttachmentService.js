@@ -9,10 +9,8 @@ const helper = require("../common/helper");
 const s3ParseUrl = require("../common/s3ParseUrl");
 const logger = require("../common/logger");
 const constants = require("../../app-constants");
-const {
-  enrichChallengeForResponse
-} = require("../common/challenge-helper");
-const prismaHelper = require('../common/prisma-helper');
+const { enrichChallengeForResponse } = require("../common/challenge-helper");
+const prismaHelper = require("../common/prisma-helper");
 
 const bucketWhitelist = config.AMAZON.BUCKET_WHITELIST.split(",").map((bucketName) =>
   bucketName.trim()
@@ -44,14 +42,16 @@ function validateUrl(url) {
  * @returns {Object} the challenge and the attachment
  */
 async function _getChallengeAttachment(challengeId, attachmentId) {
-  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } })
-  const attachment = await prisma.attachment.findUnique({ where: { id: attachmentId } })
+  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+  const attachment = await prisma.attachment.findUnique({ where: { id: attachmentId } });
   if (!challenge || !challenge.id || !attachment || attachment.challengeId !== challengeId) {
-    throw new errors.NotFoundError(`Attachment ${attachmentId} not found in challenge ${challengeId}`)
+    throw new errors.NotFoundError(
+      `Attachment ${attachmentId} not found in challenge ${challengeId}`
+    );
   }
   // convert challenge data
-  enrichChallengeForResponse(challenge)
-  prismaHelper.convertModelToResponse(challenge)
+  enrichChallengeForResponse(challenge);
+  prismaHelper.convertModelToResponse(challenge);
   return { challenge, attachment };
 }
 
@@ -71,10 +71,10 @@ async function createAttachment(currentUser, challengeId, attachments) {
     _.assignIn(attachment, {
       challengeId,
       createdBy: userId,
-      updatedBy: userId
+      updatedBy: userId,
     });
     let newAttachment = await prisma.attachment.create({ data: attachment });
-    newAttachment = _.omit(newAttachment, constants.auditFields, 'challengeId');
+    newAttachment = _.omit(newAttachment, constants.auditFields, "challengeId");
     await helper.postBusEvent(constants.Topics.ChallengeAttachmentCreated, newAttachment);
     newAttachments.push(newAttachment);
   }
@@ -103,10 +103,10 @@ createAttachment.schema = {
  * @param {String} attachmentId the attachment id
  * @returns {Object} the attachment with given id
  */
-async function getAttachment (currentUser, challengeId, attachmentId) {
+async function getAttachment(currentUser, challengeId, attachmentId) {
   const { challenge, attachment } = await _getChallengeAttachment(challengeId, attachmentId);
   await helper.ensureUserCanViewChallenge(currentUser, challenge);
-  return _.omit(attachment, constants.auditFields, 'challengeId');
+  return _.omit(attachment, constants.auditFields, "challengeId");
 }
 
 getAttachment.schema = {
@@ -123,7 +123,7 @@ getAttachment.schema = {
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated attachment
  */
-async function update (currentUser, challengeId, attachmentId, data, isFull) {
+async function update(currentUser, challengeId, attachmentId, data, isFull) {
   const { challenge, attachment } = await _getChallengeAttachment(challengeId, attachmentId);
   await helper.ensureUserCanModifyChallenge(currentUser, challenge);
   validateUrl(data.url);
@@ -137,9 +137,9 @@ async function update (currentUser, challengeId, attachmentId, data, isFull) {
 
   let ret = await prisma.attachment.update({
     data,
-    where: { id: attachmentId }
+    where: { id: attachmentId },
   });
-  ret = _.omit(ret, constants.auditFields, 'challengeId');
+  ret = _.omit(ret, constants.auditFields, "challengeId");
   // post bus event
   await helper.postBusEvent(
     constants.Topics.ChallengeAttachmentUpdated,
@@ -212,7 +212,7 @@ async function deleteAttachment(currentUser, challengeId, attachmentId) {
   }
 
   let ret = await prisma.attachment.delete({ where: { id: attachmentId } });
-  ret = _.omit(ret, constants.auditFields, 'challengeId');
+  ret = _.omit(ret, constants.auditFields, "challengeId");
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengeAttachmentDeleted, ret);
   return ret;

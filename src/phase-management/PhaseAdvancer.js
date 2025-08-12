@@ -6,7 +6,7 @@ const rulesJSON = require("./phase-rules.json");
 const errors = require("../common/errors");
 
 const helper = require("../common/helper");
-const { PhaseFact } = require('../../app-constants');
+const { PhaseFact } = require("../../app-constants");
 
 // Helper functions
 

@@ -6,7 +6,7 @@ const moment = require("moment");
 const errors = require("./errors");
 
 const timelineTemplateService = require("../services/TimelineTemplateService");
-const prisma = require('../common/prisma').getClient()
+const prisma = require("../common/prisma").getClient();
 
 class ChallengePhaseHelper {
   phaseDefinitionMap = {};
@@ -128,11 +128,7 @@ class ChallengePhaseHelper {
           .toDate()
           .toISOString();
       }
-      if (
-        _.isNil(phase.actualEndDate) &&
-        !_.isNil(newPhase) &&
-        !_.isNil(newPhase.constraints)
-      ) {
+      if (_.isNil(phase.actualEndDate) && !_.isNil(newPhase) && !_.isNil(newPhase.constraints)) {
         updatedPhase.constraints = newPhase.constraints;
       }
       if (_.isNil(fixedStartDate)) {
@@ -202,7 +198,7 @@ class ChallengePhaseHelper {
 
   async getPhaseDefinitionsAndMap() {
     if (_.isEmpty(this.phaseDefinitionMap)) {
-      const records = await prisma.phase.findMany({})
+      const records = await prisma.phase.findMany({});
 
       const map = new Map();
       _.each(records, (r) => {
