@@ -50,6 +50,15 @@ enum PrizeSetTypeEnum {
   CHECKPOINT
 }
 
+// Enum for review opportunity types on reviewers
+enum ReviewOpportunityType {
+  REGULAR_REVIEW
+  COMPONENT_DEV_REVIEW
+  SPEC_REVIEW
+  ITERATIVE_REVIEW
+  SCENARIOS_REVIEW
+}
+
 //////////////////////////////////////////
 // Main Challenge model
 //////////////////////////////////////////
@@ -103,6 +112,7 @@ model Challenge {
   metadata              ChallengeMetadata[]
   phases                ChallengePhase[]
   prizeSets             ChallengePrizeSet[]
+  reviewers             ChallengeReviewer[]
   winners               ChallengeWinner[]
   attachments           Attachment[]
   terms                 ChallengeTerm[]
@@ -470,6 +480,7 @@ model Phase {
   challengePhases ChallengePhase[]
 
   @@unique([name])
+  ChallengeReviewer ChallengeReviewer[]
 }
 
 model ChallengePhase {
@@ -541,6 +552,39 @@ model ChallengePrizeSet {
   updatedBy   String
 
   @@index([challengeId])
+}
+
+//////////////////////////////////////////
+// ChallengeReviewer model – reviewers for a challenge, both AI and member
+//////////////////////////////////////////
+
+model ChallengeReviewer {
+  id                   String                 @id @default(uuid())
+  challengeId          String
+
+  // Reviewer configuration
+  scorecardId          String
+  isMemberReview       Boolean
+  memberReviewerCount  Int?
+  phaseId              String
+  basePayment          Float?
+  incrementalPayment   Float?
+  type                 ReviewOpportunityType?
+  isAIReviewer         Boolean
+
+  // Relation to the challenge
+  challenge            Challenge              @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  // Relation to the phase
+  phase                Phase                  @relation(fields: [phaseId], references: [id])
+
+  // Auditing fields
+  createdAt            DateTime               @default(now())
+  createdBy            String
+  updatedAt            DateTime               @updatedAt
+  updatedBy            String
+
+  @@index([challengeId])
+  @@index([phaseId])
 }
 
 //////////////////////////////////////////
