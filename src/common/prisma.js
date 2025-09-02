@@ -5,6 +5,7 @@ const {
   DiscussionTypeEnum,
   ChallengeStatusEnum,
   PrizeSetTypeEnum,
+  ReviewOpportunityTypeEnum,
 } = require("@prisma/client");
 
 const prismaClient = new PrismaClient({
@@ -30,3 +31,4 @@ module.exports.ReviewTypeEnum = ReviewTypeEnum;
 module.exports.DiscussionTypeEnum = DiscussionTypeEnum;
 module.exports.ChallengeStatusEnum = ChallengeStatusEnum;
 module.exports.PrizeSetTypeEnum = PrizeSetTypeEnum;
+module.exports.ReviewOpportunityTypeEnum = ReviewOpportunityTypeEnum;

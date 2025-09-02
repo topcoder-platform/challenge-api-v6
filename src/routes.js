@@ -34,6 +34,27 @@ module.exports = {
       scopes: [CREATE, ALL],
     },
   },
+  "/challenge/default-reviewers": {
+    get: {
+      controller: "ChallengeController",
+      method: "getDefaultReviewers",
+      auth: "jwt",
+      access: [
+        constants.UserRoles.Admin,
+        constants.UserRoles.Copilot,
+        constants.UserRoles.Manager,
+        constants.UserRoles.User,
+      ],
+      scopes: [READ, ALL],
+    },
+    put: {
+      controller: "ChallengeController",
+      method: "setDefaultReviewers",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [UPDATE, ALL],
+    },
+  },
   "/challenges/support-requests": {
     post: {
       controller: "SupportController",

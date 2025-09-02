@@ -2,6 +2,8 @@
  * Insert seed data to tables in database
  */
 const _ = require("lodash");
+const util = require("util");
+const uuid = require("uuid/v4");
 const logger = require("../common/logger");
 const prismaHelper = require("../common/prisma-helper");
 

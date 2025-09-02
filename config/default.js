@@ -13,7 +13,7 @@ module.exports = {
   AUTH_SECRET: process.env.AUTH_SECRET || "mysecret",
   VALID_ISSUERS:
     process.env.VALID_ISSUERS ||
-    '["https://api.topcoder-dev.com", "https://api.topcoder.com", "https://topcoder-dev.auth0.com/"]',
+    '["https://api.topcoder-dev.com", "https://api.topcoder.com", "https://topcoder-dev.auth0.com/", "https://auth.topcoder-dev.com/"]',
 
   // used to get M2M token
   AUTH0_URL: process.env.AUTH0_URL,
@@ -43,7 +43,7 @@ module.exports = {
   // TODO: change this to localhost
   SUBMISSIONS_API_URL:
     process.env.SUBMISSIONS_API_URL || "https://api.topcoder-dev.com/v5/submissions",
-  MEMBERS_API_URL: process.env.MEMBERS_API_URL || "https://api.topcoder-dev.com/v5/members",
+  MEMBERS_API_URL: process.env.MEMBERS_API_URL || "https://api.topcoder-dev.com/v6/members",
   RESOURCES_API_URL: process.env.RESOURCES_API_URL || "http://localhost:4000/v5/resources",
   // TODO: change this to localhost
   RESOURCE_ROLES_API_URL:

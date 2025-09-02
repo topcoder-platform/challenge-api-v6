@@ -30,6 +30,7 @@ const {
   DiscussionTypeEnum,
   ChallengeStatusEnum,
   PrizeSetTypeEnum,
+  ReviewOpportunityTypeEnum,
 } = require("../common/prisma");
 const prisma = getClient();
 
@@ -144,6 +145,7 @@ const includeReturnFields = {
   prizeSets: {
     include: { prizes: true },
   },
+  reviewers: true,
   terms: true,
   skills: true,
   winners: true,
@@ -151,6 +153,120 @@ const includeReturnFields = {
   track: true,
   type: true,
 };
+
+/**
+ * Get default reviewers for a given typeId and trackId
+ * @param {Object} currentUser
+ * @param {Object} criteria { typeId, trackId }
+ */
+async function getDefaultReviewers(currentUser, criteria) {
+  const schema = Joi.object()
+    .keys({
+      typeId: Joi.id(),
+      trackId: Joi.id(),
+    })
+    .required();
+  const { error, value } = schema.validate(criteria);
+  if (error) throw error;
+
+  const rows = await prisma.defaultChallengeReviewer.findMany({
+    where: { typeId: value.typeId, trackId: value.trackId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows.map((r) => ({
+    scorecardId: r.scorecardId,
+    isMemberReview: r.isMemberReview,
+    memberReviewerCount: r.memberReviewerCount,
+    phaseId: r.phaseId,
+    basePayment: r.basePayment,
+    incrementalPayment: r.incrementalPayment,
+    type: r.type,
+    isAIReviewer: r.isAIReviewer,
+  }));
+}
+getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
+
+/**
+ * Set default reviewers for a given typeId and trackId
+ * @param {Object} currentUser
+ * @param {Object} data { typeId, trackId, reviewers }
+ */
+async function setDefaultReviewers(currentUser, data) {
+  const schema = Joi.object()
+    .keys({
+      typeId: Joi.id().required(),
+      trackId: Joi.id().required(),
+      reviewers: Joi.array()
+        .items(
+          Joi.object()
+            .keys({
+              scorecardId: Joi.string().required(),
+              isMemberReview: Joi.boolean().required(),
+              memberReviewerCount: Joi.when('isMemberReview', {
+                is: true,
+                then: Joi.number().integer().min(1).required(),
+                otherwise: Joi.forbidden(),
+              }),
+              phaseId: Joi.id().required(),
+              basePayment: Joi.number().min(0).optional().allow(null),
+              incrementalPayment: Joi.number().min(0).optional().allow(null),
+              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              isAIReviewer: Joi.boolean().required(),
+            })
+            .xor('isMemberReview', 'isAIReviewer')
+        )
+        .default([]),
+    })
+    .required();
+
+  const { error, value } = schema.validate(data);
+  if (error) throw error;
+
+  // validate referenced type and track
+  const [type, track] = await Promise.all([
+    prisma.challengeType.findUnique({ where: { id: value.typeId } }),
+    prisma.challengeTrack.findUnique({ where: { id: value.trackId } }),
+  ]);
+  if (!type) throw new errors.NotFoundError(`ChallengeType with id: ${value.typeId} doesn't exist`);
+  if (!track) throw new errors.NotFoundError(`ChallengeTrack with id: ${value.trackId} doesn't exist`);
+
+  const userId = _.toString(currentUser && currentUser.userId ? currentUser.userId : "system");
+  const auditFields = { createdBy: userId, updatedBy: userId };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.defaultChallengeReviewer.deleteMany({
+      where: { typeId: value.typeId, trackId: value.trackId },
+    });
+    if (value.reviewers.length > 0) {
+      await tx.defaultChallengeReviewer.createMany({
+        data: value.reviewers.map((r) => ({
+          ...auditFields,
+          typeId: value.typeId,
+          trackId: value.trackId,
+          scorecardId: String(r.scorecardId),
+          isMemberReview: !!r.isMemberReview,
+          memberReviewerCount: _.isNil(r.memberReviewerCount)
+            ? null
+            : Number(r.memberReviewerCount),
+          phaseId: r.phaseId,
+          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
+          incrementalPayment: _.isNil(r.incrementalPayment)
+            ? null
+            : Number(r.incrementalPayment),
+          type: r.type ? _.toUpper(r.type) : null,
+          isAIReviewer: !!r.isAIReviewer,
+        })),
+      });
+    }
+  });
+
+  return await getDefaultReviewers(currentUser, {
+    typeId: value.typeId,
+    trackId: value.trackId,
+  });
+}
+setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
 
 /**
  * Search challenges by legacyId
@@ -976,6 +1092,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.events == null) challenge.events = [];
   if (challenge.attachments == null) challenge.attachments = [];
   if (challenge.prizeSets == null) challenge.prizeSets = [];
+  if (challenge.reviewers == null) challenge.reviewers = [];
   if (challenge.metadata == null) challenge.metadata = [];
   if (challenge.groups == null) challenge.groups = [];
   if (challenge.tags == null) challenge.tags = [];
@@ -989,10 +1106,31 @@ async function createChallenge(currentUser, challenge, userToken) {
     value: typeof m.value === "string" ? m.value : JSON.stringify(m.value),
   }));
 
-  const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
-
   // No conversion needed - database stores values in dollars directly
   // The amountInCents field doesn't exist in the database schema
+  const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+
+  // If reviewers not provided, apply defaults for this (typeId, trackId)
+  if (!challenge.reviewers || challenge.reviewers.length === 0) {
+    if (challenge.typeId && challenge.trackId) {
+      const defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: { typeId: challenge.typeId, trackId: challenge.trackId },
+        orderBy: { createdAt: "asc" },
+      });
+      if (defaultReviewers && defaultReviewers.length > 0) {
+        challenge.reviewers = defaultReviewers.map((r) => ({
+          scorecardId: r.scorecardId,
+          isMemberReview: r.isMemberReview,
+          memberReviewerCount: r.memberReviewerCount,
+          phaseId: r.phaseId,
+          basePayment: r.basePayment,
+          incrementalPayment: r.incrementalPayment,
+          type: r.type,
+          isAIReviewer: r.isAIReviewer,
+        }));
+      }
+    }
+  }
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   const ret = await prisma.challenge.create({
@@ -1106,6 +1244,24 @@ createChallenge.schema = {
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
         })
+      ),
+      reviewers: Joi.array().items(
+        Joi.object()
+          .keys({
+            scorecardId: Joi.string().required(),
+            isMemberReview: Joi.boolean().required(),
+            memberReviewerCount: Joi.when('isMemberReview', {
+              is: true,
+              then: Joi.number().integer().min(1).required(),
+              otherwise: Joi.forbidden(),
+            }),
+            phaseId: Joi.id().required(),
+            basePayment: Joi.number().min(0).optional(),
+            incrementalPayment: Joi.number().min(0).optional(),
+            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            isAIReviewer: Joi.boolean().required(),
+          })
+          .xor('isMemberReview', 'isAIReviewer')
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
@@ -1839,6 +1995,9 @@ async function updateChallenge(currentUser, challengeId, data) {
     if (!_.isNil(updateData.prizeSets)) {
       await tx.challengePrizeSet.deleteMany({ where: { challengeId } });
     }
+    if (!_.isNil(updateData.reviewers)) {
+      await tx.challengeReviewer.deleteMany({ where: { challengeId } });
+    }
     if (_.isNil(updateData.winners)) {
       await tx.challengeWinner.deleteMany({ where: { challengeId } });
     }
@@ -2016,6 +2175,26 @@ updateChallenge.schema = {
           })
         )
         .optional(),
+      reviewers: Joi.array()
+        .items(
+          Joi.object()
+            .keys({
+              scorecardId: Joi.string().required(),
+              isMemberReview: Joi.boolean().required(),
+              memberReviewerCount: Joi.when('isMemberReview', {
+                is: true,
+                then: Joi.number().integer().min(1).required(),
+                otherwise: Joi.forbidden(),
+              }),
+              phaseId: Joi.id().required(),
+              basePayment: Joi.number().min(0).optional().allow(null),
+              incrementalPayment: Joi.number().min(0).optional().allow(null),
+              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              isAIReviewer: Joi.boolean().required(),
+            })
+            .xor('isMemberReview', 'isAIReviewer')
+        )
+        .optional(),
       startDate: Joi.date().iso(),
       prizeSets: Joi.array()
         .items(
@@ -2142,6 +2321,7 @@ function sanitizeChallenge(challenge) {
     "cancelReason",
     "constraints",
     "skills",
+    "reviewers",
     "wiproAllowed",
   ]);
   if (!_.isUndefined(sanitized.name)) {
@@ -2187,6 +2367,20 @@ function sanitizeChallenge(challenge) {
       ..._.pick(prizeSet, ["type", "description"]),
       prizes: _.map(prizeSet.prizes, (prize) => _.pick(prize, ["description", "type", "value"])),
     }));
+  }
+  if (challenge.reviewers) {
+    sanitized.reviewers = _.map(challenge.reviewers, (rv) =>
+      _.pick(rv, [
+        "scorecardId",
+        "isMemberReview",
+        "memberReviewerCount",
+        "phaseId",
+        "basePayment",
+        "incrementalPayment",
+        "type",
+        "isAIReviewer",
+      ])
+    );
   }
   if (challenge.events) {
     sanitized.events = _.map(challenge.events, (event) => _.pick(event, ["id", "name", "key"]));
@@ -2411,6 +2605,8 @@ module.exports = {
   getChallengeStatistics,
   sendNotifications,
   advancePhase,
+  getDefaultReviewers,
+  setDefaultReviewers,
 };
 
 logger.buildService(module.exports);
