@@ -21,6 +21,7 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
     "scheduledEndDate",
     "actualStartDate",
     "actualEndDate",
+    "challengeSource",
   ];
   // current phase names
   result.currentPhaseNames = _.map(
@@ -76,12 +77,14 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
     "name",
     "description",
     "privateDescription",
+    "challengeSource",
     "descriptionFormat",
     "tags",
     "projectId",
     "startDate",
     "groups",
     "legacyId",
+    "wiproAllowed",
   ]);
   // set legacy data
   if (!_.isNil(challenge.legacy)) {

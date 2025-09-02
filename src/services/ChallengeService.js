@@ -1201,6 +1201,8 @@ createChallenge.schema = {
       description: Joi.string(),
       privateDescription: Joi.string(),
       descriptionFormat: Joi.string(),
+      wiproAllowed: Joi.boolean().optional(),
+      challengeSource: Joi.string(),
       metadata: Joi.array()
         .items(
           Joi.object().keys({
@@ -2114,6 +2116,8 @@ updateChallenge.schema = {
       description: Joi.string().optional(),
       privateDescription: Joi.string().allow("").optional(),
       descriptionFormat: Joi.string().optional(),
+      wiproAllowed: Joi.boolean().optional(),
+      challengeSource: Joi.string().optional(),
       metadata: Joi.array()
         .items(
           Joi.object()
@@ -2305,6 +2309,7 @@ function sanitizeChallenge(challenge) {
     "description",
     "privateDescription",
     "descriptionFormat",
+    "challengeSource",
     "timelineTemplateId",
     "tags",
     "projectId",
@@ -2317,6 +2322,7 @@ function sanitizeChallenge(challenge) {
     "constraints",
     "skills",
     "reviewers",
+    "wiproAllowed",
   ]);
   if (!_.isUndefined(sanitized.name)) {
     sanitized.name = xss(sanitized.name);

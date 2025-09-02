@@ -19,6 +19,7 @@ CREATE TABLE "Challenge" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "privateDescription" TEXT,
+    "challengeSource" TEXT,
     "descriptionFormat" TEXT,
     "projectId" INTEGER,
     "typeId" TEXT NOT NULL,

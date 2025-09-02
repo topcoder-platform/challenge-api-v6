@@ -69,7 +69,10 @@ class ChallengeMigrator extends BaseMigrator {
         if(record.status) {
             record.status = statusMap[record.status] || Prisma.skip;
         }
-        
+
+        // for each old record, wiproAllowed is true
+        record.wiproAllowed = true;
+
         return record;
     }
 

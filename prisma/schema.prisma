@@ -64,17 +64,20 @@ enum ReviewOpportunityTypeEnum {
 //////////////////////////////////////////
 
 model Challenge {
-  id                  String   @id @default(uuid())
-  name                String
-  description         String?
-  privateDescription  String?
-  descriptionFormat   String?
-  projectId           Int? // frequently queried field
-  typeId              String
-  trackId             String // FK for relation in ChallengeTrack
-  timelineTemplateId  String? // now used as foreign key to ChallengeTimelineTemplate
-  overviewTotalPrizes Float? // stored from overview.totalPrizes
-  currentPhaseNames   String[] // current phase names
+  id                    String               @id @default(uuid())
+  name                  String
+  description           String?
+  privateDescription    String?
+  challengeSource       String?
+  descriptionFormat     String?
+  projectId             Int?                 // frequently queried field
+  typeId                String
+  trackId               String               // FK for relation in ChallengeTrack
+  timelineTemplateId    String?                    // now used as foreign key to ChallengeTimelineTemplate
+  overviewTotalPrizes   Float?                 // stored from overview.totalPrizes
+  currentPhaseNames     String[]             // current phase names
+
+  wiproAllowed          Boolean              @default(false)
 
   // simple arrays for tags and groups (PostgreSQL native array type)
   tags   String[]

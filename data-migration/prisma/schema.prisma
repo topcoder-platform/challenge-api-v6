@@ -59,6 +59,7 @@ model Challenge {
   name                  String
   description           String?
   privateDescription    String?
+  challengeSource       String?
   descriptionFormat     String?
   projectId             Int?                 // frequently queried field
   typeId                String
@@ -66,6 +67,8 @@ model Challenge {
   timelineTemplateId    String?                    // now used as foreign key to ChallengeTimelineTemplate
   overviewTotalPrizes   Float?                 // stored from overview.totalPrizes
   currentPhaseNames     String[]             // current phase names
+
+  wiproAllowed          Boolean              @default(false)
 
   // simple arrays for tags and groups (PostgreSQL native array type)
   tags                  String[]

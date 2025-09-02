@@ -7,7 +7,6 @@ const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
 const axios = require("axios");
-const Decimal = require("decimal.js");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");

@@ -1,0 +1,76 @@
+{
+	"info": {
+		"_postman_id": "d840bfd0-a7e8-4929-93f1-14864142b5a9",
+		"name": "wiproAllowed Challenge",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "46836291",
+		"_collection_link": "https://pinoydream.postman.co/workspace/Pinoydream's-Workspace~f0c1fd49-90ba-45d1-852b-c1b0eabc86f7/collection/46836291-d840bfd0-a7e8-4929-93f1-14864142b5a9?action=share&source=collection_link&creator=46836291"
+	},
+	"item": [
+		{
+			"name": "Get Challenge Types",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{apiURL}}/v6/challenge-types",
+					"host": [
+						"{{apiURL}}"
+					],
+					"path": [
+						"v6",
+						"challenge-types"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get Challenges",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{apiURL}}/v6/challenges",
+					"host": [
+						"{{apiURL}}"
+					],
+					"path": [
+						"v6",
+						"challenges"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "apiURL",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}

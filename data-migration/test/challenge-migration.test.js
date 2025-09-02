@@ -214,6 +214,7 @@ describe('Challenge Migration Tests', () => {
                     compareNullableField(dbChallenge.description, sourceChallenge.description);
                     compareNullableField(dbChallenge.privateDescription, sourceChallenge.privateDescription);
                     compareNullableField(dbChallenge.descriptionFormat, sourceChallenge.descriptionFormat);
+                    compareNullableField(dbChallenge.challengeSource, sourceChallenge.challengeSource);
                     compareNullableField(dbChallenge.projectId, sourceChallenge.projectId);
                     compareNullableField(dbChallenge.timelineTemplateId, sourceChallenge.timelineTemplateId);
 

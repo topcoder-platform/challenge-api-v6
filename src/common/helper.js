@@ -1,7 +1,6 @@
 /**
  * This file defines helper methods
  */
-const Joi = require("joi");
 const _ = require("lodash");
 const querystring = require("querystring");
 const constants = require("../../app-constants");
