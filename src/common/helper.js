@@ -281,7 +281,6 @@ async function createResource(challengeId, memberId, roleId) {
     memberId,
     roleId,
   };
-  console.log(userObj);
   const url = `${config.RESOURCES_API_URL}`;
   const res = await axios.post(url, userObj, {
     headers: { Authorization: `Bearer ${token}` },
