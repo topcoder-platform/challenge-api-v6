@@ -155,6 +155,120 @@ const includeReturnFields = {
 };
 
 /**
+ * Get default reviewers for a given typeId and trackId
+ * @param {Object} currentUser
+ * @param {Object} criteria { typeId, trackId }
+ */
+async function getDefaultReviewers(currentUser, criteria) {
+  const schema = Joi.object()
+    .keys({
+      typeId: Joi.id(),
+      trackId: Joi.id(),
+    })
+    .required();
+  const { error, value } = schema.validate(criteria);
+  if (error) throw error;
+
+  const rows = await prisma.defaultChallengeReviewer.findMany({
+    where: { typeId: value.typeId, trackId: value.trackId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows.map((r) => ({
+    scorecardId: r.scorecardId,
+    isMemberReview: r.isMemberReview,
+    memberReviewerCount: r.memberReviewerCount,
+    phaseId: r.phaseId,
+    basePayment: r.basePayment,
+    incrementalPayment: r.incrementalPayment,
+    type: r.type,
+    isAIReviewer: r.isAIReviewer,
+  }));
+}
+getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
+
+/**
+ * Set default reviewers for a given typeId and trackId
+ * @param {Object} currentUser
+ * @param {Object} data { typeId, trackId, reviewers }
+ */
+async function setDefaultReviewers(currentUser, data) {
+  const schema = Joi.object()
+    .keys({
+      typeId: Joi.id().required(),
+      trackId: Joi.id().required(),
+      reviewers: Joi.array()
+        .items(
+          Joi.object()
+            .keys({
+              scorecardId: Joi.string().required(),
+              isMemberReview: Joi.boolean().required(),
+              memberReviewerCount: Joi.when('isMemberReview', {
+                is: true,
+                then: Joi.number().integer().min(1).required(),
+                otherwise: Joi.forbidden(),
+              }),
+              phaseId: Joi.id().required(),
+              basePayment: Joi.number().min(0).optional().allow(null),
+              incrementalPayment: Joi.number().min(0).optional().allow(null),
+              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              isAIReviewer: Joi.boolean().required(),
+            })
+            .xor('isMemberReview', 'isAIReviewer')
+        )
+        .default([]),
+    })
+    .required();
+
+  const { error, value } = schema.validate(data);
+  if (error) throw error;
+
+  // validate referenced type and track
+  const [type, track] = await Promise.all([
+    prisma.challengeType.findUnique({ where: { id: value.typeId } }),
+    prisma.challengeTrack.findUnique({ where: { id: value.trackId } }),
+  ]);
+  if (!type) throw new errors.NotFoundError(`ChallengeType with id: ${value.typeId} doesn't exist`);
+  if (!track) throw new errors.NotFoundError(`ChallengeTrack with id: ${value.trackId} doesn't exist`);
+
+  const userId = _.toString(currentUser && currentUser.userId ? currentUser.userId : "system");
+  const auditFields = { createdBy: userId, updatedBy: userId };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.defaultChallengeReviewer.deleteMany({
+      where: { typeId: value.typeId, trackId: value.trackId },
+    });
+    if (value.reviewers.length > 0) {
+      await tx.defaultChallengeReviewer.createMany({
+        data: value.reviewers.map((r) => ({
+          ...auditFields,
+          typeId: value.typeId,
+          trackId: value.trackId,
+          scorecardId: String(r.scorecardId),
+          isMemberReview: !!r.isMemberReview,
+          memberReviewerCount: _.isNil(r.memberReviewerCount)
+            ? null
+            : Number(r.memberReviewerCount),
+          phaseId: r.phaseId,
+          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
+          incrementalPayment: _.isNil(r.incrementalPayment)
+            ? null
+            : Number(r.incrementalPayment),
+          type: r.type ? _.toUpper(r.type) : null,
+          isAIReviewer: !!r.isAIReviewer,
+        })),
+      });
+    }
+  });
+
+  return await getDefaultReviewers(currentUser, {
+    typeId: value.typeId,
+    trackId: value.trackId,
+  });
+}
+setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
+
+/**
  * Search challenges by legacyId
  * @param {Object} currentUser the user who perform operation
  * @param {Number} legacyId the legacyId
@@ -1109,16 +1223,22 @@ createChallenge.schema = {
         })
       ),
       reviewers: Joi.array().items(
-        Joi.object().keys({
-          scorecardId: Joi.string().required(),
-          isMemberReview: Joi.boolean().required(),
-          memberReviewerCount: Joi.number().integer().min(1).optional(),
-          phaseId: Joi.id().required(),
-          basePayment: Joi.number().min(0).optional(),
-          incrementalPayment: Joi.number().min(0).optional(),
-          type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-          isAIReviewer: Joi.boolean().required(),
-        })
+        Joi.object()
+          .keys({
+            scorecardId: Joi.string().required(),
+            isMemberReview: Joi.boolean().required(),
+            memberReviewerCount: Joi.when('isMemberReview', {
+              is: true,
+              then: Joi.number().integer().min(1).required(),
+              otherwise: Joi.forbidden(),
+            }),
+            phaseId: Joi.id().required(),
+            basePayment: Joi.number().min(0).optional(),
+            incrementalPayment: Joi.number().min(0).optional(),
+            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            isAIReviewer: Joi.boolean().required(),
+          })
+          .xor('isMemberReview', 'isAIReviewer')
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
@@ -2032,16 +2152,22 @@ updateChallenge.schema = {
         .optional(),
       reviewers: Joi.array()
         .items(
-          Joi.object().keys({
-            scorecardId: Joi.string().required(),
-            isMemberReview: Joi.boolean().required(),
-            memberReviewerCount: Joi.number().integer().min(1).optional().allow(null),
-            phaseId: Joi.id().required(),
-            basePayment: Joi.number().min(0).optional().allow(null),
-            incrementalPayment: Joi.number().min(0).optional().allow(null),
-            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-            isAIReviewer: Joi.boolean().required(),
-          })
+          Joi.object()
+            .keys({
+              scorecardId: Joi.string().required(),
+              isMemberReview: Joi.boolean().required(),
+              memberReviewerCount: Joi.when('isMemberReview', {
+                is: true,
+                then: Joi.number().integer().min(1).required(),
+                otherwise: Joi.forbidden(),
+              }),
+              phaseId: Joi.id().required(),
+              basePayment: Joi.number().min(0).optional().allow(null),
+              incrementalPayment: Joi.number().min(0).optional().allow(null),
+              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              isAIReviewer: Joi.boolean().required(),
+            })
+            .xor('isMemberReview', 'isAIReviewer')
         )
         .optional(),
       startDate: Joi.date().iso(),
@@ -2452,6 +2578,8 @@ module.exports = {
   getChallengeStatistics,
   sendNotifications,
   advancePhase,
+  getDefaultReviewers,
+  setDefaultReviewers,
 };
 
 logger.buildService(module.exports);

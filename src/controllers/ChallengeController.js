@@ -125,6 +125,26 @@ async function advancePhase(req, res) {
   res.send(await service.advancePhase(req, req.authUser, req.params.challengeId, req.body));
 }
 
+/**
+ * Get default reviewers for a typeId + trackId
+ * @param {Object} req the request
+ * @param {Object} res the response
+ */
+async function getDefaultReviewers(req, res) {
+  const result = await service.getDefaultReviewers(req.authUser, req.query);
+  res.send(result);
+}
+
+/**
+ * Set default reviewers for a typeId + trackId
+ * @param {Object} req the request
+ * @param {Object} res the response
+ */
+async function setDefaultReviewers(req, res) {
+  const result = await service.setDefaultReviewers(req.authUser, req.body);
+  res.send(result);
+}
+
 module.exports = {
   searchChallenges,
   createChallenge,
@@ -134,4 +154,6 @@ module.exports = {
   getChallengeStatistics,
   sendNotifications,
   advancePhase,
+  getDefaultReviewers,
+  setDefaultReviewers,
 };
