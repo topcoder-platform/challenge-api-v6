@@ -1106,10 +1106,31 @@ async function createChallenge(currentUser, challenge, userToken) {
     value: typeof m.value === "string" ? m.value : JSON.stringify(m.value),
   }));
 
-  const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
-
   // No conversion needed - database stores values in dollars directly
   // The amountInCents field doesn't exist in the database schema
+  const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+
+  // If reviewers not provided, apply defaults for this (typeId, trackId)
+  if (!challenge.reviewers || challenge.reviewers.length === 0) {
+    if (challenge.typeId && challenge.trackId) {
+      const defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: { typeId: challenge.typeId, trackId: challenge.trackId },
+        orderBy: { createdAt: "asc" },
+      });
+      if (defaultReviewers && defaultReviewers.length > 0) {
+        challenge.reviewers = defaultReviewers.map((r) => ({
+          scorecardId: r.scorecardId,
+          isMemberReview: r.isMemberReview,
+          memberReviewerCount: r.memberReviewerCount,
+          phaseId: r.phaseId,
+          basePayment: r.basePayment,
+          incrementalPayment: r.incrementalPayment,
+          type: r.type,
+          isAIReviewer: r.isAIReviewer,
+        }));
+      }
+    }
+  }
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   const ret = await prisma.challenge.create({
