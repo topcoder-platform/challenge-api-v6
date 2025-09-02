@@ -170,7 +170,7 @@ class ChallengeHelper {
   async validateCreateChallengeRequest(currentUser, challenge) {
     // projectId is required for non self-service challenges
     if (
-      _.get(challenge, 'legacy.selfService') == null &&
+      _.get(challenge, "legacy.selfService") == null &&
       challenge.projectId == null &&
       this.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
@@ -341,14 +341,14 @@ class ChallengeHelper {
       const submissionPhase = _.find(challenge.phases, (p) => p.name === "Submission");
 
       // select last started open phase as current phase
-      _.forEach(challenge.phases, p => {
+      _.forEach(challenge.phases, (p) => {
         if (p.isOpen) {
           if (!challenge.currentPhase) {
             challenge.currentPhase = p;
           } else {
             const phaseStartDate = p.actualStartDate || p.scheduledStartDate;
-            const existStartDate = challenge.currentPhase.actualStartDate ||
-              challenge.currentPhase.scheduledStartDate;
+            const existStartDate =
+              challenge.currentPhase.actualStartDate || challenge.currentPhase.scheduledStartDate;
             if (phaseStartDate > existStartDate) {
               challenge.currentPhase = p;
             }
@@ -435,7 +435,7 @@ class ChallengeHelper {
         }
       });
     });
-    
+
     // Handle overview totalPrizesInCents if it exists (though it shouldn't based on schema)
     if (overview && !_.isUndefined(overview.totalPrizesInCents)) {
       // If this field exists, it's likely already in dollars despite the name
@@ -445,7 +445,11 @@ class ChallengeHelper {
   }
 
   isProjectIdRequired(timelineTemplateId) {
-    const template = _.get(config, "SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID", '517e76b0-8824-4e72-9b48-a1ebde1793a8');
+    const template = _.get(
+      config,
+      "SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID",
+      "517e76b0-8824-4e72-9b48-a1ebde1793a8"
+    );
 
     return template !== timelineTemplateId;
   }

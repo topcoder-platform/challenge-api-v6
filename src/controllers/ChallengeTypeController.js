@@ -42,7 +42,11 @@ async function getChallengeType(req, res) {
  * @param {Object} res the response
  */
 async function fullyUpdateChallengeType(req, res) {
-  const result = await service.fullyUpdateChallengeType(req.authUser, req.params.challengeTypeId, req.body);
+  const result = await service.fullyUpdateChallengeType(
+    req.authUser,
+    req.params.challengeTypeId,
+    req.body
+  );
   res.send(result);
 }
 
@@ -52,7 +56,11 @@ async function fullyUpdateChallengeType(req, res) {
  * @param {Object} res the response
  */
 async function partiallyUpdateChallengeType(req, res) {
-  const result = await service.partiallyUpdateChallengeType(req.authUser, req.params.challengeTypeId, req.body);
+  const result = await service.partiallyUpdateChallengeType(
+    req.authUser,
+    req.params.challengeTypeId,
+    req.body
+  );
   res.send(result);
 }
 

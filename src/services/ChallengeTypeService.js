@@ -8,7 +8,7 @@ const logger = require("../common/logger");
 const constants = require("../../app-constants");
 const errors = require("../common/errors");
 
-const prisma = require('../common/prisma').getClient()
+const prisma = require("../common/prisma").getClient();
 
 /**
  * Search challenge types
@@ -16,7 +16,7 @@ const prisma = require('../common/prisma').getClient()
  * @returns {Promise<Object>} the search result
  */
 async function searchChallengeTypes(criteria) {
-  const searchFilter = getSearchFilter(_.omit(criteria, ['page', 'perPage']))
+  const searchFilter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
 
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 50;
@@ -25,9 +25,9 @@ async function searchChallengeTypes(criteria) {
 
   let records = helper.getFromInternalCache(cacheKey);
   if (records == null || records.length === 0) {
-    records = await prisma.challengeType.findMany({ where: searchFilter })
-    records = _.map(records, r => _.omit(r, constants.auditFields))
-    helper.setToInternalCache(cacheKey, records)
+    records = await prisma.challengeType.findMany({ where: searchFilter });
+    records = _.map(records, (r) => _.omit(r, constants.auditFields));
+    helper.setToInternalCache(cacheKey, records);
   }
 
   const total = records.length;
@@ -42,24 +42,24 @@ async function searchChallengeTypes(criteria) {
  * @param {Object} criteria search criteria
  * @returns filter used in prisma
  */
-function getSearchFilter (criteria) {
-  const ret = {}
+function getSearchFilter(criteria) {
+  const ret = {};
   if (!_.isEmpty(criteria.name)) {
-    ret.name = { equals: criteria.name }
+    ret.name = { equals: criteria.name };
   }
   if (!_.isEmpty(criteria.abbreviation)) {
-    ret.abbreviation = { equals: criteria.abbreviation }
+    ret.abbreviation = { equals: criteria.abbreviation };
   }
   if (!_.isEmpty(criteria.description)) {
-    ret.description = { contains: criteria.description }
+    ret.description = { contains: criteria.description };
   }
   if (!_.isUndefined(criteria.isActive)) {
-    ret.isActive = { equals: criteria.isActive }
+    ret.isActive = { equals: criteria.isActive };
   }
   if (!_.isUndefined(criteria.isTask)) {
-    ret.isTask = { equals: criteria.isTask }
+    ret.isTask = { equals: criteria.isTask };
   }
-  return ret
+  return ret;
 }
 
 searchChallengeTypes.schema = {
@@ -79,11 +79,13 @@ searchChallengeTypes.schema = {
  * @param {String} name challenge type name
  * @throws conflict error if same name exists
  */
-async function checkTypeName (name) {
+async function checkTypeName(name) {
   const existingByName = await prisma.challengeType.findMany({
-    where: { name }
-  })
-  if (existingByName && existingByName.length > 0) { throw new errors.ConflictError(`ChallengeType with name: ${name} already exist`) }
+    where: { name },
+  });
+  if (existingByName && existingByName.length > 0) {
+    throw new errors.ConflictError(`ChallengeType with name: ${name} already exist`);
+  }
 }
 
 /**
@@ -91,14 +93,14 @@ async function checkTypeName (name) {
  * @param {String} name challenge type abbreviation
  * @throws conflict error if same abbreviation exists
  */
-async function checkTypeAbrv (abbreviation) {
+async function checkTypeAbrv(abbreviation) {
   const existingByAbbr = await prisma.challengeType.findMany({
-    where: { abbreviation }
-  })
+    where: { abbreviation },
+  });
   if (existingByAbbr && existingByAbbr.length > 0) {
     throw new errors.ConflictError(
       `ChallengeType with abbreviation: ${abbreviation} already exist`
-    )
+    );
   }
 }
 
@@ -108,21 +110,21 @@ async function checkTypeAbrv (abbreviation) {
  * @param {Object} type the challenge type to created
  * @returns {Object} the created challenge type
  */
-async function createChallengeType (authUser, type) {
-  await checkTypeName(type.name)
-  await checkTypeAbrv(type.abbreviation)
+async function createChallengeType(authUser, type) {
+  await checkTypeName(type.name);
+  await checkTypeAbrv(type.abbreviation);
   let ret = await prisma.challengeType.create({
     data: {
       ...type,
       createdBy: authUser.userId,
-      updatedBy: authUser.userId
-    }
-  })
-  ret = _.omit(ret, constants.auditFields)
-  helper.flushInternalCache()
+      updatedBy: authUser.userId,
+    },
+  });
+  ret = _.omit(ret, constants.auditFields);
+  helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTypeCreated, ret)
-  return ret
+  await helper.postBusEvent(constants.Topics.ChallengeTypeCreated, ret);
+  return ret;
 }
 
 createChallengeType.schema = {
@@ -145,13 +147,13 @@ createChallengeType.schema = {
  */
 async function getChallengeType(id) {
   let ret = await prisma.challengeType.findUnique({
-    where: { id }
-  })
+    where: { id },
+  });
   if (!ret || _.isUndefined(ret.id)) {
-    throw new errors.NotFoundError(`ChallengeType with id: ${id} doesn't exist`)
+    throw new errors.NotFoundError(`ChallengeType with id: ${id} doesn't exist`);
   }
-  ret = _.omit(ret, constants.auditFields)
-  return ret
+  ret = _.omit(ret, constants.auditFields);
+  return ret;
 }
 
 getChallengeType.schema = {
@@ -165,29 +167,29 @@ getChallengeType.schema = {
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
  */
-async function fullyUpdateChallengeType (authUser, id, data) {
-  const type = await getChallengeType(id)
+async function fullyUpdateChallengeType(authUser, id, data) {
+  const type = await getChallengeType(id);
   if (type.name.toLowerCase() !== data.name.toLowerCase()) {
-    await checkTypeName(data.name)
+    await checkTypeName(data.name);
   }
   if (type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
-    await checkTypeAbrv(data.abbreviation)
+    await checkTypeAbrv(data.abbreviation);
   }
   if (_.isUndefined(data.description)) {
-    data.description = null
+    data.description = null;
   }
   let ret = await prisma.challengeType.update({
     data: {
       ...data,
-      updatedBy: authUser.userId
+      updatedBy: authUser.userId,
     },
-    where: { id }
-  })
-  ret = _.omit(ret, constants.auditFields)
-  helper.flushInternalCache()
+    where: { id },
+  });
+  ret = _.omit(ret, constants.auditFields);
+  helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, ret)
-  return ret
+  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, ret);
+  return ret;
 }
 fullyUpdateChallengeType.schema = {
   authUser: Joi.any(),
@@ -210,24 +212,24 @@ fullyUpdateChallengeType.schema = {
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
  */
-async function partiallyUpdateChallengeType (authUser, id, data) {
-  const type = await getChallengeType(id)
+async function partiallyUpdateChallengeType(authUser, id, data) {
+  const type = await getChallengeType(id);
   if (data.name && type.name.toLowerCase() !== data.name.toLowerCase()) {
-    await checkTypeName(data.name)
+    await checkTypeName(data.name);
   }
   if (data.abbreviation && type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
-    await checkTypeAbrv(data.abbreviation)
+    await checkTypeAbrv(data.abbreviation);
   }
-  data.updatedBy = authUser.userId
+  data.updatedBy = authUser.userId;
   let ret = await prisma.challengeType.update({
     where: { id },
-    data: _.extend(type, data)
-  })
-  ret = _.omit(ret, constants.auditFields)
-  helper.flushInternalCache()
+    data: _.extend(type, data),
+  });
+  ret = _.omit(ret, constants.auditFields);
+  helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, _.assignIn({ id }, data))
-  return ret
+  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, _.assignIn({ id }, data));
+  return ret;
 }
 
 partiallyUpdateChallengeType.schema = {
@@ -254,8 +256,8 @@ async function deleteChallengeType(id) {
   await prisma.challengeType.delete({ where: { id } });
   helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTypeDeleted, ret)
-  return ret
+  await helper.postBusEvent(constants.Topics.ChallengeTypeDeleted, ret);
+  return ret;
 }
 
 deleteChallengeType.schema = {

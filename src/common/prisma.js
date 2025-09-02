@@ -1,22 +1,29 @@
-const { PrismaClient, ChallengeTrackEnum, ReviewTypeEnum, DiscussionTypeEnum, ChallengeStatusEnum, PrizeSetTypeEnum } = require('@prisma/client')
+const {
+  PrismaClient,
+  ChallengeTrackEnum,
+  ReviewTypeEnum,
+  DiscussionTypeEnum,
+  ChallengeStatusEnum,
+  PrizeSetTypeEnum,
+} = require("@prisma/client");
 
 const prismaClient = new PrismaClient({
   log: [
-    { level: 'query', emit: 'event' },
-    { level: 'info', emit: 'event' },
-    { level: 'warn', emit: 'event' },
-    { level: 'error', emit: 'event' }
-  ]
-})
+    { level: "query", emit: "event" },
+    { level: "info", emit: "event" },
+    { level: "warn", emit: "event" },
+    { level: "error", emit: "event" },
+  ],
+});
 
 // By running the first query, prisma calls $connect() under the hood
 module.exports.prismaConnect = () => {
-  prismaClient.$connect()
-}
+  prismaClient.$connect();
+};
 
 module.exports.getClient = () => {
-  return prismaClient
-}
+  return prismaClient;
+};
 
 module.exports.ChallengeTrackEnum = ChallengeTrackEnum;
 module.exports.ReviewTypeEnum = ReviewTypeEnum;

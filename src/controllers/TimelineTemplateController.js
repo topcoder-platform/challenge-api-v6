@@ -42,7 +42,11 @@ async function getTimelineTemplate(req, res) {
  * @param {Object} res the response
  */
 async function fullyUpdateTimelineTemplate(req, res) {
-  const result = await service.fullyUpdateTimelineTemplate(req.authUser, req.params.timelineTemplateId, req.body);
+  const result = await service.fullyUpdateTimelineTemplate(
+    req.authUser,
+    req.params.timelineTemplateId,
+    req.body
+  );
   res.send(result);
 }
 

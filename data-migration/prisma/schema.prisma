@@ -124,6 +124,16 @@ model Challenge {
 
   @@index([projectId])
   @@index([status]) // index added for optimized search by status
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@index([typeId])
+  @@index([trackId])
+  @@index([submissionStartDate])
+  @@index([submissionEndDate])
+  @@index([registrationStartDate])
+  @@index([registrationEndDate])
+  @@index([startDate])
+  @@index([endDate])
 }
 
 //////////////////////////////////////////
