@@ -51,7 +51,7 @@ enum PrizeSetTypeEnum {
 }
 
 // Enum for review opportunity types on reviewers
-enum ReviewOpportunityType {
+enum ReviewOpportunityTypeEnum {
   REGULAR_REVIEW
   COMPONENT_DEV_REVIEW
   SPEC_REVIEW
@@ -579,7 +579,7 @@ model ChallengeReviewer {
   phaseId              String
   basePayment          Float?
   incrementalPayment   Float?
-  type                 ReviewOpportunityType?
+  type                 ReviewOpportunityTypeEnum?
   isAIReviewer         Boolean
 
   // Relation to the challenge

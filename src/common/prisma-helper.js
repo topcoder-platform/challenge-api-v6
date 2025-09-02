@@ -213,6 +213,29 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
       })),
     };
   }
+  // reviewers
+  if (!_.isNil(challenge.reviewers)) {
+    result.reviewers = {
+      create: _.map(challenge.reviewers, (r) => {
+        const reviewer = {
+          ...auditFields,
+          scorecardId: String(r.scorecardId),
+          isMemberReview: !!r.isMemberReview,
+          memberReviewerCount: _.isNil(r.memberReviewerCount)
+            ? null
+            : Number(r.memberReviewerCount),
+          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
+          incrementalPayment: _.isNil(r.incrementalPayment)
+            ? null
+            : Number(r.incrementalPayment),
+          isAIReviewer: !!r.isAIReviewer,
+        };
+        if (r.type) reviewer.type = _.toUpper(r.type);
+        if (r.phaseId) reviewer.phase = { connect: { id: r.phaseId } };
+        return reviewer;
+      }),
+    };
+  }
   // winners
   if (!_.isNil(challenge.winners)) {
     result.winners = {
@@ -330,6 +353,21 @@ function convertModelToResponse(ret) {
 
     return winner;
   });
+  // convert reviewers
+  if (ret.reviewers) {
+    ret.reviewers = _.map(ret.reviewers, (rv) =>
+      _.pick(rv, [
+        "scorecardId",
+        "isMemberReview",
+        "memberReviewerCount",
+        "phaseId",
+        "basePayment",
+        "incrementalPayment",
+        "type",
+        "isAIReviewer",
+      ])
+    );
+  }
   // TODO: Set data from other API
   ret.numOfSubmissions = 0;
   ret.numOfCheckpointSubmissions = 0;

@@ -30,6 +30,7 @@ const {
   DiscussionTypeEnum,
   ChallengeStatusEnum,
   PrizeSetTypeEnum,
+  ReviewOpportunityTypeEnum,
 } = require("../common/prisma");
 const prisma = getClient();
 
@@ -144,6 +145,7 @@ const includeReturnFields = {
   prizeSets: {
     include: { prizes: true },
   },
+  reviewers: true,
   terms: true,
   skills: true,
   winners: true,
@@ -976,6 +978,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.events == null) challenge.events = [];
   if (challenge.attachments == null) challenge.attachments = [];
   if (challenge.prizeSets == null) challenge.prizeSets = [];
+  if (challenge.reviewers == null) challenge.reviewers = [];
   if (challenge.metadata == null) challenge.metadata = [];
   if (challenge.groups == null) challenge.groups = [];
   if (challenge.tags == null) challenge.tags = [];
@@ -1103,6 +1106,18 @@ createChallenge.schema = {
           provider: Joi.string().required(),
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
+        })
+      ),
+      reviewers: Joi.array().items(
+        Joi.object().keys({
+          scorecardId: Joi.string().required(),
+          isMemberReview: Joi.boolean().required(),
+          memberReviewerCount: Joi.number().integer().min(1).optional(),
+          phaseId: Joi.id().required(),
+          basePayment: Joi.number().min(0).optional(),
+          incrementalPayment: Joi.number().min(0).optional(),
+          type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+          isAIReviewer: Joi.boolean().required(),
         })
       ),
       prizeSets: Joi.array().items(
@@ -1837,6 +1852,9 @@ async function updateChallenge(currentUser, challengeId, data) {
     if (!_.isNil(updateData.prizeSets)) {
       await tx.challengePrizeSet.deleteMany({ where: { challengeId } });
     }
+    if (!_.isNil(updateData.reviewers)) {
+      await tx.challengeReviewer.deleteMany({ where: { challengeId } });
+    }
     if (_.isNil(updateData.winners)) {
       await tx.challengeWinner.deleteMany({ where: { challengeId } });
     }
@@ -2012,6 +2030,20 @@ updateChallenge.schema = {
           })
         )
         .optional(),
+      reviewers: Joi.array()
+        .items(
+          Joi.object().keys({
+            scorecardId: Joi.string().required(),
+            isMemberReview: Joi.boolean().required(),
+            memberReviewerCount: Joi.number().integer().min(1).optional().allow(null),
+            phaseId: Joi.id().required(),
+            basePayment: Joi.number().min(0).optional().allow(null),
+            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            isAIReviewer: Joi.boolean().required(),
+          })
+        )
+        .optional(),
       startDate: Joi.date().iso(),
       prizeSets: Joi.array()
         .items(
@@ -2137,6 +2169,7 @@ function sanitizeChallenge(challenge) {
     "cancelReason",
     "constraints",
     "skills",
+    "reviewers",
   ]);
   if (!_.isUndefined(sanitized.name)) {
     sanitized.name = xss(sanitized.name);
@@ -2181,6 +2214,20 @@ function sanitizeChallenge(challenge) {
       ..._.pick(prizeSet, ["type", "description"]),
       prizes: _.map(prizeSet.prizes, (prize) => _.pick(prize, ["description", "type", "value"])),
     }));
+  }
+  if (challenge.reviewers) {
+    sanitized.reviewers = _.map(challenge.reviewers, (rv) =>
+      _.pick(rv, [
+        "scorecardId",
+        "isMemberReview",
+        "memberReviewerCount",
+        "phaseId",
+        "basePayment",
+        "incrementalPayment",
+        "type",
+        "isAIReviewer",
+      ])
+    );
   }
   if (challenge.events) {
     sanitized.events = _.map(challenge.events, (event) => _.pick(event, ["id", "name", "key"]));
