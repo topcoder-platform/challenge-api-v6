@@ -178,10 +178,10 @@ async function getDefaultReviewers(currentUser, criteria) {
     scorecardId: r.scorecardId,
     isMemberReview: r.isMemberReview,
     memberReviewerCount: r.memberReviewerCount,
-    phaseId: r.phaseId,
+    phaseName: r.phaseName,
     basePayment: r.basePayment,
     incrementalPayment: r.incrementalPayment,
-    type: r.type,
+    type: r.opportunityType,
     isAIReviewer: r.isAIReviewer,
   }));
 }
@@ -208,7 +208,7 @@ async function setDefaultReviewers(currentUser, data) {
                 then: Joi.number().integer().min(1).required(),
                 otherwise: Joi.forbidden(),
               }),
-              phaseId: Joi.id().required(),
+              phaseName: Joi.string().required(),
               basePayment: Joi.number().min(0).optional().allow(null),
               incrementalPayment: Joi.number().min(0).optional().allow(null),
               type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -234,6 +234,17 @@ async function setDefaultReviewers(currentUser, data) {
   const userId = _.toString(currentUser && currentUser.userId ? currentUser.userId : "system");
   const auditFields = { createdBy: userId, updatedBy: userId };
 
+  // Validate phase names exist
+  const uniquePhaseNames = _.uniq(value.reviewers.map((r) => r.phaseName));
+  if (uniquePhaseNames.length > 0) {
+    const phases = await prisma.phase.findMany({ where: { name: { in: uniquePhaseNames } } });
+    const existing = new Set(phases.map((p) => p.name));
+    const missing = uniquePhaseNames.filter((n) => !existing.has(n));
+    if (missing.length > 0) {
+      throw new errors.BadRequestError(`Invalid phaseName(s): ${missing.join(', ')}`);
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.defaultChallengeReviewer.deleteMany({
       where: { typeId: value.typeId, trackId: value.trackId },
@@ -249,12 +260,12 @@ async function setDefaultReviewers(currentUser, data) {
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
-          phaseId: r.phaseId,
+          phaseName: r.phaseName,
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
           incrementalPayment: _.isNil(r.incrementalPayment)
             ? null
             : Number(r.incrementalPayment),
-          type: r.type ? _.toUpper(r.type) : null,
+          opportunityType: r.type ? _.toUpper(r.type) : null,
           isAIReviewer: !!r.isAIReviewer,
         })),
       });
@@ -1118,14 +1129,24 @@ async function createChallenge(currentUser, challenge, userToken) {
         orderBy: { createdAt: "asc" },
       });
       if (defaultReviewers && defaultReviewers.length > 0) {
+        // Resolve phaseId by name
+        const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
+        const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.id]));
+
+        // ensure all required names exist
+        const missing = phaseNames.filter((n) => !phaseMap.has(n));
+        if (missing.length > 0) {
+          throw new BadRequestError(`Default reviewers reference unknown phaseName(s): ${missing.join(', ')}`);
+        }
+
         challenge.reviewers = defaultReviewers.map((r) => ({
           scorecardId: r.scorecardId,
           isMemberReview: r.isMemberReview,
           memberReviewerCount: r.memberReviewerCount,
-          phaseId: r.phaseId,
+          phaseId: phaseMap.get(r.phaseName),
           basePayment: r.basePayment,
           incrementalPayment: r.incrementalPayment,
-          type: r.type,
+          type: r.opportunityType,
           isAIReviewer: r.isAIReviewer,
         }));
       }

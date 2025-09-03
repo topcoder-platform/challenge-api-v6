@@ -496,7 +496,6 @@ model Phase {
   // Inverse relation for associated challenge phases
   challengePhases          ChallengePhase[]
   ChallengeReviewer        ChallengeReviewer[]
-  DefaultChallengeReviewer DefaultChallengeReviewer[]
 
   @@unique([name])
 }
@@ -617,7 +616,7 @@ model DefaultChallengeReviewer {
   scorecardId         String
   isMemberReview      Boolean
   memberReviewerCount Int?
-  phaseId             String
+  phaseName           String
   basePayment         Float?
   incrementalPayment  Float?
   opportunityType     ReviewOpportunityTypeEnum?
@@ -626,7 +625,7 @@ model DefaultChallengeReviewer {
   // Relations
   challengeType  ChallengeType  @relation(fields: [typeId], references: [id])
   challengeTrack ChallengeTrack @relation(fields: [trackId], references: [id])
-  challengePhase Phase          @relation(fields: [phaseId], references: [id])
+  // no relation to Phase; we store phase name for flexibility
 
   // Auditing fields
   createdAt DateTime @default(now())
@@ -635,7 +634,6 @@ model DefaultChallengeReviewer {
   updatedBy String
 
   @@index([typeId, trackId])
-  @@index([phaseId])
 }
 
 //////////////////////////////////////////
