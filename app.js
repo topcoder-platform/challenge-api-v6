@@ -30,7 +30,7 @@ app.use((req, res, next) => {
 });
 
 // serve challenge V5 API swagger definition
-app.use("/v5/challenges/docs", swaggerUi.serve, swaggerUi.setup(challengeAPISwaggerDoc));
+app.use("/v6/challenges/docs", swaggerUi.serve, swaggerUi.setup(challengeAPISwaggerDoc));
 
 app.use(
   cors({
