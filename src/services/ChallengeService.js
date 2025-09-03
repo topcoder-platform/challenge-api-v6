@@ -844,6 +844,27 @@ async function searchChallenges(currentUser, criteria) {
 
       enrichChallengeForResponse(c, c.track, c.type);
     }
+
+    // Fetch registrant counts in parallel with a small concurrency cap
+    const roleId = config.REGISTRANT_ROLE_ID || config.SUBMITTER_ROLE_ID;
+    const concurrency = 6;
+    let i = 0;
+    const worker = async () => {
+      while (true) {
+        const idx = i++;
+        if (idx >= challenges.length) break;
+        const ch = challenges[idx];
+        try {
+          const counts = await helper.getChallengeResourcesCount(ch.id, roleId);
+          ch.numOfRegistrants = counts[roleId] || 0;
+        } catch (e) {
+          logger.warn(`Failed to load registrant count for challenge ${ch.id}: ${e.message}`);
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, challenges.length) }, () => worker())
+    );
   } catch (e) {
     // logger.error(JSON.stringify(e));
     console.log(e);
@@ -1396,6 +1417,15 @@ async function getChallenge(currentUser, id, checkIfExists) {
   await enrichSkillsData(challenge);
 
   enrichChallengeForResponse(challenge, challenge.track, challenge.type);
+
+  // Populate registrant count from Resources API
+  try {
+    const roleId = config.REGISTRANT_ROLE_ID || config.SUBMITTER_ROLE_ID;
+    const counts = await helper.getChallengeResourcesCount(challenge.id, roleId);
+    challenge.numOfRegistrants = counts[roleId] || 0;
+  } catch (e) {
+    logger.warn(`Failed to load registrant count for challenge ${challenge.id}: ${e.message}`);
+  }
 
   return helper.removeNullProperties(challenge);
 }

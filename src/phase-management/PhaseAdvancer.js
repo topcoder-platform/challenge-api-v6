@@ -274,11 +274,12 @@ class PhaseAdvancer {
   async #getRegistrantCount(challengeId) {
     console.log(`Getting registrant count for challenge ${challengeId}`);
     // TODO: getChallengeResources loops through all pages, which is not necessary here, we can just get the first page and total count from header[X-Total]
+    const roleId = config.REGISTRANT_ROLE_ID || config.SUBMITTER_ROLE_ID;
     const submitters = await helper.getChallengeResourcesCount(
       challengeId,
-      config.SUBMITTER_ROLE_ID
+      roleId
     );
-    return submitters[config.SUBMITTER_ROLE_ID] || 0;
+    return submitters[roleId] || 0;
   }
 
   async #getSubmissionCount(challengeId) {
