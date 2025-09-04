@@ -60,6 +60,7 @@ module.exports = {
     ? process.env.COPILOT_RESOURCE_ROLE_IDS.split(",")
     : ["10ba038e-48da-487b-96e8-8d3b99b6d18b"],
   SUBMITTER_ROLE_ID: process.env.SUBMITTER_ROLE_ID || "732339e7-8e30-49d7-9198-cccf9451e221",
+  SUBMITTER_ROLE_NAME: process.env.SUBMITTER_ROLE_NAME || "Submitter",
   // registrant role id (defaults to SUBMITTER_ROLE_ID)
   REGISTRANT_ROLE_ID:
     process.env.REGISTRANT_ROLE_ID || process.env.SUBMITTER_ROLE_ID || "732339e7-8e30-49d7-9198-cccf9451e221",
@@ -120,4 +121,8 @@ module.exports = {
 
   SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID:
     process.env.SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID || "517e76b0-8824-4e72-9b48-a1ebde1793a8",
+
+  // Database schemas for direct counts (shared DB)
+  RESOURCES_DB_SCHEMA: process.env.RESOURCES_DB_SCHEMA || "resources",
+  REVIEW_DB_SCHEMA: process.env.REVIEW_DB_SCHEMA || "reviews",
 };
