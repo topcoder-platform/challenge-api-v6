@@ -286,7 +286,7 @@ class PhaseAdvancer {
     console.log(`Getting submission count for challenge ${challengeId}`);
     // TODO: getChallengeSubmissions loops through all pages, which is not necessary here, we can just get the first page and total count from header[X-Total]
     const submissions = await helper.getChallengeSubmissionsCount(challengeId);
-    return submissions["Contest Submission"] || 0;
+    return submissions["CONTEST_SUBMISSION"] || 0;
   }
 
   async #areAllSubmissionsReviewed(challengeId) {
