@@ -1029,49 +1029,6 @@ async function getChallengeSubmissions(challengeId) {
 }
 
 /**
- * Get challenge submissions count by type using the list endpoint.
- * Aggregates counts per submission `type` and includes a `total` count.
- * @param {String} challengeId the challenge id
- * @returns {Promise<Object>} map of { [type]: count, total: number }
- */
-async function getChallengeSubmissionsCount(challengeId) {
-  const submissions = await getChallengeSubmissions(challengeId);
-  const counts = {};
-  for (const s of submissions) {
-    const t = _.get(s, "type", "Unknown");
-    counts[t] = (counts[t] || 0) + 1;
-  }
-  counts.total = submissions.length;
-  return counts;
-}
-
-/**
- * Get total submissions count using list endpoint and X-Total header.
- * Optionally filter by submission type via `type` param.
- * @param {String} challengeId
- * @param {String} [type]
- * @returns {Promise<number>}
- */
-async function getChallengeSubmissionsTotalCount(challengeId, type) {
-  const token = await m2mHelper.getM2MToken();
-  const res = await axios.get(`${config.SUBMISSIONS_API_URL}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: {
-      challengeId,
-      perPage: 1,
-      page: 1,
-      ...(type ? { type } : {}),
-    },
-  });
-  const totalHeader = res.headers["x-total"];
-  if (!_.isNil(totalHeader)) {
-    const n = Number(totalHeader);
-    if (!Number.isNaN(n)) return n;
-  }
-  return Array.isArray(res.data) ? res.data.length : 0;
-}
-
-/**
  * Get member by ID
  * @param {String} userId the user ID
  * @returns {Object}
@@ -1279,8 +1236,6 @@ module.exports = {
   getProjectIdByRoundId,
   getGroupById,
   getChallengeSubmissions,
-  getChallengeSubmissionsCount,
-  getChallengeSubmissionsTotalCount,
   getMemberById,
   createSelfServiceProject,
   activateProject,

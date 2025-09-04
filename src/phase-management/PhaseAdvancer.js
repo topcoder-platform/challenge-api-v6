@@ -284,9 +284,23 @@ class PhaseAdvancer {
 
   async #getSubmissionCount(challengeId) {
     console.log(`Getting submission count for challenge ${challengeId}`);
-    // TODO: getChallengeSubmissions loops through all pages, which is not necessary here, we can just get the first page and total count from header[X-Total]
-    const submissions = await helper.getChallengeSubmissionsCount(challengeId);
-    return submissions["CONTEST_SUBMISSION"] || 0;
+    // We can just get the first page and total count from header[X-Total]
+      const token = await m2mHelper.getM2MToken();
+      const res = await axios.get(`${config.SUBMISSIONS_API_URL}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          challengeId,
+          perPage: 1,
+          page: 1,
+          ...(type ? { type } : {}),
+        },
+      });
+      const totalHeader = res.headers["x-total"];
+      if (!_.isNil(totalHeader)) {
+        const n = Number(totalHeader);
+        if (!Number.isNaN(n)) return n;
+      }
+      return Array.isArray(res.data) ? res.data.length : 0;
   }
 
   async #areAllSubmissionsReviewed(challengeId) {
