@@ -860,6 +860,15 @@ async function searchChallenges(currentUser, criteria) {
         } catch (e) {
           logger.warn(`Failed to load registrant count for challenge ${ch.id}: ${e.message}`);
         }
+        try {
+          const subCounts = await helper.getChallengeSubmissionsCount(ch.id);
+          ch.numOfSubmissions = subCounts["Contest Submission"] ?? subCounts.total ?? 0;
+          if (Object.prototype.hasOwnProperty.call(subCounts, "Checkpoint Submission")) {
+            ch.numOfCheckpointSubmissions = subCounts["Checkpoint Submission"] || 0;
+          }
+        } catch (e) {
+          logger.warn(`Failed to load submission count for challenge ${ch.id}: ${e.message}`);
+        }
       }
     };
     await Promise.all(
@@ -1425,6 +1434,19 @@ async function getChallenge(currentUser, id, checkIfExists) {
     challenge.numOfRegistrants = counts[roleId] || 0;
   } catch (e) {
     logger.warn(`Failed to load registrant count for challenge ${challenge.id}: ${e.message}`);
+  }
+
+  // Populate submissions count from Submissions API
+  try {
+    const subCounts = await helper.getChallengeSubmissionsCount(challenge.id);
+    // Prefer specific types where available
+    challenge.numOfSubmissions =
+      subCounts["Contest Submission"] ?? subCounts.total ?? 0;
+    if (Object.prototype.hasOwnProperty.call(subCounts, "Checkpoint Submission")) {
+      challenge.numOfCheckpointSubmissions = subCounts["Checkpoint Submission"] || 0;
+    }
+  } catch (e) {
+    logger.warn(`Failed to load submission count for challenge ${challenge.id}: ${e.message}`);
   }
 
   return helper.removeNullProperties(challenge);
