@@ -1504,13 +1504,19 @@ getChallenge.schema = {
  * @returns {Object} the challenge with given id
  */
 async function getChallengeStatistics(currentUser, id) {
-  const challenge = await getChallenge(currentUser, id);
   // get submissions
-  const submissions = await helper.getChallengeSubmissions(challenge.id);
+  console.log("Getting challenge submissions for challenge ID: " + id);
+  const submissions = await helper.getChallengeSubmissions(id);
+  console.log(`Found ${submissions.length} submissions`);
+  if (submissions.length === 0) {
+    return [];
+  }
   // for each submission, load member profile
   const map = {};
   for (const submission of submissions) {
+
     if (!map[submission.memberId]) {
+      console.log("Finding member ID: " + submission.memberId);
       // Load member profile and cache
       const member = await helper.getMemberById(submission.memberId);
       map[submission.memberId] = {

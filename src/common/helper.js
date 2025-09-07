@@ -1004,6 +1004,7 @@ async function getGroupById(groupId) {
  */
 async function getChallengeSubmissions(challengeId) {
   const token = await m2mHelper.getM2MToken();
+  console.log(`Token: ${token}`);
   let allSubmissions = [];
   // get search is paginated, we need to get all pages' data
   let page = 1;
@@ -1015,13 +1016,13 @@ async function getChallengeSubmissions(challengeId) {
         perPage: 100,
       },
     });
-    const ids = result.data || [];
+    const ids = result.data.data || [];
     if (ids.length === 0) {
       break;
     }
     allSubmissions = allSubmissions.concat(ids);
     page += 1;
-    if (result.headers["x-total-pages"] && page > Number(result.headers["x-total-pages"])) {
+    if (result.data.meta.totalPages && page > result.data.meta.totalPages) {
       break;
     }
   }
@@ -1035,9 +1036,11 @@ async function getChallengeSubmissions(challengeId) {
  */
 async function getMemberById(userId) {
   const token = await m2mHelper.getM2MToken();
+  console.log(`${config.MEMBERS_API_URL}?userId=${userId}`);
   const res = await axios.get(`${config.MEMBERS_API_URL}?userId=${userId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  console.log(res.data);
   if (res.data.length > 0) return res.data[0];
   return {};
 }
