@@ -85,6 +85,9 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
     "groups",
     "legacyId",
     "wiproAllowed",
+    "numOfRegistrants",
+    "numOfSubmissions",
+    "numOfCheckpointSubmissions",
   ]);
   // set legacy data
   if (!_.isNil(challenge.legacy)) {
@@ -371,10 +374,12 @@ function convertModelToResponse(ret) {
       ])
     );
   }
-  // TODO: Set data from other API
-  ret.numOfSubmissions = 0;
-  ret.numOfCheckpointSubmissions = 0;
-  ret.numOfRegistrants = 0;
+  // counters (stored on Challenge)
+  ret.numOfSubmissions = _.isNil(ret.numOfSubmissions) ? 0 : ret.numOfSubmissions;
+  ret.numOfCheckpointSubmissions = _.isNil(ret.numOfCheckpointSubmissions)
+    ? 0
+    : ret.numOfCheckpointSubmissions;
+  ret.numOfRegistrants = _.isNil(ret.numOfRegistrants) ? 0 : ret.numOfRegistrants;
 }
 
 module.exports = {

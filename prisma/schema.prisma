@@ -75,6 +75,9 @@ model Challenge {
   trackId               String               // FK for relation in ChallengeTrack
   timelineTemplateId    String?                    // now used as foreign key to ChallengeTimelineTemplate
   overviewTotalPrizes   Float?                 // stored from overview.totalPrizes
+  numOfRegistrants      Int                  @default(0)
+  numOfSubmissions      Int                  @default(0)
+  numOfCheckpointSubmissions Int             @default(0)
   currentPhaseNames     String[]             // current phase names
 
   wiproAllowed          Boolean              @default(false)

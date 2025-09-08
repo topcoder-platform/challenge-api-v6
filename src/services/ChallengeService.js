@@ -1227,6 +1227,9 @@ createChallenge.schema = {
       descriptionFormat: Joi.string(),
       wiproAllowed: Joi.boolean().optional(),
       challengeSource: Joi.string(),
+      numOfRegistrants: Joi.number().integer().min(0).optional(),
+      numOfSubmissions: Joi.number().integer().min(0).optional(),
+      numOfCheckpointSubmissions: Joi.number().integer().min(0).optional(),
       metadata: Joi.array()
         .items(
           Joi.object().keys({
@@ -2150,6 +2153,9 @@ updateChallenge.schema = {
       descriptionFormat: Joi.string().optional(),
       wiproAllowed: Joi.boolean().optional(),
       challengeSource: Joi.string().optional(),
+      numOfRegistrants: Joi.number().integer().min(0).optional(),
+      numOfSubmissions: Joi.number().integer().min(0).optional(),
+      numOfCheckpointSubmissions: Joi.number().integer().min(0).optional(),
       metadata: Joi.array()
         .items(
           Joi.object()
@@ -2355,6 +2361,9 @@ function sanitizeChallenge(challenge) {
     "skills",
     "reviewers",
     "wiproAllowed",
+    "numOfRegistrants",
+    "numOfSubmissions",
+    "numOfCheckpointSubmissions",
   ]);
   if (!_.isUndefined(sanitized.name)) {
     sanitized.name = xss(sanitized.name);
