@@ -21,7 +21,6 @@ const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 
 const { hasAdminRole } = require("../common/role-helper");
 const { enrichChallengeForResponse, convertToISOString } = require("../common/challenge-helper");
-const { Prisma } = require("@prisma/client");
 const deepEqual = require("deep-equal");
 const prismaHelper = require("../common/prisma-helper");
 
@@ -155,53 +154,6 @@ const includeReturnFields = {
   type: true,
 };
 
-// Utility: validate schema name to avoid SQL injection in raw queries
-function _safeSchemaName(name) {
-  if (!name || !/^[a-zA-Z0-9_]+$/.test(name)) {
-    throw new Error(`Invalid schema name: ${name}`);
-  }
-  return name;
-}
-
-// Batch-load submission counts for a list of challenge IDs
-async function _getSubmissionCountsByChallengeIds(ids) {
-  if (!ids || ids.length === 0) return {};
-  const reviewSchema = _safeSchemaName(config.REVIEW_DB_SCHEMA || "reviews");
-  const idList = Prisma.join(ids.map((id) => Prisma.sql`${id}`));
-  const rows = await prisma.$queryRaw(Prisma.sql`
-    SELECT "challengeId", COUNT(*)::int AS count
-    FROM ${Prisma.raw(`${reviewSchema}`)}.submission
-    WHERE "challengeId" IN (${idList})
-    GROUP BY "challengeId"
-  `);
-  const map = {};
-  for (const r of rows) {
-    map[r.challengeId] = Number(r.count) || 0;
-  }
-  return map;
-}
-
-// Batch-load registrant counts (Submitter role) for a list of challenge IDs
-async function _getRegistrantCountsByChallengeIds(ids) {
-  if (!ids || ids.length === 0) return {};
-  const resourcesSchema = _safeSchemaName(config.RESOURCES_DB_SCHEMA || "resources");
-  const roleName = config.SUBMITTER_ROLE_NAME || "Submitter";
-  const idList = Prisma.join(ids.map((id) => Prisma.sql`${id}`));
-  const rows = await prisma.$queryRaw(Prisma.sql`
-    SELECT r."challengeId", COUNT(*)::int AS count
-    FROM ${Prisma.raw(`${resourcesSchema}`)}."Resource" r
-    JOIN ${Prisma.raw(`${resourcesSchema}`)}."ResourceRole" rr
-      ON rr.id = r."roleId"
-    WHERE rr.name = ${roleName}
-      AND r."challengeId" IN (${idList})
-    GROUP BY r."challengeId"
-  `);
-  const map = {};
-  for (const r of rows) {
-    map[r.challengeId] = Number(r.count) || 0;
-  }
-  return map;
-}
 
 /**
  * Get default reviewers for a given typeId and trackId
@@ -349,20 +301,6 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
     prismaHelper.convertModelToResponse(c);
     enrichChallengeForResponse(c, c.track, c.type);
   });
-  // Add counts from DB
-  try {
-    const ids = challenges.map((c) => c.id);
-    const [regMap, subMap] = await Promise.all([
-      _getRegistrantCountsByChallengeIds(ids),
-      _getSubmissionCountsByChallengeIds(ids),
-    ]);
-    for (const ch of challenges) {
-      ch.numOfRegistrants = regMap[ch.id] || 0;
-      ch.numOfSubmissions = subMap[ch.id] || 0;
-    }
-  } catch (e) {
-    logger.warn(`Failed to load counts for legacyId search: ${e.message}`);
-  }
   return challenges;
 }
 
@@ -908,22 +846,7 @@ async function searchChallenges(currentUser, criteria) {
       enrichChallengeForResponse(c, c.track, c.type);
     }
 
-    // Fetch counts from DB in batches
-    const ids = challenges.map((c) => c.id);
-    let regMap = {};
-    let subMap = {};
-    try {
-      [regMap, subMap] = await Promise.all([
-        _getRegistrantCountsByChallengeIds(ids),
-        _getSubmissionCountsByChallengeIds(ids),
-      ]);
-    } catch (e) {
-      logger.warn(`Failed to batch load counts: ${e.message}`);
-    }
-    for (const ch of challenges) {
-      ch.numOfRegistrants = regMap[ch.id] || 0;
-      ch.numOfSubmissions = subMap[ch.id] || 0;
-    }
+    // Note: numOfRegistrants and numOfSubmissions are no longer calculated here.
   } catch (e) {
     // logger.error(JSON.stringify(e));
     console.log(e);
@@ -1477,17 +1400,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
 
   enrichChallengeForResponse(challenge, challenge.track, challenge.type);
 
-  // Populate registrant and submission counts directly from DB
-  try {
-    const [regMap, subMap] = await Promise.all([
-      _getRegistrantCountsByChallengeIds([challenge.id]),
-      _getSubmissionCountsByChallengeIds([challenge.id]),
-    ]);
-    challenge.numOfRegistrants = regMap[challenge.id] || 0;
-    challenge.numOfSubmissions = subMap[challenge.id] || 0;
-  } catch (e) {
-    logger.warn(`Failed to load counts for challenge ${challenge.id}: ${e.message}`);
-  }
+  // Note: numOfRegistrants and numOfSubmissions are no longer calculated here.
 
   return helper.removeNullProperties(challenge);
 }
