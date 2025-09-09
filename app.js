@@ -36,10 +36,11 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) {
+        console.log("No origin - probably curl or server to server request");
         // disable cors if service to service request
         callback(null, false);
       } else {
-        callback(null, new RegExp(/topcoder(-dev|-qa)?\.com$/));
+        callback(null, '*')
       }
     },
     exposedHeaders: [
