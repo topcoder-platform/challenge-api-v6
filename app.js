@@ -17,6 +17,7 @@ const YAML = require("yamljs");
 const swaggerUi = require("swagger-ui-express");
 const challengeAPISwaggerDoc = YAML.load("./docs/swagger.yaml");
 const { ForbiddenError } = require("./src/common/errors");
+const { getClient } = require("./src/common/prisma");
 
 // setup express app
 const app = express();
@@ -139,8 +140,41 @@ app.use((err, req, res, next) => {
   res.status(status).json(errorResponse);
 });
 
-app.listen(app.get("port"), () => {
+const server = app.listen(app.get("port"), () => {
   logger.info(`Express server listening on port ${app.get("port")}`);
 });
+
+// Graceful shutdown: close HTTP server and disconnect Prisma
+const prisma = getClient();
+const gracefulShutdown = (signal) => {
+  try {
+    logger.info(`[${signal}] Received. Starting graceful shutdown...`);
+    // Stop accepting new connections
+    server.close(async () => {
+      logger.info("HTTP server closed. Disconnecting Prisma...");
+      try {
+        await prisma.$disconnect();
+        logger.info("Prisma disconnected. Exiting.");
+      } catch (err) {
+        logger.error("Error during Prisma disconnect:", err);
+      } finally {
+        process.exit(0);
+      }
+    });
+    // Fallback: force exit if shutdown takes too long
+    const timeout = setTimeout(() => {
+      logger.error("Forced shutdown due to timeout.");
+      process.exit(1);
+    }, 10000);
+    // Don't keep the process alive solely for the timeout
+    timeout.unref();
+  } catch (err) {
+    logger.error("Unexpected error during graceful shutdown:", err);
+    process.exit(1);
+  }
+};
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 module.exports = app;
