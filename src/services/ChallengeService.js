@@ -1288,7 +1288,20 @@ createChallenge.schema = {
             type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
             isAIReviewer: Joi.boolean().required(),
           })
-          .xor('isMemberReview', 'isAIReviewer')
+          // custom validator to check that either isAIReviewer or isMemberReview are true
+          .custom((value, helpers) => {
+            const isMember = value.isMemberReview === true;
+            const isAI = value.isAIReviewer === true;
+
+            if ((isMember ? 1 : 0) + (isAI ? 1 : 0) !== 1) {
+              // mimic Joi’s xor error wording
+              return helpers.error(
+                "object.xor",
+                { peers: ["isMemberReview", "isAIReviewer"] }
+              );
+            }
+            return value;
+          }, "exclusive true check")
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
