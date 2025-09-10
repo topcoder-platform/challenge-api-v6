@@ -313,6 +313,14 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
 async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 20;
+  // Log the requested search filter (omit pagination for brevity)
+  try {
+    const filterToLog = _.omit(criteria, ["page", "perPage"]);
+    logger.info(`SearchChallenges filter: ${JSON.stringify(filterToLog)}`);
+  } catch (e) {
+    // best-effort logging; don't block on serialization issues
+    logger.info("SearchChallenges filter: <unable to serialize criteria>");
+  }
   if (!_.isUndefined(criteria.legacyId)) {
     const result = await searchByLegacyId(currentUser, criteria.legacyId, page, perPage);
     return { total: result.length, page, perPage, result };
@@ -1364,6 +1372,8 @@ createChallenge.schema = {
  * @returns {Object} the challenge with given id
  */
 async function getChallenge(currentUser, id, checkIfExists) {
+  // Log the ID of the challenge being requested
+  logger.info(`Requesting challenge by id: ${id}`);
   const challenge = await prisma.challenge.findUnique({
     where: { id },
     include: includeReturnFields,
