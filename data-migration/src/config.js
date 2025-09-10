@@ -118,7 +118,10 @@ module.exports = {
       requiredFields: ['id', 'name', 'typeId', 'trackId', 'currentPhaseNames', 'tags', 'groups', 'taskIsTask', 'taskIsAssigned', 'status', 'createdAt',
          'createdBy', 'updatedAt','updatedBy'],
       optionalFields: ['description', 'privateDescription', 'descriptionFormat', 'challengeSource', 'projectId', 'timelineTemplateId', 'overviewTotalPrizes', 'taskMemberId',
-         'submissionStartDate', 'submissionEndDate', 'registrationStartDate', 'registrationEndDate', 'startDate', 'endDate', 'legacyId'],
+         'submissionStartDate', 'submissionEndDate', 'registrationStartDate', 'registrationEndDate', 'startDate', 'endDate', 'legacyId',
+         // migration of counters
+         'numOfRegistrants', 'numOfSubmissions', 'numOfCheckpointSubmissions'
+      ],
       hasDefaults: ['id', 'taskIsTask', 'taskIsAssigned', 'status', 'createdAt', 'updatedAt', 'wiproAllowed'], // Defaults in the Prisma Schema
       dependencies: [
         {name: 'ChallengeType', fkey: 'typeId'},
