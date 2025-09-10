@@ -2496,7 +2496,8 @@ function sanitizeData(data, challenge) {
  * @returns {Object} the deleted challenge
  */
 async function deleteChallenge(currentUser, challengeId) {
-  const challenge = await prisma.challenge.findUnique({
+  // Use findFirst for compound filters; findUnique only supports unique fields
+  const challenge = await prisma.challenge.findFirst({
     where: { id: challengeId, status: ChallengeStatusEnum.NEW },
   });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
@@ -2534,7 +2535,7 @@ async function advancePhase(currentUser, challengeId, data) {
     include: includeReturnFields,
   });
 
-  if (!_.isNil(challenge) || _.isNil(challenge.id)) {
+  if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
