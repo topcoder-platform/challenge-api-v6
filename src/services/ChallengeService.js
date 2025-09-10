@@ -213,9 +213,15 @@ async function setDefaultReviewers(currentUser, data) {
               basePayment: Joi.number().min(0).optional().allow(null),
               incrementalPayment: Joi.number().min(0).optional().allow(null),
               type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-              isAIReviewer: Joi.boolean().required(),
+              // Enforce that exactly one reviewer type is true
+              isAIReviewer: Joi.boolean()
+                .required()
+                .when('isMemberReview', {
+                  is: true,
+                  then: Joi.valid(false),
+                  otherwise: Joi.valid(true),
+                }),
             })
-            .xor('isMemberReview', 'isAIReviewer')
         )
         .default([]),
     })
@@ -1142,7 +1148,8 @@ async function createChallenge(currentUser, challenge, userToken) {
       if (defaultReviewers && defaultReviewers.length > 0) {
         // Resolve phaseId by name
         const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
-        const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.id]));
+        // Map phase name -> Phase definition id (Phase.id), NOT ChallengePhase.id
+        const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.phaseId]));
 
         // ensure all required names exist
         const missing = phaseNames.filter((n) => !phaseMap.has(n));
@@ -1154,6 +1161,7 @@ async function createChallenge(currentUser, challenge, userToken) {
           scorecardId: r.scorecardId,
           isMemberReview: r.isMemberReview,
           memberReviewerCount: r.memberReviewerCount,
+          // connect reviewers to the Phase model via its id
           phaseId: phaseMap.get(r.phaseName),
           basePayment: r.basePayment,
           incrementalPayment: r.incrementalPayment,
@@ -1281,35 +1289,27 @@ createChallenge.schema = {
         })
       ),
       reviewers: Joi.array().items(
-        Joi.object()
-          .keys({
-            scorecardId: Joi.string().required(),
-            isMemberReview: Joi.boolean().required(),
-            memberReviewerCount: Joi.when('isMemberReview', {
+        Joi.object().keys({
+          scorecardId: Joi.string().required(),
+          isMemberReview: Joi.boolean().required(),
+          memberReviewerCount: Joi.when('isMemberReview', {
+            is: true,
+            then: Joi.number().integer().min(1).required(),
+            otherwise: Joi.forbidden(),
+          }),
+          phaseId: Joi.id().required(),
+          basePayment: Joi.number().min(0).optional(),
+          incrementalPayment: Joi.number().min(0).optional(),
+          type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+          // Enforce exactly one of the booleans is true using a conditional
+          isAIReviewer: Joi.boolean()
+            .required()
+            .when('isMemberReview', {
               is: true,
-              then: Joi.number().integer().min(1).required(),
-              otherwise: Joi.forbidden(),
+              then: Joi.valid(false),
+              otherwise: Joi.valid(true),
             }),
-            phaseId: Joi.id().required(),
-            basePayment: Joi.number().min(0).optional(),
-            incrementalPayment: Joi.number().min(0).optional(),
-            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-            isAIReviewer: Joi.boolean().required(),
-          })
-          // custom validator to check that either isAIReviewer or isMemberReview are true
-          .custom((value, helpers) => {
-            const isMember = value.isMemberReview === true;
-            const isAI = value.isAIReviewer === true;
-
-            if ((isMember ? 1 : 0) + (isAI ? 1 : 0) !== 1) {
-              // mimic Joi’s xor error wording
-              return helpers.error(
-                "object.xor",
-                { peers: ["isMemberReview", "isAIReviewer"] }
-              );
-            }
-            return value;
-          }, "exclusive true check")
+        })
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
@@ -2251,9 +2251,15 @@ updateChallenge.schema = {
               basePayment: Joi.number().min(0).optional().allow(null),
               incrementalPayment: Joi.number().min(0).optional().allow(null),
               type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-              isAIReviewer: Joi.boolean().required(),
+              // Enforce that exactly one reviewer type is true
+              isAIReviewer: Joi.boolean()
+                .required()
+                .when('isMemberReview', {
+                  is: true,
+                  then: Joi.valid(false),
+                  otherwise: Joi.valid(true),
+                }),
             })
-            .xor('isMemberReview', 'isAIReviewer')
         )
         .optional(),
       startDate: Joi.date().iso(),
