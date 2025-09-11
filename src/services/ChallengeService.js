@@ -2012,6 +2012,53 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
   }
 
+  // Normalize and validate reviewers' phase references before converting to Prisma input
+  if (!_.isNil(data.reviewers)) {
+    try {
+      // Build maps from the existing challenge phases
+      const challengePhaseIdToPhaseId = new Map(); // ChallengePhase.id -> Phase.id
+      const phaseIdsOnChallenge = new Set(); // Phase.id present on this challenge
+      if (challenge && Array.isArray(challenge.phases)) {
+        for (const p of challenge.phases) {
+          if (p && p.id && p.phaseId) {
+            challengePhaseIdToPhaseId.set(p.id, p.phaseId);
+            phaseIdsOnChallenge.add(p.phaseId);
+          }
+        }
+      }
+
+      // First pass: map any reviewer.phaseId that actually points to a ChallengePhase.id
+      for (const r of data.reviewers) {
+        if (r && r.phaseId && challengePhaseIdToPhaseId.has(r.phaseId)) {
+          r.phaseId = challengePhaseIdToPhaseId.get(r.phaseId);
+        }
+      }
+
+      // Validate all referenced Phase ids exist
+      const uniquePhaseIds = _.uniq(
+        data.reviewers
+          .filter((r) => r && r.phaseId)
+          .map((r) => r.phaseId)
+      );
+      if (uniquePhaseIds.length > 0) {
+        const foundPhases = await prisma.phase.findMany({ where: { id: { in: uniquePhaseIds } } });
+        const foundIds = new Set(foundPhases.map((p) => p.id));
+        const missing = uniquePhaseIds.filter((id) => !foundIds.has(id));
+        if (missing.length > 0) {
+          throw new errors.BadRequestError(
+            `Invalid reviewer.phaseId value(s); Phase not found: ${missing.join(', ')}`
+          );
+        }
+      }
+    } catch (e) {
+      // Re-throw as BadRequest to avoid nested Prisma errors later
+      if (!(e instanceof errors.BadRequestError)) {
+        throw new errors.BadRequestError(e.message || 'Invalid reviewer phase reference');
+      }
+      throw e;
+    }
+  }
+
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,

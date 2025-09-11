@@ -15,6 +15,13 @@ const prismaClient = new PrismaClient({
     { level: "warn", emit: "event" },
     { level: "error", emit: "event" },
   ],
+  // Increase default interactive transaction limits to avoid 5s timeouts on
+  // heavy multi-write operations (e.g., challenge updates with cascading deletes).
+  // Allow overriding via environment variables if needed.
+  transactionOptions: {
+    maxWait: Number(process.env.PRISMA_TRANSACTION_MAX_WAIT_MS || 10000), // wait up to 10s to start
+    timeout: Number(process.env.PRISMA_TRANSACTION_TIMEOUT_MS || 10000), // allow up to 30s per transaction
+  },
 });
 
 // By running the first query, prisma calls $connect() under the hood
