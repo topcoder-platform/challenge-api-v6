@@ -122,7 +122,7 @@ async function deleteChallenge(req, res) {
  * @param {Object} res the response
  */
 async function advancePhase(req, res) {
-  res.send(await service.advancePhase(req, req.authUser, req.params.challengeId, req.body));
+  res.send(await service.advancePhase(req.authUser, req.params.challengeId, req.body));
 }
 
 /**
