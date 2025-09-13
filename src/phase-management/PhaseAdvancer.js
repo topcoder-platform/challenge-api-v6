@@ -1,11 +1,10 @@
-const config = require("config");
 const uuid = require("uuid/v4");
 const { Engine } = require("json-rules-engine");
+const { getClient } = require("../common/prisma");
+const prisma = getClient();
 
 const rulesJSON = require("./phase-rules.json");
 const errors = require("../common/errors");
-
-const helper = require("../common/helper");
 const { PhaseFact } = require("../../app-constants");
 
 // Helper functions
@@ -272,35 +271,21 @@ class PhaseAdvancer {
   }
 
   async #getRegistrantCount(challengeId) {
-    console.log(`Getting registrant count for challenge ${challengeId}`);
-    // TODO: getChallengeResources loops through all pages, which is not necessary here, we can just get the first page and total count from header[X-Total]
-    const roleId = config.REGISTRANT_ROLE_ID || config.SUBMITTER_ROLE_ID;
-    const submitters = await helper.getChallengeResourcesCount(
-      challengeId,
-      roleId
-    );
-    return submitters[roleId] || 0;
+    console.log(`Getting registrant count for challenge ${challengeId} from DB`);
+    const ch = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { numOfRegistrants: true },
+    });
+    return ch?.numOfRegistrants || 0;
   }
 
   async #getSubmissionCount(challengeId) {
-    console.log(`Getting submission count for challenge ${challengeId}`);
-    // We can just get the first page and total count from header[X-Total]
-      const token = await m2mHelper.getM2MToken();
-      const res = await axios.get(`${config.SUBMISSIONS_API_URL}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          challengeId,
-          perPage: 1,
-          page: 1,
-          ...(type ? { type } : {}),
-        },
-      });
-      const totalHeader = res.headers["x-total"];
-      if (!_.isNil(totalHeader)) {
-        const n = Number(totalHeader);
-        if (!Number.isNaN(n)) return n;
-      }
-      return Array.isArray(res.data) ? res.data.length : 0;
+    console.log(`Getting submission count for challenge ${challengeId} from DB`);
+    const ch = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { numOfSubmissions: true },
+    });
+    return ch?.numOfSubmissions || 0;
   }
 
   async #areAllSubmissionsReviewed(challengeId) {

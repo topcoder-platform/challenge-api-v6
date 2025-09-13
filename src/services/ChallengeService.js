@@ -34,7 +34,22 @@ const {
 } = require("../common/prisma");
 const prisma = getClient();
 
-const phaseAdvancer = new PhaseAdvancer({});
+// Minimal domain adapter for PhaseAdvancer to fetch phase-specific facts.
+// For now this returns an empty factResponses array which makes the
+// PhaseAdvancer default to conservative behavior when such facts are needed.
+// This avoids runtime errors until a richer domain is implemented.
+const challengeDomain = {
+  /**
+   * Retrieve phase-specific facts from downstream services (stubbed).
+   * @param {{ legacyId: number | null, facts: Array<number> }} _request
+   * @returns {Promise<{ factResponses: Array<{ response: object }> }>}
+   */
+  async getPhaseFacts(_request) {
+    return { factResponses: [] };
+  },
+};
+
+const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 /**
  * Enrich skills data with full details from standardized skills API
@@ -2666,7 +2681,6 @@ async function advancePhase(currentUser, challengeId, data) {
     message: phaseAdvancerResult.message,
     next: phaseAdvancerResult.next,
   };
-  // Indexing in Kafka is not necessary here since domain-challenge will do it
 }
 
 advancePhase.schema = {
