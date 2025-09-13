@@ -2637,12 +2637,14 @@ async function advancePhase(currentUser, challengeId, data) {
   }
   // update phase if result is successful
   const challengeData = {};
-  const updatedPhaseData = {
-    phases: phaseAdvancerResult.updatedPhases,
-  };
-  prismaHelper.convertChallengePhaseSchema(updatedPhaseData, challengeData, auditFields);
-  // Perform partially update for now
-  const newPhases = challengeData.phases;
+  // Reuse converter only to compute derived fields (currentPhaseNames, start/end dates)
+  prismaHelper.convertChallengePhaseSchema(
+    { phases: phaseAdvancerResult.updatedPhases },
+    challengeData,
+    auditFields
+  );
+  // Persist phases based on the raw updated phases array from PhaseAdvancer
+  const newPhases = phaseAdvancerResult.updatedPhases;
   const newChallengeData = _.pick(challengeData, [
     "currentPhaseNames",
     "registrationStartDate",
@@ -2657,23 +2659,69 @@ async function advancePhase(currentUser, challengeId, data) {
     newChallengeData.status = ChallengeStatusEnum.COMPLETED;
   }
   await prisma.$transaction(async (tx) => {
-    // upsert phases one by one
-    for (let newPhase of newPhases) {
-      await tx.challengePhase.upsert({
-        where: {
-          challengeId,
-          phaseId: newPhase.phaseId,
-        },
-        create: { ...newPhase, challengeId },
-        update: newPhase,
-      });
+    // upsert phases one by one (by id when present)
+    for (const p of newPhases || []) {
+      const phaseData = _.pick(p, [
+        "name",
+        "description",
+        "isOpen",
+        "predecessor",
+        "duration",
+        "scheduledStartDate",
+        "scheduledEndDate",
+        "actualStartDate",
+        "actualEndDate",
+      ]);
+      // Ensure dates are either Date or null; assume incoming are ISO strings, Prisma accepts JS Date or string
+      try {
+        const existing = p.id
+          ? await tx.challengePhase.findUnique({ where: { id: p.id } })
+          : null;
+        if (existing) {
+          await tx.challengePhase.update({
+            where: { id: p.id },
+            data: {
+              ...phaseData,
+              updatedBy: auditFields.updatedBy,
+            },
+          });
+          // For simplicity, do not modify constraints on update here
+        } else {
+          await tx.challengePhase.create({
+            data: {
+              id: p.id || uuid(),
+              challengeId,
+              phaseId: p.phaseId,
+              ...phaseData,
+              createdBy: auditFields.createdBy,
+              updatedBy: auditFields.updatedBy,
+            },
+          });
+          if (Array.isArray(p.constraints) && p.constraints.length > 0) {
+            for (const c of p.constraints) {
+              await tx.challengePhaseConstraint.create({
+                data: {
+                  challengePhaseId: p.id,
+                  name: c.name,
+                  value: c.value,
+                  createdBy: auditFields.createdBy,
+                  updatedBy: auditFields.updatedBy,
+                },
+              });
+            }
+          }
+        }
+      } catch (e) {
+        logger.error(`Failed to upsert phase ${p.name} (${p.phaseId}) for ${challengeId}: ${e.message}`);
+        throw e;
+      }
     }
     await tx.challenge.update({
       where: { id: challengeId },
       data: newChallengeData,
     });
   });
-  const updatedChallenge = await tx.challenge.findUnique({ where: { id: challengeId } });
+  const updatedChallenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   await indexChallengeAndPostToKafka(updatedChallenge);
 
   return {
