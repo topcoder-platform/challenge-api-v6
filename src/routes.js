@@ -265,12 +265,12 @@ module.exports = {
   },
   "/challenge-phases": {
     get: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "searchPhases",
       scopes: [READ, ALL],
     },
     post: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "createPhase",
       auth: "jwt",
       access: [constants.UserRoles.Admin],
@@ -279,28 +279,28 @@ module.exports = {
   },
   "/challenge-phases/:challengePhaseId": {
     get: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "getPhase",
       auth: "jwt",
       access: [constants.UserRoles.Admin, constants.UserRoles.Copilot, constants.UserRoles.Manager],
       scopes: [READ, ALL],
     },
     put: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "fullyUpdatePhase",
       auth: "jwt",
       access: [constants.UserRoles.Admin],
       scopes: [UPDATE, ALL],
     },
     patch: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "partiallyUpdatePhase",
       auth: "jwt",
       access: [constants.UserRoles.Admin],
       scopes: [UPDATE, ALL],
     },
     delete: {
-      controller: "ChallengePhaseController",
+      controller: "PhaseController",
       method: "deletePhase",
       auth: "jwt",
       access: [constants.UserRoles.Admin],
@@ -395,6 +395,34 @@ module.exports = {
       method: "downloadAttachment",
       auth: "jwt", // any authenticated role is allowed
       scopes: [READ, ALL],
+    },
+  },
+  "/challenges/:challengeId/phases": {
+    get: {
+      controller: "ChallengePhaseController",
+      method: "getAllChallengePhases",
+      scopes: [READ, ALL],
+    },
+  },
+  "/challenges/:challengeId/phases/:id": {
+    get: {
+      controller: "ChallengePhaseController",
+      method: "getChallengePhase",
+      scopes: [READ, ALL],
+    },
+    patch: {
+      controller: "ChallengePhaseController",
+      method: "partiallyUpdateChallengePhase",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin, constants.UserRoles.SelfServiceCustomer, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      scopes: [UPDATE, ALL],
+    },
+    delete: {
+      controller: "ChallengePhaseController",
+      method: "deleteChallengePhase",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin, constants.UserRoles.SelfServiceCustomer, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      scopes: [DELETE, ALL],
     },
   },
 };

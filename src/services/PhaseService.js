@@ -80,7 +80,7 @@ async function createPhase(authUser, phase) {
   let ret = await prisma.phase.create({ data: phase });
   ret = _.omit(ret, constants.auditFields);
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengePhaseCreated, ret);
+  await helper.postBusEvent(constants.Topics.PhaseCreated, ret);
   return ret;
 }
 
@@ -142,7 +142,7 @@ async function update(authUser, phaseId, data, isFull) {
   ret = _.omit(ret, constants.auditFields);
   // post bus event
   await helper.postBusEvent(
-    constants.Topics.ChallengePhaseUpdated,
+    constants.Topics.PhaseUpdated,
     isFull ? ret : _.assignIn({ id: phaseId }, data)
   );
   return ret;
@@ -205,7 +205,7 @@ async function deletePhase(phaseId) {
   let ret = await getPhase(phaseId);
   await prisma.phase.delete({ where: { id: phaseId } });
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengePhaseDeleted, ret);
+  await helper.postBusEvent(constants.Topics.PhaseDeleted, ret);
   return ret;
 }
 

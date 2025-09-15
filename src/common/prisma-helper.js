@@ -231,9 +231,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             ? null
             : Number(r.memberReviewerCount),
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment)
-            ? null
-            : Number(r.incrementalPayment),
+          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           isAIReviewer: !!r.isAIReviewer,
         };
         if (r.type) reviewer.type = _.toUpper(r.type);

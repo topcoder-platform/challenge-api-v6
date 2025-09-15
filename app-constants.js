@@ -48,9 +48,9 @@ const Topics = {
   ChallengeTrackCreated: "test.new.bus.events", // 'challenge.action.track.created',
   ChallengeTrackUpdated: "test.new.bus.events", // 'challenge.action.track.updated',
   ChallengeTrackDeleted: "test.new.bus.events", // 'challenge.action.track.deleted',
-  ChallengePhaseCreated: "test.new.bus.events", // 'challenge.action.phase.created',
-  ChallengePhaseUpdated: "test.new.bus.events", // 'challenge.action.phase.updated',
-  ChallengePhaseDeleted: "test.new.bus.events", // 'challenge.action.phase.deleted',
+  PhaseCreated: "test.new.bus.events", // 'phase.action.created',
+  PhaseUpdated: "test.new.bus.events", // 'phase.action.updated',
+  PhaseDeleted: "test.new.bus.events", // 'phase.action.deleted',
   TimelineTemplateCreated: "test.new.bus.events", // 'challenge.action.timeline.template.created',
   TimelineTemplateUpdated: "test.new.bus.events", // 'challenge.action.timeline.template.updated',
   TimelineTemplateDeleted: "test.new.bus.events", // 'challenge.action.timeline.template.deleted',
@@ -63,6 +63,8 @@ const Topics = {
   ChallengeTimelineTemplateCreated: "challenge.action.challenge.timeline.created",
   ChallengeTimelineTemplateUpdated: "challenge.action.challenge.timeline.updated",
   ChallengeTimelineTemplateDeleted: "challenge.action.challenge.timeline.deleted",
+  ChallengePhaseUpdated: "test.new.bus.events", // 'challenge.action.phase.updated',
+  ChallengePhaseDeleted: "test.new.bus.events", // 'challenge.action.phase.deleted',
   // Self Service topics
   Notifications: "notifications.action.create",
 };

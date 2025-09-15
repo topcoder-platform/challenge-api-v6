@@ -4,6 +4,9 @@
 const _ = require('lodash')
 const uuid = require('uuid/v4')
 const { ChallengeStatusEnum } = require('../src/common/prisma')
+const prisma = require('../src/common/prisma').getClient()
+const jwt = require('jsonwebtoken')
+const config = require('config')
 
 let challengeTrack
 let challengeType
@@ -12,6 +15,8 @@ let phase2
 let timelineTemplate
 let challenge
 let taskChallenge
+let adminToken
+let userToken
 
 /**
  * function to deeply compare arrays  regardeless of the order
@@ -31,6 +36,10 @@ const phase2Id = uuid()
 const timelineTemplateId = uuid()
 const challengeId = uuid()
 const taskChallengeId = uuid()
+const challengePhase1Id = uuid()
+const challengePhase2Id = uuid()
+const challengePhaseConstrain1Id = uuid()
+const challengePhaseConstrain2Id = uuid()
 
 /**
  * Create test data
@@ -131,6 +140,49 @@ async function createData () {
     updatedBy: 'admin'
   }
   challenge = await prisma.challenge.create({ data: challengeData })
+  await prisma.challengePhase.createMany({
+    data: [
+      {
+        id: challengePhase1Id,
+        challengeId: challenge.id,
+        phaseId: phase.id,
+        name: 'Registration',
+        duration: 1000,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      },
+      {
+        id: challengePhase2Id,
+        challengeId: challenge.id,
+        phaseId: phase2.id,
+        name: 'Submission',
+        duration: 2000,
+        predecessor:challengePhase1Id,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      }
+    ]
+  })
+  await prisma.challengePhaseConstraint.createMany({
+    data: [
+      {
+        id: challengePhaseConstrain1Id,
+        challengePhaseId: challengePhase1Id,
+        name: `constraint-name-1`,
+        value: 100,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      },
+      {
+        id: challengePhaseConstrain2Id,
+        challengePhaseId: challengePhase2Id,
+        name: `constraint-name-2`,
+        value: 200,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      }
+    ]
+  })
 
   taskChallenge = await prisma.challenge.create({ data: {
     id: taskChallengeId,
@@ -153,6 +205,41 @@ async function createData () {
     createdBy: 'admin',
     updatedBy: 'admin'
   }})
+
+  adminToken = jwt.sign({
+    roles: [
+      'Topcoder User',
+      'Connect Support',
+      'administrator',
+      'testRole',
+      'aaa',
+      'tony_test_1',
+      'Connect Manager',
+      'Connect Admin',
+      'copilot',
+      'Connect Copilot Manager'
+    ],
+    iss: 'https://api.topcoder-dev.com',
+    handle: 'TonyJ',
+    exp: 1980992788,
+    userId: '8547899',
+    iat: 1549791611,
+    email: 'email@domain.com.z',
+    jti: 'f94d1e26-3d0e-46ca-8115-8754544a08f1'
+  }, config.get('AUTH_SECRET')) 
+  // adminToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlcyI6WyJUb3Bjb2RlciBVc2VyIiwiQ29ubmVjdCBTdXBwb3J0IiwiYWRtaW5pc3RyYXRvciIsInRlc3RSb2xlIiwiYWFhIiwidG9ueV90ZXN0XzEiLCJDb25uZWN0IE1hbmFnZXIiLCJDb25uZWN0IEFkbWluIiwiY29waWxvdCIsIkNvbm5lY3QgQ29waWxvdCBNYW5hZ2VyIl0sImlzcyI6Imh0dHBzOi8vYXBpLnRvcGNvZGVyLWRldi5jb20iLCJoYW5kbGUiOiJUb255SiIsImV4cCI6MTc4OTAwODYyMywidXNlcklkIjoiODU0Nzg5OSIsImlhdCI6MTU0OTc5MTYxMSwiZW1haWwiOiJ0amVmdHMrZml4QHRvcGNvZGVyLmNvbSIsImp0aSI6ImY5NGQxZTI2LTNkMGUtNDZjYS04MTE1LTg3NTQ1NDRhMDhmMSJ9.bMzIZ7YlDVhIauGtYTcL4bwW1eyYnOvqZUMb_ZNcX0E'
+  userToken = jwt.sign({
+    roles: [
+      'Topcoder User'
+    ],
+    iss: 'https://api.topcoder-dev.com',
+    handle: 'phead',
+    exp: 1980992788,
+    userId: '22742764',
+    iat: 1549791611,
+    email: 'email@domain.com.z',
+    jti: '9c4511c5-c165-4a1b-899e-b65ad0e02b55'
+  }, config.get('AUTH_SECRET')) 
 }
 
 const defaultProjectTerms = [
@@ -186,6 +273,8 @@ const additionalTerm = {
  * Clear test data
  */
 async function clearData () {
+  await prisma.challengePhaseConstraint.deleteMany({ where: { id: { in: [challengePhaseConstrain1Id, challengePhaseConstrain2Id] } } })
+  await prisma.challengePhase.deleteMany({ where: { challengeId: { in: [challengeId, taskChallengeId] } } })
   await prisma.challenge.deleteMany({
     where: { id: { in: [challengeId, taskChallengeId] } }
   })
@@ -209,7 +298,12 @@ function getData () {
     taskChallenge,
     defaultProjectTerms,
     additionalTerm,
-    mockTerms
+    mockTerms,
+    challengePhase1Id,
+    challengePhase2Id,
+    challengePhaseConstrain1Id,
+    adminToken,
+    userToken
   }
 }
 

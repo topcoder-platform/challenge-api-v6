@@ -1,0 +1,1063 @@
+{
+	"info": {
+		"_postman_id": "3b53e5d5-a858-408f-976f-25bd7539a373",
+		"name": "Test Challenge Phase",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1574174"
+	},
+	"item": [
+		{
+			"name": "set env",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"pm.environment.set(\"challengeId\", jsonData[0].id);",
+							"pm.environment.set(\"phaseId\", jsonData[0].phases[0].id);",
+							""
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get all challenge phases",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"\tpm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get all challenge phases(invalid challengeId)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/invalid/phases",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"invalid",
+						"phases"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phase",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"\tpm.environment.set(\"constraintId\", pm.response.json().constraints[0].id);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phases 404(phaseId not exist)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phases 404(challengeId not exist)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phases 404(challengeId, phaseId combination does not have a corresponding)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/a74cd2f6-2077-49c2-aec7-422fc6600e52/phases/003a4b14-de5d-43fc-9e35-835dbeb6af1f",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"a74cd2f6-2077-49c2-aec7-422fc6600e52",
+						"phases",
+						"003a4b14-de5d-43fc-9e35-835dbeb6af1f"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phases 400(invalid challengeId)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/a74cd2f6-2077-49c2-aec7-422fc6600e5/phases/003a4b14-de5d-43fc-9e35-835dbeb6af1f",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"a74cd2f6-2077-49c2-aec7-422fc6600e5",
+						"phases",
+						"003a4b14-de5d-43fc-9e35-835dbeb6af1f"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get challenge phases 400(invalid phaseId)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/${{challengeId}}/phases/003a4b14-de5d-43fc-9e35-835dbeb6a",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"${{challengeId}}",
+						"phases",
+						"003a4b14-de5d-43fc-9e35-835dbeb6a"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"isOpen\": null,\n    \"name\": \"test\",\n    \"constraints\": [{\n        \"id\": \"{{constraintId}}\",\n        \"name\": \"ct1\",\n        \"value\": 5\n    }, {\n        \"name\": \"ct2\",\n        \"value\": 7\n    }]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(phaseId not exist)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"isOpen\": null,\n    \"name\": \"test\",\n    \"constraints\": [{\n        \"id\": \"{{constraintId}}\",\n        \"name\": \"ct1\",\n        \"value\": 5\n    }, {\n        \"name\": \"ct2\",\n        \"value\": 7\n    }]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(challengeId not exist)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"isOpen\": null,\n    \"name\": \"test\",\n    \"constraints\": [{\n        \"id\": \"{{constraintId}}\",\n        \"name\": \"ct1\",\n        \"value\": 5\n    }, {\n        \"name\": \"ct2\",\n        \"value\": 7\n    }]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(phase invalid)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"phaseId\": \"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(predecessor does not exist)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"predecessor\": \"aa5a3f78-79e0-4bf7-93ff-b11e8f5b397b\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(scheduledStartDate should not be after scheduledEndDate)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"scheduledStartDate\": \"2025-04-04T04:38:00.000Z\",\n    \"scheduledEndDate\": \"2025-04-03T04:38:00.000Z\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(actualStartDate should not be after scheduledEndDate)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"actualStartDate\": \"2025-04-04T04:38:00.000Z\",\n    \"actualEndDate\": \"2025-04-03T04:38:00.000Z\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(constraint is not exists for the ChallengePhase)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"constraints\": [{\n        \"id\": \"47c57dd0-77d2-49c0-93c0-9bc01069510f\",\n        \"name\": \"t1\",\n        \"value\": 100\n    }]\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "partially update challenge phases(partially update challenge phase - unexpected field)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"updated\",\n    \"other\": \"xx\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete challenge phases(not found)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 404\", function () {",
+							"\tpm.response.to.have.status(404);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/47c57dd0-77d2-49c0-93c0-9bc01069510f",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"47c57dd0-77d2-49c0-93c0-9bc01069510f"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete challenge phases(invalid challenge id)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/invalid/phases/47c57dd0-77d2-49c0-93c0-9bc01069510f",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"invalid",
+						"phases",
+						"47c57dd0-77d2-49c0-93c0-9bc01069510f"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete challenge phases(invalid phase id)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 400\", function () {",
+							"\tpm.response.to.have.status(400);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/invalid",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"invalid"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete challenge phases",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"\tpm.response.to.have.status(200);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/v6/challenges/{{challengeId}}/phases/{{phaseId}}",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"v6",
+						"challenges",
+						"{{challengeId}}",
+						"phases",
+						"{{phaseId}}"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

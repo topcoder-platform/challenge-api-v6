@@ -14,7 +14,7 @@ const app = require('../../app')
 const constants = require('../../app-constants')
 const AttachmentService = require('../../src/services/AttachmentService')
 const testHelper = require('../testHelper')
-const { ChallengeStatusEnum } = require('../src/common/prisma')
+const { ChallengeStatusEnum } = require('../../src/common/prisma')
 
 const should = chai.should()
 chai.use(chaiHttp)

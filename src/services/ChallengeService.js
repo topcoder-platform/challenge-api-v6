@@ -169,7 +169,6 @@ const includeReturnFields = {
   type: true,
 };
 
-
 /**
  * Get default reviewers for a given typeId and trackId
  * @param {Object} currentUser
@@ -215,28 +214,27 @@ async function setDefaultReviewers(currentUser, data) {
       trackId: Joi.id().required(),
       reviewers: Joi.array()
         .items(
-          Joi.object()
-            .keys({
-              scorecardId: Joi.string().required(),
-              isMemberReview: Joi.boolean().required(),
-              memberReviewerCount: Joi.when('isMemberReview', {
+          Joi.object().keys({
+            scorecardId: Joi.string().required(),
+            isMemberReview: Joi.boolean().required(),
+            memberReviewerCount: Joi.when("isMemberReview", {
+              is: true,
+              then: Joi.number().integer().min(1).required(),
+              otherwise: Joi.forbidden(),
+            }),
+            phaseName: Joi.string().required(),
+            basePayment: Joi.number().min(0).optional().allow(null),
+            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            // Enforce that exactly one reviewer type is true
+            isAIReviewer: Joi.boolean()
+              .required()
+              .when("isMemberReview", {
                 is: true,
-                then: Joi.number().integer().min(1).required(),
-                otherwise: Joi.forbidden(),
+                then: Joi.valid(false),
+                otherwise: Joi.valid(true),
               }),
-              phaseName: Joi.string().required(),
-              basePayment: Joi.number().min(0).optional().allow(null),
-              incrementalPayment: Joi.number().min(0).optional().allow(null),
-              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-              // Enforce that exactly one reviewer type is true
-              isAIReviewer: Joi.boolean()
-                .required()
-                .when('isMemberReview', {
-                  is: true,
-                  then: Joi.valid(false),
-                  otherwise: Joi.valid(true),
-                }),
-            })
+          })
         )
         .default([]),
     })
@@ -251,7 +249,8 @@ async function setDefaultReviewers(currentUser, data) {
     prisma.challengeTrack.findUnique({ where: { id: value.trackId } }),
   ]);
   if (!type) throw new errors.NotFoundError(`ChallengeType with id: ${value.typeId} doesn't exist`);
-  if (!track) throw new errors.NotFoundError(`ChallengeTrack with id: ${value.trackId} doesn't exist`);
+  if (!track)
+    throw new errors.NotFoundError(`ChallengeTrack with id: ${value.trackId} doesn't exist`);
 
   const userId = _.toString(currentUser && currentUser.userId ? currentUser.userId : "system");
   const auditFields = { createdBy: userId, updatedBy: userId };
@@ -263,7 +262,7 @@ async function setDefaultReviewers(currentUser, data) {
     const existing = new Set(phases.map((p) => p.name));
     const missing = uniquePhaseNames.filter((n) => !existing.has(n));
     if (missing.length > 0) {
-      throw new errors.BadRequestError(`Invalid phaseName(s): ${missing.join(', ')}`);
+      throw new errors.BadRequestError(`Invalid phaseName(s): ${missing.join(", ")}`);
     }
   }
 
@@ -284,9 +283,7 @@ async function setDefaultReviewers(currentUser, data) {
             : Number(r.memberReviewerCount),
           phaseName: r.phaseName,
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment)
-            ? null
-            : Number(r.incrementalPayment),
+          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           opportunityType: r.type ? _.toUpper(r.type) : null,
           isAIReviewer: !!r.isAIReviewer,
         })),
@@ -1169,7 +1166,9 @@ async function createChallenge(currentUser, challenge, userToken) {
         // ensure all required names exist
         const missing = phaseNames.filter((n) => !phaseMap.has(n));
         if (missing.length > 0) {
-          throw new BadRequestError(`Default reviewers reference unknown phaseName(s): ${missing.join(', ')}`);
+          throw new BadRequestError(
+            `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
+          );
         }
 
         challenge.reviewers = defaultReviewers.map((r) => ({
@@ -1307,7 +1306,7 @@ createChallenge.schema = {
         Joi.object().keys({
           scorecardId: Joi.string().required(),
           isMemberReview: Joi.boolean().required(),
-          memberReviewerCount: Joi.when('isMemberReview', {
+          memberReviewerCount: Joi.when("isMemberReview", {
             is: true,
             then: Joi.number().integer().min(1).required(),
             otherwise: Joi.forbidden(),
@@ -1319,7 +1318,7 @@ createChallenge.schema = {
           // Enforce exactly one of the booleans is true using a conditional
           isAIReviewer: Joi.boolean()
             .required()
-            .when('isMemberReview', {
+            .when("isMemberReview", {
               is: true,
               then: Joi.valid(false),
               otherwise: Joi.valid(true),
@@ -1468,7 +1467,6 @@ async function getChallengeStatistics(currentUser, id) {
   // for each submission, load member profile
   const map = {};
   for (const submission of submissions) {
-
     if (!map[submission.memberId]) {
       console.log("Finding member ID: " + submission.memberId);
       // Load member profile and cache
@@ -2051,9 +2049,7 @@ async function updateChallenge(currentUser, challengeId, data) {
 
       // Validate all referenced Phase ids exist
       const uniquePhaseIds = _.uniq(
-        data.reviewers
-          .filter((r) => r && r.phaseId)
-          .map((r) => r.phaseId)
+        data.reviewers.filter((r) => r && r.phaseId).map((r) => r.phaseId)
       );
       if (uniquePhaseIds.length > 0) {
         const foundPhases = await prisma.phase.findMany({ where: { id: { in: uniquePhaseIds } } });
@@ -2061,14 +2057,14 @@ async function updateChallenge(currentUser, challengeId, data) {
         const missing = uniquePhaseIds.filter((id) => !foundIds.has(id));
         if (missing.length > 0) {
           throw new errors.BadRequestError(
-            `Invalid reviewer.phaseId value(s); Phase not found: ${missing.join(', ')}`
+            `Invalid reviewer.phaseId value(s); Phase not found: ${missing.join(", ")}`
           );
         }
       }
     } catch (e) {
       // Re-throw as BadRequest to avoid nested Prisma errors later
       if (!(e instanceof errors.BadRequestError)) {
-        throw new errors.BadRequestError(e.message || 'Invalid reviewer phase reference');
+        throw new errors.BadRequestError(e.message || "Invalid reviewer phase reference");
       }
       throw e;
     }
@@ -2300,28 +2296,27 @@ updateChallenge.schema = {
         .optional(),
       reviewers: Joi.array()
         .items(
-          Joi.object()
-            .keys({
-              scorecardId: Joi.string().required(),
-              isMemberReview: Joi.boolean().required(),
-              memberReviewerCount: Joi.when('isMemberReview', {
+          Joi.object().keys({
+            scorecardId: Joi.string().required(),
+            isMemberReview: Joi.boolean().required(),
+            memberReviewerCount: Joi.when("isMemberReview", {
+              is: true,
+              then: Joi.number().integer().min(1).required(),
+              otherwise: Joi.forbidden(),
+            }),
+            phaseId: Joi.id().required(),
+            basePayment: Joi.number().min(0).optional().allow(null),
+            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            // Enforce that exactly one reviewer type is true
+            isAIReviewer: Joi.boolean()
+              .required()
+              .when("isMemberReview", {
                 is: true,
-                then: Joi.number().integer().min(1).required(),
-                otherwise: Joi.forbidden(),
+                then: Joi.valid(false),
+                otherwise: Joi.valid(true),
               }),
-              phaseId: Joi.id().required(),
-              basePayment: Joi.number().min(0).optional().allow(null),
-              incrementalPayment: Joi.number().min(0).optional().allow(null),
-              type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-              // Enforce that exactly one reviewer type is true
-              isAIReviewer: Joi.boolean()
-                .required()
-                .when('isMemberReview', {
-                  is: true,
-                  then: Joi.valid(false),
-                  otherwise: Joi.valid(true),
-                }),
-            })
+          })
         )
         .optional(),
       startDate: Joi.date().iso(),
@@ -2674,9 +2669,7 @@ async function advancePhase(currentUser, challengeId, data) {
       ]);
       // Ensure dates are either Date or null; assume incoming are ISO strings, Prisma accepts JS Date or string
       try {
-        const existing = p.id
-          ? await tx.challengePhase.findUnique({ where: { id: p.id } })
-          : null;
+        const existing = p.id ? await tx.challengePhase.findUnique({ where: { id: p.id } }) : null;
         if (existing) {
           await tx.challengePhase.update({
             where: { id: p.id },
@@ -2712,7 +2705,9 @@ async function advancePhase(currentUser, challengeId, data) {
           }
         }
       } catch (e) {
-        logger.error(`Failed to upsert phase ${p.name} (${p.phaseId}) for ${challengeId}: ${e.message}`);
+        logger.error(
+          `Failed to upsert phase ${p.name} (${p.phaseId}) for ${challengeId}: ${e.message}`
+        );
         throw e;
       }
     }

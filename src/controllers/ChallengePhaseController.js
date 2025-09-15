@@ -1,84 +1,60 @@
 /**
  * Controller for challenge phase endpoints
  */
-const HttpStatus = require("http-status-codes");
-const service = require("../services/PhaseService");
-const helper = require("../common/helper");
+const service = require("../services/ChallengePhaseService");
 
 /**
- * Search phases
+ * Get all challenge phases
  * @param {Object} req the request
  * @param {Object} res the response
  */
-async function searchPhases(req, res) {
-  const result = await service.searchPhases(req.query);
-  helper.setResHeaders(req, res, result);
-  res.send(result.result);
-}
-
-/**
- * Create phase
- * @param {Object} req the request
- * @param {Object} res the response
- */
-async function createPhase(req, res) {
-  const result = await service.createPhase(req.authUser, req.body);
-  res.status(HttpStatus.CREATED).send(result);
-}
-
-/**
- * Get phase
- * @param {Object} req the request
- * @param {Object} res the response
- */
-async function getPhase(req, res) {
-  const result = await service.getPhase(req.params.challengePhaseId);
+async function getAllChallengePhases(req, res) {
+  const result = await service.getAllChallengePhases(req.params.challengeId);
   res.send(result);
 }
 
 /**
- * Fully update phase
+ * Get challenge phase
  * @param {Object} req the request
  * @param {Object} res the response
  */
-async function fullyUpdatePhase(req, res) {
-  const result = await service.fullyUpdatePhase(
+async function getChallengePhase(req, res) {
+  const result = await service.getChallengePhase(req.params.challengeId, req.params.id);
+  res.send(result);
+}
+
+/**
+ * Partially update challenge phase
+ * @param {Object} req the request
+ * @param {Object} res the response
+ */
+async function partiallyUpdateChallengePhase(req, res) {
+  const result = await service.partiallyUpdateChallengePhase(
     req.authUser,
-    req.params.challengePhaseId,
+    req.params.challengeId,
+    req.params.id,
     req.body
   );
   res.send(result);
 }
 
 /**
- * Partially update phase
+ * Delete challenge phase
  * @param {Object} req the request
  * @param {Object} res the response
  */
-async function partiallyUpdatePhase(req, res) {
-  const result = await service.partiallyUpdatePhase(
+async function deleteChallengePhase(req, res) {
+  const result = await service.deleteChallengePhase(
     req.authUser,
-    req.params.challengePhaseId,
-    req.body
+    req.params.challengeId,
+    req.params.id
   );
-  res.send(result);
-}
-
-/**
- * Delete phase
- * @param {Object} req the request
- * @param {Object} res the response
- */
-async function deletePhase(req, res) {
-  const result = await service.deletePhase(req.params.challengePhaseId);
   res.send(result);
 }
 
 module.exports = {
-  searchPhases,
-  createPhase,
-  getPhase,
-  fullyUpdatePhase,
-  partiallyUpdatePhase,
-  deletePhase,
+  getAllChallengePhases,
+  getChallengePhase,
+  partiallyUpdateChallengePhase,
+  deleteChallengePhase,
 };
