@@ -108,11 +108,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
   if (data["predecessor"]) {
     const predecessor = await prisma.challengePhase.findFirst({
-      where: { challengeId, phaseId: data["predecessor"] },
+      where: { challengeId, id: data["predecessor"] }
     });
     if (!predecessor) {
       throw new errors.BadRequestError(
-        `predecessor should be a valid phase in the same challenge: ${challengeId}`
+        `predecessor should be a valid challenge phase in the same challenge: ${challengeId}`
       );
     }
   }
@@ -243,14 +243,14 @@ async function deleteChallengePhase(currentUser, challengeId, id) {
     // recalculates the predecessors
     await tx.challengePhase.updateMany({
       data: {
-        // if result.predecessor exists, update successor's predecessor to predecessor
+        // if result.predecessor exists, update successor's predecessor to predecessor of current challenge phase
         // otherwise update successor's predecessor to null
         predecessor: result.predecessor || null,
         updatedBy: String(currentUser.userId),
       },
       where: {
         challengeId,
-        predecessor: result.phaseId,
+        predecessor: result.id,
       },
     });
     // delete challengePhaseConstraint
