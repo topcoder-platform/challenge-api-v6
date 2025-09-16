@@ -2123,9 +2123,9 @@ async function updateChallenge(currentUser, challengeId, data) {
     if (_.isNil(updateData.terms)) {
       await tx.challengeTerm.deleteMany({ where: { challengeId } });
     }
-    if (_.isNil(updateData.skills)) {
-      await tx.challengeSkill.deleteMany({ where: { challengeId } });
-    }
+    // if (_.isNil(updateData.skills)) {
+    //   await tx.challengeSkill.deleteMany({ where: { challengeId } });
+    // }
 
     return await tx.challenge.update({
       data: updateData,
