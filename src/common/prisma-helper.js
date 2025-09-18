@@ -232,7 +232,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             : Number(r.memberReviewerCount),
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
-          isAIReviewer: !!r.isAIReviewer,
+          aiWorkflowId: r.aiWorkflowId,
         };
         if (r.type) reviewer.type = _.toUpper(r.type);
         if (r.phaseId) reviewer.phase = { connect: { id: r.phaseId } };
@@ -368,7 +368,7 @@ function convertModelToResponse(ret) {
         "basePayment",
         "incrementalPayment",
         "type",
-        "isAIReviewer",
+        "aiWorkflowId",
       ])
     );
   }

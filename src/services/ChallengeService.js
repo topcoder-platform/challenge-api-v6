@@ -197,7 +197,7 @@ async function getDefaultReviewers(currentUser, criteria) {
     basePayment: r.basePayment,
     incrementalPayment: r.incrementalPayment,
     type: r.opportunityType,
-    isAIReviewer: r.isAIReviewer,
+    aiWorkflowId: r.aiWorkflowId,
   }));
 }
 getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
@@ -226,14 +226,11 @@ async function setDefaultReviewers(currentUser, data) {
             basePayment: Joi.number().min(0).optional().allow(null),
             incrementalPayment: Joi.number().min(0).optional().allow(null),
             type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-            // Enforce that exactly one reviewer type is true
-            isAIReviewer: Joi.boolean()
-              .required()
-              .when("isMemberReview", {
-                is: true,
-                then: Joi.valid(false),
-                otherwise: Joi.valid(true),
-              }),
+            aiWorkflowId: Joi.when("isMemberReview", {
+              is: false,
+              then: Joi.string().required(),
+              otherwise: Joi.forbidden(),
+            }),
           })
         )
         .default([]),
@@ -285,7 +282,7 @@ async function setDefaultReviewers(currentUser, data) {
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           opportunityType: r.type ? _.toUpper(r.type) : null,
-          isAIReviewer: !!r.isAIReviewer,
+          aiWorkflowId: r.aiWorkflowId,
         })),
       });
     }
@@ -1180,7 +1177,7 @@ async function createChallenge(currentUser, challenge, userToken) {
           basePayment: r.basePayment,
           incrementalPayment: r.incrementalPayment,
           type: r.opportunityType,
-          isAIReviewer: r.isAIReviewer,
+          aiWorkflowId: r.aiWorkflowId,
         }));
       }
     }
@@ -1315,14 +1312,11 @@ createChallenge.schema = {
           basePayment: Joi.number().min(0).optional(),
           incrementalPayment: Joi.number().min(0).optional(),
           type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-          // Enforce exactly one of the booleans is true using a conditional
-          isAIReviewer: Joi.boolean()
-            .required()
-            .when("isMemberReview", {
-              is: true,
-              then: Joi.valid(false),
-              otherwise: Joi.valid(true),
-            }),
+          aiWorkflowId: Joi.when("isMemberReview", {
+            is: false,
+            then: Joi.string().required(),
+            otherwise: Joi.forbidden(),
+          }),
         })
       ),
       prizeSets: Joi.array().items(
@@ -2308,14 +2302,11 @@ updateChallenge.schema = {
             basePayment: Joi.number().min(0).optional().allow(null),
             incrementalPayment: Joi.number().min(0).optional().allow(null),
             type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
-            // Enforce that exactly one reviewer type is true
-            isAIReviewer: Joi.boolean()
-              .required()
-              .when("isMemberReview", {
-                is: true,
-                then: Joi.valid(false),
-                otherwise: Joi.valid(true),
-              }),
+            aiWorkflowId: Joi.when("isMemberReview", {
+              is: false,
+              then: Joi.string().required(),
+              otherwise: Joi.forbidden(),
+            }),
           })
         )
         .optional(),
@@ -2505,7 +2496,7 @@ function sanitizeChallenge(challenge) {
         "basePayment",
         "incrementalPayment",
         "type",
-        "isAIReviewer",
+        "aiWorkflowId",
       ])
     );
   }

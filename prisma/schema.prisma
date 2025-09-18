@@ -590,7 +590,7 @@ model ChallengeReviewer {
   basePayment         Float?
   incrementalPayment  Float?
   type                ReviewOpportunityTypeEnum?
-  isAIReviewer        Boolean
+  aiWorkflowId        String? @db.VarChar(14)
 
   // Relation to the challenge
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
