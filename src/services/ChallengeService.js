@@ -52,88 +52,126 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 /**
- * Enrich skills data with full details from standardized skills API
+ * Enrich skills data with full details from standardized skills API.
  * @param {Object} challenge the challenge object
+ * @param {Object} [options]
+ * @param {Map<string, Object>} [options.skillLookup] optional map of skillId -> skill payload
  */
-async function enrichSkillsData(challenge) {
-  if (!challenge.skills || challenge.skills.length === 0) {
+async function enrichSkillsData(challenge, { skillLookup } = {}) {
+  if (!Array.isArray(challenge.skills) || challenge.skills.length === 0) {
     return;
   }
 
-  const skillIds = challenge.skills.map((skill) => skill.skillId || skill.id);
+  const skillIds = _(challenge.skills)
+    .map((skill) => skill.skillId || skill.id)
+    .filter((id) => !_.isNil(id))
+    .uniq()
+    .value();
 
   if (skillIds.length === 0) {
     return;
   }
 
-  try {
-    const standSkills = await helper.getStandSkills(skillIds);
-
-    challenge.skills = challenge.skills.map((skill) => {
-      const skillId = skill.skillId || skill.id;
-      const found = _.find(standSkills, (item) => item.id === skillId);
-
-      if (found) {
-        const enrichedSkill = {
-          id: skillId,
-          name: found.name,
-        };
-
-        if (found.category) {
-          enrichedSkill.category = {
-            id: found.category.id,
-            name: found.category.name,
-          };
-        }
-
-        return enrichedSkill;
-      }
-
-      // Fallback if skill not found in standardized skills API
-      return {
-        id: skillId,
-        name: skill.name || "",
-      };
-    });
-  } catch (error) {
-    logger.error("Failed to enrich skills data:", error);
-
-    // Enhanced fallback: try to get skill data from original challenge data if available
-    // This handles cases where the external skills API is not accessible
+  let lookup = skillLookup;
+  if (!lookup) {
     try {
-      // Get the original challenge data from database with skills
-      const originalChallenge = await prisma.challenge.findUnique({
-        where: { id: challenge.id },
-        include: {
-          skills: true,
-          // Include other relations that might have skill data
-        },
+      const standSkills = await helper.getStandSkills(skillIds);
+      lookup = new Map();
+      standSkills.forEach((skill) => {
+        if (skill && skill.id) {
+          lookup.set(skill.id, skill);
+        }
       });
-
-      if (originalChallenge && originalChallenge.skills) {
-        // Check if we have stored skill names in metadata or other fields
-        challenge.skills = challenge.skills.map((skill) => {
-          const skillId = skill.skillId || skill.id;
-
-          // Basic fallback structure
-          const fallbackSkill = {
-            id: skillId,
-            name: skill.name || skillId, // Use skillId as name if no name available
-          };
-
-          return fallbackSkill;
-        });
-      }
-    } catch (dbError) {
-      logger.error("Failed to get fallback skill data from database:", dbError);
-
-      // Final fallback to basic structure if API call fails
+    } catch (error) {
+      logger.error("Failed to enrich skills data:", error);
       challenge.skills = challenge.skills.map((skill) => ({
         id: skill.skillId || skill.id,
         name: skill.name || "",
       }));
+      return;
     }
   }
+
+  const getFromLookup = (skillId) => {
+    if (!lookup) {
+      return null;
+    }
+    if (lookup instanceof Map) {
+      return lookup.get(skillId);
+    }
+    return lookup[skillId];
+  };
+
+  challenge.skills = challenge.skills.map((skill) => {
+    const skillId = skill.skillId || skill.id;
+    const found = getFromLookup(skillId);
+    if (found) {
+      const enrichedSkill = {
+        id: skillId,
+        name: found.name,
+      };
+
+      if (found.category) {
+        enrichedSkill.category = {
+          id: found.category.id,
+          name: found.category.name,
+        };
+      }
+
+      return enrichedSkill;
+    }
+
+    return {
+      id: skillId,
+      name: skill.name || "",
+    };
+  });
+}
+
+/**
+ * Enrich skills for a list of challenges using a single lookup call when possible.
+ * @param {Array<Object>} challenges
+ */
+async function enrichSkillsDataBulk(challenges) {
+  const challengesWithSkills = challenges.filter(
+    (challenge) => Array.isArray(challenge.skills) && challenge.skills.length > 0
+  );
+
+  if (challengesWithSkills.length === 0) {
+    return;
+  }
+
+  const uniqueSkillIds = _(challengesWithSkills)
+    .flatMap((challenge) =>
+      challenge.skills
+        .map((skill) => skill.skillId || skill.id)
+        .filter((id) => !_.isNil(id))
+    )
+    .uniq()
+    .value();
+
+  if (uniqueSkillIds.length === 0) {
+    return;
+  }
+
+  let lookup = null;
+  try {
+    const standSkills = await helper.getStandSkills(uniqueSkillIds);
+    lookup = new Map();
+    standSkills.forEach((skill) => {
+      if (skill && skill.id) {
+        lookup.set(skill.id, skill);
+      }
+    });
+  } catch (error) {
+    logger.error("Failed to enrich skills data in bulk:", error);
+    await Promise.all(challengesWithSkills.map((challenge) => enrichSkillsData(challenge)));
+    return;
+  }
+
+  await Promise.all(
+    challengesWithSkills.map((challenge) => enrichSkillsData(challenge, { skillLookup: lookup }))
+  );
 }
 
 // define return field for challenge model. Used in prisma.
@@ -198,6 +236,7 @@ async function getDefaultReviewers(currentUser, criteria) {
     incrementalPayment: r.incrementalPayment,
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
+    isAIReviewer: r.isAIReviewer,
   }));
 }
 getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
@@ -217,6 +256,7 @@ async function setDefaultReviewers(currentUser, data) {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
+            isAIReviewer: Joi.boolean().default(false),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
               then: Joi.number().integer().min(1).required(),
@@ -275,6 +315,7 @@ async function setDefaultReviewers(currentUser, data) {
           trackId: value.trackId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
+          isAIReviewer: !!r.isAIReviewer,
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
@@ -769,6 +810,8 @@ async function searchChallenges(currentUser, criteria) {
   }
 
   let memberChallengeIds;
+  let currentUserChallengeIds;
+  let currentUserChallengeIdSet;
 
   // FIXME: This is wrong!
   // if (!_.isUndefined(currentUser) && currentUser.handle) {
@@ -776,14 +819,13 @@ async function searchChallenges(currentUser, criteria) {
   // }
 
   if (criteria.memberId) {
-    // logger.error(`memberId ${criteria.memberId}`)
     memberChallengeIds = await helper.listChallengesByMember(criteria.memberId);
-    // logger.error(`response ${JSON.stringify(ids)}`)
     prismaFilter.where.AND.push({
       id: { in: memberChallengeIds },
     });
   } else if (currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
-    memberChallengeIds = await helper.listChallengesByMember(currentUser.userId);
+    currentUserChallengeIds = await helper.listChallengesByMember(currentUser.userId);
+    memberChallengeIds = currentUserChallengeIds;
   }
 
   // FIXME: Tech Debt
@@ -859,15 +901,15 @@ async function searchChallenges(currentUser, criteria) {
     total = await prisma.challenge.count({ ...prismaFilter });
     challenges = await prisma.challenge.findMany(prismaQuery);
 
-    // Process challenges sequentially to enrich skills data
-    for (const c of challenges) {
-      prismaHelper.convertModelToResponse(c);
+    challenges.forEach((challenge) => {
+      prismaHelper.convertModelToResponse(challenge);
+    });
 
-      // Enrich skills data with full details from standardized skills API
-      await enrichSkillsData(c);
+    await enrichSkillsDataBulk(challenges);
 
-      enrichChallengeForResponse(c, c.track, c.type);
-    }
+    challenges.forEach((challenge) => {
+      enrichChallengeForResponse(challenge, challenge.track, challenge.type);
+    });
 
     // Note: numOfRegistrants and numOfSubmissions are no longer calculated here.
   } catch (e) {
@@ -877,46 +919,51 @@ async function searchChallenges(currentUser, criteria) {
 
   let result = challenges;
 
-  // Hide privateDescription for non-register challenges
   if (currentUser) {
     if (!currentUser.isMachine && !_hasAdminRole) {
-      result = _.each(result, (val) => _.unset(val, "billing"));
-      const ids = await helper.listChallengesByMember(currentUser.userId);
-      result = _.each(result, (val) => {
-        if (!_.includes(ids, val.id)) {
-          _.unset(val, "privateDescription");
+      result.forEach((challenge) => {
+        _.unset(challenge, "billing");
+      });
+
+      if (!currentUserChallengeIds) {
+        currentUserChallengeIds = await helper.listChallengesByMember(currentUser.userId);
+      }
+
+      const accessibleIds = currentUserChallengeIds || [];
+      currentUserChallengeIdSet = currentUserChallengeIdSet || new Set(accessibleIds);
+
+      result.forEach((challenge) => {
+        if (!currentUserChallengeIdSet.has(challenge.id)) {
+          _.unset(challenge, "privateDescription");
         }
       });
     }
   } else {
-    result = _.each(result, (val) => {
-      _.unset(val, "billing");
-      _.unset(val, "privateDescription");
-      return val;
+    result.forEach((challenge) => {
+      _.unset(challenge, "billing");
+      _.unset(challenge, "privateDescription");
     });
   }
 
   if (criteria.isLightweight === "true") {
-    result = _.each(result, (val) => {
-      // _.unset(val, 'terms')
-      _.unset(val, "description");
-      _.unset(val, "privateDescription");
-      return val;
+    result.forEach((challenge) => {
+      _.unset(challenge, "description");
+      _.unset(challenge, "privateDescription");
     });
   }
 
-  _.each(result, async (element) => {
-    if (element.status !== ChallengeStatusEnum.COMPLETED) {
-      _.unset(element, "winners");
+  result.forEach((challenge) => {
+    if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
+      _.unset(challenge, "winners");
     }
-    // TODO: in the long run we wanna do a finer grained filtering of the payments
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
-      _.unset(element, "payments");
+      _.unset(challenge, "payments");
     }
-    helper.removeNullProperties(element);
   });
 
-  return { total, page, perPage, result };
+  const sanitizedResult = result.map((challenge) => helper.removeNullProperties(challenge));
+
+  return { total, page, perPage, result: sanitizedResult };
 }
 searchChallenges.schema = {
   currentUser: Joi.any(),
@@ -1178,6 +1225,7 @@ async function createChallenge(currentUser, challenge, userToken) {
           incrementalPayment: r.incrementalPayment,
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
+          isAIReviewer: r.isAIReviewer ?? false,
         }));
       }
     }
@@ -1303,6 +1351,7 @@ createChallenge.schema = {
         Joi.object().keys({
           scorecardId: Joi.string().required(),
           isMemberReview: Joi.boolean().required(),
+          isAIReviewer: Joi.boolean().default(false),
           memberReviewerCount: Joi.when("isMemberReview", {
             is: true,
             then: Joi.number().integer().min(1).required(),
@@ -2293,6 +2342,7 @@ updateChallenge.schema = {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
+            isAIReviewer: Joi.boolean().default(false),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
               then: Joi.number().integer().min(1).required(),
@@ -2491,6 +2541,7 @@ function sanitizeChallenge(challenge) {
       _.pick(rv, [
         "scorecardId",
         "isMemberReview",
+        "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
         "basePayment",
