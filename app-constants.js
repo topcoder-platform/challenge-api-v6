@@ -18,9 +18,9 @@ const prizeTypes = {
 
 const validChallengeParams = {
   UpdatedBy: "updatedBy",
-  Updated: "updated",
+  Updated: "updatedAt",
   CreatedBy: "createdBy",
-  Created: "created",
+  Created: "createdAt",
   EndDate: "endDate",
   StartDate: "startDate",
   ProjectId: "projectId",
