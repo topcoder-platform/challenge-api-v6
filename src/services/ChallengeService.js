@@ -265,7 +265,11 @@ async function setDefaultReviewers(currentUser, data) {
             phaseName: Joi.string().required(),
             basePayment: Joi.number().min(0).optional().allow(null),
             incrementalPayment: Joi.number().min(0).optional().allow(null),
-            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            type: Joi.when("isMemberReview", {
+              is: true,
+              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              otherwise: Joi.forbidden(),
+            }),
             aiWorkflowId: Joi.when("isMemberReview", {
               is: false,
               then: Joi.string().required(),
@@ -1360,7 +1364,11 @@ createChallenge.schema = {
           phaseId: Joi.id().required(),
           basePayment: Joi.number().min(0).optional(),
           incrementalPayment: Joi.number().min(0).optional(),
-          type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+          type: Joi.when("isMemberReview", {
+            is: true,
+            then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            otherwise: Joi.forbidden(),
+          }),
           aiWorkflowId: Joi.when("isMemberReview", {
             is: false,
             then: Joi.string().required(),
@@ -2351,7 +2359,11 @@ updateChallenge.schema = {
             phaseId: Joi.id().required(),
             basePayment: Joi.number().min(0).optional().allow(null),
             incrementalPayment: Joi.number().min(0).optional().allow(null),
-            type: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            type: Joi.when("isMemberReview", {
+              is: true,
+              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              otherwise: Joi.forbidden(),
+            }),
             aiWorkflowId: Joi.when("isMemberReview", {
               is: false,
               then: Joi.string().required(),
