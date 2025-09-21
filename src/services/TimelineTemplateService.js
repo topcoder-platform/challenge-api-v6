@@ -9,6 +9,7 @@ const constants = require("../../app-constants");
 const errors = require("../common/errors");
 
 const PhaseService = require("./PhaseService");
+const phaseHelper = require("../common/phase-helper");
 
 const prisma = require("../common/prisma").getClient();
 
@@ -87,12 +88,13 @@ async function createTimelineTemplate(authUser, timelineTemplate) {
   await phaseHelper.validatePhases(timelineTemplate.phases);
 
   const phases = timelineTemplate.phases;
+  const auditUserId = String(authUser.userId);
   _.forEach(phases, (p) => {
-    p.createdBy = authUser.userId;
-    p.updatedBy = authUser.userId;
+    p.createdBy = auditUserId;
+    p.updatedBy = auditUserId;
   });
-  timelineTemplate.createdBy = authUser.userId;
-  timelineTemplate.updatedBy = authUser.userId;
+  timelineTemplate.createdBy = auditUserId;
+  timelineTemplate.updatedBy = auditUserId;
   timelineTemplate.phases = { create: phases };
 
   let ret = await prisma.timelineTemplate.create({
@@ -184,11 +186,12 @@ async function update(authUser, timelineTemplateId, data, isFull) {
   } else {
     data = { ...timelineTemplate, ...data };
   }
-  data.updatedBy = authUser.userId;
+  const auditUserId = String(authUser.userId);
+  data.updatedBy = auditUserId;
   data.phases = {
     create: _.forEach(data.phases, (p) => {
-      p.createdBy = authUser.userId;
-      p.updatedBy = authUser.userId;
+      p.createdBy = auditUserId;
+      p.updatedBy = auditUserId;
       delete p.timelineTemplateId;
     }),
   };
