@@ -44,7 +44,7 @@ class ChallengePhaseHelper {
         );
         if (
           !_.isUndefined(fixedStartDate) &&
-          moment(scheduledStartDate).isSameOrBefore(moment(fixedStartDate))
+          moment(scheduledStartDate).isBefore(moment(fixedStartDate))
         ) {
           scheduledStartDate = moment(fixedStartDate).add(5, "minutes").toDate().toISOString();
         }
@@ -112,7 +112,7 @@ class ChallengePhaseHelper {
         );
         if (
           !_.isNil(fixedStartDate) &&
-          moment(scheduledStartDate).isSameOrBefore(moment(fixedStartDate))
+          moment(scheduledStartDate).isBefore(moment(fixedStartDate))
         ) {
           scheduledStartDate = moment(fixedStartDate).add(5, "minutes").toDate().toISOString();
         }
