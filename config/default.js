@@ -122,6 +122,8 @@ module.exports = {
   SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID:
     process.env.SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID || "517e76b0-8824-4e72-9b48-a1ebde1793a8",
 
+  // Database connection overrides
+  REVIEW_DB_URL: process.env.REVIEW_DB_URL,
   // Database schemas for direct counts (shared DB)
   RESOURCES_DB_SCHEMA: process.env.RESOURCES_DB_SCHEMA || "resources",
   REVIEW_DB_SCHEMA: process.env.REVIEW_DB_SCHEMA || "reviews",

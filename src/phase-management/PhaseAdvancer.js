@@ -1,6 +1,9 @@
 const uuid = require("uuid/v4");
 const { Engine } = require("json-rules-engine");
+const { Prisma } = require("@prisma/client");
+const config = require("config");
 const { getClient } = require("../common/prisma");
+const { getReviewClient } = require("../common/review-prisma");
 const prisma = getClient();
 
 const rulesJSON = require("./phase-rules.json");
@@ -289,8 +292,57 @@ class PhaseAdvancer {
   }
 
   async #areAllSubmissionsReviewed(challengeId) {
-    console.log(`Getting review count for challenge ${challengeId}`);
-    return Promise.resolve(true);
+    console.log(`Evaluating review completion for challenge ${challengeId}`);
+
+    const challenge = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: {
+        numOfSubmissions: true,
+        reviewers: {
+          select: {
+            isMemberReview: true,
+            memberReviewerCount: true,
+          },
+        },
+      },
+    });
+
+    if (!challenge) {
+      throw new Error(`Challenge ${challengeId} not found`);
+    }
+
+    const submissionCount = challenge.numOfSubmissions ?? 0;
+    const memberReviewerCount = (challenge.reviewers || [])
+      .filter((reviewer) => reviewer.isMemberReview)
+      .reduce((total, reviewer) => total + Number(reviewer.memberReviewerCount ?? 0), 0);
+
+    const requiredReviews = memberReviewerCount * submissionCount;
+
+    const reviewPrisma = getReviewClient();
+    const reviewSchema = config.REVIEW_DB_SCHEMA;
+    const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+    const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+    const [{ count: completedReviews = 0 } = {}] = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT r."id")::int AS count
+        FROM ${reviewTable} r
+        INNER JOIN ${submissionTable} s
+          ON (
+            (r."submissionId" IS NOT NULL AND s."id" = r."submissionId")
+            OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
+          )
+        WHERE s."challengeId" = ${challengeId}
+          AND r."status" = ${"COMPLETED"}
+      `
+    );
+
+    const completedReviewCount = Number(completedReviews);
+    console.log(
+      `Review completion stats for ${challengeId}: required=${requiredReviews}, completed=${completedReviewCount}`
+    );
+
+    return requiredReviews === completedReviewCount;
   }
 
   async #areAllAppealsResolved(challengeId) {
