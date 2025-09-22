@@ -46,7 +46,7 @@ class ChallengePhaseHelper {
           !_.isUndefined(fixedStartDate) &&
           moment(scheduledStartDate).isBefore(moment(fixedStartDate))
         ) {
-          scheduledStartDate = moment(fixedStartDate).add(5, "minutes").toDate().toISOString();
+          scheduledStartDate = moment(fixedStartDate).toDate().toISOString();
         }
         phase.scheduledStartDate = moment(scheduledStartDate).toDate().toISOString();
         phase.scheduledEndDate = moment(phase.scheduledStartDate)
@@ -114,7 +114,7 @@ class ChallengePhaseHelper {
           !_.isNil(fixedStartDate) &&
           moment(scheduledStartDate).isBefore(moment(fixedStartDate))
         ) {
-          scheduledStartDate = moment(fixedStartDate).add(5, "minutes").toDate().toISOString();
+          scheduledStartDate = moment(fixedStartDate).toDate().toISOString();
         }
         if (isBeingActivated && moment(scheduledStartDate).isSameOrBefore(moment())) {
           updatedPhase.isOpen = true;
