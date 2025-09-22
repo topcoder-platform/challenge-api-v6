@@ -108,7 +108,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
   if (data["predecessor"]) {
     const predecessor = await prisma.challengePhase.findFirst({
-      where: { challengeId, id: data["predecessor"] }
+      where: { challengeId, id: data["predecessor"] },
     });
     if (!predecessor) {
       throw new errors.BadRequestError(

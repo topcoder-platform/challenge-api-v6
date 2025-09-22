@@ -143,9 +143,7 @@ async function enrichSkillsDataBulk(challenges) {
 
   const uniqueSkillIds = _(challengesWithSkills)
     .flatMap((challenge) =>
-      challenge.skills
-        .map((skill) => skill.skillId || skill.id)
-        .filter((id) => !_.isNil(id))
+      challenge.skills.map((skill) => skill.skillId || skill.id).filter((id) => !_.isNil(id))
     )
     .uniq()
     .value();

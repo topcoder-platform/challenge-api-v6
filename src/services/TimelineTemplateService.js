@@ -9,7 +9,6 @@ const constants = require("../../app-constants");
 const errors = require("../common/errors");
 
 const PhaseService = require("./PhaseService");
-const phaseHelper = require("../common/phase-helper");
 
 const prisma = require("../common/prisma").getClient();
 
@@ -85,7 +84,7 @@ async function createTimelineTemplate(authUser, timelineTemplate) {
   await checkName(timelineTemplate.name);
 
   // Do not validate phases for now
-  await phaseHelper.validatePhases(timelineTemplate.phases);
+  await PhaseService.validatePhases(timelineTemplate.phases);
 
   const phases = timelineTemplate.phases;
   const auditUserId = String(authUser.userId);
