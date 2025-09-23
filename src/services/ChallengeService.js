@@ -1804,7 +1804,10 @@ async function updateChallenge(currentUser, challengeId, data) {
 
   /* END self-service stuffs */
 
-  let isChallengeBeingActivated = false;
+  const isStatusChangingToActive =
+    data.status === ChallengeStatusEnum.ACTIVE &&
+    challenge.status !== ChallengeStatusEnum.ACTIVE;
+  let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   if (data.status) {
     if (data.status === ChallengeStatusEnum.ACTIVE) {
@@ -1817,9 +1820,6 @@ async function updateChallenge(currentUser, challengeId, data) {
         throw new errors.BadRequestError(
           "Cannot Activate this project, it has no active billing account."
         );
-      }
-      if (challenge.status === ChallengeStatusEnum.DRAFT) {
-        isChallengeBeingActivated = true;
       }
     }
 
