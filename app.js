@@ -16,6 +16,8 @@ const fileUpload = require("express-fileupload");
 const YAML = require("yamljs");
 const swaggerUi = require("swagger-ui-express");
 const challengeAPISwaggerDoc = YAML.load("./docs/swagger.yaml");
+const { withAuthMetadata } = require("./src/common/swagger");
+const challengeAPIWithAuthDoc = withAuthMetadata(challengeAPISwaggerDoc);
 const { ForbiddenError } = require("./src/common/errors");
 const { getClient } = require("./src/common/prisma");
 
@@ -30,8 +32,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// serve challenge V5 API swagger definition
-app.use("/v6/challenges/docs", swaggerUi.serve, swaggerUi.setup(challengeAPISwaggerDoc));
+// serve challenge API swagger definition with auth metadata
+app.use(
+  "/v6/challenges/api-docs",
+  swaggerUi.serveFiles(challengeAPIWithAuthDoc),
+  swaggerUi.setup(challengeAPIWithAuthDoc, { explorer: true })
+);
 
 app.use(
   cors({
