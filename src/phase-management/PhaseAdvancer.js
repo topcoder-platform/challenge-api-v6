@@ -16,6 +16,13 @@ const { PhaseFact } = require("../../app-constants");
 
 const normalizeName = (name) => name.replace(/ /g, "");
 
+const PHASE_FACTS = {
+  Submission: [PhaseFact.PHASE_FACT_SUBMISSION],
+  Review: [PhaseFact.PHASE_FACT_REVIEW],
+  "Iterative Review": [PhaseFact.PHASE_FACT_ITERATIVE_REVIEW],
+  Appeals: [PhaseFact.PHASE_FACT_APPEALS],
+};
+
 const shouldCheckConstraint = (operation, phase, constraintName, rules) => {
   const normalizedConstraintName = normalizeName(constraintName);
   return (
@@ -40,7 +47,7 @@ class PhaseAdvancer {
     this.#challengeDomain = challengeDomain;
   }
 
-  #factGenerators = {
+  #phaseSpecificFactGenerators = {
     Registration: async (challengeId, phaseSpecificFacts) => ({
       registrantCount: await this.#getRegistrantCount(challengeId),
     }),
@@ -79,7 +86,19 @@ class PhaseAdvancer {
     };
 
     const phaseSpecificFacts = await this.#challengeDomain.getPhaseFacts(phaseSpecificFactRequest);
-    const facts = {
+    const facts = this.#buildBaseFacts(phases, phase);
+
+    const phaseSpecificGenerator = this.#phaseSpecificFactGenerators[normalizeName(phase.name)];
+    if (phaseSpecificGenerator) {
+      const additionalFacts = await phaseSpecificGenerator(challengeId, phaseSpecificFacts, phases);
+      Object.assign(facts, additionalFacts);
+    }
+
+    return facts;
+  }
+
+  #buildBaseFacts(phases, phase) {
+    return {
       name: phase.name,
       isOpen: phase.isOpen,
       isClosed: !phase.isOpen && phase.actualEndDate != null,
@@ -93,108 +112,151 @@ class PhaseAdvancer {
           : true,
       nextPhase: phases.find((p) => p.predecessor === phase.phaseId)?.name,
     };
-
-    if (this.#factGenerators[normalizeName(phase.name)]) {
-      const additionalFacts = await this.#factGenerators[normalizeName(phase.name)](
-        challengeId,
-        phaseSpecificFacts,
-        phases
-      );
-      Object.assign(facts, additionalFacts);
-    }
-
-    return facts;
   }
 
   async advancePhase(challengeId, legacyId, phases, operation, phaseName) {
-    phaseName = phaseName.replace(/-/g, " ");
+    const targetPhaseName = this.#normalizePhaseName(phaseName);
+    const phase = this.#findActivePhase(phases, targetPhaseName);
 
-    const matchedPhases = phases
-      .filter((phase) => phase.actualEndDate == null && phase.name === phaseName)
-      .sort((a, b) => new Date(a.scheduledStartDate) - new Date(b.scheduledStartDate));
-
-    if (matchedPhases.length === 0) {
-      throw new errors.BadRequestError(`Phase ${phaseName} not found or already closed`);
+    if (!phase) {
+      throw new errors.BadRequestError(`Phase ${targetPhaseName} not found or already closed`);
     }
 
-    const phase = matchedPhases[0]; // We only advance the earliest phase
+    const rules = this.#collectRules(operation, phase);
+    const facts = await this.#generateFacts(challengeId, legacyId, phases, phase, operation);
+    const validation = await this.#validateRules(rules, facts);
 
-    const essentialRules = this.#rules[`${operation}Rules`][normalizeName(phase.name)]
-      ? this.#rules[`${operation}Rules`][normalizeName(phase.name)].map((rule) => ({
+    if (!validation.success) {
+      return {
+        success: false,
+        message: `Cannot ${operation} phase ${phase.name} for challenge ${challengeId}`,
+        detail: `Rule ${validation.ruleName} failed`,
+        failureReasons: validation.failureReasons,
+      };
+    }
+
+    const { nextPhases, hasWinningSubmission } = await this.#applyOperation(
+      operation,
+      challengeId,
+      phases,
+      phase,
+      facts
+    );
+
+    return {
+      success: true,
+      hasWinningSubmission,
+      message: `Successfully ${operation}d phase ${phase.name} for challenge ${challengeId}`,
+      updatedPhases: phases,
+      next: {
+        operation: operation === "close" && nextPhases.length > 0 ? "open" : undefined,
+        phases: nextPhases,
+      },
+    };
+  }
+
+  #normalizePhaseName(phaseName) {
+    return phaseName.replace(/-/g, " ");
+  }
+
+  #findActivePhase(phases, phaseName) {
+    return (
+      phases
+        .filter((phase) => phase.actualEndDate == null && phase.name === phaseName)
+        .sort((a, b) => new Date(a.scheduledStartDate) - new Date(b.scheduledStartDate))[0] || null
+    );
+  }
+
+  #collectRules(operation, phase) {
+    const normalizedPhaseName = normalizeName(phase.name);
+    const operationRules = this.#rules[`${operation}Rules`] || {};
+    const essentialRules = operationRules[normalizedPhaseName]
+      ? operationRules[normalizedPhaseName].map((rule) => ({
           name: rule.name,
           conditions: rule.conditions,
           event: rule.event,
         }))
       : [];
 
-    const constraintRules =
-      phase.constraints
-        ?.filter((constraint) =>
-          shouldCheckConstraint(operation, phase, constraint.name, this.#rules)
-        )
-        .map((constraint) => ({
-          name: `Constraint: ${constraint.name}`,
-          conditions: {
-            all: [
-              {
-                fact: this.#rules.constraintNameFactMap[normalizeName(constraint.name)],
-                operator: "greaterThanInclusive",
-                value: constraint.value,
-              },
-            ],
-          },
-          event: {
-            type: `can${operation.toLowerCase()}`,
-          },
-        })) || [];
+    const constraintRules = this.#buildConstraintRules(operation, phase);
 
-    const rules = [...essentialRules, ...constraintRules];
-    const facts = await this.#generateFacts(challengeId, legacyId, phases, phase, operation);
+    return [...essentialRules, ...constraintRules];
+  }
 
+  #buildConstraintRules(operation, phase) {
+    if (!Array.isArray(phase.constraints) || phase.constraints.length === 0) {
+      return [];
+    }
+
+    return phase.constraints
+      .filter((constraint) => shouldCheckConstraint(operation, phase, constraint.name, this.#rules))
+      .map((constraint) => ({
+        name: `Constraint: ${constraint.name}`,
+        conditions: {
+          all: [
+            {
+              fact: this.#rules.constraintNameFactMap[normalizeName(constraint.name)],
+              operator: "greaterThanInclusive",
+              value: constraint.value,
+            },
+          ],
+        },
+        event: {
+          type: `can${operation.toLowerCase()}`,
+        },
+      }));
+  }
+
+  async #validateRules(rules, facts) {
     for (const rule of rules) {
       const ruleExecutionResult = await this.#executeRule(rule, facts);
-
       if (!ruleExecutionResult.success) {
         return {
           success: false,
-          message: `Cannot ${operation} phase ${phase.name} for challenge ${challengeId}`,
-          detail: `Rule ${rule.name} failed`,
+          ruleName: rule.name,
           failureReasons: ruleExecutionResult.failureReasons,
         };
       }
     }
 
-    let next = [];
+    return { success: true };
+  }
 
+  async #applyOperation(operation, challengeId, phases, phase, facts) {
     if (operation === "open") {
       await this.#open(challengeId, phases, phase);
-    } else if (operation === "close") {
-      await this.#close(challengeId, phases, phase);
+      return { nextPhases: [], hasWinningSubmission: facts.hasWinningSubmission };
+    }
 
-      if (facts.hasWinningSubmission) {
-        console.log("Challenge has a winning submission. Close the challenge.");
-      } else {
-        console.log("Checking if inserting a phase is required");
-        const insertedPhase = this.#insertPhaseIfRequired(phases, phase, facts);
+    if (operation === "close") {
+      return this.#handleClose(challengeId, phases, phase, facts);
+    }
 
-        if (insertedPhase) {
-          next.push(insertedPhase);
-        }
-      }
-      if (next.length == 0) {
-        next = phases.filter((p) => p.predecessor === phase.phaseId);
+    throw new Error(`Unsupported operation ${operation}`);
+  }
+
+  async #handleClose(challengeId, phases, phase, facts) {
+    await this.#close(challengeId, phases, phase);
+
+    let nextPhases = [];
+
+    if (facts.hasWinningSubmission) {
+      console.log("Challenge has a winning submission. Close the challenge.");
+    } else {
+      console.log("Checking if inserting a phase is required");
+      const insertedPhase = this.#insertPhaseIfRequired(phases, phase, facts);
+      if (insertedPhase) {
+        nextPhases.push(insertedPhase);
       }
     }
 
+    if (nextPhases.length === 0) {
+      nextPhases = phases.filter((p) => p.predecessor === phase.phaseId);
+    }
+
     return {
-      success: true,
+      nextPhases,
       hasWinningSubmission: facts.hasWinningSubmission,
-      message: `Successfully ${operation}d phase ${phase.name} for challenge ${challengeId}`,
-      updatedPhases: phases,
-      next: {
-        operation: operation === "close" && next.length > 0 ? "open" : undefined,
-        phases: next,
-      },
     };
   }
 
@@ -470,20 +532,7 @@ class PhaseAdvancer {
   }
 
   #getPhaseFactName(phaseName) {
-    if (phaseName === "Submission") {
-      return [PhaseFact.PHASE_FACT_SUBMISSION];
-    }
-    if (phaseName === "Review") {
-      return [PhaseFact.PHASE_FACT_REVIEW];
-    }
-    if (phaseName === "Iterative Review") {
-      return [PhaseFact.PHASE_FACT_ITERATIVE_REVIEW];
-    }
-    if (phaseName === "Appeals") {
-      return [PhaseFact.PHASE_FACT_APPEALS];
-    }
-
-    return [];
+    return PHASE_FACTS[phaseName] || [];
   }
 }
 
