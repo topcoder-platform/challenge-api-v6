@@ -1805,8 +1805,7 @@ async function updateChallenge(currentUser, challengeId, data) {
   /* END self-service stuffs */
 
   const isStatusChangingToActive =
-    data.status === ChallengeStatusEnum.ACTIVE &&
-    challenge.status !== ChallengeStatusEnum.ACTIVE;
+    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   if (data.status) {

@@ -70,8 +70,14 @@ function withAuthMetadata(baseDoc) {
 
       if (jwtRequired) {
         operation.security = operation.security || [];
-        const hasBearer = operation.security.some((entry) => Object.prototype.hasOwnProperty.call(entry, "bearer"));
-        if (!hasBearer && annotatedDoc.securityDefinitions && annotatedDoc.securityDefinitions.bearer) {
+        const hasBearer = operation.security.some((entry) =>
+          Object.prototype.hasOwnProperty.call(entry, "bearer")
+        );
+        if (
+          !hasBearer &&
+          annotatedDoc.securityDefinitions &&
+          annotatedDoc.securityDefinitions.bearer
+        ) {
           operation.security.push({ bearer: [] });
         }
       }
