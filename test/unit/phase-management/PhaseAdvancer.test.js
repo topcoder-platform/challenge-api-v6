@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 
 const PhaseAdvancer = require("../../../src/phase-management/PhaseAdvancer");
+const { getClient } = require("../../../src/common/prisma");
 
 const buildIterativeReviewPhase = () => ({
   id: "phase-iterative-review",
@@ -18,6 +19,13 @@ const buildIterativeReviewPhase = () => ({
 });
 
 describe("PhaseAdvancer Iterative Review gating", () => {
+  const prisma = getClient();
+  const originalFindUnique = prisma.challenge.findUnique;
+
+  afterEach(() => {
+    prisma.challenge.findUnique = originalFindUnique;
+  });
+
   it("fails to open iterative review when no submissions exist", async () => {
     const challengeDomain = {
       async getPhaseFacts() {
@@ -35,6 +43,8 @@ describe("PhaseAdvancer Iterative Review gating", () => {
     };
     const phaseAdvancer = new PhaseAdvancer(challengeDomain);
     const phases = [buildIterativeReviewPhase()];
+
+    prisma.challenge.findUnique = async () => ({ numOfSubmissions: 0 });
 
     const result = await phaseAdvancer.advancePhase(
       "challenge-123",
@@ -66,6 +76,8 @@ describe("PhaseAdvancer Iterative Review gating", () => {
     };
     const phaseAdvancer = new PhaseAdvancer(challengeDomain);
     const phases = [buildIterativeReviewPhase()];
+
+    prisma.challenge.findUnique = async () => ({ numOfSubmissions: 1 });
 
     const result = await phaseAdvancer.advancePhase(
       "challenge-123",

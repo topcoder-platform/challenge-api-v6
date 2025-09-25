@@ -385,13 +385,15 @@ class PhaseAdvancer {
       )}`
     );
 
+    const recordedSubmissionCount = await this.#getSubmissionCount(challengeId);
+    if (recordedSubmissionCount <= 0) {
+      console.log("Iterative Review will remain closed - no recorded submissions yet.");
+      return false;
+    }
+
     const factResponses = Array.isArray(phaseSpecificFacts?.factResponses)
       ? phaseSpecificFacts.factResponses
       : [];
-
-    if (factResponses.length === 0) {
-      return false;
-    }
 
     const toNumber = (value) => {
       const parsed = Number(value);
@@ -404,20 +406,16 @@ class PhaseAdvancer {
       } = {},
     ] = factResponses;
 
-    const submissionCount = toNumber(rawSubmissionCount);
+    const submissionCountFromFacts = toNumber(rawSubmissionCount);
     const reviewCount = toNumber(rawReviewCount);
-
-    if (submissionCount <= 0) {
-      console.log("Iterative Review will remain closed - no submissions recorded yet.");
-      return false;
-    }
+    const submissionCount = Math.max(recordedSubmissionCount, submissionCountFromFacts);
 
     const numClosedIterativeReviewPhases = phases.filter(
       (phase) => phase.name === "Iterative Review" && phase.actualEndDate != null
     ).length;
 
     console.log(
-      `numClosedIterativeReviewPhases: ${numClosedIterativeReviewPhases}; submissionCount: ${submissionCount}; reviewCount: ${reviewCount}`
+      `Iterative review gating stats - recordedSubmissions: ${recordedSubmissionCount}; factSubmissions: ${submissionCountFromFacts}; reviewCount: ${reviewCount}; closedIterativePhases: ${numClosedIterativeReviewPhases}`
     );
 
     return submissionCount > reviewCount + numClosedIterativeReviewPhases;
