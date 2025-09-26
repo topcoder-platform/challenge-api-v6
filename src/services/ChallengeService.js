@@ -1969,11 +1969,27 @@ async function updateChallenge(currentUser, challengeId, data) {
     data.phases = phaseHelper.handlePhasesAfterCancelling(challenge.phases);
     phasesUpdated = true;
   }
+  const phasesForDates = phasesUpdated ? data.phases : challenge.phases;
+
   if (phasesUpdated || data.startDate) {
-    data.startDate = convertToISOString(_.min(_.map(data.phases, "scheduledStartDate")));
+    const startSource =
+      phasesForDates && phasesForDates.length > 0
+        ? _.min(_.map(phasesForDates, "scheduledStartDate"))
+        : data.startDate || challenge.startDate;
+
+    if (!_.isNil(startSource)) {
+      data.startDate = convertToISOString(startSource);
+    }
   }
   if (phasesUpdated || data.endDate) {
-    data.endDate = convertToISOString(_.max(_.map(data.phases, "scheduledEndDate")));
+    const endSource =
+      phasesForDates && phasesForDates.length > 0
+        ? _.max(_.map(phasesForDates, "scheduledEndDate"))
+        : data.endDate || challenge.endDate;
+
+    if (!_.isNil(endSource)) {
+      data.endDate = convertToISOString(endSource);
+    }
   }
 
   if (data.winners && data.winners.length && data.winners.length > 0) {

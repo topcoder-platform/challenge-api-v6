@@ -696,6 +696,20 @@ describe('challenge service unit tests', () => {
       should.exist(result.updated)
     }).timeout(3000)
 
+    it('update challenge with startDate only keeps derived dates stable', async () => {
+      const result = await service.updateChallenge(
+        { isMachine: true, sub: 'sub3', userId: 22838965 },
+        id,
+        {
+          startDate: testChallengeData.startDate
+        }
+      )
+
+      should.equal(result.id, id)
+      should.exist(result.startDate)
+      should.equal(testHelper.getDatesDiff(result.startDate, testChallengeData.startDate), 0)
+    })
+
     it('update challenge successfully with winners', async () => {
       const result = await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, data.challenge.id, {
         winners: [{
