@@ -6,6 +6,7 @@ const HttpStatus = require("http-status-codes");
 const m2mHelper = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const errors = require("./errors");
+const logger = require("./logger");
 
 class ProjectHelper {
   /**
@@ -18,10 +19,14 @@ class ProjectHelper {
   async getProject(projectId, currentUser) {
     let token = await m2mHelper.getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
+    logger.debug(`projectHelper.getProject: GET ${url}`);
     try {
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      logger.debug(
+        `projectHelper.getProject: response status ${res.status} for project ${projectId}`
+      );
       if (currentUser.isMachine || hasAdminRole(currentUser)) {
         return res.data;
       }
@@ -41,6 +46,11 @@ class ProjectHelper {
       }
       return res.data;
     } catch (err) {
+      logger.debug(
+        `projectHelper.getProject: error for project ${projectId} - status ${
+          _.get(err, "response.status", "n/a")
+        }: ${err.message}`
+      );
       if (_.get(err, "response.status") === HttpStatus.NOT_FOUND) {
         throw new errors.BadRequestError(`Project with id: ${projectId} doesn't exist`);
       } else {
@@ -59,10 +69,14 @@ class ProjectHelper {
   async getProjectBillingInformation(projectId) {
     const token = await m2mHelper.getM2MToken();
     const projectUrl = `${config.PROJECTS_API_URL}/${projectId}/billingAccount`;
+    logger.debug(`projectHelper.getProjectBillingInformation: GET ${projectUrl}`);
     try {
       const res = await axios.get(projectUrl, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      logger.debug(
+        `projectHelper.getProjectBillingInformation: response status ${res.status} for project ${projectId}`
+      );
 
       let markup = _.get(res, "data.markup", null)
         ? _.toNumber(_.get(res, "data.markup", null))
@@ -84,6 +98,11 @@ class ProjectHelper {
           markup: null,
         };
       } else {
+        logger.debug(
+          `projectHelper.getProjectBillingInformation: error for project ${projectId} - status ${
+            responseCode || "n/a"
+          }: ${err.message}`
+        );
         throw err;
       }
     }

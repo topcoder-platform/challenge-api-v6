@@ -1677,7 +1677,15 @@ async function updateChallenge(currentUser, challengeId, data) {
   if (challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
     projectId = _.get(challenge, "projectId");
 
+    logger.debug(
+      `updateChallenge(${challengeId}): requesting billing information for project ${projectId}`
+    );
     ({ billingAccountId, markup } = await projectHelper.getProjectBillingInformation(projectId));
+    logger.debug(
+      `updateChallenge(${challengeId}): billing lookup complete (hasAccount=${
+        billingAccountId != null
+      })`
+    );
 
     if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
       // Ensure billingAccountId is a string or null to match Prisma schema
@@ -1700,14 +1708,20 @@ async function updateChallenge(currentUser, challengeId, data) {
   data = sanitizeData(sanitizeChallenge(data), challenge);
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
 
+  logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
   const challengeResources = await helper.getChallengeResources(challengeId);
+  logger.debug(
+    `updateChallenge(${challengeId}): fetched ${challengeResources.length} challenge resources`
+  );
 
+  logger.debug(`updateChallenge(${challengeId}): validating update payload`);
   await challengeHelper.validateChallengeUpdateRequest(
     currentUser,
     challenge,
     data,
     challengeResources
   );
+  logger.debug(`updateChallenge(${challengeId}): payload validation complete`);
   validateTask(currentUser, challenge, data, challengeResources);
 
   let sendActivationEmail = false;
@@ -1746,6 +1760,9 @@ async function updateChallenge(currentUser, challengeId, data) {
           "value",
           "N/A"
         );
+        logger.debug(
+          `updateChallenge(${challengeId}): activating self-service project ${projectId}`
+        );
         await helper.activateProject(
           projectId,
           currentUser,
@@ -1778,6 +1795,9 @@ async function updateChallenge(currentUser, challengeId, data) {
       challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
       try {
+        logger.debug(
+          `updateChallenge(${challengeId}): updating self-service project info for project ${projectId}`
+        );
         await helper.updateSelfServiceProjectInfo(
           projectId,
           data.endDate || challenge.endDate,
@@ -1794,6 +1814,9 @@ async function updateChallenge(currentUser, challengeId, data) {
       challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
     ) {
       try {
+        logger.debug(
+          `updateChallenge(${challengeId}): cancelling self-service project ${challenge.projectId}`
+        );
         await helper.cancelProject(challenge.projectId, data.cancelReason, currentUser);
       } catch (e) {
         logger.debug(`There was an error trying to cancel the project: ${e.message}`);

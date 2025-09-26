@@ -229,16 +229,35 @@ async function getChallengeResources(challengeId, roleId = null) {
   const perPage = 100;
   let page = 1;
   let result = [];
+  logger.debug(
+    `helper.getChallengeResources: start challenge ${challengeId}${roleId ? ` role ${roleId}` : ""}`
+  );
   while (true) {
     const url = `${
       config.RESOURCES_API_URL
     }?challengeId=${challengeId}&perPage=${perPage}&page=${page}${
       roleId ? `&roleId=${roleId}` : ""
     }`;
+    logger.debug(`helper.getChallengeResources: GET ${url}`);
 
-    const res = await axios.get(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    let res;
+    try {
+      res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {
+      logger.debug(
+        `helper.getChallengeResources: error page ${page} for challenge ${challengeId} - status ${
+          _.get(err, "response.status", "n/a")
+        }: ${err.message}`
+      );
+      throw err;
+    }
+    logger.debug(
+      `helper.getChallengeResources: page ${page} -> status ${res.status}, items ${
+        _.get(res, "data.length", 0) || 0
+      }`
+    );
     if (!res.data || res.data.length === 0) {
       break;
     }
@@ -261,10 +280,23 @@ async function getChallengeResourcesCount(challengeId, roleId = null) {
   const url = `${config.RESOURCES_API_URL}/count?challengeId=${challengeId}${
     roleId ? `&roleId=${roleId}` : ""
   }`;
-  const res = await axios.get(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.data;
+  logger.debug(`helper.getChallengeResourcesCount: GET ${url}`);
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    logger.debug(
+      `helper.getChallengeResourcesCount: response status ${res.status} for challenge ${challengeId}`
+    );
+    return res.data;
+  } catch (err) {
+    logger.debug(
+      `helper.getChallengeResourcesCount: error for challenge ${challengeId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -352,15 +384,30 @@ async function getProjectIdByRoundId(roundId) {
 async function getProjectPayment(projectId) {
   const token = await m2mHelper.getM2MToken();
   const url = `${config.CUSTOMER_PAYMENTS_URL}`;
-  const res = await axios.get(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: {
-      referenceId: projectId,
-      reference: "project",
-    },
-  });
-  const [payment] = res.data;
-  return payment;
+  logger.debug(`helper.getProjectPayment: GET ${url} (project ${projectId})`);
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        referenceId: projectId,
+        reference: "project",
+      },
+    });
+    logger.debug(
+      `helper.getProjectPayment: response status ${res.status} (records=${
+        _.get(res, "data.length", 0) || 0
+      })`
+    );
+    const [payment] = res.data;
+    return payment;
+  } catch (err) {
+    logger.debug(
+      `helper.getProjectPayment: error for project ${projectId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -371,12 +418,22 @@ async function capturePayment(paymentId) {
   const token = await m2mHelper.getM2MToken();
   const url = `${config.CUSTOMER_PAYMENTS_URL}/${paymentId}/charge`;
   logger.info(`Calling: ${url} to capture payment`);
-  const res = await axios.patch(url, {}, { headers: { Authorization: `Bearer ${token}` } });
-  logger.debug(`Payment API Response: ${JSON.stringify(res.data)}`);
-  if (res.data.status !== "succeeded") {
-    throw new Error(`Failed to charge payment. Current status: ${res.data.status}`);
+  try {
+    const res = await axios.patch(url, {}, { headers: { Authorization: `Bearer ${token}` } });
+    logger.debug(`helper.capturePayment: response status ${res.status}`);
+    logger.debug(`Payment API Response: ${JSON.stringify(res.data)}`);
+    if (res.data.status !== "succeeded") {
+      throw new Error(`Failed to charge payment. Current status: ${res.data.status}`);
+    }
+    return res.data;
+  } catch (err) {
+    logger.debug(
+      `helper.capturePayment: error for payment ${paymentId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
   }
-  return res.data;
 }
 
 /**
@@ -386,11 +443,22 @@ async function capturePayment(paymentId) {
 async function cancelPayment(paymentId) {
   const token = await m2mHelper.getM2MToken();
   const url = `${config.CUSTOMER_PAYMENTS_URL}/${paymentId}/cancel`;
-  const res = await axios.patch(url, {}, { headers: { Authorization: `Bearer ${token}` } });
-  if (res.data.status !== "canceled") {
-    throw new Error(`Failed to cancel payment. Current status: ${res.data.status}`);
+  logger.debug(`helper.cancelPayment: PATCH ${url}`);
+  try {
+    const res = await axios.patch(url, {}, { headers: { Authorization: `Bearer ${token}` } });
+    logger.debug(`helper.cancelPayment: response status ${res.status}`);
+    if (res.data.status !== "canceled") {
+      throw new Error(`Failed to cancel payment. Current status: ${res.data.status}`);
+    }
+    return res.data;
+  } catch (err) {
+    logger.debug(
+      `helper.cancelPayment: error for payment ${paymentId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
   }
-  return res.data;
 }
 
 /**
@@ -410,23 +478,34 @@ async function cancelProject(projectId, cancelReason, currentUser) {
   }
   const token = await m2mHelper.getM2MToken();
   const url = `${config.PROJECTS_API_URL}/${projectId}`;
-  await axios.patch(
-    url,
-    {
-      cancelReason,
-      status: "cancelled",
-      details: {
-        ...project.details,
-        paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
-        paymentId: payment.id,
-        paymentIntentId: payment.paymentIntentId,
-        paymentAmount: payment.amount,
-        paymentCurrency: payment.currency,
-        paymentStatus: payment.status,
+  logger.debug(`helper.cancelProject: PATCH ${url}`);
+  try {
+    await axios.patch(
+      url,
+      {
+        cancelReason,
+        status: "cancelled",
+        details: {
+          ...project.details,
+          paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
+          paymentId: payment.id,
+          paymentIntentId: payment.paymentIntentId,
+          paymentAmount: payment.amount,
+          paymentCurrency: payment.currency,
+          paymentStatus: payment.status,
+        },
       },
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    logger.debug(`helper.cancelProject: PATCH success for project ${projectId}`);
+  } catch (err) {
+    logger.debug(
+      `helper.cancelProject: error for project ${projectId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -455,24 +534,36 @@ async function activateProject(projectId, currentUser, name, description) {
   }
   const token = await m2mHelper.getM2MToken();
   const url = `${config.PROJECTS_API_URL}/${projectId}`;
-  const res = await axios.patch(
-    url,
-    {
-      name,
-      description,
-      status: "active",
-      details: {
-        ...project.details,
-        paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
-        paymentId: payment.id,
-        paymentIntentId: payment.paymentIntentId,
-        paymentAmount: payment.amount,
-        paymentCurrency: payment.currency,
-        paymentStatus: payment.status,
+  logger.debug(`helper.activateProject: PATCH ${url}`);
+  let res;
+  try {
+    res = await axios.patch(
+      url,
+      {
+        name,
+        description,
+        status: "active",
+        details: {
+          ...project.details,
+          paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
+          paymentId: payment.id,
+          paymentIntentId: payment.paymentIntentId,
+          paymentAmount: payment.amount,
+          paymentCurrency: payment.currency,
+          paymentStatus: payment.status,
+        },
       },
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  } catch (err) {
+    logger.debug(
+      `helper.activateProject: error for project ${projectId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
+  logger.debug(`helper.activateProject: PATCH success for project ${projectId}`);
 
   if (res.data && res.data.status === "reviewed") {
     // auto activate if the project goes in reviewed state
@@ -492,22 +583,35 @@ async function updateSelfServiceProjectInfo(projectId, workItemPlannedEndDate, c
   const token = await m2mHelper.getM2MToken();
   const url = `${config.PROJECTS_API_URL}/${projectId}`;
 
-  await axios.patch(
-    url,
-    {
-      details: {
-        ...project.details,
-        paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
-        paymentId: payment.id,
-        paymentIntentId: payment.paymentIntentId,
-        paymentAmount: payment.amount,
-        paymentCurrency: payment.currency,
-        paymentStatus: payment.status,
-        workItemPlannedEndDate,
+  logger.debug(`helper.updateSelfServiceProjectInfo: PATCH ${url}`);
+  try {
+    await axios.patch(
+      url,
+      {
+        details: {
+          ...project.details,
+          paymentProvider: config.DEFAULT_PAYMENT_PROVIDER,
+          paymentId: payment.id,
+          paymentIntentId: payment.paymentIntentId,
+          paymentAmount: payment.amount,
+          paymentCurrency: payment.currency,
+          paymentStatus: payment.status,
+          workItemPlannedEndDate,
+        },
       },
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    logger.debug(
+      `helper.updateSelfServiceProjectInfo: PATCH success for project ${projectId}`
+    );
+  } catch (err) {
+    logger.debug(
+      `helper.updateSelfServiceProjectInfo: error for project ${projectId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -586,14 +690,30 @@ async function getUserGroups(userId) {
  */
 async function getCompleteUserGroupTreeIds(userId) {
   const token = await m2mHelper.getM2MToken();
-  const result = await axios.get(`${config.GROUPS_API_URL}/memberGroups/${userId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    params: {
-      uuid: true,
-    },
-  });
+  const url = `${config.GROUPS_API_URL}/memberGroups/${userId}`;
+  logger.debug(`helper.getCompleteUserGroupTreeIds: GET ${url}`);
+  try {
+    const result = await axios.get(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        uuid: true,
+      },
+    });
 
-  return result.data || [];
+    logger.debug(
+      `helper.getCompleteUserGroupTreeIds: response status ${result.status} (groups=${
+        _.get(result, "data.length", 0) || 0
+      })`
+    );
+    return result.data || [];
+  } catch (err) {
+    logger.debug(
+      `helper.getCompleteUserGroupTreeIds: error for user ${userId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -701,7 +821,18 @@ async function postBusEvent(topic, payload, options = {}) {
   if (options.key) {
     message.key = options.key;
   }
-  await client.postEvent(message);
+  logger.debug(
+    `helper.postBusEvent: publishing topic ${topic}${options.key ? ` key ${options.key}` : ""}`
+  );
+  try {
+    await client.postEvent(message);
+    logger.debug(`helper.postBusEvent: publish complete for topic ${topic}`);
+  } catch (err) {
+    logger.debug(
+      `helper.postBusEvent: error publishing topic ${topic} - ${err.message}`
+    );
+    throw err;
+  }
 }
 
 /**
@@ -1100,10 +1231,24 @@ async function getStandSkills(ids) {
   for (const batch of queryBatches) {
     skillDataPromises.push(
       (async () => {
-        const res = await axios.get(
-          `${config.API_BASE_URL}/v5/standardized-skills/skills?${batch}`
-        );
-        return res.data;
+        const requestUrl = `${config.API_BASE_URL}/v5/standardized-skills/skills?${batch}`;
+        logger.debug(`helper.getStandSkills: GET ${requestUrl}`);
+        try {
+          const res = await axios.get(requestUrl);
+          logger.debug(
+            `helper.getStandSkills: response status ${res.status} (items=${
+              _.get(res, "data.length", 0) || 0
+            })`
+          );
+          return res.data;
+        } catch (err) {
+          logger.debug(
+            `helper.getStandSkills: error fetching skills batch - status ${
+              _.get(err, "response.status", "n/a")
+            }: ${err.message}`
+          );
+          throw err;
+        }
       })()
     );
   }
