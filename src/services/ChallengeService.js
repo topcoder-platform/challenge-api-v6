@@ -210,7 +210,9 @@ const includeReturnFields = {
   reviewers: true,
   terms: true,
   skills: true,
-  winners: true,
+  winners: {
+    orderBy: { placement: "asc" },
+  },
   attachments: true,
   track: true,
   type: true,
@@ -710,9 +712,13 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  const sortByProp = criteria.sortBy ? criteria.sortBy : "createdAt";
+  let sortByProp = criteria.sortBy ? criteria.sortBy : "createdAt";
 
   const sortOrderProp = criteria.sortOrder ? criteria.sortOrder : "desc";
+
+  if (sortByProp === "overview.totalPrizes") {
+    sortByProp = "overviewTotalPrizes";
+  }
 
   if (criteria.tco) {
     prismaFilter.where.AND.push({
