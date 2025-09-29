@@ -34,6 +34,17 @@ const {
 } = require("../common/prisma");
 const prisma = getClient();
 
+// Provide aliases for friendlier sortBy query params
+const sortByAliases = {
+  updated: constants.validChallengeParams.Updated,
+  created: constants.validChallengeParams.Created,
+};
+
+const allowedSortByValues = _.uniq([
+  ..._.values(constants.validChallengeParams),
+  ...Object.keys(sortByAliases),
+]);
+
 // Minimal domain adapter for PhaseAdvancer to fetch phase-specific facts.
 // For now this returns an empty factResponses array which makes the
 // PhaseAdvancer default to conservative behavior when such facts are needed.
@@ -371,6 +382,11 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
 async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 20;
+
+  if (criteria.sortBy && sortByAliases[criteria.sortBy]) {
+    criteria.sortBy = sortByAliases[criteria.sortBy];
+  }
+
   // Log the requested search filter (omit pagination for brevity)
   try {
     const filterToLog = _.omit(criteria, ["page", "perPage"]);
@@ -891,11 +907,38 @@ async function searchChallenges(currentUser, criteria) {
 
   const prismaQuery = {
     ...prismaFilter,
-    take: criteria.perPage,
-    skip: (criteria.page - 1) * criteria.perPage,
+    take: perPage,
+    skip: (page - 1) * perPage,
     orderBy: [sortFilter],
     include: includeReturnFields,
   };
+
+  try {
+    const logContext = {
+      where: prismaFilter.where,
+      orderBy: prismaQuery.orderBy,
+      pagination: {
+        page,
+        perPage,
+        take: perPage,
+        skip: (page - 1) * perPage,
+      },
+      groupsToFilter,
+      accessibleGroups,
+    };
+    const logPayload = JSON.stringify(logContext, (_key, value) => {
+      if (typeof value === "bigint") {
+        return value.toString();
+      }
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
+      return value;
+    });
+    logger.info(`SearchChallenges prisma query: ${logPayload}`);
+  } catch (logError) {
+    logger.warn(`SearchChallenges prisma logging failed: ${logError.message}`);
+  }
 
   let challenges = [];
   let total = 0;
@@ -997,7 +1040,7 @@ searchChallenges.schema = {
       projectId: Joi.number().integer().positive(),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)),
+      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
       group: Joi.string(),
       startDateStart: Joi.date(),
       startDateEnd: Joi.date(),
@@ -1020,9 +1063,9 @@ searchChallenges.schema = {
       updatedBy: Joi.string(),
       isLightweight: Joi.boolean().default(false),
       memberId: Joi.string(),
-      sortBy: Joi.string().valid(_.values(constants.validChallengeParams)),
+      sortBy: Joi.string().valid(...allowedSortByValues),
       sortOrder: Joi.string().valid(["asc", "desc"]),
-      groups: Joi.array().items(Joi.optionalId()).unique().min(1),
+      groups: Joi.array().items(Joi.optionalId()).unique(),
       ids: Joi.array().items(Joi.optionalId()).unique().min(1),
       isTask: Joi.boolean(),
       taskIsAssigned: Joi.boolean(),
@@ -2437,7 +2480,7 @@ updateChallenge.schema = {
           allowedRegistrants: Joi.array().items(Joi.string().trim().lowercase()).optional(),
         })
         .optional(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)),
+      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),

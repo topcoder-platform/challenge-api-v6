@@ -10,10 +10,10 @@ generator client {
 
 // Enum for allowed challenge track values (matches app-constants)
 enum ChallengeTrackEnum {
-  DEVELOP
   DESIGN
   DATA_SCIENCE
-  QA
+  DEVELOPMENT
+  QUALITY_ASSURANCE
 }
 
 enum ReviewTypeEnum {
