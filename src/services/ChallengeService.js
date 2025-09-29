@@ -210,7 +210,9 @@ const includeReturnFields = {
   reviewers: true,
   terms: true,
   skills: true,
-  winners: true,
+  winners: {
+    orderBy: { placement: "asc" },
+  },
   attachments: true,
   track: true,
   type: true,
