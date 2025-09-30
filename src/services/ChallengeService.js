@@ -1088,19 +1088,42 @@ searchChallenges.schema = {
  * @returns {Object} the created challenge
  */
 async function createChallenge(currentUser, challenge, userToken) {
-  await challengeHelper.validateCreateChallengeRequest(currentUser, challenge);
-  const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+  const buildLogContext = () =>
+    JSON.stringify({
+      challengeName: challenge.name,
+      challengeId: challenge.id,
+      trackId: challenge.trackId,
+      typeId: challenge.typeId,
+      projectId: challenge.projectId,
+      timelineTemplateId: challenge.timelineTemplateId,
+      selfService: _.get(challenge, "legacy.selfService", false),
+      userId: _.get(currentUser, "userId"),
+      handle: _.get(currentUser, "handle"),
+    });
 
-  console.log("TYPE", prizeTypeTmp);
+  logger.info(`createChallenge: start ${buildLogContext()}`);
+  logger.debug(`createChallenge: validating request payload ${buildLogContext()}`);
+  await challengeHelper.validateCreateChallengeRequest(currentUser, challenge);
+  logger.debug(`createChallenge: request payload validated ${buildLogContext()}`);
+  const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+  logger.debug(
+    `createChallenge: initial prize validation complete (prizeType=${prizeTypeTmp}) ${buildLogContext()}`
+  );
   if (challenge.legacy && challenge.legacy.selfService) {
     // if self-service, create a new project (what about if projectId is provided in the payload? confirm with business!)
     if (!challenge.projectId && challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
       const selfServiceProjectName = `Self service - ${currentUser.handle} - ${challenge.name}`;
+      logger.info(
+        `createChallenge: creating self-service project (name=${selfServiceProjectName}) ${buildLogContext()}`
+      );
       challenge.projectId = await helper.createSelfServiceProject(
         selfServiceProjectName,
         "N/A",
         config.NEW_SELF_SERVICE_PROJECT_TYPE,
         userToken
+      );
+      logger.info(
+        `createChallenge: self-service project created (projectId=${challenge.projectId}) ${buildLogContext()}`
       );
     }
 
@@ -1124,9 +1147,19 @@ async function createChallenge(currentUser, challenge, userToken) {
       throw new errors.BadRequestError("Project id must be provided");
     }
 
+    logger.debug(`createChallenge: fetching project details ${buildLogContext()}`);
     const { directProjectId } = await projectHelper.getProject(projectId, currentUser);
+    logger.debug(
+      `createChallenge: fetched project details (directProjectId=${directProjectId}) ${buildLogContext()}`
+    );
+    logger.debug(`createChallenge: fetching billing information ${buildLogContext()}`);
     const { billingAccountId, markup } = await projectHelper.getProjectBillingInformation(
       projectId
+    );
+    logger.debug(
+      `createChallenge: billing information retrieved (hasAccount=${
+        billingAccountId !== null && billingAccountId !== undefined
+      }, markup=${markup}) ${buildLogContext()}`
     );
 
     _.set(challenge, "legacy.directProjectId", directProjectId);
@@ -1153,7 +1186,14 @@ async function createChallenge(currentUser, challenge, userToken) {
     challenge.startDate = convertToISOString(challenge.startDate);
   }
 
+  logger.debug(`createChallenge: resolving challenge track/type ${buildLogContext()}`);
   const { track, type } = await challengeHelper.validateAndGetChallengeTypeAndTrack(challenge);
+  logger.debug(
+    `createChallenge: resolved challenge track/type (trackId=${_.get(
+      track,
+      "id"
+    )}, typeId=${_.get(type, "id")}) ${buildLogContext()}`
+  );
 
   if (_.get(type, "isTask")) {
     _.set(challenge, "task.isTask", true);
@@ -1173,18 +1213,28 @@ async function createChallenge(currentUser, challenge, userToken) {
   }
 
   if (challenge.phases && challenge.phases.length > 0) {
+    logger.debug(
+      `createChallenge: validating provided phases (count=${challenge.phases.length}) ${buildLogContext()}`
+    );
     await phaseHelper.validatePhases(challenge.phases);
+    logger.debug(`createChallenge: provided phases validated ${buildLogContext()}`);
   }
 
   // populate phases
   if (!challenge.timelineTemplateId) {
     if (challenge.typeId && challenge.trackId) {
+      logger.debug(
+        `createChallenge: fetching default timeline template (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+      );
       const supportedTemplates =
         await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
           typeId: challenge.typeId,
           trackId: challenge.trackId,
           isDefault: true,
         });
+      logger.debug(
+        `createChallenge: retrieved ${supportedTemplates.result.length} supported templates ${buildLogContext()}`
+      );
       const challengeTimelineTemplate = supportedTemplates.result[0];
       if (!challengeTimelineTemplate) {
         throw new errors.BadRequestError(
@@ -1192,14 +1242,23 @@ async function createChallenge(currentUser, challenge, userToken) {
         );
       }
       challenge.timelineTemplateId = challengeTimelineTemplate.timelineTemplateId;
+      logger.debug(
+        `createChallenge: using timelineTemplateId=${challenge.timelineTemplateId} ${buildLogContext()}`
+      );
     } else {
       throw new errors.BadRequestError(`trackId and typeId are required to create a challenge`);
     }
   }
+  logger.debug(
+    `createChallenge: populating phases for challenge creation (templateId=${challenge.timelineTemplateId}) ${buildLogContext()}`
+  );
   challenge.phases = await phaseHelper.populatePhasesForChallengeCreation(
     challenge.phases,
     challenge.startDate,
     challenge.timelineTemplateId
+  );
+  logger.debug(
+    `createChallenge: phases populated (count=${challenge.phases.length}) ${buildLogContext()}`
   );
 
   // populate challenge terms
@@ -1207,7 +1266,15 @@ async function createChallenge(currentUser, challenge, userToken) {
   // challenge.terms = await helper.validateChallengeTerms(_.union(projectTerms, challenge.terms))
   // TODO - challenge terms returned from projects api don't have a role associated
   // this will need to be updated to associate project terms with a roleId
+  logger.debug(
+    `createChallenge: validating challenge terms (count=${_.get(
+      challenge.terms,
+      "length",
+      0
+    )}) ${buildLogContext()}`
+  );
   challenge.terms = await helper.validateChallengeTerms(challenge.terms || []);
+  logger.debug(`createChallenge: challenge terms validated ${buildLogContext()}`);
 
   // default the descriptionFormat
   if (!challenge.descriptionFormat) {
@@ -1238,14 +1305,23 @@ async function createChallenge(currentUser, challenge, userToken) {
   // No conversion needed - database stores values in dollars directly
   // The amountInCents field doesn't exist in the database schema
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+  logger.debug(
+    `createChallenge: final prize validation complete (prizeType=${prizeType}) ${buildLogContext()}`
+  );
 
   // If reviewers not provided, apply defaults for this (typeId, trackId)
   if (!challenge.reviewers || challenge.reviewers.length === 0) {
     if (challenge.typeId && challenge.trackId) {
+      logger.debug(
+        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+      );
       const defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
         where: { typeId: challenge.typeId, trackId: challenge.trackId },
         orderBy: { createdAt: "asc" },
       });
+      logger.debug(
+        `createChallenge: loaded ${defaultReviewers.length} default reviewers ${buildLogContext()}`
+      );
       if (defaultReviewers && defaultReviewers.length > 0) {
         // Resolve phaseId by name
         const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
@@ -1277,10 +1353,20 @@ async function createChallenge(currentUser, challenge, userToken) {
   }
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
+  logger.info(
+    `createChallenge: creating challenge record via prisma ${buildLogContext()} phaseCount=${_.get(
+      challenge,
+      "phases.length",
+      0
+    )} prizeSetCount=${_.get(challenge, "prizeSets.length", 0)}`
+  );
   const ret = await prisma.challenge.create({
     data: prismaModel,
     include: includeReturnFields,
   });
+  logger.info(
+    `createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`
+  );
 
   ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   // No conversion needed - values are already in dollars in the database
@@ -1293,16 +1379,34 @@ async function createChallenge(currentUser, challenge, userToken) {
 
   if (challenge.legacy.selfService) {
     if (currentUser.handle) {
+      logger.debug(
+        `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+      );
       await helper.createResource(ret.id, ret.createdBy, config.CLIENT_MANAGER_ROLE_ID);
+      logger.debug(
+        `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+      );
     }
   } else {
     if (currentUser.handle) {
+      logger.debug(
+        `createChallenge: assigning MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+      );
       await helper.createResource(ret.id, ret.createdBy, config.MANAGER_ROLE_ID);
+      logger.debug(
+        `createChallenge: MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+      );
     }
   }
 
   // post bus event
+  logger.info(
+    `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+  );
   await helper.postBusEvent(constants.Topics.ChallengeCreated, ret);
+  logger.info(
+    `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+  );
 
   return helper.removeNullProperties(ret);
 }
