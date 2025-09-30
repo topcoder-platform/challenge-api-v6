@@ -1822,6 +1822,8 @@ async function updateChallenge(currentUser, challengeId, data) {
   }
   enrichChallengeForResponse(challenge);
   prismaHelper.convertModelToResponse(challenge);
+  const originalChallengePhases = _.cloneDeep(challenge.phases || []);
+  const auditUserId = _.toString(currentUser.userId);
   const existingPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
 
   // No conversion needed - values are already in dollars in the database
@@ -2108,6 +2110,7 @@ async function updateChallenge(currentUser, challengeId, data) {
   }
 
   let phasesUpdated = false;
+  let phasesForUpdate = null;
   if (
     ((data.phases && data.phases.length > 0) ||
       isChallengeBeingActivated ||
@@ -2140,10 +2143,12 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
     phasesUpdated = true;
     data.phases = newPhases;
+    phasesForUpdate = _.cloneDeep(newPhases);
   }
   if (isChallengeBeingCancelled && challenge.phases && challenge.phases.length > 0) {
     data.phases = phaseHelper.handlePhasesAfterCancelling(challenge.phases);
     phasesUpdated = true;
+    phasesForUpdate = _.cloneDeep(data.phases);
   }
   const phasesForDates = phasesUpdated ? data.phases : challenge.phases;
 
@@ -2264,6 +2269,9 @@ async function updateChallenge(currentUser, challengeId, data) {
       delete data.phases;
     }
   }
+  if (_.isNil(data.phases)) {
+    phasesForUpdate = null;
+  }
 
   // Normalize and validate reviewers' phase references before converting to Prisma input
   if (!_.isNil(data.reviewers)) {
@@ -2318,6 +2326,9 @@ async function updateChallenge(currentUser, challengeId, data) {
   updateData.updatedBy = _.toString(currentUser.userId);
   // reset createdBy
   delete updateData.createdBy;
+  if (!_.isNil(updateData.phases)) {
+    delete updateData.phases;
+  }
 
   const newPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updateData.prizeSets);
   if (newPrizeType != null && existingPrizeType != null && newPrizeType !== existingPrizeType) {
@@ -2326,6 +2337,15 @@ async function updateChallenge(currentUser, challengeId, data) {
     );
   }
   const updatedChallenge = await prisma.$transaction(async (tx) => {
+    if (Array.isArray(phasesForUpdate)) {
+      await syncChallengePhases(
+        tx,
+        challengeId,
+        phasesForUpdate,
+        auditUserId,
+        originalChallengePhases
+      );
+    }
     // drop nested data if updated
     if (!_.isNil(updateData.legacyRecord)) {
       await tx.challengeLegacy.deleteMany({ where: { challengeId } });
@@ -2344,9 +2364,6 @@ async function updateChallenge(currentUser, challengeId, data) {
     }
     if (!_.isNil(updateData.metadata)) {
       await tx.challengeMetadata.deleteMany({ where: { challengeId } });
-    }
-    if (!_.isNil(updateData.phases)) {
-      await tx.challengePhase.deleteMany({ where: { challengeId } });
     }
     if (!_.isNil(updateData.prizeSets)) {
       await tx.challengePrizeSet.deleteMany({ where: { challengeId } });
@@ -2776,6 +2793,117 @@ function sanitizeChallenge(challenge) {
   }
 
   return sanitized;
+}
+
+async function syncChallengePhases(tx, challengeId, updatedPhases, auditUserId, originalPhases = []) {
+  if (!Array.isArray(updatedPhases)) {
+    return;
+  }
+
+  const originalById = new Map((originalPhases || []).map((phase) => [phase.id, phase]));
+  const originalByPhaseId = new Map();
+  for (const original of originalPhases || []) {
+    if (!_.isNil(original.phaseId)) {
+      originalByPhaseId.set(original.phaseId, original);
+    }
+  }
+  const retainedIds = new Set();
+
+  for (const phase of updatedPhases) {
+    if (!phase) continue;
+
+    let recordId = !_.isNil(phase.id) ? phase.id : undefined;
+    let phaseDefinitionId = !_.isNil(phase.phaseId) ? phase.phaseId : undefined;
+
+    if (!phaseDefinitionId && recordId && originalById.has(recordId)) {
+      phaseDefinitionId = originalById.get(recordId).phaseId;
+    }
+    if (!recordId && phaseDefinitionId && originalByPhaseId.has(phaseDefinitionId)) {
+      recordId = originalByPhaseId.get(phaseDefinitionId).id;
+    }
+    if (!phaseDefinitionId && recordId && originalById.has(recordId)) {
+      phaseDefinitionId = originalById.get(recordId).phaseId;
+    }
+    if (!phaseDefinitionId) {
+      throw new BadRequestError("Cannot update challenge phases without phaseId");
+    }
+    if (!recordId) {
+      recordId = uuid();
+    }
+
+    const existing = originalById.get(recordId);
+    retainedIds.add(recordId);
+
+    const scalarKeys = [
+      "name",
+      "description",
+      "isOpen",
+      "duration",
+      "scheduledStartDate",
+      "scheduledEndDate",
+      "actualStartDate",
+      "actualEndDate",
+      "challengeSource",
+    ];
+    const phaseData = {};
+    for (const key of scalarKeys) {
+      if (!_.isUndefined(phase[key])) {
+        phaseData[key] = phase[key];
+      }
+    }
+    phaseData.predecessor = _.isNil(phase.predecessor) ? null : phase.predecessor;
+
+    phaseData.phaseId = phaseDefinitionId;
+
+    if (existing) {
+      await tx.challengePhase.update({
+        where: { id: recordId },
+        data: {
+          ...phaseData,
+          updatedBy: auditUserId,
+        },
+      });
+      await tx.challengePhaseConstraint.deleteMany({ where: { challengePhaseId: recordId } });
+    } else {
+      await tx.challengePhase.create({
+        data: {
+          id: recordId,
+          challengeId,
+          ...phaseData,
+          createdBy: auditUserId,
+          updatedBy: auditUserId,
+        },
+      });
+    }
+
+    if (Array.isArray(phase.constraints) && phase.constraints.length > 0) {
+      for (const constraint of phase.constraints) {
+        if (_.isNil(constraint.name) || _.isNil(constraint.value)) {
+          continue;
+        }
+
+        const constraintData = {
+          challengePhaseId: recordId,
+          name: constraint.name,
+          value: constraint.value,
+          createdBy: auditUserId,
+          updatedBy: auditUserId,
+        };
+
+        if (!_.isNil(constraint.id)) {
+          constraintData.id = constraint.id;
+        }
+
+        await tx.challengePhaseConstraint.create({ data: constraintData });
+      }
+    }
+  }
+
+  for (const phase of originalPhases || []) {
+    if (!retainedIds.has(phase.id)) {
+      await tx.challengePhase.delete({ where: { id: phase.id } });
+    }
+  }
 }
 
 function sanitizeData(data, challenge) {

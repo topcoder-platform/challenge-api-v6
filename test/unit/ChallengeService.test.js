@@ -746,6 +746,13 @@ describe('challenge service unit tests', () => {
       should.exist(result.updated)
     })
 
+    it('update challenge - creator memberId can modify without matching handle', async () => {
+      const updatePayload = { privateDescription: 'Creator update via memberId' }
+      const result = await service.updateChallenge({ userId: 'testuser', handle: 'different-handle' }, id, updatePayload)
+      should.equal(result.id, id)
+      should.equal(result.privateDescription, updatePayload.privateDescription)
+    })
+
     it('update challenge - project not found', async () => {
       try {
         await service.updateChallenge(

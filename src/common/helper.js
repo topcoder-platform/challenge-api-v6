@@ -1079,10 +1079,18 @@ async function ensureUserCanModifyChallenge(currentUser, challenge, challengeRes
     currentUser.userId,
     challengeResources
   );
+  const challengeCreator = _.isNil(challenge.createdBy)
+    ? null
+    : _.toString(challenge.createdBy);
+  const currentUserId = _.isNil(currentUser.userId) ? null : _.toString(currentUser.userId);
+  const currentUserHandle = currentUser.handle ? _.toLower(currentUser.handle) : null;
+  const isChallengeCreator =
+    (!!challengeCreator && !!currentUserId && challengeCreator === currentUserId) ||
+    (!!challengeCreator && !!currentUserHandle && _.toLower(challengeCreator) === currentUserHandle);
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
-    challenge.createdBy.toLowerCase() !== currentUser.handle.toLowerCase() &&
+    !isChallengeCreator &&
     !isUserHasFullAccess
   ) {
     throw new errors.ForbiddenError(
