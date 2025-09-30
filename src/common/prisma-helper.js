@@ -171,10 +171,8 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             // Database stores values in dollars directly, no amountInCents field exists
             prizeData.value = p.value;
             // calculate only placement and checkpoint prizes
-            if (
-              (s.type === PrizeSetTypeEnum.PLACEMENT || s.type === PrizeSetTypeEnum.CHECKPOINT) &&
-              p.type === constants.prizeTypes.USD
-            ) {
+            if (s.type === PrizeSetTypeEnum.PLACEMENT && p.type === constants.prizeTypes.USD)
+            {
               // Values are already in dollars, no conversion needed
               totalPrizes += p.value;
             }
