@@ -89,8 +89,8 @@ class ChallengeHelper {
       promises.push(
         (async () => {
           const group = await helper.getGroupById(g);
-          const status = _.toLower(_.get(group, "status"));
-          if (!group || status !== "active") {
+          console.log("group", group);
+          if (!group) {
             throw new errors.BadRequestError("The groups provided are invalid " + g);
           }
         })()
