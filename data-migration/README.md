@@ -121,6 +121,7 @@ LOG_LEVEL=info
 SKIP_MISSING_REQUIRED=false
 USE_TRANSACTIONS=true
 CHALLENGE_COUNTERS_ONLY=false
+MIGRATORS_ONLY=
 
 # Migration attribution
 CREATED_BY=migration
@@ -135,6 +136,15 @@ Further migration configuration can also be done in `src/config.js`
 ### Updating Challenge Counters Only
 
 Set `CHALLENGE_COUNTERS_ONLY=true` to re-run the `Challenge` migrator without touching other fields. In this mode the tool will skip normal validations and only update `numOfRegistrants` and `numOfSubmissions` for challenges that already exist in the database. Make sure the JSON payload still includes the challenge `id` and the counter values you want to refresh.
+
+### Selecting Specific Migrators
+
+Use `MIGRATORS_ONLY` (comma-separated list) to limit which migrators run. The filter matches either the model name or the migrator class name without the `Migrator` suffix. Examples:
+
+- `MIGRATORS_ONLY=Challenge` runs the challenge migrator only.
+- `MIGRATORS_ONLY=Challenge,ChallengeType,ChallengeTrack` runs those three migrators.
+
+Combine with `CHALLENGE_COUNTERS_ONLY=true` to update just the challenge counters for existing rows.
 
 ## Testing
 The project includes comprehensive tests to validate that data has been migrated correctly:

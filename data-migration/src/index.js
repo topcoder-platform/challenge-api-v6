@@ -51,30 +51,60 @@ async function main() {
     const manager = new MigrationManager();
     
     // Register migrators in any order (they'll be sorted by priority)
-    manager
-      .registerMigrator(new AuditLogMigrator())
-      .registerMigrator(new ChallengeConstraintMigrator())
-      .registerMigrator(new ChallengeDiscussionOptionMigrator())
-      .registerMigrator(new ChallengeEventMigrator())
-      .registerMigrator(new ChallengeSkillMigrator())
-      .registerMigrator(new ChallengeTermMigrator())
-      .registerMigrator(new ChallengeWinnerMigrator())
-      .registerMigrator(new PrizeMigrator())
-      .registerMigrator(new ChallengePrizeSetMigrator())
-      .registerMigrator(new TimelineTemplatePhaseMigrator())
-      .registerMigrator(new ChallengePhaseConstraintMigrator())
-      .registerMigrator(new ChallengePhaseMigrator())
-      .registerMigrator(new ChallengeMetadataMigrator())
-      .registerMigrator(new ChallengeDiscussionMigrator())
-      .registerMigrator(new ChallengeLegacyMigrator())
-      .registerMigrator(new ChallengeBillingMigrator())
-      .registerMigrator(new PhaseMigrator())
-      .registerMigrator(new ChallengeTimelineTemplateMigrator())
-      .registerMigrator(new TimelineTemplateMigrator())
-      .registerMigrator(new ChallengeMigrator())
-      .registerMigrator(new ChallengeTypeMigrator())
-      .registerMigrator(new ChallengeTrackMigrator());
-    
+    const migrators = [
+      new AuditLogMigrator(),
+      new ChallengeConstraintMigrator(),
+      new ChallengeDiscussionOptionMigrator(),
+      new ChallengeEventMigrator(),
+      new ChallengeSkillMigrator(),
+      new ChallengeTermMigrator(),
+      new ChallengeWinnerMigrator(),
+      new PrizeMigrator(),
+      new ChallengePrizeSetMigrator(),
+      new TimelineTemplatePhaseMigrator(),
+      new ChallengePhaseConstraintMigrator(),
+      new ChallengePhaseMigrator(),
+      new ChallengeMetadataMigrator(),
+      new ChallengeDiscussionMigrator(),
+      new ChallengeLegacyMigrator(),
+      new ChallengeBillingMigrator(),
+      new PhaseMigrator(),
+      new ChallengeTimelineTemplateMigrator(),
+      new TimelineTemplateMigrator(),
+      new ChallengeMigrator(),
+      new ChallengeTypeMigrator(),
+      new ChallengeTrackMigrator()
+    ];
+
+    const requestedOnly = manager.config.MIGRATORS_ONLY;
+    const requestedSet = requestedOnly ? new Set(requestedOnly.map(name => name.toLowerCase())) : null;
+
+    if (requestedSet) {
+      manager.logger.info(`MIGRATORS_ONLY set; limiting migration to: ${requestedOnly.join(', ')}`);
+    }
+
+    for (const migrator of migrators) {
+      const identifiers = [
+        migrator.modelName,
+        migrator.constructor?.name,
+        migrator.constructor?.name?.replace(/Migrator$/i, '')
+      ].filter(Boolean).map(name => name.toLowerCase());
+
+      const shouldInclude = !requestedSet || identifiers.some(name => requestedSet.has(name));
+
+      if (!shouldInclude) {
+        manager.logger.debug(`Skipping ${migrator.modelName} migrator due to MIGRATORS_ONLY filter`);
+        continue;
+      }
+
+      manager.registerMigrator(migrator);
+    }
+
+    if (!manager.migrators.length) {
+      manager.logger.warn('No migrators registered. Check MIGRATORS_ONLY configuration.');
+      return;
+    }
+
     // Run migration
     await manager.migrate();
   } catch (error) {

@@ -1,6 +1,12 @@
 const path = require('path');
 require('dotenv').config();
 
+const parseListEnv = value => {
+  if (!value) return null;
+  const list = value.split(',').map(entry => entry.trim()).filter(Boolean);
+  return list.length ? list : null;
+};
+
 // Default configuration with fallbacks
 module.exports = {
   // Database connection
@@ -25,6 +31,7 @@ module.exports = {
 
   // Specialized challenge migration toggles
   CHALLENGE_COUNTERS_ONLY: process.env.CHALLENGE_COUNTERS_ONLY === 'true',
+  MIGRATORS_ONLY: parseListEnv(process.env.MIGRATORS_ONLY || process.env.MIGRATE_ONLY),
 
   migrator: {
     ChallengeType: {
