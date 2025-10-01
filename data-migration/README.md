@@ -120,6 +120,7 @@ LOG_LEVEL=info
 # Migration behavior
 SKIP_MISSING_REQUIRED=false
 USE_TRANSACTIONS=true
+CHALLENGE_COUNTERS_ONLY=false
 
 # Migration attribution
 CREATED_BY=migration
@@ -130,6 +131,11 @@ Logfiles are by default stored in `logs/migration.log`
 It can be configured using the env variable `LOG_FILE`  
 Log levels(increasing level of information): `error`, `warn`, `info`, `debug`  
 Further migration configuration can also be done in `src/config.js`
+
+### Updating Challenge Counters Only
+
+Set `CHALLENGE_COUNTERS_ONLY=true` to re-run the `Challenge` migrator without touching other fields. In this mode the tool will skip normal validations and only update `numOfRegistrants` and `numOfSubmissions` for challenges that already exist in the database. Make sure the JSON payload still includes the challenge `id` and the counter values you want to refresh.
+
 ## Testing
 The project includes comprehensive tests to validate that data has been migrated correctly:
 ```

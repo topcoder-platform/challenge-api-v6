@@ -23,6 +23,9 @@ module.exports = {
   // Logfile path
   LOG_FILE: process.env.LOG_FILE || path.join(__dirname, '..', 'logs', 'migration.log'),
 
+  // Specialized challenge migration toggles
+  CHALLENGE_COUNTERS_ONLY: process.env.CHALLENGE_COUNTERS_ONLY === 'true',
+
   migrator: {
     ChallengeType: {
       idField: 'id',
@@ -132,6 +135,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
+      countersOnly: process.env.CHALLENGE_COUNTERS_ONLY === 'true',
       filename: process.env.CHALLENGE_FILE || 'challenge-api.challenge.json'
     },
 

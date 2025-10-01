@@ -28,6 +28,86 @@ class ChallengeMigrator extends BaseMigrator {
         super('Challenge', 2, true);
     }
 
+    isCountersOnly() {
+        const migratorConfig = this.manager.config.migrator?.[this.modelName] || {};
+        return Boolean(migratorConfig.countersOnly || this.manager.config.CHALLENGE_COUNTERS_ONLY);
+    }
+
+    async migrate() {
+        if (!this.isCountersOnly()) {
+            return await super.migrate();
+        }
+
+        this.manager.logger.info('Challenge migrator running in counters-only mode (numOfRegistrants & numOfSubmissions)');
+
+        const rawData = await this.loadData();
+        const data = await this.beforeMigration(rawData);
+
+        const idField = this.getIdField();
+        const counters = ['numOfRegistrants', 'numOfSubmissions'];
+
+        let processed = 0;
+        let skipped = 0;
+        const errors = [];
+
+        for (const record of data) {
+            const id = record[idField];
+            if (!id) {
+                this.manager.logger.warn('Skipping challenge record without id while updating counters');
+                skipped++;
+                continue;
+            }
+
+            const updateData = {};
+
+            for (const field of counters) {
+                const rawValue = record[field];
+                if (rawValue === undefined || rawValue === null) {
+                    continue;
+                }
+
+                const numericValue = typeof rawValue === 'string' && rawValue.trim() !== ''
+                    ? Number(rawValue)
+                    : rawValue;
+
+                if (typeof numericValue === 'number' && Number.isFinite(numericValue)) {
+                    updateData[field] = numericValue;
+                } else {
+                    this.manager.logger.warn(`Skipping ${field} for challenge ${id}; expected numeric value, received ${rawValue}`);
+                }
+            }
+
+            if (!Object.keys(updateData).length) {
+                this.manager.logger.debug(`No counter updates found for challenge ${id}; skipping`);
+                skipped++;
+                continue;
+            }
+
+            try {
+                await this.manager.prisma[this.queryName].update({
+                    where: { [idField]: id },
+                    data: updateData
+                });
+                this.validIds.add(id);
+                processed++;
+            } catch (error) {
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+                    this.manager.logger.warn(`Skipping challenge ${id}; record not found in database while updating counters`);
+                } else {
+                    this.manager.logger.error(`Failed to update counters for challenge ${id}`, error);
+                    errors.push({ id, message: error.message });
+                }
+                skipped++;
+            }
+        }
+
+        await this.afterMigration({ processed, skipped, errors });
+
+        this.manager.logger.info(`Updated counter fields for ${processed} challenges (skipped ${skipped})`);
+
+        return { processed, skipped, errors };
+    }
+
     async beforeMigration(data) {
         // Add exisitng IDs to validIds set
         const existing = await this.manager.prisma[this.queryName].findMany({
