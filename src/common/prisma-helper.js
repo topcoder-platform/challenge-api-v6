@@ -2,6 +2,7 @@ const _ = require("lodash");
 const Decimal = require("decimal.js");
 const constants = require("../../app-constants");
 const { PrizeSetTypeEnum } = require("@prisma/client");
+const { dedupeChallengeTerms } = require("./helper");
 /**
  * Convert phases data to prisma model.
  *
@@ -346,7 +347,8 @@ function convertModelToResponse(ret) {
   delete ret.overviewTotalPrizes;
 
   // convert terms
-  ret.terms = _.map(ret.terms, (t) => ({ id: t.termId, roleId: t.roleId }));
+  const serializedTerms = _.map(ret.terms, (t) => ({ id: t.termId, roleId: t.roleId }));
+  ret.terms = dedupeChallengeTerms(serializedTerms);
   // convert skills - basic transformation, enrichment happens in service layer
   ret.skills = _.map(ret.skills, (s) => ({ id: s.skillId }));
   // convert attachments

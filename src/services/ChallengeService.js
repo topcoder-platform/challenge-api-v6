@@ -419,6 +419,33 @@ async function searchChallenges(currentUser, criteria) {
 
   const _hasAdminRole = hasAdminRole(currentUser);
 
+  const normalizeGroupIdValue = (value) => {
+    if (_.isNil(value)) {
+      return null;
+    }
+    const normalized = _.toString(value).trim();
+    if (!normalized) {
+      return null;
+    }
+    const lowered = normalized.toLowerCase();
+    if (lowered === "null" || lowered === "undefined") {
+      return null;
+    }
+    return normalized;
+  };
+
+  const normalizeGroupIdList = (list) => {
+    if (_.isNil(list)) {
+      return [];
+    }
+    const arrayValue = Array.isArray(list) ? list : [list];
+    return _.uniq(
+      arrayValue
+        .map((value) => normalizeGroupIdValue(value))
+        .filter((value) => !_.isNil(value))
+    );
+  };
+
   let includedTrackIds = _.isArray(criteria.trackIds) ? criteria.trackIds : [];
   let includedTypeIds = _.isArray(criteria.typeIds) ? criteria.typeIds : [];
 
@@ -745,52 +772,63 @@ async function searchChallenges(currentUser, criteria) {
 
   let groupsToFilter = [];
   let accessibleGroups = [];
+  let accessibleGroupsSet = new Set();
 
   if (currentUser && !currentUser.isMachine && !_hasAdminRole) {
-    accessibleGroups = await helper.getCompleteUserGroupTreeIds(currentUser.userId);
+    const rawAccessibleGroups = await helper.getCompleteUserGroupTreeIds(currentUser.userId);
+    accessibleGroups = normalizeGroupIdList(rawAccessibleGroups);
+    accessibleGroupsSet = new Set(accessibleGroups);
   }
 
   // Filter all groups from the criteria to make sure the user can access those
   if (!_.isUndefined(criteria.group) || !_.isUndefined(criteria.groups)) {
+    const criteriaGroupsList = _.isNil(criteria.groups) ? [] : [].concat(criteria.groups);
+
     // check group access
     if (_.isUndefined(currentUser)) {
-      if (criteria.group) {
-        const group = await helper.getGroupById(criteria.group);
+      const normalizedGroup = normalizeGroupIdValue(criteria.group);
+      if (normalizedGroup) {
+        const group = await helper.getGroupById(normalizedGroup);
         if (group && !group.privateGroup) {
-          groupsToFilter.push(criteria.group);
+          groupsToFilter.push(normalizedGroup);
         }
       }
-      if (criteria.groups && criteria.groups.length > 0) {
-        const promises = [];
-        _.each(criteria.groups, (g) => {
-          promises.push(
-            (async () => {
-              const group = await helper.getGroupById(g);
-              if (group && !group.privateGroup) {
-                groupsToFilter.push(g);
-              }
-            })()
-          );
+
+      if (criteriaGroupsList.length > 0) {
+        const promises = criteriaGroupsList.map(async (groupValue) => {
+          const normalized = normalizeGroupIdValue(groupValue);
+          if (!normalized) {
+            return;
+          }
+          const group = await helper.getGroupById(normalized);
+          if (group && !group.privateGroup) {
+            groupsToFilter.push(normalized);
+          }
         });
         await Promise.all(promises);
       }
     } else if (!currentUser.isMachine && !_hasAdminRole) {
-      if (accessibleGroups.includes(criteria.group)) {
-        groupsToFilter.push(criteria.group);
+      const normalizedGroup = normalizeGroupIdValue(criteria.group);
+      if (normalizedGroup && accessibleGroupsSet.has(normalizedGroup)) {
+        groupsToFilter.push(normalizedGroup);
       }
-      if (criteria.groups && criteria.groups.length > 0) {
-        _.each(criteria.groups, (g) => {
-          if (accessibleGroups.includes(g)) {
-            groupsToFilter.push(g);
+
+      if (criteriaGroupsList.length > 0) {
+        criteriaGroupsList.forEach((groupValue) => {
+          const normalized = normalizeGroupIdValue(groupValue);
+          if (normalized && accessibleGroupsSet.has(normalized)) {
+            groupsToFilter.push(normalized);
           }
         });
       }
     } else {
-      groupsToFilter = [...(criteria.groups ? criteria.groups : [])];
-      if (criteria.group) {
-        groupsToFilter.push(criteria.group);
+      groupsToFilter = normalizeGroupIdList(criteriaGroupsList);
+      const normalizedGroup = normalizeGroupIdValue(criteria.group);
+      if (normalizedGroup) {
+        groupsToFilter.push(normalizedGroup);
       }
     }
+
     groupsToFilter = _.uniq(groupsToFilter);
 
     if (groupsToFilter.length === 0) {
@@ -2261,7 +2299,7 @@ async function updateChallenge(currentUser, challengeId, data) {
   }
 
   if (!_.isUndefined(data.terms)) {
-    await helper.validateChallengeTerms(data.terms);
+    data.terms = await helper.validateChallengeTerms(data.terms);
   }
 
   if (data.phases && data.phases.length > 0) {
@@ -2784,7 +2822,8 @@ function sanitizeChallenge(challenge) {
     }));
   }
   if (challenge.terms) {
-    sanitized.terms = _.map(challenge.terms, (term) => _.pick(term, ["id", "roleId"]));
+    const uniqueTerms = helper.dedupeChallengeTerms(challenge.terms || []);
+    sanitized.terms = _.map(uniqueTerms, (term) => _.pick(term, ["id", "roleId"]));
   }
   if (challenge.attachments) {
     sanitized.attachments = _.map(challenge.attachments, (attachment) =>

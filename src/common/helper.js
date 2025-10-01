@@ -700,12 +700,13 @@ async function getCompleteUserGroupTreeIds(userId) {
       },
     });
 
+    const normalizedGroupIds = normalizeGroupIdsFromResponse(result.data);
     logger.debug(
       `helper.getCompleteUserGroupTreeIds: response status ${result.status} (groups=${
-        _.get(result, "data.length", 0) || 0
+        normalizedGroupIds.length
       })`
     );
-    return result.data || [];
+    return normalizedGroupIds;
   } catch (err) {
     logger.debug(
       `helper.getCompleteUserGroupTreeIds: error for user ${userId} - status ${
@@ -714,6 +715,79 @@ async function getCompleteUserGroupTreeIds(userId) {
     );
     throw err;
   }
+}
+
+/**
+ * Normalize group payload into a flat list of group identifier strings.
+ *
+ * @param {Array|Object|String|Number} groupPayload raw response from Groups API
+ * @returns {Array<String>} normalized group identifiers
+ */
+function normalizeGroupIdsFromResponse(groupPayload) {
+  const ids = new Set();
+
+  const pushId = (value) => {
+    if (_.isNil(value)) {
+      return;
+    }
+    if (typeof value === "number" || typeof value === "bigint") {
+      ids.add(value.toString());
+      return;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return;
+      }
+      const lowered = trimmed.toLowerCase();
+      if (lowered === "null" || lowered === "undefined") {
+        return;
+      }
+      ids.add(trimmed);
+    }
+  };
+
+  const visit = (payload, depth = 0) => {
+    if (_.isNil(payload) || depth > 6) {
+      return;
+    }
+    if (Array.isArray(payload)) {
+      payload.forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    if (_.isPlainObject(payload)) {
+      const identifierKeys = ["id", "groupId", "oldId", "legacyId", "uuid"];
+      identifierKeys.forEach((key) => {
+        if (!_.isNil(payload[key])) {
+          pushId(payload[key]);
+        }
+      });
+
+      const nestedKeys = [
+        "path",
+        "pathIds",
+        "pathGroupIds",
+        "parentGroups",
+        "ancestors",
+        "ancestorGroupIds",
+        "subGroups",
+        "children",
+        "groupIds",
+        "membershipGroupIds",
+      ];
+      nestedKeys.forEach((key) => {
+        if (!_.isNil(payload[key])) {
+          visit(payload[key], depth + 1);
+        }
+      });
+      return;
+    }
+
+    pushId(payload);
+  };
+
+  visit(groupPayload);
+  return Array.from(ids);
 }
 
 /**
@@ -939,18 +1013,40 @@ async function getProjectDefaultTerms(projectId) {
 }
 
 /**
+ * Remove duplicate term entries by "id" and "roleId" combination.
+ *
+ * @param {Array<Object>} terms list of challenge terms
+ * @returns {Array<Object>} unique term definitions
+ */
+function dedupeChallengeTerms(terms = []) {
+  if (!Array.isArray(terms)) {
+    return [];
+  }
+
+  return _.uniqBy(
+    terms.filter((term) => !_.isNil(term)),
+    (term) => {
+      const idKey = _.toString(term.id).trim();
+      const roleKey = _.isNil(term.roleId) ? "" : _.toString(term.roleId).trim();
+      return `${idKey}:${roleKey}`;
+    }
+  );
+}
+
+/**
  * This function gets the challenge terms array with the terms data
  * The terms data is retrieved from the terms API using the specified terms ids
  *
  * @param {Array<Object>} terms The array of terms {id, roleId} to retrieve from terms API
  */
 async function validateChallengeTerms(terms = []) {
-  if (terms.length === 0) {
+  const uniqueTerms = dedupeChallengeTerms(terms);
+  if (uniqueTerms.length === 0) {
     return [];
   }
   const listOfTerms = [];
   const token = await m2mHelper.getM2MToken();
-  for (let term of terms) {
+  for (let term of uniqueTerms) {
     // Get the terms details from the API
     try {
       await axios.get(`${config.TERMS_API_URL}/${term.id}`, {
@@ -1374,6 +1470,7 @@ module.exports = {
   createResource,
   getUserGroups,
   ensureNoDuplicateOrNullElements,
+  dedupeChallengeTerms,
   postBusEvent,
   calculateChallengeEndDate,
   listChallengesByMember,
