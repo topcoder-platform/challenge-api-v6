@@ -648,15 +648,24 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
   if (criteria.currentPhaseName) {
-    if (criteria.currentPhaseName === "Registration") {
-      prismaFilter.where.AND.push({
-        currentPhaseNames: { hasSome: ["Registration", "Open"] },
-      });
-    } else {
-      prismaFilter.where.AND.push({
-        currentPhaseNames: { has: criteria.currentPhaseName },
-      });
-    }
+    const phaseNamesToMatch =
+      criteria.currentPhaseName === "Registration"
+        ? ["Registration", "Open"]
+        : [criteria.currentPhaseName];
+
+    prismaFilter.where.AND.push({
+      OR: [
+        { currentPhaseNames: { hasSome: phaseNamesToMatch } },
+        {
+          phases: {
+            some: {
+              name: { in: phaseNamesToMatch },
+              isOpen: true,
+            },
+          },
+        },
+      ],
+    });
   }
   if (criteria.createdDateStart) {
     prismaFilter.where.AND.push({
