@@ -2456,7 +2456,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     await indexChallengeAndPostToKafka(committed, track, type);
   }
 
-  if (updatedChallenge.legacy.selfService) {
+  // Convert to response shape before any business-logic checks that expect it
+  prismaHelper.convertModelToResponse(updatedChallenge);
+  enrichChallengeForResponse(updatedChallenge);
+
+  if (_.get(updatedChallenge, "legacy.selfService")) {
     const creator = await helper.getMemberByHandle(updatedChallenge.createdBy);
     if (sendSubmittedEmail) {
       await helper.sendSelfServiceNotification(
