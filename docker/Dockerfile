@@ -7,7 +7,8 @@ COPY . /challenge-api
 WORKDIR /challenge-api
 
 # Install the dependencies from package.json
+RUN git --version
 RUN npm i -g pnpm
-RUN --mount=type=ssh pnpm install
+RUN pnpm install
 
 CMD node /challenge-api/app.js

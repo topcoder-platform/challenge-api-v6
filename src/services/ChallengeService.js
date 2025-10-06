@@ -1859,7 +1859,16 @@ function validateTask(currentUser, challenge, data, challengeResources) {
  * @param {Object} data the challenge data to be updated
  * @returns {Object} the updated challenge
  */
-async function updateChallenge(currentUser, challengeId, data) {
+// Note: `options` may be a boolean for backward compatibility (emitEvent flag),
+// or an object { emitEvent?: boolean }.
+async function updateChallenge(currentUser, challengeId, data, options = {}) {
+  // Backward compatibility for callers passing a boolean as the 4th arg
+  let emitEvent = true;
+  if (typeof options === "boolean") {
+    emitEvent = options;
+  } else if (options && Object.prototype.hasOwnProperty.call(options, "emitEvent")) {
+    emitEvent = options.emitEvent !== false;
+  }
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
     include: includeReturnFields,
@@ -2437,7 +2446,15 @@ async function updateChallenge(currentUser, challengeId, data) {
       include: includeReturnFields,
     });
   });
-  await indexChallengeAndPostToKafka(updatedChallenge, track, type);
+  // Re-fetch the challenge outside the transaction to ensure we publish
+  // only after the commit succeeds and using the committed snapshot.
+  if (emitEvent) {
+    const committed = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      include: includeReturnFields,
+    });
+    await indexChallengeAndPostToKafka(committed, track, type);
+  }
 
   if (updatedChallenge.legacy.selfService) {
     const creator = await helper.getMemberByHandle(updatedChallenge.createdBy);
