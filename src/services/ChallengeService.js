@@ -207,7 +207,9 @@ const includeReturnFields = {
   prizeSets: {
     include: { prizes: true },
   },
-  reviewers: true,
+  reviewers: {
+    orderBy: { createdAt: "asc" },
+  },
   terms: true,
   skills: true,
   winners: {
