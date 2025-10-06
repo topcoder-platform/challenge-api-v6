@@ -7,7 +7,6 @@ COPY . /challenge-api
 WORKDIR /challenge-api
 
 # Install the dependencies from package.json
-RUN git --version
 RUN npm i -g pnpm
 RUN pnpm install
 
