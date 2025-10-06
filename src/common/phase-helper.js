@@ -87,10 +87,23 @@ class ChallengePhaseHelper {
     timelineTemplateId,
     isBeingActivated
   ) {
-    const { timelineTemplateMap } = await this.getTemplateAndTemplateMap(timelineTemplateId);
+    const { timelineTemplateMap, timelineTempate } = await this.getTemplateAndTemplateMap(
+      timelineTemplateId
+    );
     const { phaseDefinitionMap } = await this.getPhaseDefinitionsAndMap();
+
+    // Ensure deterministic processing order based on the timeline template sequence
+    // DB returns phases ordered by dates, which can cause "fixedStartDate" logic below
+    // to incorrectly push earlier phases forward. Sorting by template order prevents that.
+    const orderIndex = new Map();
+    _.each(timelineTempate, (tplPhase, idx) => orderIndex.set(tplPhase.phaseId, idx));
+    const challengePhasesOrdered = _.sortBy(
+      challengePhases,
+      (p) => orderIndex.get(p.phaseId) ?? Number.MAX_SAFE_INTEGER
+    );
+
     let fixedStartDate = undefined;
-    const updatedPhases = _.map(challengePhases, (phase) => {
+    const updatedPhases = _.map(challengePhasesOrdered, (phase) => {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
       const newPhase = _.find(newPhases, (p) => p.phaseId === phase.phaseId);
