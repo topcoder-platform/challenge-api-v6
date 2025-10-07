@@ -11,4 +11,12 @@ WORKDIR /challenge-api
 RUN npm i -g pnpm
 RUN pnpm install
 
-CMD node /challenge-api/app.js
+# Enable Node diagnostic reports and Prisma backtraces for deeper crash insights
+ENV NODE_OPTIONS="--report-on-fatalerror --report-uncaught-exception --report-signal=SIGUSR2 --report-directory=/challenge-api/reports --report-filename=report.%p.%t.json --enable-source-maps"
+ENV RUST_BACKTRACE=1
+# Optional: raise Prisma log level from the engine; keep it modest by default
+ENV PRISMA_LOG_LEVEL=info
+
+RUN mkdir -p /challenge-api/reports
+
+CMD ["node","/challenge-api/app.js"]

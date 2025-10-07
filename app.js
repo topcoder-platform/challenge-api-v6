@@ -11,6 +11,45 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const HttpStatus = require("http-status-codes");
 const logger = require("./src/common/logger");
+
+// Global error and signal handlers to improve crash visibility.
+// Note: SIGSEGV cannot be handled in userland, but these cover other fatal cases.
+process.on("uncaughtException", (err) => {
+  try {
+    logger.error("Uncaught exception:", err);
+    if (process.report && typeof process.report.writeReport === "function") {
+      const reportPath = process.report.writeReport();
+      if (reportPath) logger.error(`Diagnostic report written: ${reportPath}`);
+    }
+  } finally {
+    // Exit to avoid undefined state after an unhandled exception
+    process.exit(1);
+  }
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("Unhandled rejection:", { reason, promise });
+  try {
+    if (process.report && typeof process.report.writeReport === "function") {
+      const reportPath = process.report.writeReport();
+      if (reportPath) logger.error(`Diagnostic report written: ${reportPath}`);
+    }
+  } catch (_) {}
+});
+
+// Allow on-demand diagnostic reports (e.g., docker/ecs kill -s SIGUSR2 <container>)
+process.on("SIGUSR2", () => {
+  try {
+    if (process.report && typeof process.report.writeReport === "function") {
+      const reportPath = process.report.writeReport();
+      if (reportPath) logger.warn(`SIGUSR2 received. Diagnostic report: ${reportPath}`);
+    } else {
+      logger.warn("SIGUSR2 received, but process.report is not available.");
+    }
+  } catch (err) {
+    logger.error("Error generating diagnostic report on SIGUSR2:", err);
+  }
+});
 const interceptor = require("express-interceptor");
 const fileUpload = require("express-fileupload");
 const YAML = require("yamljs");

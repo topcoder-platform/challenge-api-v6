@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const config = require("config");
+const logger = require("./logger");
 
 let reviewPrismaClient;
 
@@ -28,6 +29,31 @@ const getReviewClient = () => {
   }
   if (!reviewPrismaClient) {
     reviewPrismaClient = createClient();
+    // Forward Prisma engine logs for the review DB
+    reviewPrismaClient.$on("error", (e) => {
+      try {
+        logger.error(`[prisma:review:error] ${e.message || e}`);
+      } catch (_) {}
+    });
+    reviewPrismaClient.$on("warn", (e) => {
+      try {
+        logger.warn(`[prisma:review:warn] ${e.message || e}`);
+      } catch (_) {}
+    });
+    reviewPrismaClient.$on("info", (e) => {
+      try {
+        logger.info(`[prisma:review:info] ${e.message || e}`);
+      } catch (_) {}
+    });
+    if (process.env.PRISMA_LOG_QUERIES === "true") {
+      reviewPrismaClient.$on("query", (e) => {
+        try {
+          logger.info(
+            `[prisma:review:query] ${e.query} params=${e.params} duration=${e.duration}ms`
+          );
+        } catch (_) {}
+      });
+    }
   }
   return reviewPrismaClient;
 };

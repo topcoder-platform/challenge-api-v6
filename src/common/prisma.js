@@ -7,6 +7,7 @@ const {
   PrizeSetTypeEnum,
   ReviewOpportunityTypeEnum,
 } = require("@prisma/client");
+const logger = require("./logger");
 
 const prismaClient = new PrismaClient({
   log: [
@@ -23,6 +24,35 @@ const prismaClient = new PrismaClient({
     timeout: Number(process.env.PRISMA_TRANSACTION_TIMEOUT_MS || 10000), // allow up to 30s per transaction
   },
 });
+
+// Forward Prisma engine logs to the application logger. This helps diagnose
+// native engine panics or crashes that may lead to exit code 139.
+prismaClient.$on("error", (e) => {
+  try {
+    logger.error(`[prisma:error] ${e.message || e}`);
+  } catch (_) {}
+});
+prismaClient.$on("warn", (e) => {
+  try {
+    logger.warn(`[prisma:warn] ${e.message || e}`);
+  } catch (_) {}
+});
+prismaClient.$on("info", (e) => {
+  try {
+    logger.info(`[prisma:info] ${e.message || e}`);
+  } catch (_) {}
+});
+
+// Optional verbose query logging: enable by setting PRISMA_LOG_QUERIES=true
+if (process.env.PRISMA_LOG_QUERIES === "true") {
+  prismaClient.$on("query", (e) => {
+    try {
+      logger.info(
+        `[prisma:query] ${e.query} params=${e.params} duration=${e.duration}ms`
+      );
+    } catch (_) {}
+  });
+}
 
 // By running the first query, prisma calls $connect() under the hood
 module.exports.prismaConnect = () => {
