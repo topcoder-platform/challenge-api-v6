@@ -221,7 +221,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
   // reviewers
   if (!_.isNil(challenge.reviewers)) {
     result.reviewers = {
-      create: _.map(challenge.reviewers, (r) => {
+      create: _.map(challenge.reviewers, (r, index) => {
         const reviewer = {
           ...auditFields,
           scorecardId: String(r.scorecardId),
@@ -232,6 +232,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           aiWorkflowId: r.aiWorkflowId,
+          createdAt: new Date(Date.now() + index),
         };
         if (r.type) reviewer.type = _.toUpper(r.type);
         if (r.phaseId) reviewer.phase = { connect: { id: r.phaseId } };
