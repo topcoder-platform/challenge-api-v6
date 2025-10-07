@@ -3203,7 +3203,8 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
   );
 
   prismaHelper.convertModelToResponse(updatedChallenge);
-  enrichChallengeForResponse(updatedChallenge, track, type);
+  // Keep legacy string values for bus event payload to avoid breaking consumers
+  enrichChallengeForResponse(updatedChallenge, track, type, { asString: true });
 
   await helper.postBusEvent(constants.Topics.ChallengeUpdated, updatedChallenge, {
     key:

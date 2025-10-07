@@ -335,7 +335,23 @@ class ChallengeHelper {
     }
   }
 
-  enrichChallengeForResponse(challenge, track, type) {
+  /**
+   * Enrich challenge for API responses. Normalizes dates, phases and ensures
+   * `track` and `type` fields have a consistent shape.
+   *
+   * By default, `track` and `type` are returned as objects:
+   *   track: { id, name, track }
+   *   type:  { id, name }
+   *
+   * If options.asString === true, `track` and `type` are returned as display strings
+   * (legacy behavior used for bus events to avoid breaking consumers).
+   *
+   * @param {Object} challenge
+   * @param {Object} [track]
+   * @param {Object} [type]
+   * @param {{ asString?: boolean }} [options]
+   */
+  enrichChallengeForResponse(challenge, track, type, options = {}) {
     if (challenge.phases && challenge.phases.length > 0) {
       const registrationPhase = _.find(challenge.phases, (p) => p.name === "Registration");
       const submissionPhase = _.find(challenge.phases, (p) => p.name === "Submission");
@@ -385,12 +401,30 @@ class ChallengeHelper {
     if (challenge.endDate)
       challenge.endDate = ChallengeHelper.convertDateToISOString(challenge.endDate);
 
+    const asString = options.asString === true;
+
     if (track) {
-      challenge.track = track.name;
+      if (asString) {
+        challenge.track = track.name;
+      } else {
+        challenge.track = {
+          id: track.id,
+          name: track.name,
+          // Prefer the canonical enum value if present; else derive from name/abbreviation
+          track: track.track || (track.abbreviation ? String(track.abbreviation).toUpperCase() : String(track.name || '').toUpperCase().replace(/\s+/g, '_')),
+        };
+      }
     }
 
     if (type) {
-      challenge.type = type.name;
+      if (asString) {
+        challenge.type = type.name;
+      } else {
+        challenge.type = {
+          id: type.id,
+          name: type.name,
+        };
+      }
     }
     if (challenge.metadata) {
       challenge.metadata = challenge.metadata.map((m) => {
