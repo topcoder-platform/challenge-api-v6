@@ -1733,7 +1733,7 @@ async function getChallengeStatistics(currentUser, id) {
     }
     // add submission
     map[submission.memberId].submissions.push({
-      created: submission.created,
+      created: submission.createdAt,
       score: _.get(
         _.find(submission.review || [], (r) => r.metadata),
         "score",
