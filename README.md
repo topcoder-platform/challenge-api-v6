@@ -283,3 +283,35 @@ Refer to the verification document `Verification.md`
 
 - In the app-constants.js Topics field, the used topics are using a test topic,
   the suggested ones are commented out, because these topics are not created in TC dev Kafka yet.
+
+**Downstream Usage**
+
+- This service is consumed by multiple Topcoder apps. Below is a quick map of where and how it’s called to help with debugging.
+
+**platform-ui**
+
+- Admin and Review apps read challenge data and metadata via v6 endpoints:
+  - Search challenges: `GET /v6/challenges?{filters}`. See `platform-ui/src/apps/admin/src/lib/services/challenge-management.service.ts`.
+  - Fetch challenge by id: `GET /v6/challenges/{id}`. See `platform-ui/src/apps/admin/src/lib/services/challenge-management.service.ts` and `platform-ui/src/apps/review/src/lib/services/challenges.service.ts`.
+  - Challenge types and tracks: `GET /v6/challenge-types`, `GET /v6/challenge-tracks`. See `platform-ui/src/apps/admin/src/lib/services/challenge-management.service.ts` and `platform-ui/src/apps/review/src/lib/services/challenges.service.ts`.
+  - Support requests: `POST /v6/challenges/support-requests`. See `platform-ui/src/libs/shared/lib/components/contact-support-form/contact-support-functions/contact-support-store/contact-support.store.ts`.
+- Local dev proxy maps `/v6/challenges`, `/v6/challenge-types`, `/v6/challenge-tracks`, `/v6/challenge-phases`, and `/v6/timeline-templates` to this service on port 3000. See `platform-ui/src/config/environments/local.env.ts`.
+
+**community-app**
+
+- Uses v6 endpoints for public challenge listing and details:
+  - List/search challenges for dashboards and content blocks: `GET /v6/challenges?{filters}`. See `community-app/src/shared/services/dashboard.js` and `community-app/src/shared/actions/contentful.js`.
+  - Fetch challenge details (e.g., for review opportunity details pages): `GET /v6/challenges/{id}`. See `community-app/src/shared/services/reviewOpportunities.js`.
+
+**work-manager**
+
+- Work Manager CRUD and metadata flows rely on v6 Challenge API:
+  - Get challenge details: `GET /v6/challenges/{id}`. See `work-manager/src/services/challenges.js`.
+  - Create/update/delete challenges: `POST /v6/challenges`, `PUT /v6/challenges/{id}`, `PATCH /v6/challenges/{id}`, `DELETE /v6/challenges/{id}`. See `work-manager/src/services/challenges.js`.
+  - Manage attachments: `POST /v6/challenges/{id}/attachments`, `DELETE /v6/challenges/{id}/attachments/{attachmentId}`. See `work-manager/src/services/challenges.js`.
+  - Default reviewers: `GET /v6/challenge/default-reviewers?typeId&trackId`. See `work-manager/src/services/challenges.js`.
+  - Challenge metadata: `GET /v6/challenge-types`, `GET /v6/challenge-tracks`, `GET /v6/challenge-phases`, `GET /v6/challenge-timelines`. See `work-manager/src/services/challenges.js` and config under `work-manager/config/constants/*`.
+- API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
+  - Dev: `work-manager/config/constants/development.js`.
+  - Local: `work-manager/config/constants/local.js`.
+  - Prod: `work-manager/config/constants/production.js`.
