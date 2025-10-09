@@ -232,6 +232,9 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           aiWorkflowId: r.aiWorkflowId,
+          shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
+            ? true
+            : !!r.shouldOpenOpportunity,
           createdAt: new Date(Date.now() + index),
         };
         if (r.type) reviewer.type = _.toUpper(r.type);
@@ -370,6 +373,7 @@ function convertModelToResponse(ret) {
         "incrementalPayment",
         "type",
         "aiWorkflowId",
+        "shouldOpenOpportunity",
       ])
     );
   }

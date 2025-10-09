@@ -250,6 +250,9 @@ async function getDefaultReviewers(currentUser, criteria) {
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
     isAIReviewer: r.isAIReviewer,
+    shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
+      ? r.shouldOpenOpportunity
+      : true,
   }));
 }
 getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
@@ -270,6 +273,7 @@ async function setDefaultReviewers(currentUser, data) {
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
             isAIReviewer: Joi.boolean().default(false),
+            shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
               then: Joi.number().integer().min(1).required(),
@@ -341,6 +345,9 @@ async function setDefaultReviewers(currentUser, data) {
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           opportunityType: r.type ? _.toUpper(r.type) : null,
           aiWorkflowId: r.aiWorkflowId,
+          shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
+            ? true
+            : !!r.shouldOpenOpportunity,
         })),
       });
     }
@@ -1402,6 +1409,8 @@ async function createChallenge(currentUser, challenge, userToken) {
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
           isAIReviewer: r.isAIReviewer ?? false,
+          shouldOpenOpportunity:
+            _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
         }));
       }
     }
@@ -1556,6 +1565,7 @@ createChallenge.schema = {
           scorecardId: Joi.string().required(),
           isMemberReview: Joi.boolean().required(),
           isAIReviewer: Joi.boolean().default(false),
+          shouldOpenOpportunity: Joi.boolean().default(true),
           memberReviewerCount: Joi.when("isMemberReview", {
             is: true,
             then: Joi.number().integer().min(1).required(),
@@ -2627,6 +2637,7 @@ updateChallenge.schema = {
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
             isAIReviewer: Joi.boolean().default(false),
+            shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
               then: Joi.number().integer().min(1).required(),

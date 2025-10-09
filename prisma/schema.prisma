@@ -592,6 +592,7 @@ model ChallengeReviewer {
   incrementalPayment  Float?
   type                ReviewOpportunityTypeEnum?
   aiWorkflowId        String?                    @db.VarChar(14)
+  shouldOpenOpportunity Boolean @default(true)
 
   // Relation to the challenge
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -627,6 +628,7 @@ model DefaultChallengeReviewer {
   incrementalPayment  Float?
   opportunityType     ReviewOpportunityTypeEnum?
   isAIReviewer        Boolean
+  shouldOpenOpportunity Boolean @default(true)
 
   // Relations
   challengeType  ChallengeType  @relation(fields: [typeId], references: [id])
