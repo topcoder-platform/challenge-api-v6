@@ -64,23 +64,23 @@ enum ReviewOpportunityTypeEnum {
 //////////////////////////////////////////
 
 model Challenge {
-  id                    String               @id @default(uuid())
-  name                  String
-  description           String?
-  privateDescription    String?
-  challengeSource       String?
-  descriptionFormat     String?
-  projectId             Int?                 // frequently queried field
-  typeId                String
-  trackId               String               // FK for relation in ChallengeTrack
-  timelineTemplateId    String?                    // now used as foreign key to ChallengeTimelineTemplate
-  overviewTotalPrizes   Float?                 // stored from overview.totalPrizes
-  numOfRegistrants      Int                  @default(0)
-  numOfSubmissions      Int                  @default(0)
-  numOfCheckpointSubmissions Int             @default(0)
-  currentPhaseNames     String[]             // current phase names
+  id                         String   @id @default(uuid())
+  name                       String
+  description                String?
+  privateDescription         String?
+  challengeSource            String?
+  descriptionFormat          String?
+  projectId                  Int? // frequently queried field
+  typeId                     String
+  trackId                    String // FK for relation in ChallengeTrack
+  timelineTemplateId         String? // now used as foreign key to ChallengeTimelineTemplate
+  overviewTotalPrizes        Float? // stored from overview.totalPrizes
+  numOfRegistrants           Int      @default(0)
+  numOfSubmissions           Int      @default(0)
+  numOfCheckpointSubmissions Int      @default(0)
+  currentPhaseNames          String[] // current phase names
 
-  wiproAllowed          Boolean              @default(false)
+  wiproAllowed Boolean @default(false)
 
   // simple arrays for tags and groups (PostgreSQL native array type)
   tags   String[]
@@ -499,6 +499,7 @@ model Phase {
   // Inverse relation for associated challenge phases
   challengePhases          ChallengePhase[]
   ChallengeReviewer        ChallengeReviewer[]
+  DefaultChallengeReviewer DefaultChallengeReviewer[]
 
   @@unique([name])
 }
@@ -590,7 +591,7 @@ model ChallengeReviewer {
   basePayment         Float?
   incrementalPayment  Float?
   type                ReviewOpportunityTypeEnum?
-  aiWorkflowId        String? @db.VarChar(14)
+  aiWorkflowId        String?                    @db.VarChar(14)
 
   // Relation to the challenge
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -620,6 +621,8 @@ model DefaultChallengeReviewer {
   isMemberReview      Boolean
   memberReviewerCount Int?
   phaseName           String
+  // Optional explicit link to Phase for better fidelity
+  phaseId             String?
   basePayment         Float?
   incrementalPayment  Float?
   opportunityType     ReviewOpportunityTypeEnum?
@@ -628,7 +631,8 @@ model DefaultChallengeReviewer {
   // Relations
   challengeType  ChallengeType  @relation(fields: [typeId], references: [id])
   challengeTrack ChallengeTrack @relation(fields: [trackId], references: [id])
-  // no relation to Phase; we store phase name for flexibility
+  // Relation to Phase (optional for backward compatibility with phaseName)
+  phase          Phase?         @relation(fields: [phaseId], references: [id])
 
   // Auditing fields
   createdAt DateTime @default(now())
@@ -637,6 +641,7 @@ model DefaultChallengeReviewer {
   updatedBy String
 
   @@index([typeId, trackId])
+  @@index([phaseId])
 }
 
 //////////////////////////////////////////
