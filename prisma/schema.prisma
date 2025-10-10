@@ -584,15 +584,15 @@ model ChallengeReviewer {
   challengeId String
 
   // Reviewer configuration
-  scorecardId         String
-  isMemberReview      Boolean
-  memberReviewerCount Int?
-  phaseId             String
-  basePayment         Float?
-  incrementalPayment  Float?
-  type                ReviewOpportunityTypeEnum?
-  aiWorkflowId        String?                    @db.VarChar(14)
-  shouldOpenOpportunity Boolean @default(true)
+  scorecardId           String
+  isMemberReview        Boolean
+  memberReviewerCount   Int?
+  phaseId               String
+  basePayment           Float?
+  incrementalPayment    Float?
+  type                  ReviewOpportunityTypeEnum?
+  aiWorkflowId          String?                    @db.VarChar(14)
+  shouldOpenOpportunity Boolean                    @default(true)
 
   // Relation to the challenge
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
@@ -614,27 +614,29 @@ model ChallengeReviewer {
 //////////////////////////////////////////
 
 model DefaultChallengeReviewer {
-  id                  String                     @id @default(uuid())
-  typeId              String
-  trackId             String
+  id                    String                     @id @default(uuid())
+  typeId                String
+  trackId               String
+  timelineTemplateId    String?
   // Reviewer configuration (mirrors ChallengeReviewer)
-  scorecardId         String
-  isMemberReview      Boolean
-  memberReviewerCount Int?
-  phaseName           String
+  scorecardId           String
+  isMemberReview        Boolean
+  memberReviewerCount   Int?
+  phaseName             String
   // Optional explicit link to Phase for better fidelity
-  phaseId             String?
-  basePayment         Float?
-  incrementalPayment  Float?
-  opportunityType     ReviewOpportunityTypeEnum?
-  isAIReviewer        Boolean
-  shouldOpenOpportunity Boolean @default(true)
+  phaseId               String?
+  basePayment           Float?
+  incrementalPayment    Float?
+  opportunityType       ReviewOpportunityTypeEnum?
+  isAIReviewer          Boolean
+  shouldOpenOpportunity Boolean                    @default(true)
 
   // Relations
-  challengeType  ChallengeType  @relation(fields: [typeId], references: [id])
-  challengeTrack ChallengeTrack @relation(fields: [trackId], references: [id])
+  challengeType    ChallengeType     @relation(fields: [typeId], references: [id])
+  challengeTrack   ChallengeTrack    @relation(fields: [trackId], references: [id])
+  timelineTemplate TimelineTemplate? @relation(fields: [timelineTemplateId], references: [id])
   // Relation to Phase (optional for backward compatibility with phaseName)
-  phase          Phase?         @relation(fields: [phaseId], references: [id])
+  phase            Phase?            @relation(fields: [phaseId], references: [id])
 
   // Auditing fields
   createdAt DateTime @default(now())
@@ -643,6 +645,7 @@ model DefaultChallengeReviewer {
   updatedBy String
 
   @@index([typeId, trackId])
+  @@index([typeId, trackId, timelineTemplateId])
   @@index([phaseId])
 }
 
@@ -665,7 +668,8 @@ model TimelineTemplate {
   challengeTimelineTemplates ChallengeTimelineTemplate[]
 
   // Opposite relation field for Challenge.
-  challenges Challenge[]
+  challenges               Challenge[]
+  DefaultChallengeReviewer DefaultChallengeReviewer[]
 
   @@unique([name])
 }
