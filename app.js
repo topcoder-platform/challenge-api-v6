@@ -37,19 +37,6 @@ process.on("unhandledRejection", (reason, promise) => {
   } catch (_) {}
 });
 
-// Allow on-demand diagnostic reports (e.g., docker/ecs kill -s SIGUSR2 <container>)
-process.on("SIGUSR2", () => {
-  try {
-    if (process.report && typeof process.report.writeReport === "function") {
-      const reportPath = process.report.writeReport();
-      if (reportPath) logger.warn(`SIGUSR2 received. Diagnostic report: ${reportPath}`);
-    } else {
-      logger.warn("SIGUSR2 received, but process.report is not available.");
-    }
-  } catch (err) {
-    logger.error("Error generating diagnostic report on SIGUSR2:", err);
-  }
-});
 const interceptor = require("express-interceptor");
 const fileUpload = require("express-fileupload");
 const YAML = require("yamljs");

@@ -4,13 +4,62 @@
 const _ = require("lodash");
 const Joi = require("joi");
 const moment = require("moment");
+const { Prisma } = require("@prisma/client");
+const config = require("config");
 const helper = require("../common/helper");
 const logger = require("../common/logger");
 const errors = require("../common/errors");
 const constants = require("../../app-constants");
+const { getReviewClient } = require("../common/review-prisma");
 
 const { getClient } = require("../common/prisma");
 const prisma = getClient();
+const PENDING_REVIEW_STATUSES = Object.freeze(["PENDING", "IN_PROGRESS", "DRAFT", "SUBMITTED"]);
+
+async function hasPendingScorecardsForPhase(challengePhaseId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping pending scorecard check for phase ${challengePhaseId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const statusText = Prisma.raw(`"status"::text`);
+
+  const pendingStatusClause =
+    PENDING_REVIEW_STATUSES.length > 0
+      ? Prisma.sql`${statusText} IN (${Prisma.join(
+          PENDING_REVIEW_STATUSES.map((status) => Prisma.sql`${status}`)
+        )})`
+      : Prisma.sql`FALSE`;
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS count
+        FROM ${reviewTable}
+        WHERE "phaseId" = ${challengePhaseId}
+          AND (
+            "status" IS NULL
+            OR ${pendingStatusClause}
+          )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check pending scorecards for phase ${challengePhaseId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
 
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
@@ -147,8 +196,41 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     }
   }
 
+  const isClosingPhase =
+    "isOpen" in data && data["isOpen"] === false && Boolean(challengePhase.isOpen);
+  const isReopeningPhase =
+    "isOpen" in data && data["isOpen"] === true && !challengePhase.isOpen;
+  if (isClosingPhase) {
+    const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id);
+    if (pendingScorecards) {
+      const phaseName = challengePhase.name || "phase";
+      throw new errors.ForbiddenError(
+        `Cannot close ${phaseName} because there are still pending scorecards`
+      );
+    }
+  }
+  if (isReopeningPhase) {
+    data.actualEndDate = null;
+  }
+
   // Update ChallengePhase
   data.updatedBy = String(currentUser.userId);
+  if (!_.isNil(data.duration)) {
+    const startInput = !_.isNil(data.scheduledStartDate)
+      ? data.scheduledStartDate
+      : !_.isNil(challengePhase.scheduledStartDate)
+      ? challengePhase.scheduledStartDate
+      : null;
+    if (startInput) {
+      const startDate = new Date(startInput);
+      if (!Number.isNaN(startDate.getTime())) {
+        const recalculatedScheduledEndDate = new Date(
+          startDate.getTime() + Number(data.duration) * 1000
+        );
+        data.scheduledEndDate = recalculatedScheduledEndDate;
+      }
+    }
+  }
   const dataToUpdate = _.omit(data, "constraints");
   const result = await prisma.$transaction(async (tx) => {
     const result = await tx.challengePhase.update({

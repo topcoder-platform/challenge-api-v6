@@ -462,6 +462,41 @@ async function cancelPayment(paymentId) {
 }
 
 /**
+ * Generate payments for challenge resources via finance API
+ * @param {String|Number} challengeId the challenge id
+ * @returns {Boolean} true if the request succeeds, false otherwise
+ */
+async function generateChallengePayments(challengeId) {
+  if (!config.FINANCE_API_URL) {
+    logger.warn("helper.generateChallengePayments: FINANCE_API_URL not configured");
+    return false;
+  }
+
+  const token = await m2mHelper.getM2MToken();
+  const url = `${config.FINANCE_API_URL}/challenges/${challengeId}`;
+  logger.debug(`helper.generateChallengePayments: POST ${url}`);
+
+  try {
+    const res = await axios.post(
+      url,
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    logger.debug(`helper.generateChallengePayments: response status ${res.status}`);
+    return res.status >= 200 && res.status < 300;
+  } catch (err) {
+    logger.debug(
+      `helper.generateChallengePayments: error for challenge ${challengeId} - status ${
+        _.get(err, "response.status", "n/a")
+      }: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
  * Cancel project
  * @param {String} projectId the project id
  * @param {String} cancelReason the cancel reasonn
@@ -1496,6 +1531,7 @@ module.exports = {
   getProjectPayment,
   capturePayment,
   cancelPayment,
+  generateChallengePayments,
   sendSelfServiceNotification,
   getMemberByHandle,
   getMembersByHandles,

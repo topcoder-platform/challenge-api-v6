@@ -1,8 +1,17 @@
 /*
  * Unit tests for ChallengePhaseService
  */
+if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
+  process.env.REVIEW_DB_URL = process.env.DATABASE_URL
+}
+
 require('../../app-bootstrap')
 const chai = require('chai')
+const config = require('config')
+const { Prisma } = require('@prisma/client')
+const uuid = require('uuid/v4')
+const { getReviewClient } = require('../../src/common/review-prisma')
+const prisma = require('../../src/common/prisma').getClient()
 const service = require('../../src/services/ChallengePhaseService')
 const testHelper = require('../testHelper')
 
@@ -11,12 +20,29 @@ const should = chai.should()
 describe('challenge phase service unit tests', () => {
   let data
   const authUser = { userId: 'testuser' }
+  const reviewSchema = config.get('REVIEW_DB_SCHEMA')
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
+  let reviewClient
   before(async () => {
     await testHelper.createData()
     data = testHelper.getData()
+    reviewClient = getReviewClient()
+    await reviewClient.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${reviewSchema}"`)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."review" (
+        "id" varchar(36) PRIMARY KEY,
+        "phaseId" varchar(255) NOT NULL,
+        "status" varchar(32),
+        "createdAt" timestamp DEFAULT now(),
+        "updatedAt" timestamp DEFAULT now()
+      )
+    `)
   })
 
   after(async () => {
+    if (reviewClient) {
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."review"`)
+    }
     await testHelper.clearData()
   })
 
@@ -101,10 +127,13 @@ describe('challenge phase service unit tests', () => {
   describe('partially update challenge phase tests', () => {
     it('partially update challenge phase successfully', async function () {
       this.timeout(50000)
+      const scheduledStartDate = '2025-01-01T00:00:00.000Z'
+      const expectedScheduledEndDate = new Date(new Date(scheduledStartDate).getTime() + 7200 * 1000).toISOString()
       const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
         name: 'updated-Registration',
         isOpen: true,
         duration: 7200,
+        scheduledStartDate,
         constraints: [
           {
             id: data.challengePhaseConstrain1Id,
@@ -120,6 +149,22 @@ describe('challenge phase service unit tests', () => {
       should.equal(challengePhase.name, 'updated-Registration')
       should.equal(challengePhase.duration, 7200)
       should.equal(challengePhase.isOpen, true)
+      should.equal(new Date(challengePhase.scheduledStartDate).toISOString(), scheduledStartDate)
+      should.equal(new Date(challengePhase.scheduledEndDate).toISOString(), expectedScheduledEndDate)
+    })
+
+    it('partially update challenge phase - reopening clears actual end date', async () => {
+      const previousEndDate = new Date()
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: false, actualEndDate: previousEndDate }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+        isOpen: true
+      })
+      should.equal(challengePhase.isOpen, true)
+      should.equal(challengePhase.actualEndDate, null)
     })
 
     it('partially update challenge phase - not found', async () => {
@@ -191,6 +236,68 @@ describe('challenge phase service unit tests', () => {
         return
       }
       throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - forbidden when pending scorecards exist', async function () {
+      this.timeout(50000)
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true }
+      })
+
+      const reviewId = uuid()
+      let caughtError
+      try {
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${reviewTable} ("id", "phaseId", "status")
+            VALUES (${reviewId}, ${data.challengePhase1Id}, ${'PENDING'})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+          isOpen: false
+        })
+      } catch (e) {
+        caughtError = e
+      } finally {
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`
+        )
+      }
+
+      should.exist(caughtError)
+      should.equal(caughtError.httpStatus || caughtError.statusCode, 403)
+      should.equal(caughtError.message, 'Cannot close Registration because there are still pending scorecards')
+    })
+
+    it('partially update challenge phase - allows closing when scorecards are completed', async function () {
+      this.timeout(50000)
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true }
+      })
+
+      const reviewId = uuid()
+      try {
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${reviewTable} ("id", "phaseId", "status")
+            VALUES (${reviewId}, ${data.challengePhase1Id}, ${'COMPLETED'})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+          isOpen: false
+        })
+        should.equal(challengePhase.isOpen, false)
+      } finally {
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`
+        )
+      }
     })
 
     it('partially update challenge phase - unexpected field', async () => {

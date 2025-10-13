@@ -1918,6 +1918,63 @@ function validateTask(currentUser, challenge, data, challengeResources) {
   }
 }
 
+function prepareTaskCompletionData(challenge, challengeResources, data) {
+  const isTask = _.get(challenge, "legacy.pureV5Task");
+  const isCompleteTask =
+    data.status === ChallengeStatusEnum.COMPLETED &&
+    challenge.status !== ChallengeStatusEnum.COMPLETED;
+
+  if (!isTask || !isCompleteTask) {
+    return null;
+  }
+
+  const submitters = _.filter(
+    challengeResources,
+    (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+  );
+
+  if (!submitters || submitters.length === 0) {
+    throw new errors.BadRequestError("Task has no submitter resource");
+  }
+
+  if (!data.winners || data.winners.length === 0) {
+    const submitter = submitters[0];
+    data.winners = [
+      {
+        userId: parseInt(submitter.memberId, 10),
+        handle: submitter.memberHandle,
+        placement: 1,
+        type: PrizeSetTypeEnum.PLACEMENT,
+      },
+    ];
+  }
+
+  const completionTime = new Date().toISOString();
+  const startTime = challenge.startDate || completionTime;
+
+  const updatedPhases = _.map(challenge.phases || [], (phase) => ({
+    id: phase.id,
+    phaseId: phase.phaseId,
+    name: phase.name,
+    description: phase.description,
+    duration: phase.duration,
+    scheduledStartDate: phase.scheduledStartDate,
+    scheduledEndDate: phase.scheduledEndDate,
+    predecessor: phase.predecessor,
+    constraints: _.cloneDeep(phase.constraints),
+    actualStartDate: startTime,
+    actualEndDate: completionTime,
+    isOpen: false,
+  }));
+
+  data.phases = updatedPhases;
+
+  return {
+    shouldTriggerPayments: true,
+    completionTime,
+  };
+}
+
 /**
  * Update challenge.
  * @param {Object} currentUser the user who perform operation
@@ -2000,6 +2057,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   );
   logger.debug(`updateChallenge(${challengeId}): payload validation complete`);
   validateTask(currentUser, challenge, data, challengeResources);
+  const taskCompletionInfo = prepareTaskCompletionData(challenge, challengeResources, data);
 
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
@@ -2512,6 +2570,19 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       include: includeReturnFields,
     });
   });
+  if (taskCompletionInfo && taskCompletionInfo.shouldTriggerPayments) {
+    logger.info(`Triggering payment generation for Task challenge ${challengeId}`);
+    try {
+      const paymentSuccess = await helper.generateChallengePayments(challengeId);
+      if (!paymentSuccess) {
+        logger.warn(`Failed to generate payments for Task challenge ${challengeId}`);
+      }
+    } catch (err) {
+      logger.error(
+        `Error generating payments for Task challenge ${challengeId}: ${err.message}`
+      );
+    }
+  }
   // Re-fetch the challenge outside the transaction to ensure we publish
   // only after the commit succeeds and using the committed snapshot.
   if (emitEvent) {
