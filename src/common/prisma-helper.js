@@ -172,8 +172,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             // Database stores values in dollars directly, no amountInCents field exists
             prizeData.value = p.value;
             // calculate only placement and checkpoint prizes
-            if (s.type === PrizeSetTypeEnum.PLACEMENT && p.type === constants.prizeTypes.USD)
-            {
+            if (s.type === PrizeSetTypeEnum.PLACEMENT && p.type === constants.prizeTypes.USD) {
               // Values are already in dollars, no conversion needed
               totalPrizes += p.value;
             }
@@ -229,8 +228,10 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
-          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
+          baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
+          incrementalCoefficient: _.isNil(r.incrementalCoefficient)
+            ? null
+            : Number(r.incrementalCoefficient),
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
             ? true
@@ -369,8 +370,8 @@ function convertModelToResponse(ret) {
         "isMemberReview",
         "memberReviewerCount",
         "phaseId",
-        "basePayment",
-        "incrementalPayment",
+        "baseCoefficient",
+        "incrementalCoefficient",
         "type",
         "aiWorkflowId",
         "shouldOpenOpportunity",

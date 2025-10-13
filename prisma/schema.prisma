@@ -588,8 +588,8 @@ model ChallengeReviewer {
   isMemberReview        Boolean
   memberReviewerCount   Int?
   phaseId               String
-  basePayment           Float?
-  incrementalPayment    Float?
+  baseCoefficient           Float?
+  incrementalCoefficient    Float?
   type                  ReviewOpportunityTypeEnum?
   aiWorkflowId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
