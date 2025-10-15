@@ -258,6 +258,7 @@ async function getDefaultReviewers(currentUser, criteria) {
     isMemberReview: r.isMemberReview,
     memberReviewerCount: r.memberReviewerCount,
     phaseName: r.phaseName,
+    fixedAmount: r.fixedAmount,
     baseCoefficient: r.baseCoefficient,
     incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
@@ -292,6 +293,7 @@ async function setDefaultReviewers(currentUser, data) {
               otherwise: Joi.forbidden(),
             }),
             phaseName: Joi.string().required(),
+            fixedAmount: Joi.number().min(0).optional().allow(null),
             baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
@@ -369,6 +371,7 @@ async function setDefaultReviewers(currentUser, data) {
             ? null
             : Number(r.memberReviewerCount),
           phaseName: r.phaseName,
+          fixedAmount: _.isNil(r.fixedAmount) ? null : Number(r.fixedAmount),
           baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
           incrementalCoefficient: _.isNil(r.incrementalCoefficient)
             ? null
@@ -1466,6 +1469,7 @@ async function createChallenge(currentUser, challenge, userToken) {
           memberReviewerCount: r.memberReviewerCount,
           // connect reviewers to the Phase model via its id
           phaseId: phaseMap.get(r.phaseName),
+          fixedAmount: r.fixedAmount,
           baseCoefficient: r.baseCoefficient,
           incrementalCoefficient: r.incrementalCoefficient,
           type: r.opportunityType,
@@ -1645,8 +1649,6 @@ createChallenge.schema = {
             otherwise: Joi.forbidden(),
           }),
           phaseId: Joi.id().required(),
-          baseCoefficient: Joi.number().min(0).optional(),
-          incrementalCoefficient: Joi.number().min(0).optional(),
           type: Joi.when("isMemberReview", {
             is: true,
             then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -2788,8 +2790,6 @@ updateChallenge.schema = {
               otherwise: Joi.forbidden(),
             }),
             phaseId: Joi.id().required(),
-            baseCoefficient: Joi.number().min(0).optional().allow(null),
-            incrementalCoefficient: Joi.number().min(0).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -2987,6 +2987,7 @@ function sanitizeChallenge(challenge) {
         "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
+        "fixedAmount",
         "baseCoefficient",
         "incrementalCoefficient",
         "type",
