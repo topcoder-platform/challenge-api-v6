@@ -1,20 +1,43 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
-const config = require('./config');
+const configModule = require('./config');
 const fs = require('fs');
 const path = require('path');
+
+const { parseMigrationMode } = configModule;
+const baseConfig = { ...configModule };
+
+if (typeof parseMigrationMode === 'function') {
+  delete baseConfig.parseMigrationMode;
+}
 
 /**
  * Core migration manager that orchestrates the migration process
  */
 class MigrationManager {
   constructor(userConfig = {}) {
+    const overrideConfig = { ...userConfig };
+    let pendingMigrationModeWarning = null;
+
+    if (Object.prototype.hasOwnProperty.call(overrideConfig, 'MIGRATION_MODE') && typeof parseMigrationMode === 'function') {
+      const rawMigrationMode = overrideConfig.MIGRATION_MODE;
+      const normalizedMode = parseMigrationMode(rawMigrationMode);
+      overrideConfig.MIGRATION_MODE = normalizedMode;
+
+      const isNullishOverride = rawMigrationMode === undefined || rawMigrationMode === null;
+      const matchesAllowedString = typeof rawMigrationMode === 'string' && rawMigrationMode.toLowerCase() === normalizedMode;
+
+      if (!isNullishOverride && !matchesAllowedString) {
+        pendingMigrationModeWarning = rawMigrationMode;
+      }
+    }
+
     // Merge default config with user-provided config
     this.config = {
-      ...config,
-      ...userConfig,
+      ...baseConfig,
+      ...overrideConfig,
       defaultValues: {
-        ...config.defaultValues,
-        ...(userConfig.defaultValues || {})
+        ...baseConfig.defaultValues,
+        ...(overrideConfig.defaultValues || {})
       }
     };
     
@@ -29,6 +52,20 @@ class MigrationManager {
     this.dependencies = {};
     // this.logger = this.createLogger(this.config.LOG_LEVEL);
     this.logger = this.createLogger(this.config.LOG_LEVEL, this.config.LOG_FILE || 'migration.log');
+    if (pendingMigrationModeWarning) {
+      this.logger.warn(`Invalid MIGRATION_MODE "${pendingMigrationModeWarning}" provided. Defaulting to 'full'.`);
+    }
+
+    if (this.config.MIGRATION_MODE === 'incremental') {
+      const sinceDate = this.config.INCREMENTAL_SINCE_DATE;
+
+      if (!sinceDate) {
+        this.logger.warn('Incremental migration mode is set but no INCREMENTAL_SINCE_DATE is configured.');
+      } else if (Number.isNaN(Date.parse(sinceDate))) {
+        this.logger.warn(`INCREMENTAL_SINCE_DATE "${sinceDate}" is not a valid ISO date string and will be ignored by subsequent phases.`);
+        this.config.INCREMENTAL_SINCE_DATE = null;
+      }
+    }
     this.migrators = [];
   }
   
@@ -110,6 +147,13 @@ class MigrationManager {
    */
   isValidDependency(dependencyModel, id) {
     return this.dependencies[dependencyModel]?.has(id) || false;
+  }
+
+  /**
+   * Determine if the migration is running in incremental mode
+   */
+  isIncrementalMode() {
+    return this.config.MIGRATION_MODE === 'incremental';
   }
 
   /**

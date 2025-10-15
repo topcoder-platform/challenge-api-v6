@@ -36,8 +36,22 @@ class BaseMigrator {
   /**
    * Load data for this migrator
    * @returns {Array} The loaded data
-   */
+  */
   async loadData() {
+    const isIncremental = this.manager.isIncrementalMode();
+    const sinceDate = this.manager.config.INCREMENTAL_SINCE_DATE ?? null;
+
+    if (isIncremental) {
+      this.manager.logger.debug(`Loading ${this.modelName} data with incremental filter since ${sinceDate || 'unspecified date'}`);
+      return await loadData(
+        this.manager.config.DATA_DIRECTORY,
+        this.getFileName(),
+        this.isElasticsearch,
+        sinceDate
+      );
+    }
+
+    this.manager.logger.debug(`Loading ${this.modelName} data without incremental filtering`);
     return await loadData(this.manager.config.DATA_DIRECTORY, this.getFileName(), this.isElasticsearch);
   }
   
@@ -47,6 +61,21 @@ class BaseMigrator {
    */
   async migrate() {
     this.manager.logger.info(`Migrating ${this.modelName} data...`);
+    const isIncremental = this.manager.isIncrementalMode();
+    const sinceDate = this.manager.config.INCREMENTAL_SINCE_DATE ?? 'unspecified date';
+    const incrementalFields = Array.isArray(this.manager.config.INCREMENTAL_FIELDS)
+      ? this.manager.config.INCREMENTAL_FIELDS
+      : [];
+
+    if (isIncremental) {
+      this.manager.logger.info(`Running in INCREMENTAL mode since ${sinceDate}`);
+      if (incrementalFields.length) {
+        this.manager.logger.info(`Updating only fields: ${incrementalFields.join(', ')}`);
+      }
+    } else {
+      this.manager.logger.info('Running in FULL migration mode');
+    }
+
     const data = await this.loadData();
 
     // Allow subclasses to perform pre-processing
@@ -54,8 +83,9 @@ class BaseMigrator {
     
     const processFn = this.createProcessFunction();
     const result = await this.manager.processBatch(processedData, processFn);
-    
-    this.manager.logger.info(`Migrated ${result.processed} ${this.modelName} records (skipped ${result.skipped})`);
+
+    const modeLabel = isIncremental ? 'incremental' : 'full';
+    this.manager.logger.info(`Migrated ${result.processed} ${this.modelName} records (skipped ${result.skipped}) in ${modeLabel} mode`);
     
     // Allow subclasses to perform post-processing
     await this.afterMigration(result);
@@ -93,10 +123,16 @@ class BaseMigrator {
     return async (batch, prisma, uniqueTracker) => {
       let processed = 0;
       let skipped = 0;
-      
+
       // Initialize unique trackers if needed
       this.initializeUniqueTrackers(uniqueTracker);
-      
+
+      if (this.manager.isIncrementalMode()) {
+        this.manager.logger.debug(`Processing ${this.modelName} batch in incremental mode`);
+      } else {
+        this.manager.logger.debug(`Processing ${this.modelName} batch in full migration mode`);
+      }
+
       for (const _record of batch) {
 
         const record = this.beforeValidation(_record);
@@ -137,7 +173,9 @@ class BaseMigrator {
         const finalModelData = this.customizeRecordData(modelData);
         
         // Create upsert data
-        const upsertData = this.createUpsertData(finalModelData, this.getIdField());
+        const upsertData = this.manager.isIncrementalMode()
+          ? this.createIncrementalUpsertData(finalModelData, this.getIdField())
+          : this.createUpsertData(finalModelData, this.getIdField());
         
         // Allow subclasses to modify upsert data if needed
         const finalUpsertData = this.customizeUpsertData(upsertData, record);
@@ -236,6 +274,61 @@ class BaseMigrator {
     const createData = { ...record };
     createData.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
     
+    return {
+      where: { [idField]: record[idField] },
+      update: updateData,
+      create: createData
+    };
+  }
+
+  /**
+   * Create upsert data when running in incremental mode. Only configured incremental fields
+   * are updated while new records still receive the full dataset.
+   * @param {Object} record The processed record data
+   * @param {string} idField The ID field name
+   * @returns {{ where: Object, update: Object, create: Object }} The incremental upsert payload
+   */
+  createIncrementalUpsertData(record, idField) {
+    const incrementalFields = Array.isArray(this.manager.config.INCREMENTAL_FIELDS)
+      ? this.manager.config.INCREMENTAL_FIELDS
+      : [];
+
+    if (!incrementalFields.length) {
+      return this.createUpsertData(record, idField);
+    }
+
+    const updateData = {};
+    const missingFields = [];
+
+    for (const field of incrementalFields) {
+      if (field === idField) {
+        continue;
+      }
+
+      if (record[field] !== undefined) {
+        updateData[field] = record[field];
+      } else {
+        updateData[field] = Prisma.skip;
+        missingFields.push(field);
+      }
+    }
+
+    updateData.updatedAt = record.updatedAt ? new Date(record.updatedAt) : new Date();
+    updateData.updatedBy = record.updatedBy;
+
+    if (missingFields.length) {
+      this._missingIncrementalFieldWarnings = this._missingIncrementalFieldWarnings || new Set();
+      for (const field of missingFields) {
+        if (!this._missingIncrementalFieldWarnings.has(field)) {
+          this._missingIncrementalFieldWarnings.add(field);
+          this.manager.logger.warn(`Configured incremental field "${field}" is missing on some ${this.modelName} records; skipping updates for this field`);
+        }
+      }
+    }
+
+    const createData = { ...record };
+    createData.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
+
     return {
       where: { [idField]: record[idField] },
       update: updateData,

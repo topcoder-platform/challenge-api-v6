@@ -7,6 +7,13 @@ const parseListEnv = value => {
   return list.length ? list : null;
 };
 
+const ALLOWED_MIGRATION_MODES = new Set(['full', 'incremental']);
+const parseMigrationMode = value => {
+  if (!value) return 'full';
+  const normalized = String(value).toLowerCase();
+  return ALLOWED_MIGRATION_MODES.has(normalized) ? normalized : 'full';
+};
+
 // Default configuration with fallbacks
 module.exports = {
   // Database connection
@@ -21,6 +28,11 @@ module.exports = {
   // Migration behavior
   SKIP_MISSING_REQUIRED: process.env.SKIP_MISSING_REQUIRED === 'true',
   USE_TRANSACTIONS: process.env.USE_TRANSACTIONS !== 'false',
+
+  // Incremental migration settings
+  MIGRATION_MODE: parseMigrationMode(process.env.MIGRATION_MODE),
+  INCREMENTAL_SINCE_DATE: process.env.INCREMENTAL_SINCE_DATE || null,
+  INCREMENTAL_FIELDS: parseListEnv(process.env.INCREMENTAL_FIELDS),
   
   // Migration attribution
   CREATED_BY: process.env.CREATED_BY || 'migration',
@@ -409,3 +421,8 @@ module.exports = {
     },
   }, 
 };
+
+Object.defineProperty(module.exports, 'parseMigrationMode', {
+  value: parseMigrationMode,
+  enumerable: false
+});
