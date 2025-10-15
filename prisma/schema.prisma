@@ -588,6 +588,7 @@ model ChallengeReviewer {
   isMemberReview        Boolean
   memberReviewerCount   Int?
   phaseId               String
+  fixedAmount           Float? @default(0)
   baseCoefficient           Float?
   incrementalCoefficient    Float?
   type                  ReviewOpportunityTypeEnum?
@@ -625,8 +626,9 @@ model DefaultChallengeReviewer {
   phaseName             String
   // Optional explicit link to Phase for better fidelity
   phaseId               String?
-  basePayment           Float?
-  incrementalPayment    Float?
+  fixedAmount           Float? @default(0)
+  baseCoefficient           Float?
+  incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
   isAIReviewer          Boolean
   shouldOpenOpportunity Boolean                    @default(true)

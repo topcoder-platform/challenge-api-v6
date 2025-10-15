@@ -292,8 +292,8 @@ async function setDefaultReviewers(currentUser, data) {
               otherwise: Joi.forbidden(),
             }),
             phaseName: Joi.string().required(),
-            baseCoefficient: Joi.number().min(0).optional().allow(null),
-            incrementalCoefficient: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
