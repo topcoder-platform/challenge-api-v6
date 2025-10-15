@@ -258,14 +258,12 @@ async function getDefaultReviewers(currentUser, criteria) {
     isMemberReview: r.isMemberReview,
     memberReviewerCount: r.memberReviewerCount,
     phaseName: r.phaseName,
-    basePayment: r.basePayment,
-    incrementalPayment: r.incrementalPayment,
+    baseCoefficient: r.baseCoefficient,
+    incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
     isAIReviewer: r.isAIReviewer,
-    shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
-      ? r.shouldOpenOpportunity
-      : true,
+    shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
   }));
 }
 getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
@@ -294,8 +292,8 @@ async function setDefaultReviewers(currentUser, data) {
               otherwise: Joi.forbidden(),
             }),
             phaseName: Joi.string().required(),
-            basePayment: Joi.number().min(0).optional().allow(null),
-            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -354,9 +352,7 @@ async function setDefaultReviewers(currentUser, data) {
       where: {
         typeId: value.typeId,
         trackId: value.trackId,
-        timelineTemplateId: _.isNil(value.timelineTemplateId)
-          ? null
-          : value.timelineTemplateId,
+        timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
       },
     });
     if (value.reviewers.length > 0) {
@@ -365,9 +361,7 @@ async function setDefaultReviewers(currentUser, data) {
           ...auditFields,
           typeId: value.typeId,
           trackId: value.trackId,
-          timelineTemplateId: _.isNil(value.timelineTemplateId)
-            ? null
-            : value.timelineTemplateId,
+          timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
           isAIReviewer: !!r.isAIReviewer,
@@ -375,8 +369,10 @@ async function setDefaultReviewers(currentUser, data) {
             ? null
             : Number(r.memberReviewerCount),
           phaseName: r.phaseName,
-          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
+          baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
+          incrementalCoefficient: _.isNil(r.incrementalCoefficient)
+            ? null
+            : Number(r.incrementalCoefficient),
           opportunityType: r.type ? _.toUpper(r.type) : null,
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
@@ -484,9 +480,7 @@ async function searchChallenges(currentUser, criteria) {
     }
     const arrayValue = Array.isArray(list) ? list : [list];
     return _.uniq(
-      arrayValue
-        .map((value) => normalizeGroupIdValue(value))
-        .filter((value) => !_.isNil(value))
+      arrayValue.map((value) => normalizeGroupIdValue(value)).filter((value) => !_.isNil(value))
     );
   };
 
@@ -1220,7 +1214,9 @@ async function createChallenge(currentUser, challenge, userToken) {
         userToken
       );
       logger.info(
-        `createChallenge: self-service project created (projectId=${challenge.projectId}) ${buildLogContext()}`
+        `createChallenge: self-service project created (projectId=${
+          challenge.projectId
+        }) ${buildLogContext()}`
       );
     }
 
@@ -1286,10 +1282,10 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.debug(`createChallenge: resolving challenge track/type ${buildLogContext()}`);
   const { track, type } = await challengeHelper.validateAndGetChallengeTypeAndTrack(challenge);
   logger.debug(
-    `createChallenge: resolved challenge track/type (trackId=${_.get(
-      track,
+    `createChallenge: resolved challenge track/type (trackId=${_.get(track, "id")}, typeId=${_.get(
+      type,
       "id"
-    )}, typeId=${_.get(type, "id")}) ${buildLogContext()}`
+    )}) ${buildLogContext()}`
   );
 
   if (_.get(type, "isTask")) {
@@ -1311,7 +1307,9 @@ async function createChallenge(currentUser, challenge, userToken) {
 
   if (challenge.phases && challenge.phases.length > 0) {
     logger.debug(
-      `createChallenge: validating provided phases (count=${challenge.phases.length}) ${buildLogContext()}`
+      `createChallenge: validating provided phases (count=${
+        challenge.phases.length
+      }) ${buildLogContext()}`
     );
     await phaseHelper.validatePhases(challenge.phases);
     logger.debug(`createChallenge: provided phases validated ${buildLogContext()}`);
@@ -1321,7 +1319,9 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (!challenge.timelineTemplateId) {
     if (challenge.typeId && challenge.trackId) {
       logger.debug(
-        `createChallenge: fetching default timeline template (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+        `createChallenge: fetching default timeline template (trackId=${
+          challenge.trackId
+        }, typeId=${challenge.typeId}) ${buildLogContext()}`
       );
       const supportedTemplates =
         await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
@@ -1330,7 +1330,9 @@ async function createChallenge(currentUser, challenge, userToken) {
           isDefault: true,
         });
       logger.debug(
-        `createChallenge: retrieved ${supportedTemplates.result.length} supported templates ${buildLogContext()}`
+        `createChallenge: retrieved ${
+          supportedTemplates.result.length
+        } supported templates ${buildLogContext()}`
       );
       const challengeTimelineTemplate = supportedTemplates.result[0];
       if (!challengeTimelineTemplate) {
@@ -1340,14 +1342,18 @@ async function createChallenge(currentUser, challenge, userToken) {
       }
       challenge.timelineTemplateId = challengeTimelineTemplate.timelineTemplateId;
       logger.debug(
-        `createChallenge: using timelineTemplateId=${challenge.timelineTemplateId} ${buildLogContext()}`
+        `createChallenge: using timelineTemplateId=${
+          challenge.timelineTemplateId
+        } ${buildLogContext()}`
       );
     } else {
       throw new errors.BadRequestError(`trackId and typeId are required to create a challenge`);
     }
   }
   logger.debug(
-    `createChallenge: populating phases for challenge creation (templateId=${challenge.timelineTemplateId}) ${buildLogContext()}`
+    `createChallenge: populating phases for challenge creation (templateId=${
+      challenge.timelineTemplateId
+    }) ${buildLogContext()}`
   );
   challenge.phases = await phaseHelper.populatePhasesForChallengeCreation(
     challenge.phases,
@@ -1410,7 +1416,9 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (!challenge.reviewers || challenge.reviewers.length === 0) {
     if (challenge.typeId && challenge.trackId) {
       logger.debug(
-        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${
+          challenge.typeId
+        }) ${buildLogContext()}`
       );
       const defaultReviewerWhere = {
         typeId: challenge.typeId,
@@ -1458,13 +1466,14 @@ async function createChallenge(currentUser, challenge, userToken) {
           memberReviewerCount: r.memberReviewerCount,
           // connect reviewers to the Phase model via its id
           phaseId: phaseMap.get(r.phaseName),
-          basePayment: r.basePayment,
-          incrementalPayment: r.incrementalPayment,
+          baseCoefficient: r.baseCoefficient,
+          incrementalCoefficient: r.incrementalCoefficient,
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
           isAIReviewer: r.isAIReviewer ?? false,
-          shouldOpenOpportunity:
-            _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
+          shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
+            ? r.shouldOpenOpportunity
+            : true,
         }));
       }
     }
@@ -1482,9 +1491,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     data: prismaModel,
     include: includeReturnFields,
   });
-  logger.info(
-    `createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`
-  );
+  logger.info(`createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`);
 
   ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   // No conversion needed - values are already in dollars in the database
@@ -1498,32 +1505,44 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.legacy.selfService) {
     if (currentUser.handle) {
       logger.debug(
-        `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
       await helper.createResource(ret.id, ret.createdBy, config.CLIENT_MANAGER_ROLE_ID);
       logger.debug(
-        `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
     }
   } else {
     if (currentUser.handle) {
       logger.debug(
-        `createChallenge: assigning MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: assigning MANAGER role to creator (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
       await helper.createResource(ret.id, ret.createdBy, config.MANAGER_ROLE_ID);
       logger.debug(
-        `createChallenge: MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: MANAGER role assignment complete (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
     }
   }
 
   // post bus event
   logger.info(
-    `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+    `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${
+      ret.id
+    }) ${buildLogContext()}`
   );
   await helper.postBusEvent(constants.Topics.ChallengeCreated, ret);
   logger.info(
-    `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+    `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${
+      ret.id
+    }) ${buildLogContext()}`
   );
 
   return helper.removeNullProperties(ret);
@@ -1626,8 +1645,8 @@ createChallenge.schema = {
             otherwise: Joi.forbidden(),
           }),
           phaseId: Joi.id().required(),
-          basePayment: Joi.number().min(0).optional(),
-          incrementalPayment: Joi.number().min(0).optional(),
+          baseCoefficient: Joi.number().min(0).optional(),
+          incrementalCoefficient: Joi.number().min(0).optional(),
           type: Joi.when("isMemberReview", {
             is: true,
             then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -2769,8 +2788,8 @@ updateChallenge.schema = {
               otherwise: Joi.forbidden(),
             }),
             phaseId: Joi.id().required(),
-            basePayment: Joi.number().min(0).optional().allow(null),
-            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -2968,8 +2987,8 @@ function sanitizeChallenge(challenge) {
         "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
-        "basePayment",
-        "incrementalPayment",
+        "baseCoefficient",
+        "incrementalCoefficient",
         "type",
         "aiWorkflowId",
       ])
