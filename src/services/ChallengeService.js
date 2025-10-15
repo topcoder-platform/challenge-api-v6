@@ -1659,6 +1659,9 @@ createChallenge.schema = {
             then: Joi.string().required(),
             otherwise: Joi.forbidden(),
           }),
+          fixedAmount: Joi.number().min(0).optional().allow(null),
+          baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+          incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
         })
       ),
       prizeSets: Joi.array().items(
@@ -2800,6 +2803,9 @@ updateChallenge.schema = {
               then: Joi.string().required(),
               otherwise: Joi.forbidden(),
             }),
+            fixedAmount: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
           })
         )
         .optional(),
