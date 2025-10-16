@@ -196,6 +196,40 @@ class ChallengeMigrator extends BaseMigrator {
             }
         }
 
+        if (record.tags !== undefined) {
+            if (Array.isArray(record.tags)) {
+                const cleanedTags = [];
+
+                for (const rawTag of record.tags) {
+                    if (rawTag === null || rawTag === undefined) {
+                        continue;
+                    }
+
+                    if (typeof rawTag !== 'string') {
+                        this.manager.logger.warn(`Skipping invalid tag value for challenge ${record[this.getIdField()]}; expected string, received ${typeof rawTag}`);
+                        continue;
+                    }
+
+                    const trimmedTag = rawTag.trim();
+                    if (!trimmedTag || trimmedTag.toLowerCase() === 'null') {
+                        continue;
+                    }
+
+                    cleanedTags.push(trimmedTag);
+                }
+
+                record.tags = cleanedTags;
+            } else if (record.tags === null) {
+                record.tags = [];
+            } else if (typeof record.tags === 'string') {
+                const trimmedTag = record.tags.trim();
+                record.tags = trimmedTag && trimmedTag.toLowerCase() !== 'null' ? [trimmedTag] : [];
+            } else {
+                this.manager.logger.warn(`Replacing unexpected tags value for challenge ${record[this.getIdField()]}; defaulting to empty array`);
+                record.tags = [];
+            }
+        }
+
         return record;
     }
 
