@@ -106,8 +106,9 @@ class MigrationManager {
       }
       
       try {
-        if (logStream && !logStream.writableStream) {
-          logStream.write(`${logMessage} ${argsString}\n`);
+        if (logStream?.writable) {
+          const suffix = argsString ? ` ${argsString}` : '';
+          logStream.write(`${logMessage}${suffix}\n`);
         }
       } catch (err) {
         console.error('Error writing to log:', err);

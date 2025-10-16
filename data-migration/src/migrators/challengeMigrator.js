@@ -137,6 +137,34 @@ class ChallengeMigrator extends BaseMigrator {
             record.updatedAt = record.updated
         }
 
+        if (record.legacyId !== undefined) {
+            if (record.legacyId === null) {
+                // keep as null
+            } else if (typeof record.legacyId === 'string') {
+                const trimmedLegacyId = record.legacyId.trim();
+
+                if (!trimmedLegacyId || trimmedLegacyId.toLowerCase() === 'null') {
+                    record.legacyId = null;
+                } else {
+                    const parsedLegacyId = Number(trimmedLegacyId);
+                    if (Number.isFinite(parsedLegacyId)) {
+                        record.legacyId = parsedLegacyId;
+                    } else {
+                        this.manager.logger.warn(`Skipping legacyId for challenge ${record[this.getIdField()]}; non-numeric value "${record.legacyId}"`);
+                        record.legacyId = Prisma.skip;
+                    }
+                }
+            } else if (typeof record.legacyId !== 'number') {
+                const parsedLegacyId = Number(record.legacyId);
+                if (Number.isFinite(parsedLegacyId)) {
+                    record.legacyId = parsedLegacyId;
+                } else {
+                    this.manager.logger.warn(`Skipping legacyId for challenge ${record[this.getIdField()]}; non-numeric value "${record.legacyId}"`);
+                    record.legacyId = Prisma.skip;
+                }
+            }
+        }
+
         return record;
     }
 
