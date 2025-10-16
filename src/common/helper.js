@@ -19,6 +19,8 @@ const projectHelper = require("./project-helper");
 const m2mHelper = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 
+const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
+
 // Bus API Client
 let busApiClient;
 
@@ -919,6 +921,10 @@ function getBusApiClient() {
  * @param {Object} options the extra options to the message
  */
 async function postBusEvent(topic, payload, options = {}) {
+  if (DISABLED_TOPICS.has(topic)) {
+    logger.debug(`helper.postBusEvent: skipping disabled topic ${topic}`);
+    return;
+  }
   const client = getBusApiClient();
   const message = {
     topic,

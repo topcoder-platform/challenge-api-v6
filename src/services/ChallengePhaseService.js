@@ -11,6 +11,7 @@ const logger = require("../common/logger");
 const errors = require("../common/errors");
 const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
+const { indexChallengeAndPostToKafka } = require("./ChallengeService");
 
 const { getClient } = require("../common/prisma");
 const prisma = getClient();
@@ -65,6 +66,27 @@ async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
+  }
+}
+
+/**
+ * Publish a challenge update event with the latest challenge payload.
+ * @param {String} challengeId the challenge id
+ */
+async function postChallengeUpdatedNotification(challengeId) {
+  try {
+    const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+    if (!challenge) {
+      logger.error(`Failed to publish challenge update event: challenge ${challengeId} not found`);
+      return;
+    }
+    await indexChallengeAndPostToKafka(challenge);
+  } catch (error) {
+    logger.error(
+      `Failed to publish challenge update event for challenge ${challengeId}: ${error.message}`,
+      error
+    );
+    throw error;
   }
 }
 
@@ -273,6 +295,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     constants.Topics.ChallengePhaseUpdated,
     _.assignIn({ id: result.id }, data)
   );
+  await postChallengeUpdatedNotification(challengeId);
   return _.omit(result, constants.auditFields);
 }
 
@@ -352,6 +375,7 @@ async function deleteChallengePhase(currentUser, challengeId, id) {
   const ret = _.omit(result, constants.auditFields);
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengePhaseDeleted, ret);
+  await postChallengeUpdatedNotification(challengeId);
   return ret;
 }
 

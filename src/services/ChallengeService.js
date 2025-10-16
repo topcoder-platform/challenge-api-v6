@@ -3387,6 +3387,7 @@ module.exports = {
   advancePhase,
   getDefaultReviewers,
   setDefaultReviewers,
+  indexChallengeAndPostToKafka,
 };
 
 logger.buildService(module.exports);
