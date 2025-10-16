@@ -153,18 +153,44 @@ describe('challenge phase service unit tests', () => {
       should.equal(new Date(challengePhase.scheduledEndDate).toISOString(), expectedScheduledEndDate)
     })
 
-    it('partially update challenge phase - reopening clears actual end date', async () => {
+    it('partially update challenge phase - closing sets actual end date', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true, actualStartDate: new Date(), actualEndDate: null }
+      })
+
+      const before = new Date()
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+        isOpen: false
+      })
+      const after = new Date()
+
+      should.equal(challengePhase.isOpen, false)
+      should.exist(challengePhase.actualEndDate)
+      const actualEndMs = new Date(challengePhase.actualEndDate).getTime()
+      actualEndMs.should.be.at.least(before.getTime())
+      actualEndMs.should.be.at.most(after.getTime())
+    })
+
+    it('partially update challenge phase - reopening clears actual end date and sets start date', async () => {
       const previousEndDate = new Date()
       await prisma.challengePhase.update({
         where: { id: data.challengePhase1Id },
         data: { isOpen: false, actualEndDate: previousEndDate }
       })
 
+      const before = new Date()
       const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
         isOpen: true
       })
+      const after = new Date()
+
       should.equal(challengePhase.isOpen, true)
       should.equal(challengePhase.actualEndDate, null)
+      should.exist(challengePhase.actualStartDate)
+      const actualStartMs = new Date(challengePhase.actualStartDate).getTime()
+      actualStartMs.should.be.at.least(before.getTime())
+      actualStartMs.should.be.at.most(after.getTime())
     })
 
     it('partially update challenge phase - not found', async () => {

@@ -62,6 +62,61 @@ async function hasPendingScorecardsForPhase(challengePhaseId) {
   return Number(count) > 0;
 }
 
+async function hasCompletedReviewsForPhase(challengePhaseIdOrIds) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping completed review check for phase ${challengePhaseIdOrIds} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const phaseIds = Array.isArray(challengePhaseIdOrIds)
+    ? challengePhaseIdOrIds.filter((id) => !_.isNil(id))
+    : [challengePhaseIdOrIds];
+
+  if (phaseIds.length === 0) {
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const statusText = Prisma.raw(`"status"::text`);
+  const completedStatuses = ["IN_PROGRESS", "COMPLETED"];
+
+  const phaseIdClause =
+    phaseIds.length === 1
+      ? Prisma.sql`"phaseId" = ${phaseIds[0]}`
+      : Prisma.sql`"phaseId" IN (${Prisma.join(
+          phaseIds.map((phaseId) => Prisma.sql`${phaseId}`)
+        )})`;
+
+  const completedStatusClause = Prisma.sql`${statusText} IN (${Prisma.join(
+    completedStatuses.map((status) => Prisma.sql`${status}`)
+  )})`;
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS count
+        FROM ${reviewTable}
+        WHERE ${phaseIdClause}
+          AND ${completedStatusClause}
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check completed reviews for phase(s) ${phaseIds.join(", ")}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
@@ -230,8 +285,47 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         `Cannot close ${phaseName} because there are still pending scorecards`
       );
     }
+    if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
+      data.actualEndDate = new Date();
+    }
   }
   if (isReopeningPhase) {
+    const phaseName = challengePhase.name;
+    if (phaseName === "Submission" || phaseName === "Registration") {
+      const hasCompletedReviews = await hasCompletedReviewsForPhase(challengePhase.id);
+      if (hasCompletedReviews) {
+        throw new errors.ForbiddenError(
+          "Cannot reopen Submission/Registration phase because reviews are already in progress or completed"
+        );
+      }
+    }
+
+    if (phaseName === "Checkpoint Submission") {
+      const checkpointPhases = await prisma.challengePhase.findMany({
+        where: {
+          challengeId: challengePhase.challengeId,
+          name: { in: ["Checkpoint Screening", "Checkpoint Review"] },
+        },
+        select: { id: true },
+      });
+      const checkpointPhaseIds = checkpointPhases.map((cp) => cp.id);
+      if (checkpointPhaseIds.length > 0) {
+        const hasCheckpointReviews = await hasCompletedReviewsForPhase(checkpointPhaseIds);
+        if (hasCheckpointReviews) {
+          throw new errors.ForbiddenError(
+            "Cannot reopen Checkpoint Submission phase because Checkpoint Screening or Checkpoint Review reviews are already in progress or completed"
+          );
+        }
+      }
+    }
+
+    const hasActualStartDate = !_.isNil(challengePhase.actualStartDate);
+    const hasActualEndDate = !_.isNil(challengePhase.actualEndDate);
+    if (hasActualStartDate) {
+      data.actualStartDate = challengePhase.actualStartDate;
+    } else if (!("actualStartDate" in data) || _.isNil(data.actualStartDate)) {
+      data.actualStartDate = new Date();
+    }
     data.actualEndDate = null;
   }
 
