@@ -3,6 +3,8 @@ const configModule = require('./config');
 const fs = require('fs');
 const path = require('path');
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const { parseMigrationMode } = configModule;
 const baseConfig = { ...configModule };
 
@@ -236,6 +238,41 @@ class MigrationManager {
     const batchSize = this.config.BATCH_SIZE;
     let processed = 0;
     let skipped = 0;
+    const rawRetryAttempts = Number(this.config.TRANSACTION_RETRY_ATTEMPTS);
+    const retryAttempts = Number.isFinite(rawRetryAttempts) && rawRetryAttempts > 0
+      ? Math.floor(rawRetryAttempts)
+      : 0;
+    const rawRetryDelayMs = Number(this.config.TRANSACTION_RETRY_DELAY_MS);
+    const retryDelayMs = Number.isFinite(rawRetryDelayMs) && rawRetryDelayMs > 0
+      ? Math.floor(rawRetryDelayMs)
+      : 0;
+    const shouldRetryTransactionStart = error =>
+      this.config.USE_TRANSACTIONS &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2028';
+    const executeBatch = async (batch, attempt = 0) => {
+      const uniqueTracker = new Map();
+
+      try {
+        if (this.config.USE_TRANSACTIONS) {
+          return await this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker));
+        }
+        return await processFn(batch, this.prisma, uniqueTracker);
+      } catch (error) {
+        if (attempt < retryAttempts && shouldRetryTransactionStart(error)) {
+          const nextAttempt = attempt + 1;
+          const waitMs = retryDelayMs;
+          const waitSeconds = Math.round(waitMs / 1000) || 0;
+          this.logger.warn(`Unable to start transaction for batch (P2028). Retrying attempt ${nextAttempt} of ${retryAttempts} in ${waitSeconds}s.`);
+          if (waitMs > 0) {
+            await sleep(waitMs);
+          }
+          return executeBatch(batch, nextAttempt);
+        }
+
+        throw error;
+      }
+    };
 
     // Create batches
     const batches = [];
@@ -249,15 +286,7 @@ class MigrationManager {
 
     for (let i = 0; i < batches.length; i += concurrencyLimit) {
       const batchGroup = batches.slice(i, i + concurrencyLimit);
-      const batchPromises = batchGroup.map(batch => {
-      const uniqueTracker = new Map();
-      
-      if (this.config.USE_TRANSACTIONS) {
-        return this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker));
-      } else {
-        return processFn(batch, this.prisma, uniqueTracker);
-      }
-      });
+      const batchPromises = batchGroup.map(batch => executeBatch(batch));
       
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);

@@ -28,6 +28,8 @@ module.exports = {
   // Migration behavior
   SKIP_MISSING_REQUIRED: process.env.SKIP_MISSING_REQUIRED === 'true',
   USE_TRANSACTIONS: process.env.USE_TRANSACTIONS !== 'false',
+  TRANSACTION_RETRY_ATTEMPTS: parseInt(process.env.TRANSACTION_RETRY_ATTEMPTS || '3', 10),
+  TRANSACTION_RETRY_DELAY_MS: parseInt(process.env.TRANSACTION_RETRY_DELAY_MS || '15000', 10),
 
   // Incremental migration settings
   MIGRATION_MODE: parseMigrationMode(process.env.MIGRATION_MODE),
