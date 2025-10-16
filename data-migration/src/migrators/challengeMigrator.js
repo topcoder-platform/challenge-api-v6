@@ -137,6 +137,37 @@ class ChallengeMigrator extends BaseMigrator {
             record.updatedAt = record.updated
         }
 
+        if (record.projectId !== undefined) {
+            if (record.projectId === null) {
+                // keep as null
+            } else if (typeof record.projectId === 'string') {
+                const trimmedProjectId = record.projectId.trim();
+
+                if (!trimmedProjectId || trimmedProjectId.toLowerCase() === 'null') {
+                    record.projectId = null;
+                } else {
+                    const parsedProjectId = Number(trimmedProjectId);
+                    if (Number.isFinite(parsedProjectId) && Number.isInteger(parsedProjectId)) {
+                        record.projectId = parsedProjectId;
+                    } else {
+                        this.manager.logger.warn(`Skipping projectId for challenge ${record[this.getIdField()]}; non-integer value "${record.projectId}"`);
+                        record.projectId = Prisma.skip;
+                    }
+                }
+            } else if (typeof record.projectId !== 'number') {
+                const parsedProjectId = Number(record.projectId);
+                if (Number.isFinite(parsedProjectId) && Number.isInteger(parsedProjectId)) {
+                    record.projectId = parsedProjectId;
+                } else {
+                    this.manager.logger.warn(`Skipping projectId for challenge ${record[this.getIdField()]}; non-integer value "${record.projectId}"`);
+                    record.projectId = Prisma.skip;
+                }
+            } else if (!Number.isInteger(record.projectId)) {
+                this.manager.logger.warn(`Skipping projectId for challenge ${record[this.getIdField()]}; non-integer value "${record.projectId}"`);
+                record.projectId = Prisma.skip;
+            }
+        }
+
         if (record.legacyId !== undefined) {
             if (record.legacyId === null) {
                 // keep as null
