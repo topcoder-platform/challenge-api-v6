@@ -23,9 +23,17 @@ class ChallengeMetadataMigrator extends BaseMigrator {
             record[this.getIdField()] = uuidv4();
         }
 
-        if (record.value !== Prisma.skip && typeof record.value === 'boolean') {
-            // Prisma schema stores metadata value as string; convert booleans to string form
-            record.value = record.value ? 'true' : 'false';
+        if (record.value !== Prisma.skip) {
+            if (typeof record.value === 'boolean') {
+                // Prisma schema stores metadata value as string; convert booleans to string form
+                record.value = record.value ? 'true' : 'false';
+            } else if (typeof record.value === 'number' && Number.isFinite(record.value)) {
+                // Accept numeric values (including ints) and persist them as strings for Prisma
+                record.value = record.value.toString();
+            } else if (typeof record.value === 'bigint') {
+                // Avoid bigint serialization errors by converting to string
+                record.value = record.value.toString();
+            }
         }
 
         return record;
