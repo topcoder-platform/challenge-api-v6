@@ -16,6 +16,7 @@ const { BadRequestError } = require("../common/errors");
 const phaseHelper = require("../common/phase-helper");
 const projectHelper = require("../common/project-helper");
 const challengeHelper = require("../common/challenge-helper");
+const { getReviewClient } = require("../common/review-prisma");
 
 const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 
@@ -61,6 +62,8 @@ const challengeDomain = {
 };
 
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
+
+const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -2522,6 +2525,15 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  if (!_.isNil(data.reviewers)) {
+    await ensureScorecardChangeDoesNotConflict({
+      challengeId,
+      originalReviewers: challenge.reviewers || [],
+      updatedReviewers: data.reviewers,
+      originalChallengePhases,
+    });
+  }
+
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,
@@ -2910,6 +2922,136 @@ sendNotifications.schema = {
   currentUser: Joi.any(),
   challengeId: Joi.id(),
 };
+
+async function ensureScorecardChangeDoesNotConflict({
+  challengeId,
+  originalReviewers = [],
+  updatedReviewers = [],
+  originalChallengePhases = [],
+}) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return;
+  }
+
+  if (!Array.isArray(originalReviewers) || originalReviewers.length === 0) {
+    return;
+  }
+
+  const originalByPhase = new Map();
+  for (const reviewer of originalReviewers) {
+    if (!reviewer || _.isNil(reviewer.phaseId)) {
+      continue;
+    }
+    const phaseKey = String(reviewer.phaseId);
+    if (!originalByPhase.has(phaseKey)) {
+      originalByPhase.set(phaseKey, []);
+    }
+    originalByPhase.get(phaseKey).push(reviewer);
+  }
+
+  if (originalByPhase.size === 0) {
+    return;
+  }
+
+  const updatedByPhase = new Map();
+  if (Array.isArray(updatedReviewers)) {
+    for (const reviewer of updatedReviewers) {
+      if (!reviewer || _.isNil(reviewer.phaseId)) {
+        continue;
+      }
+      const phaseKey = String(reviewer.phaseId);
+      if (!updatedByPhase.has(phaseKey)) {
+        updatedByPhase.set(phaseKey, []);
+      }
+      updatedByPhase.get(phaseKey).push(reviewer);
+    }
+  }
+
+  const removedScorecardsByPhase = new Map();
+  for (const [phaseKey, originalList] of originalByPhase.entries()) {
+    const updatedList = updatedByPhase.get(phaseKey) || [];
+
+    const originalScorecards = Array.from(
+      new Set(
+        originalList
+          .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
+          .filter((scorecardId) => !_.isNil(scorecardId))
+      )
+    );
+
+    if (originalScorecards.length === 0) {
+      continue;
+    }
+
+    const updatedScorecards = Array.from(
+      new Set(
+        updatedList
+          .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
+          .filter((scorecardId) => !_.isNil(scorecardId))
+      )
+    );
+
+    const removedScorecards = originalScorecards.filter(
+      (scorecardId) => !updatedScorecards.includes(scorecardId)
+    );
+
+    if (removedScorecards.length > 0) {
+      removedScorecardsByPhase.set(phaseKey, Array.from(new Set(removedScorecards)));
+    }
+  }
+
+  if (removedScorecardsByPhase.size === 0) {
+    return;
+  }
+
+  const phaseIdToChallengePhaseIds = new Map();
+  for (const phase of originalChallengePhases || []) {
+    if (!phase || _.isNil(phase.phaseId) || _.isNil(phase.id)) {
+      continue;
+    }
+    const phaseKey = String(phase.phaseId);
+    if (!phaseIdToChallengePhaseIds.has(phaseKey)) {
+      phaseIdToChallengePhaseIds.set(phaseKey, new Set());
+    }
+    phaseIdToChallengePhaseIds.get(phaseKey).add(String(phase.id));
+  }
+
+  const reviewClient = getReviewClient();
+
+  for (const [phaseKey, scorecardIds] of removedScorecardsByPhase.entries()) {
+    const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
+
+    if (challengePhaseIds.length === 0) {
+      logger.debug(
+        `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`
+      );
+      continue;
+    }
+
+    for (const scorecardId of scorecardIds) {
+      if (!scorecardId) {
+        continue;
+      }
+
+      const conflictingReviews = await reviewClient.review.count({
+        where: {
+          phaseId: { in: challengePhaseIds },
+          scorecardId,
+          status: { in: REVIEW_STATUS_BLOCKING },
+        },
+      });
+
+      if (conflictingReviews > 0) {
+        throw new BadRequestError(
+          "Can't change the scorecard at this time because at least one review has already started with the old scorecard"
+        );
+      }
+    }
+  }
+}
 
 /**
  * Remove unwanted properties from the challenge object

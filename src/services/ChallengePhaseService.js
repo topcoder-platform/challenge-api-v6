@@ -234,7 +234,13 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
   if (data["predecessor"]) {
     const predecessor = await prisma.challengePhase.findFirst({
-      where: { challengeId, id: data["predecessor"] },
+      where: {
+        challengeId,
+        OR: [
+          { id: data["predecessor"] },
+          { phaseId: data["predecessor"] },
+        ],
+      },
     });
     if (!predecessor) {
       throw new errors.BadRequestError(
@@ -247,7 +253,13 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   const predecessorId = data["predecessor"] || challengePhase.predecessor;
   if (isOpeningPhase && predecessorId) {
     const predecessorPhase = await prisma.challengePhase.findFirst({
-      where: { challengeId, id: predecessorId },
+      where: {
+        challengeId,
+        OR: [
+          { id: predecessorId },
+          { phaseId: predecessorId },
+        ],
+      },
     });
 
     if (

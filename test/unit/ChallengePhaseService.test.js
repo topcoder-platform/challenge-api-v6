@@ -32,10 +32,15 @@ describe('challenge phase service unit tests', () => {
       CREATE TABLE IF NOT EXISTS "${reviewSchema}"."review" (
         "id" varchar(36) PRIMARY KEY,
         "phaseId" varchar(255) NOT NULL,
+        "scorecardId" varchar(255),
         "status" varchar(32),
         "createdAt" timestamp DEFAULT now(),
         "updatedAt" timestamp DEFAULT now()
       )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "scorecardId" varchar(255)
     `)
   })
 
@@ -228,6 +233,53 @@ describe('challenge phase service unit tests', () => {
       })
     })
 
+    it('partially update challenge phase - reopening succeeds when predecessor matches phaseId', async () => {
+      const startDate = new Date('2025-07-01T00:00:00.000Z')
+      const endDate = new Date('2025-07-02T00:00:00.000Z')
+      const originalData = await prisma.challengePhase.findUnique({
+        where: { id: data.challengePhase2Id },
+        select: { predecessor: true }
+      })
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: false,
+          predecessor: data.phase.id
+        }
+      })
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          {
+            isOpen: true
+          }
+        )
+
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase2Id },
+          data: {
+            predecessor: originalData.predecessor,
+            isOpen: false
+          }
+        })
+      }
+    })
+
     it('partially update challenge phase - cannot reopen when open phase is not a successor', async () => {
       const startDate = new Date('2025-06-01T00:00:00.000Z')
       const endDate = new Date('2025-06-02T00:00:00.000Z')
@@ -296,7 +348,10 @@ describe('challenge phase service unit tests', () => {
       try {
         await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', predecessor: data.challenge.id })
       } catch (e) {
-        should.equal(e.message, `predecessor should be a valid phase in the same challenge: ${data.challenge.id}`)
+        should.equal(
+          e.message,
+          `predecessor should be a valid challenge phase in the same challenge: ${data.challenge.id}`
+        )
         return
       }
       throw new Error('should not reach here')
