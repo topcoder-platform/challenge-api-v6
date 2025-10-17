@@ -3,6 +3,7 @@
  */
 const _ = require("lodash");
 const Joi = require("joi");
+const { Prisma } = require("@prisma/client");
 const uuid = require("uuid/v4");
 const config = require("config");
 const xss = require("xss");
@@ -3020,6 +3021,16 @@ async function ensureScorecardChangeDoesNotConflict({
   }
 
   const reviewClient = getReviewClient();
+  const hasReviewModel =
+    reviewClient &&
+    typeof reviewClient.review === "object" &&
+    typeof reviewClient.review?.count === "function";
+
+  if (!hasReviewModel) {
+    logger.debug(
+      `Prisma review model is unavailable; falling back to raw query guard for challenge ${challengeId}`
+    );
+  }
 
   for (const [phaseKey, scorecardIds] of removedScorecardsByPhase.entries()) {
     const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
@@ -3036,13 +3047,43 @@ async function ensureScorecardChangeDoesNotConflict({
         continue;
       }
 
-      const conflictingReviews = await reviewClient.review.count({
-        where: {
-          phaseId: { in: challengePhaseIds },
-          scorecardId,
-          status: { in: REVIEW_STATUS_BLOCKING },
-        },
-      });
+      let conflictingReviews = 0;
+
+      if (hasReviewModel) {
+        conflictingReviews = await reviewClient.review.count({
+          where: {
+            phaseId: { in: challengePhaseIds },
+            scorecardId,
+            status: { in: REVIEW_STATUS_BLOCKING },
+          },
+        });
+      } else if (typeof reviewClient?.$queryRaw === "function") {
+        try {
+          const queryResult = await reviewClient.$queryRaw`
+            SELECT COUNT(*)::int AS count
+            FROM "review"
+            WHERE "phaseId" IN (${Prisma.join(challengePhaseIds)})
+              AND "scorecardId" = ${scorecardId}
+              AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
+          `;
+
+          const rawCount =
+            Array.isArray(queryResult) && queryResult.length > 0
+              ? Number(queryResult[0]?.count || 0)
+              : 0;
+          conflictingReviews = Number.isFinite(rawCount) ? rawCount : 0;
+        } catch (error) {
+          logger.warn(
+            `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} due to review DB query failure: ${error.message}`
+          );
+          continue;
+        }
+      } else {
+        logger.warn(
+          `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because review Prisma client does not support raw queries`
+        );
+        continue;
+      }
 
       if (conflictingReviews > 0) {
         throw new BadRequestError(
