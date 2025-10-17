@@ -243,6 +243,25 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     }
   }
 
+  const isOpeningPhase = "isOpen" in data && data["isOpen"] === true;
+  const predecessorId = data["predecessor"] || challengePhase.predecessor;
+  if (isOpeningPhase && predecessorId) {
+    const predecessorPhase = await prisma.challengePhase.findFirst({
+      where: { challengeId, id: predecessorId },
+    });
+
+    if (
+      !predecessorPhase ||
+      predecessorPhase.isOpen ||
+      _.isNil(predecessorPhase.actualStartDate) ||
+      _.isNil(predecessorPhase.actualEndDate)
+    ) {
+      throw new errors.BadRequestError(
+        "Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set"
+      );
+    }
+  }
+
   if (data["scheduledStartDate"] || data["scheduledEndDate"]) {
     const startDate = data["scheduledStartDate"] || challengePhase.scheduledStartDate;
     const endDate = data["scheduledEndDate"] || challengePhase.scheduledEndDate;

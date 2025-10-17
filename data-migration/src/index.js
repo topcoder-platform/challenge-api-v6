@@ -52,7 +52,7 @@ async function main() {
     
     // Register migrators in any order (they'll be sorted by priority)
     const migrators = [
-      new AuditLogMigrator(),
+//      new AuditLogMigrator(),
       new ChallengeConstraintMigrator(),
       new ChallengeDiscussionOptionMigrator(),
       new ChallengeEventMigrator(),

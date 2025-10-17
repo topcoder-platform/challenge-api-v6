@@ -335,6 +335,104 @@ describe('challenge phase service unit tests', () => {
       }
       throw new Error('should not reach here')
     })
+
+    it('partially update challenge phase - cannot open phase when predecessor is not closed', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot open phase when predecessor has no actualEndDate', async () => {
+      const startDate = new Date('2025-01-01T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: null
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot open phase when predecessor has no actualStartDate', async () => {
+      const endDate = new Date('2025-01-02T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: null,
+          actualEndDate: endDate
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - can open phase when predecessor is properly closed', async () => {
+      const startDate = new Date('2025-02-01T00:00:00.000Z')
+      const endDate = new Date('2025-02-02T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: { isOpen: false }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      should.equal(challengePhase.isOpen, true)
+    })
+
+    it('partially update challenge phase - can open phase without predecessor', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: null,
+          actualEndDate: null
+        }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { isOpen: true })
+      should.equal(challengePhase.isOpen, true)
+    })
   })
 
   describe('delete challenge phase tests', () => {
