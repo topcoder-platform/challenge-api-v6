@@ -23,6 +23,11 @@ class ChallengeMetadataMigrator extends BaseMigrator {
             record[this.getIdField()] = uuidv4();
         }
 
+        if (record.value !== Prisma.skip && typeof record.value === 'boolean') {
+            // Prisma schema stores metadata value as string; convert booleans to string form
+            record.value = record.value ? 'true' : 'false';
+        }
+
         return record;
     }
 
