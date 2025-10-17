@@ -2,6 +2,9 @@ const { loadData } = require('../utils/dataLoader');
 const { MigrationManager } = require('../migrationManager')
 const { Prisma } = require('@prisma/client');
 
+const INT32_MAX = 2147483647;
+const INT32_MIN = -2147483648;
+
 /**
  * Base migrator class that all model migrators extend
  */
@@ -180,11 +183,20 @@ class BaseMigrator {
         // Allow subclasses to modify upsert data if needed
         const finalUpsertData = this.customizeUpsertData(upsertData, record);
         
-        // Perform the upsert operation
-        const dbData = await this.performUpsert(prisma, finalUpsertData);
+        // Perform the upsert operation with error handling
+        const upsertResult = await this.performUpsert(prisma, finalUpsertData);
+
+        if (upsertResult?.skip) {
+          skipped++;
+          continue;
+        }
+
+        const dbData = upsertResult?.data ?? upsertResult;
         
         // Allow subclasses to perform post-upsert operations
-        await this.afterUpsert(dbData, record, prisma);
+        if (dbData) {
+          await this.afterUpsert(dbData, record, prisma);
+        }
         
         processed++;
       }
@@ -446,7 +458,146 @@ class BaseMigrator {
    * @returns {Promise<Object>} The result of the upsert operation
    */
   async performUpsert(prisma, upsertData) {
-    return await prisma[this.queryName].upsert(upsertData);
+    try {
+      const data = await prisma[this.queryName].upsert(upsertData);
+      return { data };
+    } catch (error) {
+      const resolution = await this.handleUpsertError(error, upsertData);
+
+      if (resolution?.retryData) {
+        try {
+          const data = await prisma[this.queryName].upsert(resolution.retryData);
+          return { data };
+        } catch (retryError) {
+          this.manager.logger.error(`Retry upsert failed for ${this.modelName} ${this.describeRecord(upsertData)}:`, retryError);
+          return { skip: true };
+        }
+      }
+
+      if (resolution?.skip) {
+        return { skip: true };
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Handle upsert errors and decide whether to retry or skip
+   * @param {Error} error
+   * @param {Object} upsertData
+   * @returns {{retryData?: Object, skip?: boolean}|null}
+   */
+  async handleUpsertError(error, upsertData) {
+    const recordLabel = this.describeRecord(upsertData);
+
+    if (this.isIntOverflowError(error)) {
+      this.manager.logger.warn(`Integer overflow detected while migrating ${this.modelName} ${recordLabel}: ${error.message}`);
+      const sanitized = this.sanitizeOverflowingInts(upsertData);
+
+      if (sanitized.skip) {
+        this.manager.logger.warn(`Skipping ${this.modelName} ${recordLabel} due to integer overflow on required field.`);
+        return { skip: true };
+      }
+
+      if (sanitized.modified) {
+        this.manager.logger.warn(`Retrying ${this.modelName} ${recordLabel} after removing overflow values.`);
+        return { retryData: sanitized.data };
+      }
+
+      this.manager.logger.warn(`Skipping ${this.modelName} ${recordLabel}; no safe way to correct integer overflow.`);
+      return { skip: true };
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if the error corresponds to an integer overflow from Prisma
+   * @param {Error} error
+   * @returns {boolean}
+   */
+  isIntOverflowError(error) {
+    const message = error?.message || '';
+    return message.includes('Unable to fit integer value');
+  }
+
+  /**
+   * Sanitize integer overflow values from the upsert payload
+   * @param {Object} upsertData
+   * @returns {{data: Object, modified: boolean, skip: boolean}}
+   */
+  sanitizeOverflowingInts(upsertData) {
+    const optionalFields = new Set(this.optionalFields || []);
+    const requiredFields = new Set(this.requiredFields || []);
+    let modified = false;
+    let skip = false;
+    const recordLabel = this.describeRecord(upsertData);
+
+    const pruneOverflow = (section = {}, sectionName) => {
+      if (!section || typeof section !== 'object') {
+        return section;
+      }
+
+      const sanitized = { ...section };
+
+      for (const [key, value] of Object.entries(sanitized)) {
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          continue;
+        }
+
+        if (value > INT32_MAX || value < INT32_MIN) {
+          if (optionalFields.has(key)) {
+            delete sanitized[key];
+            modified = true;
+            this.manager.logger.warn(`${this.modelName} ${recordLabel}: dropped optional overflow field "${key}" (${value}) from ${sectionName}.`);
+          } else if (requiredFields.has(key)) {
+            skip = true;
+            this.manager.logger.error(`${this.modelName} ${recordLabel}: required field "${key}" has overflow value (${value}); cannot migrate.`);
+          } else {
+            delete sanitized[key];
+            modified = true;
+            this.manager.logger.warn(`${this.modelName} ${recordLabel}: removed overflow field "${key}" (${value}) from ${sectionName}.`);
+          }
+        }
+      }
+
+      return sanitized;
+    };
+
+    return {
+      data: {
+        where: { ...(upsertData?.where || {}) },
+        update: pruneOverflow(upsertData?.update, 'update payload'),
+        create: pruneOverflow(upsertData?.create, 'create payload')
+      },
+      modified,
+      skip
+    };
+  }
+
+  /**
+   * Describe the target record for logging
+   * @param {Object} upsertData
+   * @returns {string}
+   */
+  describeRecord(upsertData) {
+    const idField = this.getIdField();
+    const identifier = upsertData?.where?.[idField];
+
+    if (identifier !== undefined) {
+      return `[${idField}: ${identifier}]`;
+    }
+
+    if (upsertData?.where) {
+      try {
+        return `[where: ${JSON.stringify(upsertData.where)}]`;
+      } catch (err) {
+        return '[where: unable to serialize]';
+      }
+    }
+
+    return '';
   }
   
   /**

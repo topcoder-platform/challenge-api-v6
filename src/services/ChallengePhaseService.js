@@ -340,6 +340,40 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
     const hasActualStartDate = !_.isNil(challengePhase.actualStartDate);
     const hasActualEndDate = !_.isNil(challengePhase.actualEndDate);
+
+    if (hasActualStartDate && hasActualEndDate) {
+      const openPhases = await prisma.challengePhase.findMany({
+        where: {
+          challengeId: challengePhase.challengeId,
+          isOpen: true,
+        },
+        select: {
+          id: true,
+          phaseId: true,
+          predecessor: true,
+        },
+      });
+
+      if (openPhases.length > 0) {
+        const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)]);
+        if (!_.isNil(challengePhase.phaseId)) {
+          reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
+        }
+        const hasDependentOpenPhase = openPhases.some((phase) => {
+          if (!phase || _.isNil(phase.predecessor)) {
+            return false;
+          }
+          return reopenedPhaseIdentifiers.has(String(phase.predecessor));
+        });
+
+        if (!hasDependentOpenPhase) {
+          throw new errors.ForbiddenError(
+            `Cannot reopen ${phaseName} because no currently open phase depends on it`,
+          );
+        }
+      }
+    }
+
     if (hasActualStartDate) {
       data.actualStartDate = challengePhase.actualStartDate;
     } else if (!("actualStartDate" in data) || _.isNil(data.actualStartDate)) {

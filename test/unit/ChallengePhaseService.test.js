@@ -193,6 +193,85 @@ describe('challenge phase service unit tests', () => {
       actualStartMs.should.be.at.most(after.getTime())
     })
 
+    it('partially update challenge phase - allows reopening when successor phase depends on it', async () => {
+      const startDate = new Date('2025-05-01T00:00:00.000Z')
+      const endDate = new Date('2025-05-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          predecessor: data.challengePhase1Id
+        }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+        isOpen: true
+      })
+
+      should.equal(challengePhase.isOpen, true)
+      should.equal(challengePhase.actualEndDate, null)
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: false
+        }
+      })
+    })
+
+    it('partially update challenge phase - cannot reopen when open phase is not a successor', async () => {
+      const startDate = new Date('2025-06-01T00:00:00.000Z')
+      const endDate = new Date('2025-06-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          predecessor: null
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+          isOpen: true
+        })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 403)
+        should.equal(
+          e.message,
+          'Cannot reopen Registration because no currently open phase depends on it'
+        )
+        return
+      } finally {
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase2Id },
+          data: {
+            isOpen: false,
+            predecessor: data.challengePhase1Id
+          }
+        })
+      }
+
+      throw new Error('should not reach here')
+    })
+
     it('partially update challenge phase - not found', async () => {
       try {
         await service.partiallyUpdateChallengePhase(authUser, data.taskChallenge.id, data.challengePhase2Id, { name: 'updated', duration: 7200 })
