@@ -117,6 +117,54 @@ async function hasCompletedReviewsForPhase(challengePhaseIdOrIds) {
   return Number(count) > 0;
 }
 
+async function hasSubmittedAppealsForChallenge(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping submitted appeals check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`);
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`);
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`);
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT a."id")::int AS count
+        FROM ${appealTable} a
+        INNER JOIN ${reviewItemCommentTable} ric ON ric."id" = a."reviewItemCommentId"
+        INNER JOIN ${reviewItemTable} ri ON ri."id" = ric."reviewItemId"
+        INNER JOIN ${reviewTable} r ON r."id" = ri."reviewId"
+        WHERE EXISTS (
+          SELECT 1
+          FROM ${submissionTable} s
+          WHERE s."challengeId" = ${challengeId}
+            AND (
+              (r."submissionId" IS NOT NULL AND s."id" = r."submissionId")
+              OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
+            )
+        )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check submitted appeals for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
@@ -363,6 +411,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
           id: true,
           phaseId: true,
           predecessor: true,
+          name: true,
         },
       });
 
@@ -371,17 +420,31 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         if (!_.isNil(challengePhase.phaseId)) {
           reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
         }
-        const hasDependentOpenPhase = openPhases.some((phase) => {
+        const dependentOpenPhases = openPhases.filter((phase) => {
           if (!phase || _.isNil(phase.predecessor)) {
             return false;
           }
           return reopenedPhaseIdentifiers.has(String(phase.predecessor));
         });
 
-        if (!hasDependentOpenPhase) {
+        if (dependentOpenPhases.length === 0) {
           throw new errors.ForbiddenError(
             `Cannot reopen ${phaseName} because no currently open phase depends on it`,
           );
+        }
+
+        const appealsDependentPhaseExists = dependentOpenPhases.some(
+          (phase) => String(phase.name || "").toLowerCase() === "appeals"
+        );
+        if (appealsDependentPhaseExists) {
+          const hasSubmittedAppeals = await hasSubmittedAppealsForChallenge(
+            challengePhase.challengeId
+          );
+          if (hasSubmittedAppeals) {
+            throw new errors.ForbiddenError(
+              `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`
+            );
+          }
         }
       }
     }

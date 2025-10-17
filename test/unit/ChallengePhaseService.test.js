@@ -22,7 +22,12 @@ describe('challenge phase service unit tests', () => {
   const authUser = { userId: 'testuser' }
   const reviewSchema = config.get('REVIEW_DB_SCHEMA')
   const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`)
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`)
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
   let reviewClient
+  const shortId = () => uuid().replace(/-/g, '').slice(0, 14)
   before(async () => {
     await testHelper.createData()
     data = testHelper.getData()
@@ -42,11 +47,48 @@ describe('challenge phase service unit tests', () => {
       ALTER TABLE "${reviewSchema}"."review"
       ADD COLUMN IF NOT EXISTS "scorecardId" varchar(255)
     `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "submissionId" varchar(14)
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "legacySubmissionId" varchar(14)
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."submission" (
+        "id" varchar(14) PRIMARY KEY,
+        "legacySubmissionId" varchar(14),
+        "challengeId" varchar(36)
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."reviewItem" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewId" varchar(36) NOT NULL
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."reviewItemComment" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewItemId" varchar(14) NOT NULL
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."appeal" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewItemCommentId" varchar(14) NOT NULL
+      )
+    `)
   })
 
   after(async () => {
     if (reviewClient) {
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appeal"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItemComment"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItem"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."review"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."submission"`)
     }
     await testHelper.clearData()
   })
@@ -319,6 +361,123 @@ describe('challenge phase service unit tests', () => {
             predecessor: data.challengePhase1Id
           }
         })
+      }
+
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot reopen predecessor when appeals have submitted appeals', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const appealsPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Appeals',
+          description: 'desc',
+          isOpen: true,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const reviewChallengePhaseId = uuid()
+      const appealsChallengePhaseId = uuid()
+      const reviewStart = new Date('2025-07-01T00:00:00.000Z')
+      const reviewEnd = new Date('2025-07-02T00:00:00.000Z')
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          actualStartDate: reviewStart,
+          actualEndDate: reviewEnd,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      await prisma.challengePhase.create({
+        data: {
+          id: appealsChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: appealsPhase.id,
+          name: 'Appeals',
+          isOpen: true,
+          predecessor: reviewChallengePhaseId,
+          actualStartDate: new Date('2025-07-02T12:00:00.000Z'),
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const submissionId = shortId()
+      const reviewId = uuid()
+      const reviewItemId = shortId()
+      const reviewItemCommentId = shortId()
+      const appealId = shortId()
+
+      await reviewClient.$executeRaw(
+        Prisma.sql`INSERT INTO ${submissionTable} ("id", "challengeId") VALUES (${submissionId}, ${data.challenge.id})`
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewTable} ("id", "phaseId", "submissionId", "status")
+          VALUES (${reviewId}, ${reviewChallengePhaseId}, ${submissionId}, ${'COMPLETED'})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewItemTable} ("id", "reviewId")
+          VALUES (${reviewItemId}, ${reviewId})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewItemCommentTable} ("id", "reviewItemId")
+          VALUES (${reviewItemCommentId}, ${reviewItemId})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${appealTable} ("id", "reviewItemCommentId")
+          VALUES (${appealId}, ${reviewItemCommentId})
+        `
+      )
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, {
+          isOpen: true
+        })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 403)
+        should.equal(
+          e.message,
+          'Cannot reopen Review because submitted appeals already exist in the Appeals phase'
+        )
+        return
+      } finally {
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${appealTable} WHERE "id" = ${appealId}`)
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewItemCommentTable} WHERE "id" = ${reviewItemCommentId}`
+        )
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewItemTable} WHERE "id" = ${reviewItemId}`)
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`)
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${submissionTable} WHERE "id" = ${submissionId}`)
+        await prisma.challengePhase.deleteMany({
+          where: { id: { in: [appealsChallengePhaseId, reviewChallengePhaseId] } }
+        })
+        await prisma.phase.deleteMany({ where: { id: { in: [appealsPhase.id, reviewPhase.id] } } })
       }
 
       throw new Error('should not reach here')
