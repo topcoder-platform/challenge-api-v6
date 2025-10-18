@@ -23,6 +23,18 @@ class ChallengeLegacyMigrator extends BaseMigrator {
             record[this.getIdField()] = uuidv4();
         }
 
+        if (typeof record.reviewType === 'string') {
+            const normalizedType = record.reviewType.trim().toLowerCase();
+            const reviewTypeMap = {
+                internal: 'INTERNAL',
+                community: 'COMMUNITY'
+            };
+
+            if (reviewTypeMap[normalizedType]) {
+                record.reviewType = reviewTypeMap[normalizedType];
+            }
+        }
+
         return record;
     }
 
