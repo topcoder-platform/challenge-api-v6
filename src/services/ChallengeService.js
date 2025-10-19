@@ -1098,6 +1098,7 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+      _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
       _.unset(challenge, "payments");
@@ -1769,6 +1770,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
     _.unset(challenge, "winners");
+    _.unset(challenge, "checkpointWinners");
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
@@ -1855,6 +1857,27 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
  * @param {Array} winners the Winner Array
  * @param {Array} challengeResources the challenge resources
  */
+function buildCombinedWinnerPayload(data = {}) {
+  const combined = [];
+  if (Array.isArray(data.winners)) {
+    combined.push(
+      ...data.winners.map((winner) => ({
+        ...winner,
+        type: _.toUpper(winner.type || PrizeSetTypeEnum.PLACEMENT),
+      }))
+    );
+  }
+  if (Array.isArray(data.checkpointWinners)) {
+    combined.push(
+      ...data.checkpointWinners.map((winner) => ({
+        ...winner,
+        type: _.toUpper(winner.type || PrizeSetTypeEnum.CHECKPOINT),
+      }))
+    );
+  }
+  return combined;
+}
+
 async function validateWinners(winners, challengeResources) {
   const registrants = _.filter(challengeResources, (r) => r.roleId === config.SUBMITTER_ROLE_ID);
   for (const prizeType of _.values(PrizeSetTypeEnum)) {
@@ -2381,13 +2404,15 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  if (data.winners && data.winners.length && data.winners.length > 0) {
-    await validateWinners(data.winners, challengeResources);
-    if (_.get(challenge, "legacy.pureV5Task", false)) {
-      _.each(data.winners, (w) => {
-        w.type = PrizeSetTypeEnum.PLACEMENT;
-      });
-    }
+  const combinedWinnerPayload = buildCombinedWinnerPayload(data);
+  if (combinedWinnerPayload.length > 0) {
+    await validateWinners(combinedWinnerPayload, challengeResources);
+  }
+
+  if (_.get(challenge, "legacy.pureV5Task", false) && !_.isUndefined(data.winners)) {
+    _.each(data.winners, (w) => {
+      w.type = PrizeSetTypeEnum.PLACEMENT;
+    });
   }
 
   // Only m2m tokens are allowed to modify the `task.*` information on a challenge
@@ -2876,6 +2901,18 @@ updateChallenge.schema = {
             .unknown(true)
         )
         .optional(),
+      checkpointWinners: Joi.array()
+        .items(
+          Joi.object()
+            .keys({
+              userId: Joi.number().integer().positive().required(),
+              handle: Joi.string().required(),
+              placement: Joi.number().integer().positive().required(),
+              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+            })
+            .unknown(true)
+        )
+        .optional(),
       terms: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -3189,6 +3226,11 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.winners) {
     sanitized.winners = _.map(challenge.winners, (winner) =>
+      _.pick(winner, ["userId", "handle", "placement", "type"])
+    );
+  }
+  if (challenge.checkpointWinners) {
+    sanitized.checkpointWinners = _.map(challenge.checkpointWinners, (winner) =>
       _.pick(winner, ["userId", "handle", "placement", "type"])
     );
   }
