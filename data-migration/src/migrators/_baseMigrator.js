@@ -509,6 +509,17 @@ class BaseMigrator {
       return { skip: true };
     }
 
+    if (this.isNumericStringTypeError(error)) {
+      const fieldTypeMap = this.extractNumericFieldTypesFromError(error);
+      const sanitized = this.convertNumericStringFields(upsertData, fieldTypeMap);
+
+      if (sanitized.modified) {
+        const fieldSummary = sanitized.convertedFields.join(', ') || 'numeric fields';
+        this.manager.logger.warn(`${this.modelName} ${recordLabel}: converted string inputs for ${fieldSummary}; retrying upsert.`);
+        return { retryData: sanitized.data };
+      }
+    }
+
     return null;
   }
 
@@ -520,6 +531,267 @@ class BaseMigrator {
   isIntOverflowError(error) {
     const message = error?.message || '';
     return message.includes('Unable to fit integer value');
+  }
+
+  /**
+   * Determine if the Prisma error was triggered by passing string values to numeric fields
+   * @param {Error} error
+   * @returns {boolean}
+   */
+  isNumericStringTypeError(error) {
+    if (!error) {
+      return false;
+    }
+
+    const message = error.message || '';
+    const numericTypeMismatchPattern = /Expected\s+(?:Float|Int|Decimal|BigInt|Double|Real|Numeric)[^,]*,\s*provided\s+String/i;
+
+    if (numericTypeMismatchPattern.test(message)) {
+      return true;
+    }
+
+    if (Prisma?.PrismaClientValidationError && error instanceof Prisma.PrismaClientValidationError) {
+      return numericTypeMismatchPattern.test(message);
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract field names and expected numeric types from a Prisma validation error message
+   * @param {Error} error
+   * @returns {Map<string, string>}
+   */
+  extractNumericFieldTypesFromError(error) {
+    const message = error?.message || '';
+    const fieldTypeMap = new Map();
+    const argumentPattern = /Argument\s+(?:["'`])?([A-Za-z0-9_.\[\]]+)(?:["'`])?\s*:\s*Invalid value provided\.?\s*Expected\s+([A-Za-z0-9]+)[^,]*,\s*provided\s+String/gi;
+    let match;
+
+    while ((match = argumentPattern.exec(message)) !== null) {
+      const rawPath = match[1];
+      const expectedType = (match[2] || '').toUpperCase();
+      const field = this.normalizeErrorFieldPath(rawPath);
+
+      if (field && !fieldTypeMap.has(field)) {
+        fieldTypeMap.set(field, expectedType);
+      }
+    }
+
+    return fieldTypeMap;
+  }
+
+  /**
+   * Normalize a Prisma error argument path to the relevant field name
+   * @param {string} rawPath
+   * @returns {string|null}
+   */
+  normalizeErrorFieldPath(rawPath) {
+    if (!rawPath || typeof rawPath !== 'string') {
+      return null;
+    }
+
+    const segments = rawPath
+      .replace(/\[\d+\]/g, '.') // Treat array indices as segment separators
+      .split('.')
+      .map(segment => segment.trim())
+      .filter(Boolean);
+
+    if (!segments.length) {
+      return null;
+    }
+
+    return segments[segments.length - 1];
+  }
+
+  /**
+   * Convert string representations of numeric values to their proper numeric types
+   * @param {Object} upsertData
+   * @param {Map<string, string>} fieldTypeMap
+   * @returns {{data: Object, modified: boolean, convertedFields: string[]}}
+   */
+  convertNumericStringFields(upsertData, fieldTypeMap) {
+    if (!upsertData || !(fieldTypeMap instanceof Map)) {
+      return { data: upsertData, modified: false, convertedFields: [] };
+    }
+
+    if (!fieldTypeMap.size) {
+      return { data: upsertData, modified: false, convertedFields: [] };
+    }
+
+    const targetMap = new Map();
+    for (const [field, type] of fieldTypeMap.entries()) {
+      if (typeof field === 'string' && field) {
+        targetMap.set(field, (type || '').toUpperCase());
+      }
+    }
+
+    if (!targetMap.size) {
+      return { data: upsertData, modified: false, convertedFields: [] };
+    }
+
+    const convertedFields = new Set();
+    const convertValue = (value) => {
+      if (value === null || value === undefined) {
+        return value;
+      }
+
+      if (value instanceof Date) {
+        return value;
+      }
+
+      if (Prisma?.Decimal && value instanceof Prisma.Decimal) {
+        return value;
+      }
+
+      if (Array.isArray(value)) {
+        let changed = false;
+        const result = value.map(item => {
+          const converted = convertValue(item);
+          if (converted !== item) {
+            changed = true;
+          }
+          return converted;
+        });
+
+        return changed ? result : value;
+      }
+
+      if (typeof value === 'object') {
+        let changed = false;
+        const result = {};
+
+        for (const [key, entry] of Object.entries(value)) {
+          let newEntry = entry;
+          const expectedType = targetMap.get(key);
+
+          if (expectedType && typeof entry === 'string') {
+            const converted = this.tryConvertNumericString(entry, expectedType);
+            if (converted !== null) {
+              newEntry = converted;
+              changed = true;
+              convertedFields.add(`${key} (${expectedType})`);
+            }
+          }
+
+          const nested = convertValue(newEntry);
+          if (nested !== newEntry) {
+            newEntry = nested;
+            changed = true;
+          }
+
+          result[key] = newEntry;
+        }
+
+        return changed ? result : value;
+      }
+
+      return value;
+    };
+
+    const transformedWhere = convertValue(upsertData.where);
+    const transformedUpdate = convertValue(upsertData.update);
+    const transformedCreate = convertValue(upsertData.create);
+
+    const modified =
+      transformedWhere !== upsertData.where ||
+      transformedUpdate !== upsertData.update ||
+      transformedCreate !== upsertData.create;
+
+    if (!modified) {
+      return { data: upsertData, modified: false, convertedFields: [] };
+    }
+
+    return {
+      data: {
+        ...upsertData,
+        where: transformedWhere,
+        update: transformedUpdate,
+        create: transformedCreate
+      },
+      modified: true,
+      convertedFields: Array.from(convertedFields)
+    };
+  }
+
+  /**
+   * Attempt to convert a numeric-looking string into the proper numeric type
+   * @param {string} value
+   * @param {string} expectedType
+   * @returns {number|BigInt|Prisma.Decimal|null}
+   */
+  tryConvertNumericString(value, expectedType) {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed.length) {
+      return null;
+    }
+
+    const type = (expectedType || '').toUpperCase();
+    const integerPattern = /^[+-]?\d+$/;
+    const floatPattern = /^[+-]?(?:\d+(\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+    if (type === 'BIGINT') {
+      if (!integerPattern.test(trimmed)) {
+        return null;
+      }
+      try {
+        return BigInt(trimmed);
+      } catch (err) {
+        return null;
+      }
+    }
+
+    if (type === 'INT' || type === 'SMALLINT') {
+      if (!integerPattern.test(trimmed)) {
+        return null;
+      }
+      const intValue = Number(trimmed);
+      if (!Number.isFinite(intValue) || !Number.isInteger(intValue)) {
+        return null;
+      }
+      return intValue;
+    }
+
+    if (type === 'FLOAT' || type === 'DOUBLE' || type === 'REAL') {
+      if (!floatPattern.test(trimmed)) {
+        return null;
+      }
+      const floatValue = Number(trimmed);
+      return Number.isFinite(floatValue) ? floatValue : null;
+    }
+
+    if (type === 'DECIMAL' || type === 'NUMERIC') {
+      if (!floatPattern.test(trimmed)) {
+        return null;
+      }
+      if (Prisma?.Decimal) {
+        try {
+          return new Prisma.Decimal(trimmed);
+        } catch (err) {
+          // Fallback to native number if Decimal instantiation fails
+        }
+      }
+      const decimalValue = Number(trimmed);
+      return Number.isFinite(decimalValue) ? decimalValue : null;
+    }
+
+    if (integerPattern.test(trimmed)) {
+      const intValue = Number(trimmed);
+      if (Number.isFinite(intValue) && Number.isInteger(intValue)) {
+        return intValue;
+      }
+    }
+
+    if (floatPattern.test(trimmed)) {
+      const floatValue = Number(trimmed);
+      return Number.isFinite(floatValue) ? floatValue : null;
+    }
+
+    return null;
   }
 
   /**
