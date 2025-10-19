@@ -19,6 +19,9 @@ enum ChallengeTrackEnum {
 enum ReviewTypeEnum {
   COMMUNITY
   INTERNAL
+  SYSTEM
+  PROVISIONAL
+  EXAMPLE
 }
 
 enum DiscussionTypeEnum {
