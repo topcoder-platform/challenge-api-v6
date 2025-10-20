@@ -2,6 +2,10 @@
  * Unit tests of challenge service
  */
 
+if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
+  process.env.REVIEW_DB_URL = process.env.DATABASE_URL
+}
+
 require('../../app-bootstrap')
 const _ = require('lodash')
 const config = require('config')
@@ -11,8 +15,12 @@ const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
 const testHelper = require('../testHelper')
 const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
+const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = getClient()
+const reviewSchema = config.get('REVIEW_DB_SCHEMA')
+const reviewTableName = `"${reviewSchema}"."review"`
 const should = chai.should()
+let reviewClient
 
 describe('challenge service unit tests', () => {
   // created entity id
@@ -44,6 +52,24 @@ describe('challenge service unit tests', () => {
     await testHelper.clearData()
     await testHelper.createData()
     data = testHelper.getData()
+
+    reviewClient = getReviewClient()
+    await reviewClient.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${reviewSchema}"`)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ${reviewTableName} (
+        "id" varchar(36) PRIMARY KEY,
+        "phaseId" varchar(255) NOT NULL,
+        "scorecardId" varchar(255),
+        "status" varchar(32),
+        "createdAt" timestamp DEFAULT now(),
+        "updatedAt" timestamp DEFAULT now()
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${reviewTableName}
+      ADD COLUMN IF NOT EXISTS "scorecardId" varchar(255)
+    `)
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${reviewTableName}`)
 
     testChallengeData = {
       typeId: data.challenge.typeId,
@@ -744,6 +770,83 @@ describe('challenge service unit tests', () => {
       should.exist(result.startDate)
       should.exist(result.created)
       should.exist(result.updated)
+    })
+
+    describe('reviewer scorecard changes', () => {
+      const originalScorecardId = 'sc-original'
+      const newScorecardId = 'sc-updated'
+
+      beforeEach(async () => {
+        await prisma.challengeReviewer.deleteMany({ where: { challengeId: data.challenge.id } })
+        await prisma.challengeReviewer.create({
+          data: {
+            challengeId: data.challenge.id,
+            scorecardId: originalScorecardId,
+            isMemberReview: false,
+            phaseId: data.phase.id,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          }
+        })
+        if (reviewClient) {
+          await reviewClient.$executeRawUnsafe(`DELETE FROM ${reviewTableName}`)
+        }
+      })
+
+      afterEach(async () => {
+        await prisma.challengeReviewer.deleteMany({ where: { challengeId: data.challenge.id } })
+        if (reviewClient) {
+          await reviewClient.$executeRawUnsafe(`DELETE FROM ${reviewTableName}`)
+        }
+      })
+
+      it('allows scorecard change when no reviews exist', async () => {
+        const payload = {
+          reviewers: [
+            {
+              phaseId: data.phase.id,
+              scorecardId: newScorecardId,
+              isMemberReview: false
+            }
+          ]
+        }
+
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: 'sub3', userId: 22838965 },
+          data.challenge.id,
+          payload
+        )
+
+        should.exist(updated.reviewers)
+        should.equal(updated.reviewers.length, 1)
+        should.equal(updated.reviewers[0].scorecardId, newScorecardId)
+      })
+
+      it('blocks scorecard change when reviews already started', async () => {
+        if (reviewClient) {
+          await reviewClient.$executeRawUnsafe(`INSERT INTO ${reviewTableName} ("id", "phaseId", "scorecardId", "status") VALUES ('${uuid()}', '${data.challengePhase1Id}', '${originalScorecardId}', 'IN_PROGRESS')`)
+        }
+
+        try {
+          await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, data.challenge.id, {
+            reviewers: [
+              {
+                phaseId: data.phase.id,
+                scorecardId: newScorecardId,
+                isMemberReview: false
+              }
+            ]
+          })
+        } catch (e) {
+          should.equal(
+            e.message,
+            "Can't change the scorecard at this time because at least one review has already started with the old scorecard"
+          )
+          return
+        }
+
+        throw new Error('should not reach here')
+      })
     })
 
     it('update challenge - creator memberId can modify without matching handle', async () => {

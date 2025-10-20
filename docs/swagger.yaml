@@ -2585,6 +2585,25 @@ definitions:
               minimum: 1
               description: the winner placement
               example: 1
+        required:
+          - userId
+          - handle
+          - placement
+      checkpointWinners:
+        type: array
+        items:
+          properties:
+            userId:
+              type: integer
+              description: The user id
+            handle:
+              type: string
+              description: the user handle
+            placement:
+              type: integer
+              minimum: 1
+              description: the checkpoint winner placement
+              example: 1
           required:
             - userId
             - handle
@@ -3032,6 +3051,25 @@ definitions:
             - userId
             - handle
             - placement
+      checkpointWinners:
+        type: array
+        items:
+          properties:
+            userId:
+              type: integer
+              description: The user id
+            handle:
+              type: string
+              description: the user handle
+            placement:
+              type: integer
+              minimum: 1
+              description: the checkpoint winner placement
+              example: 1
+          required:
+            - userId
+            - handle
+            - placement
       terms:
         type: array
         description: The ids and roleId of the terms of use to add for the challenge
@@ -3224,6 +3262,25 @@ definitions:
               type: integer
               minimum: 1
               description: the winner placement
+              example: 1
+          required:
+            - userId
+            - handle
+            - placement
+      checkpointWinners:
+        type: array
+        items:
+          properties:
+            userId:
+              type: integer
+              description: The user id
+            handle:
+              type: string
+              description: the user handle
+            placement:
+              type: integer
+              minimum: 1
+              description: the checkpoint winner placement
               example: 1
           required:
             - userId

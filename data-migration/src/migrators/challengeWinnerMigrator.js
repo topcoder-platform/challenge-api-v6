@@ -39,6 +39,20 @@ class ChallengeWinnerMigrator extends BaseMigrator {
             record[this.getIdField()] = uuidv4();
         }
 
+        if (typeof record.userId === 'string') {
+            const trimmedUserId = record.userId.trim();
+            if (/^-?\d+$/.test(trimmedUserId)) {
+                record.userId = Number.parseInt(trimmedUserId, 10);
+            }
+        }
+
+        if (typeof record.placement === 'string') {
+            const trimmedPlacement = record.placement.trim();
+            if (/^-?\d+$/.test(trimmedPlacement)) {
+                record.placement = Number.parseInt(trimmedPlacement, 10);
+            }
+        }
+
         if (record.type) {
             record.type = prizeSetTypeMap[record.type] || Prisma.skip;
         }

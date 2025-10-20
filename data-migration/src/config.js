@@ -7,13 +7,20 @@ const parseListEnv = value => {
   return list.length ? list : null;
 };
 
+const ALLOWED_MIGRATION_MODES = new Set(['full', 'incremental']);
+const parseMigrationMode = value => {
+  if (!value) return 'full';
+  const normalized = String(value).toLowerCase();
+  return ALLOWED_MIGRATION_MODES.has(normalized) ? normalized : 'full';
+};
+
 // Default configuration with fallbacks
 module.exports = {
   // Database connection
   DATABASE_URL: process.env.DATABASE_URL,
   
   // Migration settings
-  DATA_DIRECTORY: process.env.DATA_DIRECTORY || path.join(__dirname, '..', 'data'),
+  DATA_DIRECTORY: process.env.DATA_DIRECTORY || '/home/ubuntu/',
   BATCH_SIZE: parseInt(process.env.BATCH_SIZE || '100', 10),
   CONCURRENCY_LIMIT: parseInt(process.env.CONCURRENCY_LIMIT || '10', 10),
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
@@ -21,6 +28,13 @@ module.exports = {
   // Migration behavior
   SKIP_MISSING_REQUIRED: process.env.SKIP_MISSING_REQUIRED === 'true',
   USE_TRANSACTIONS: process.env.USE_TRANSACTIONS !== 'false',
+  TRANSACTION_RETRY_ATTEMPTS: parseInt(process.env.TRANSACTION_RETRY_ATTEMPTS || '3', 10),
+  TRANSACTION_RETRY_DELAY_MS: parseInt(process.env.TRANSACTION_RETRY_DELAY_MS || '15000', 10),
+
+  // Incremental migration settings
+  MIGRATION_MODE: parseMigrationMode(process.env.MIGRATION_MODE),
+  INCREMENTAL_SINCE_DATE: process.env.INCREMENTAL_SINCE_DATE || null,
+  INCREMENTAL_FIELDS: parseListEnv(process.env.INCREMENTAL_FIELDS),
   
   // Migration attribution
   CREATED_BY: process.env.CREATED_BY || 'migration',
@@ -44,7 +58,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TYPE_FILE || 'ChallengeType_dynamo_data.json'
+      filename: process.env.CHALLENGE_TYPE_FILE || 'ChallengeType.json'
     },
 
     ChallengeTrack: {
@@ -57,7 +71,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TRACK_FILE || 'ChallengeTrack_dynamo_data.json'
+      filename: process.env.CHALLENGE_TRACK_FILE || 'ChallengeTrack.json'
     },
 
     TimelineTemplate: {
@@ -73,7 +87,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate_dynamo_data.json'
+      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate.json'
     },
 
     Phase: {
@@ -89,7 +103,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.PHASE_FILE || 'Phase_dynamo_data.json'
+      filename: process.env.PHASE_FILE || 'Phase.json'
     },
 
     TimelineTemplatePhase: {
@@ -102,7 +116,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate_dynamo_data.json'
+      filename: process.env.TIMELINE_TEMPLATE_FILE || 'TimelineTemplate.json'
     },
 
     ChallengeTimelineTemplate: {
@@ -119,7 +133,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.CHALLENGE_TIMELINE_TEMPLATE_FILE || 'ChallengeTimelineTemplate_dynamo_data.json'
+      filename: process.env.CHALLENGE_TIMELINE_TEMPLATE_FILE || 'ChallengeTimelineTemplate.json'
     },
 
     Challenge: {
@@ -159,7 +173,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.AUDIT_LOG_FILE || 'AuditLog_dynamo_data.json'
+      filename: process.env.AUDIT_LOG_FILE || 'AuditLog.json'
     },
   
     Attachment: {
@@ -175,7 +189,7 @@ module.exports = {
         createdBy: process.env.CREATED_BY || 'migration',
         updatedBy: process.env.UPDATED_BY || 'migration'
       },
-      filename: process.env.ATTACHMENT_FILE || 'Attachment_dynamo_data.json'
+      filename: process.env.ATTACHMENT_FILE || 'Attachment.json'
     },
 
     ChallengeBilling: {
@@ -409,3 +423,8 @@ module.exports = {
     },
   }, 
 };
+
+Object.defineProperty(module.exports, 'parseMigrationMode', {
+  value: parseMigrationMode,
+  enumerable: false
+});

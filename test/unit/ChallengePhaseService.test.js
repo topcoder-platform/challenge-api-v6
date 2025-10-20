@@ -22,7 +22,12 @@ describe('challenge phase service unit tests', () => {
   const authUser = { userId: 'testuser' }
   const reviewSchema = config.get('REVIEW_DB_SCHEMA')
   const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`)
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`)
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
   let reviewClient
+  const shortId = () => uuid().replace(/-/g, '').slice(0, 14)
   before(async () => {
     await testHelper.createData()
     data = testHelper.getData()
@@ -32,16 +37,58 @@ describe('challenge phase service unit tests', () => {
       CREATE TABLE IF NOT EXISTS "${reviewSchema}"."review" (
         "id" varchar(36) PRIMARY KEY,
         "phaseId" varchar(255) NOT NULL,
+        "scorecardId" varchar(255),
         "status" varchar(32),
         "createdAt" timestamp DEFAULT now(),
         "updatedAt" timestamp DEFAULT now()
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "scorecardId" varchar(255)
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "submissionId" varchar(14)
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE "${reviewSchema}"."review"
+      ADD COLUMN IF NOT EXISTS "legacySubmissionId" varchar(14)
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."submission" (
+        "id" varchar(14) PRIMARY KEY,
+        "legacySubmissionId" varchar(14),
+        "challengeId" varchar(36)
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."reviewItem" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewId" varchar(36) NOT NULL
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."reviewItemComment" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewItemId" varchar(14) NOT NULL
+      )
+    `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."appeal" (
+        "id" varchar(14) PRIMARY KEY,
+        "reviewItemCommentId" varchar(14) NOT NULL
       )
     `)
   })
 
   after(async () => {
     if (reviewClient) {
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appeal"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItemComment"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItem"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."review"`)
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."submission"`)
     }
     await testHelper.clearData()
   })
@@ -153,18 +200,287 @@ describe('challenge phase service unit tests', () => {
       should.equal(new Date(challengePhase.scheduledEndDate).toISOString(), expectedScheduledEndDate)
     })
 
-    it('partially update challenge phase - reopening clears actual end date', async () => {
+    it('partially update challenge phase - closing sets actual end date', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true, actualStartDate: new Date(), actualEndDate: null }
+      })
+
+      const before = new Date()
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+        isOpen: false
+      })
+      const after = new Date()
+
+      should.equal(challengePhase.isOpen, false)
+      should.exist(challengePhase.actualEndDate)
+      const actualEndMs = new Date(challengePhase.actualEndDate).getTime()
+      actualEndMs.should.be.at.least(before.getTime())
+      actualEndMs.should.be.at.most(after.getTime())
+    })
+
+    it('partially update challenge phase - reopening clears actual end date and sets start date', async () => {
       const previousEndDate = new Date()
       await prisma.challengePhase.update({
         where: { id: data.challengePhase1Id },
         data: { isOpen: false, actualEndDate: previousEndDate }
       })
 
+      const before = new Date()
       const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
         isOpen: true
       })
+      const after = new Date()
+
       should.equal(challengePhase.isOpen, true)
       should.equal(challengePhase.actualEndDate, null)
+      should.exist(challengePhase.actualStartDate)
+      const actualStartMs = new Date(challengePhase.actualStartDate).getTime()
+      actualStartMs.should.be.at.least(before.getTime())
+      actualStartMs.should.be.at.most(after.getTime())
+    })
+
+    it('partially update challenge phase - allows reopening when successor phase depends on it', async () => {
+      const startDate = new Date('2025-05-01T00:00:00.000Z')
+      const endDate = new Date('2025-05-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          predecessor: data.challengePhase1Id
+        }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+        isOpen: true
+      })
+
+      should.equal(challengePhase.isOpen, true)
+      should.equal(challengePhase.actualEndDate, null)
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: false
+        }
+      })
+    })
+
+    it('partially update challenge phase - reopening succeeds when predecessor matches phaseId', async () => {
+      const startDate = new Date('2025-07-01T00:00:00.000Z')
+      const endDate = new Date('2025-07-02T00:00:00.000Z')
+      const originalData = await prisma.challengePhase.findUnique({
+        where: { id: data.challengePhase2Id },
+        select: { predecessor: true }
+      })
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: false,
+          predecessor: data.phase.id
+        }
+      })
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          {
+            isOpen: true
+          }
+        )
+
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase2Id },
+          data: {
+            predecessor: originalData.predecessor,
+            isOpen: false
+          }
+        })
+      }
+    })
+
+    it('partially update challenge phase - cannot reopen when open phase is not a successor', async () => {
+      const startDate = new Date('2025-06-01T00:00:00.000Z')
+      const endDate = new Date('2025-06-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          predecessor: null
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+          isOpen: true
+        })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 403)
+        should.equal(
+          e.message,
+          'Cannot reopen Registration because no currently open phase depends on it'
+        )
+        return
+      } finally {
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase2Id },
+          data: {
+            isOpen: false,
+            predecessor: data.challengePhase1Id
+          }
+        })
+      }
+
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot reopen predecessor when appeals have submitted appeals', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const appealsPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Appeals',
+          description: 'desc',
+          isOpen: true,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const reviewChallengePhaseId = uuid()
+      const appealsChallengePhaseId = uuid()
+      const reviewStart = new Date('2025-07-01T00:00:00.000Z')
+      const reviewEnd = new Date('2025-07-02T00:00:00.000Z')
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          actualStartDate: reviewStart,
+          actualEndDate: reviewEnd,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      await prisma.challengePhase.create({
+        data: {
+          id: appealsChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: appealsPhase.id,
+          name: 'Appeals',
+          isOpen: true,
+          predecessor: reviewChallengePhaseId,
+          actualStartDate: new Date('2025-07-02T12:00:00.000Z'),
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const submissionId = shortId()
+      const reviewId = uuid()
+      const reviewItemId = shortId()
+      const reviewItemCommentId = shortId()
+      const appealId = shortId()
+
+      await reviewClient.$executeRaw(
+        Prisma.sql`INSERT INTO ${submissionTable} ("id", "challengeId") VALUES (${submissionId}, ${data.challenge.id})`
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewTable} ("id", "phaseId", "submissionId", "status")
+          VALUES (${reviewId}, ${reviewChallengePhaseId}, ${submissionId}, ${'COMPLETED'})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewItemTable} ("id", "reviewId")
+          VALUES (${reviewItemId}, ${reviewId})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewItemCommentTable} ("id", "reviewItemId")
+          VALUES (${reviewItemCommentId}, ${reviewItemId})
+        `
+      )
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${appealTable} ("id", "reviewItemCommentId")
+          VALUES (${appealId}, ${reviewItemCommentId})
+        `
+      )
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, {
+          isOpen: true
+        })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 403)
+        should.equal(
+          e.message,
+          'Cannot reopen Review because submitted appeals already exist in the Appeals phase'
+        )
+        return
+      } finally {
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${appealTable} WHERE "id" = ${appealId}`)
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewItemCommentTable} WHERE "id" = ${reviewItemCommentId}`
+        )
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewItemTable} WHERE "id" = ${reviewItemId}`)
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`)
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${submissionTable} WHERE "id" = ${submissionId}`)
+        await prisma.challengePhase.deleteMany({
+          where: { id: { in: [appealsChallengePhaseId, reviewChallengePhaseId] } }
+        })
+        await prisma.phase.deleteMany({ where: { id: { in: [appealsPhase.id, reviewPhase.id] } } })
+      }
+
+      throw new Error('should not reach here')
     })
 
     it('partially update challenge phase - not found', async () => {
@@ -191,7 +507,10 @@ describe('challenge phase service unit tests', () => {
       try {
         await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', predecessor: data.challenge.id })
       } catch (e) {
-        should.equal(e.message, `predecessor should be a valid phase in the same challenge: ${data.challenge.id}`)
+        should.equal(
+          e.message,
+          `predecessor should be a valid challenge phase in the same challenge: ${data.challenge.id}`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -308,6 +627,104 @@ describe('challenge phase service unit tests', () => {
         return
       }
       throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot open phase when predecessor is not closed', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: { isOpen: true }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot open phase when predecessor has no actualEndDate', async () => {
+      const startDate = new Date('2025-01-01T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: null
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - cannot open phase when predecessor has no actualStartDate', async () => {
+      const endDate = new Date('2025-01-02T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: null,
+          actualEndDate: endDate
+        }
+      })
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      } catch (e) {
+        should.equal(
+          e.message,
+          'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
+        )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - can open phase when predecessor is properly closed', async () => {
+      const startDate = new Date('2025-02-01T00:00:00.000Z')
+      const endDate = new Date('2025-02-02T00:00:00.000Z')
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: { isOpen: false }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      should.equal(challengePhase.isOpen, true)
+    })
+
+    it('partially update challenge phase - can open phase without predecessor', async () => {
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: null,
+          actualEndDate: null
+        }
+      })
+
+      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { isOpen: true })
+      should.equal(challengePhase.isOpen, true)
     })
   })
 

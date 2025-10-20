@@ -3,6 +3,7 @@
  */
 const _ = require("lodash");
 const Joi = require("joi");
+const { Prisma } = require("@prisma/client");
 const uuid = require("uuid/v4");
 const config = require("config");
 const xss = require("xss");
@@ -16,6 +17,7 @@ const { BadRequestError } = require("../common/errors");
 const phaseHelper = require("../common/phase-helper");
 const projectHelper = require("../common/project-helper");
 const challengeHelper = require("../common/challenge-helper");
+const { getReviewClient } = require("../common/review-prisma");
 
 const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 
@@ -61,6 +63,8 @@ const challengeDomain = {
 };
 
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
+
+const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -258,14 +262,13 @@ async function getDefaultReviewers(currentUser, criteria) {
     isMemberReview: r.isMemberReview,
     memberReviewerCount: r.memberReviewerCount,
     phaseName: r.phaseName,
-    basePayment: r.basePayment,
-    incrementalPayment: r.incrementalPayment,
+    fixedAmount: r.fixedAmount,
+    baseCoefficient: r.baseCoefficient,
+    incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
     isAIReviewer: r.isAIReviewer,
-    shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
-      ? r.shouldOpenOpportunity
-      : true,
+    shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
   }));
 }
 getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
@@ -294,8 +297,9 @@ async function setDefaultReviewers(currentUser, data) {
               otherwise: Joi.forbidden(),
             }),
             phaseName: Joi.string().required(),
-            basePayment: Joi.number().min(0).optional().allow(null),
-            incrementalPayment: Joi.number().min(0).optional().allow(null),
+            fixedAmount: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -354,9 +358,7 @@ async function setDefaultReviewers(currentUser, data) {
       where: {
         typeId: value.typeId,
         trackId: value.trackId,
-        timelineTemplateId: _.isNil(value.timelineTemplateId)
-          ? null
-          : value.timelineTemplateId,
+        timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
       },
     });
     if (value.reviewers.length > 0) {
@@ -365,9 +367,7 @@ async function setDefaultReviewers(currentUser, data) {
           ...auditFields,
           typeId: value.typeId,
           trackId: value.trackId,
-          timelineTemplateId: _.isNil(value.timelineTemplateId)
-            ? null
-            : value.timelineTemplateId,
+          timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
           isAIReviewer: !!r.isAIReviewer,
@@ -375,8 +375,11 @@ async function setDefaultReviewers(currentUser, data) {
             ? null
             : Number(r.memberReviewerCount),
           phaseName: r.phaseName,
-          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
+          fixedAmount: _.isNil(r.fixedAmount) ? null : Number(r.fixedAmount),
+          baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
+          incrementalCoefficient: _.isNil(r.incrementalCoefficient)
+            ? null
+            : Number(r.incrementalCoefficient),
           opportunityType: r.type ? _.toUpper(r.type) : null,
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
@@ -484,9 +487,7 @@ async function searchChallenges(currentUser, criteria) {
     }
     const arrayValue = Array.isArray(list) ? list : [list];
     return _.uniq(
-      arrayValue
-        .map((value) => normalizeGroupIdValue(value))
-        .filter((value) => !_.isNil(value))
+      arrayValue.map((value) => normalizeGroupIdValue(value)).filter((value) => !_.isNil(value))
     );
   };
 
@@ -1097,6 +1098,7 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+      _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
       _.unset(challenge, "payments");
@@ -1220,7 +1222,9 @@ async function createChallenge(currentUser, challenge, userToken) {
         userToken
       );
       logger.info(
-        `createChallenge: self-service project created (projectId=${challenge.projectId}) ${buildLogContext()}`
+        `createChallenge: self-service project created (projectId=${
+          challenge.projectId
+        }) ${buildLogContext()}`
       );
     }
 
@@ -1286,10 +1290,10 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.debug(`createChallenge: resolving challenge track/type ${buildLogContext()}`);
   const { track, type } = await challengeHelper.validateAndGetChallengeTypeAndTrack(challenge);
   logger.debug(
-    `createChallenge: resolved challenge track/type (trackId=${_.get(
-      track,
+    `createChallenge: resolved challenge track/type (trackId=${_.get(track, "id")}, typeId=${_.get(
+      type,
       "id"
-    )}, typeId=${_.get(type, "id")}) ${buildLogContext()}`
+    )}) ${buildLogContext()}`
   );
 
   if (_.get(type, "isTask")) {
@@ -1311,7 +1315,9 @@ async function createChallenge(currentUser, challenge, userToken) {
 
   if (challenge.phases && challenge.phases.length > 0) {
     logger.debug(
-      `createChallenge: validating provided phases (count=${challenge.phases.length}) ${buildLogContext()}`
+      `createChallenge: validating provided phases (count=${
+        challenge.phases.length
+      }) ${buildLogContext()}`
     );
     await phaseHelper.validatePhases(challenge.phases);
     logger.debug(`createChallenge: provided phases validated ${buildLogContext()}`);
@@ -1321,7 +1327,9 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (!challenge.timelineTemplateId) {
     if (challenge.typeId && challenge.trackId) {
       logger.debug(
-        `createChallenge: fetching default timeline template (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+        `createChallenge: fetching default timeline template (trackId=${
+          challenge.trackId
+        }, typeId=${challenge.typeId}) ${buildLogContext()}`
       );
       const supportedTemplates =
         await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
@@ -1330,7 +1338,9 @@ async function createChallenge(currentUser, challenge, userToken) {
           isDefault: true,
         });
       logger.debug(
-        `createChallenge: retrieved ${supportedTemplates.result.length} supported templates ${buildLogContext()}`
+        `createChallenge: retrieved ${
+          supportedTemplates.result.length
+        } supported templates ${buildLogContext()}`
       );
       const challengeTimelineTemplate = supportedTemplates.result[0];
       if (!challengeTimelineTemplate) {
@@ -1340,14 +1350,18 @@ async function createChallenge(currentUser, challenge, userToken) {
       }
       challenge.timelineTemplateId = challengeTimelineTemplate.timelineTemplateId;
       logger.debug(
-        `createChallenge: using timelineTemplateId=${challenge.timelineTemplateId} ${buildLogContext()}`
+        `createChallenge: using timelineTemplateId=${
+          challenge.timelineTemplateId
+        } ${buildLogContext()}`
       );
     } else {
       throw new errors.BadRequestError(`trackId and typeId are required to create a challenge`);
     }
   }
   logger.debug(
-    `createChallenge: populating phases for challenge creation (templateId=${challenge.timelineTemplateId}) ${buildLogContext()}`
+    `createChallenge: populating phases for challenge creation (templateId=${
+      challenge.timelineTemplateId
+    }) ${buildLogContext()}`
   );
   challenge.phases = await phaseHelper.populatePhasesForChallengeCreation(
     challenge.phases,
@@ -1410,7 +1424,9 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (!challenge.reviewers || challenge.reviewers.length === 0) {
     if (challenge.typeId && challenge.trackId) {
       logger.debug(
-        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${challenge.typeId}) ${buildLogContext()}`
+        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${
+          challenge.typeId
+        }) ${buildLogContext()}`
       );
       const defaultReviewerWhere = {
         typeId: challenge.typeId,
@@ -1458,13 +1474,15 @@ async function createChallenge(currentUser, challenge, userToken) {
           memberReviewerCount: r.memberReviewerCount,
           // connect reviewers to the Phase model via its id
           phaseId: phaseMap.get(r.phaseName),
-          basePayment: r.basePayment,
-          incrementalPayment: r.incrementalPayment,
+          fixedAmount: r.fixedAmount,
+          baseCoefficient: r.baseCoefficient,
+          incrementalCoefficient: r.incrementalCoefficient,
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
           isAIReviewer: r.isAIReviewer ?? false,
-          shouldOpenOpportunity:
-            _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
+          shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
+            ? r.shouldOpenOpportunity
+            : true,
         }));
       }
     }
@@ -1482,9 +1500,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     data: prismaModel,
     include: includeReturnFields,
   });
-  logger.info(
-    `createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`
-  );
+  logger.info(`createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`);
 
   ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   // No conversion needed - values are already in dollars in the database
@@ -1498,32 +1514,44 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.legacy.selfService) {
     if (currentUser.handle) {
       logger.debug(
-        `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
       await helper.createResource(ret.id, ret.createdBy, config.CLIENT_MANAGER_ROLE_ID);
       logger.debug(
-        `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
     }
   } else {
     if (currentUser.handle) {
       logger.debug(
-        `createChallenge: assigning MANAGER role to creator (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: assigning MANAGER role to creator (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
       await helper.createResource(ret.id, ret.createdBy, config.MANAGER_ROLE_ID);
       logger.debug(
-        `createChallenge: MANAGER role assignment complete (challengeId=${ret.id}) ${buildLogContext()}`
+        `createChallenge: MANAGER role assignment complete (challengeId=${
+          ret.id
+        }) ${buildLogContext()}`
       );
     }
   }
 
   // post bus event
   logger.info(
-    `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+    `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${
+      ret.id
+    }) ${buildLogContext()}`
   );
   await helper.postBusEvent(constants.Topics.ChallengeCreated, ret);
   logger.info(
-    `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${ret.id}) ${buildLogContext()}`
+    `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${
+      ret.id
+    }) ${buildLogContext()}`
   );
 
   return helper.removeNullProperties(ret);
@@ -1626,8 +1654,6 @@ createChallenge.schema = {
             otherwise: Joi.forbidden(),
           }),
           phaseId: Joi.id().required(),
-          basePayment: Joi.number().min(0).optional(),
-          incrementalPayment: Joi.number().min(0).optional(),
           type: Joi.when("isMemberReview", {
             is: true,
             then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -1638,6 +1664,9 @@ createChallenge.schema = {
             then: Joi.string().required(),
             otherwise: Joi.forbidden(),
           }),
+          fixedAmount: Joi.number().min(0).optional().allow(null),
+          baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+          incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
         })
       ),
       prizeSets: Joi.array().items(
@@ -1741,6 +1770,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
     _.unset(challenge, "winners");
+    _.unset(challenge, "checkpointWinners");
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
@@ -1827,6 +1857,27 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
  * @param {Array} winners the Winner Array
  * @param {Array} challengeResources the challenge resources
  */
+function buildCombinedWinnerPayload(data = {}) {
+  const combined = [];
+  if (Array.isArray(data.winners)) {
+    combined.push(
+      ...data.winners.map((winner) => ({
+        ...winner,
+        type: _.toUpper(winner.type || PrizeSetTypeEnum.PLACEMENT),
+      }))
+    );
+  }
+  if (Array.isArray(data.checkpointWinners)) {
+    combined.push(
+      ...data.checkpointWinners.map((winner) => ({
+        ...winner,
+        type: _.toUpper(winner.type || PrizeSetTypeEnum.CHECKPOINT),
+      }))
+    );
+  }
+  return combined;
+}
+
 async function validateWinners(winners, challengeResources) {
   const registrants = _.filter(challengeResources, (r) => r.roleId === config.SUBMITTER_ROLE_ID);
   for (const prizeType of _.values(PrizeSetTypeEnum)) {
@@ -2353,13 +2404,15 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  if (data.winners && data.winners.length && data.winners.length > 0) {
-    await validateWinners(data.winners, challengeResources);
-    if (_.get(challenge, "legacy.pureV5Task", false)) {
-      _.each(data.winners, (w) => {
-        w.type = PrizeSetTypeEnum.PLACEMENT;
-      });
-    }
+  const combinedWinnerPayload = buildCombinedWinnerPayload(data);
+  if (combinedWinnerPayload.length > 0) {
+    await validateWinners(combinedWinnerPayload, challengeResources);
+  }
+
+  if (_.get(challenge, "legacy.pureV5Task", false) && !_.isUndefined(data.winners)) {
+    _.each(data.winners, (w) => {
+      w.type = PrizeSetTypeEnum.PLACEMENT;
+    });
   }
 
   // Only m2m tokens are allowed to modify the `task.*` information on a challenge
@@ -2496,6 +2549,15 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       }
       throw e;
     }
+  }
+
+  if (!_.isNil(data.reviewers)) {
+    await ensureScorecardChangeDoesNotConflict({
+      challengeId,
+      originalReviewers: challenge.reviewers || [],
+      updatedReviewers: data.reviewers,
+      originalChallengePhases,
+    });
   }
 
   // convert data to prisma models
@@ -2769,8 +2831,6 @@ updateChallenge.schema = {
               otherwise: Joi.forbidden(),
             }),
             phaseId: Joi.id().required(),
-            basePayment: Joi.number().min(0).optional().allow(null),
-            incrementalPayment: Joi.number().min(0).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
               then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
@@ -2781,6 +2841,9 @@ updateChallenge.schema = {
               then: Joi.string().required(),
               otherwise: Joi.forbidden(),
             }),
+            fixedAmount: Joi.number().min(0).optional().allow(null),
+            baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
+            incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
           })
         )
         .optional(),
@@ -2827,6 +2890,18 @@ updateChallenge.schema = {
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
       winners: Joi.array()
+        .items(
+          Joi.object()
+            .keys({
+              userId: Joi.number().integer().positive().required(),
+              handle: Joi.string().required(),
+              placement: Joi.number().integer().positive().required(),
+              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+            })
+            .unknown(true)
+        )
+        .optional(),
+      checkpointWinners: Joi.array()
         .items(
           Joi.object()
             .keys({
@@ -2885,6 +2960,176 @@ sendNotifications.schema = {
   currentUser: Joi.any(),
   challengeId: Joi.id(),
 };
+
+async function ensureScorecardChangeDoesNotConflict({
+  challengeId,
+  originalReviewers = [],
+  updatedReviewers = [],
+  originalChallengePhases = [],
+}) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return;
+  }
+
+  if (!Array.isArray(originalReviewers) || originalReviewers.length === 0) {
+    return;
+  }
+
+  const originalByPhase = new Map();
+  for (const reviewer of originalReviewers) {
+    if (!reviewer || _.isNil(reviewer.phaseId)) {
+      continue;
+    }
+    const phaseKey = String(reviewer.phaseId);
+    if (!originalByPhase.has(phaseKey)) {
+      originalByPhase.set(phaseKey, []);
+    }
+    originalByPhase.get(phaseKey).push(reviewer);
+  }
+
+  if (originalByPhase.size === 0) {
+    return;
+  }
+
+  const updatedByPhase = new Map();
+  if (Array.isArray(updatedReviewers)) {
+    for (const reviewer of updatedReviewers) {
+      if (!reviewer || _.isNil(reviewer.phaseId)) {
+        continue;
+      }
+      const phaseKey = String(reviewer.phaseId);
+      if (!updatedByPhase.has(phaseKey)) {
+        updatedByPhase.set(phaseKey, []);
+      }
+      updatedByPhase.get(phaseKey).push(reviewer);
+    }
+  }
+
+  const removedScorecardsByPhase = new Map();
+  for (const [phaseKey, originalList] of originalByPhase.entries()) {
+    const updatedList = updatedByPhase.get(phaseKey) || [];
+
+    const originalScorecards = Array.from(
+      new Set(
+        originalList
+          .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
+          .filter((scorecardId) => !_.isNil(scorecardId))
+      )
+    );
+
+    if (originalScorecards.length === 0) {
+      continue;
+    }
+
+    const updatedScorecards = Array.from(
+      new Set(
+        updatedList
+          .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
+          .filter((scorecardId) => !_.isNil(scorecardId))
+      )
+    );
+
+    const removedScorecards = originalScorecards.filter(
+      (scorecardId) => !updatedScorecards.includes(scorecardId)
+    );
+
+    if (removedScorecards.length > 0) {
+      removedScorecardsByPhase.set(phaseKey, Array.from(new Set(removedScorecards)));
+    }
+  }
+
+  if (removedScorecardsByPhase.size === 0) {
+    return;
+  }
+
+  const phaseIdToChallengePhaseIds = new Map();
+  for (const phase of originalChallengePhases || []) {
+    if (!phase || _.isNil(phase.phaseId) || _.isNil(phase.id)) {
+      continue;
+    }
+    const phaseKey = String(phase.phaseId);
+    if (!phaseIdToChallengePhaseIds.has(phaseKey)) {
+      phaseIdToChallengePhaseIds.set(phaseKey, new Set());
+    }
+    phaseIdToChallengePhaseIds.get(phaseKey).add(String(phase.id));
+  }
+
+  const reviewClient = getReviewClient();
+  const hasReviewModel =
+    reviewClient &&
+    typeof reviewClient.review === "object" &&
+    typeof reviewClient.review?.count === "function";
+
+  if (!hasReviewModel) {
+    logger.debug(
+      `Prisma review model is unavailable; falling back to raw query guard for challenge ${challengeId}`
+    );
+  }
+
+  for (const [phaseKey, scorecardIds] of removedScorecardsByPhase.entries()) {
+    const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
+
+    if (challengePhaseIds.length === 0) {
+      logger.debug(
+        `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`
+      );
+      continue;
+    }
+
+    for (const scorecardId of scorecardIds) {
+      if (!scorecardId) {
+        continue;
+      }
+
+      let conflictingReviews = 0;
+
+      if (hasReviewModel) {
+        conflictingReviews = await reviewClient.review.count({
+          where: {
+            phaseId: { in: challengePhaseIds },
+            scorecardId,
+            status: { in: REVIEW_STATUS_BLOCKING },
+          },
+        });
+      } else if (typeof reviewClient?.$queryRaw === "function") {
+        try {
+          const queryResult = await reviewClient.$queryRaw`
+            SELECT COUNT(*)::int AS count
+            FROM "review"
+            WHERE "phaseId" IN (${Prisma.join(challengePhaseIds)})
+              AND "scorecardId" = ${scorecardId}
+              AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
+          `;
+
+          const rawCount =
+            Array.isArray(queryResult) && queryResult.length > 0
+              ? Number(queryResult[0]?.count || 0)
+              : 0;
+          conflictingReviews = Number.isFinite(rawCount) ? rawCount : 0;
+        } catch (error) {
+          logger.warn(
+            `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} due to review DB query failure: ${error.message}`
+          );
+          continue;
+        }
+      } else {
+        logger.warn(
+          `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because review Prisma client does not support raw queries`
+        );
+        continue;
+      }
+
+      if (conflictingReviews > 0) {
+        throw new BadRequestError(
+          "Can't change the scorecard at this time because at least one review has already started with the old scorecard"
+        );
+      }
+    }
+  }
+}
 
 /**
  * Remove unwanted properties from the challenge object
@@ -2968,8 +3213,9 @@ function sanitizeChallenge(challenge) {
         "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
-        "basePayment",
-        "incrementalPayment",
+        "fixedAmount",
+        "baseCoefficient",
+        "incrementalCoefficient",
         "type",
         "aiWorkflowId",
       ])
@@ -2980,6 +3226,11 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.winners) {
     sanitized.winners = _.map(challenge.winners, (winner) =>
+      _.pick(winner, ["userId", "handle", "placement", "type"])
+    );
+  }
+  if (challenge.checkpointWinners) {
+    sanitized.checkpointWinners = _.map(challenge.checkpointWinners, (winner) =>
       _.pick(winner, ["userId", "handle", "placement", "type"])
     );
   }
@@ -3361,6 +3612,7 @@ module.exports = {
   advancePhase,
   getDefaultReviewers,
   setDefaultReviewers,
+  indexChallengeAndPostToKafka,
 };
 
 logger.buildService(module.exports);

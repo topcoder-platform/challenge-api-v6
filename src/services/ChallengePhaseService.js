@@ -11,6 +11,7 @@ const logger = require("../common/logger");
 const errors = require("../common/errors");
 const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
+const { indexChallengeAndPostToKafka } = require("./ChallengeService");
 
 const { getClient } = require("../common/prisma");
 const prisma = getClient();
@@ -61,10 +62,134 @@ async function hasPendingScorecardsForPhase(challengePhaseId) {
   return Number(count) > 0;
 }
 
+async function hasCompletedReviewsForPhase(challengePhaseIdOrIds) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping completed review check for phase ${challengePhaseIdOrIds} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const phaseIds = Array.isArray(challengePhaseIdOrIds)
+    ? challengePhaseIdOrIds.filter((id) => !_.isNil(id))
+    : [challengePhaseIdOrIds];
+
+  if (phaseIds.length === 0) {
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const statusText = Prisma.raw(`"status"::text`);
+  const completedStatuses = ["IN_PROGRESS", "COMPLETED"];
+
+  const phaseIdClause =
+    phaseIds.length === 1
+      ? Prisma.sql`"phaseId" = ${phaseIds[0]}`
+      : Prisma.sql`"phaseId" IN (${Prisma.join(
+          phaseIds.map((phaseId) => Prisma.sql`${phaseId}`)
+        )})`;
+
+  const completedStatusClause = Prisma.sql`${statusText} IN (${Prisma.join(
+    completedStatuses.map((status) => Prisma.sql`${status}`)
+  )})`;
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS count
+        FROM ${reviewTable}
+        WHERE ${phaseIdClause}
+          AND ${completedStatusClause}
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check completed reviews for phase(s) ${phaseIds.join(", ")}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
+async function hasSubmittedAppealsForChallenge(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping submitted appeals check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`);
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`);
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`);
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT a."id")::int AS count
+        FROM ${appealTable} a
+        INNER JOIN ${reviewItemCommentTable} ric ON ric."id" = a."reviewItemCommentId"
+        INNER JOIN ${reviewItemTable} ri ON ri."id" = ric."reviewItemId"
+        INNER JOIN ${reviewTable} r ON r."id" = ri."reviewId"
+        WHERE EXISTS (
+          SELECT 1
+          FROM ${submissionTable} s
+          WHERE s."challengeId" = ${challengeId}
+            AND (
+              (r."submissionId" IS NOT NULL AND s."id" = r."submissionId")
+              OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
+            )
+        )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check submitted appeals for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
+  }
+}
+
+/**
+ * Publish a challenge update event with the latest challenge payload.
+ * @param {String} challengeId the challenge id
+ */
+async function postChallengeUpdatedNotification(challengeId) {
+  try {
+    const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+    if (!challenge) {
+      logger.error(`Failed to publish challenge update event: challenge ${challengeId} not found`);
+      return;
+    }
+    await indexChallengeAndPostToKafka(challenge);
+  } catch (error) {
+    logger.error(
+      `Failed to publish challenge update event for challenge ${challengeId}: ${error.message}`,
+      error
+    );
+    throw error;
   }
 }
 
@@ -157,11 +282,42 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
   if (data["predecessor"]) {
     const predecessor = await prisma.challengePhase.findFirst({
-      where: { challengeId, id: data["predecessor"] },
+      where: {
+        challengeId,
+        OR: [
+          { id: data["predecessor"] },
+          { phaseId: data["predecessor"] },
+        ],
+      },
     });
     if (!predecessor) {
       throw new errors.BadRequestError(
         `predecessor should be a valid challenge phase in the same challenge: ${challengeId}`
+      );
+    }
+  }
+
+  const isOpeningPhase = "isOpen" in data && data["isOpen"] === true;
+  const predecessorId = data["predecessor"] || challengePhase.predecessor;
+  if (isOpeningPhase && predecessorId) {
+    const predecessorPhase = await prisma.challengePhase.findFirst({
+      where: {
+        challengeId,
+        OR: [
+          { id: predecessorId },
+          { phaseId: predecessorId },
+        ],
+      },
+    });
+
+    if (
+      !predecessorPhase ||
+      predecessorPhase.isOpen ||
+      _.isNil(predecessorPhase.actualStartDate) ||
+      _.isNil(predecessorPhase.actualEndDate)
+    ) {
+      throw new errors.BadRequestError(
+        "Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set"
       );
     }
   }
@@ -208,8 +364,96 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         `Cannot close ${phaseName} because there are still pending scorecards`
       );
     }
+    if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
+      data.actualEndDate = new Date();
+    }
   }
   if (isReopeningPhase) {
+    const phaseName = challengePhase.name;
+    if (phaseName === "Submission" || phaseName === "Registration") {
+      const hasCompletedReviews = await hasCompletedReviewsForPhase(challengePhase.id);
+      if (hasCompletedReviews) {
+        throw new errors.ForbiddenError(
+          "Cannot reopen Submission/Registration phase because reviews are already in progress or completed"
+        );
+      }
+    }
+
+    if (phaseName === "Checkpoint Submission") {
+      const checkpointPhases = await prisma.challengePhase.findMany({
+        where: {
+          challengeId: challengePhase.challengeId,
+          name: { in: ["Checkpoint Screening", "Checkpoint Review"] },
+        },
+        select: { id: true },
+      });
+      const checkpointPhaseIds = checkpointPhases.map((cp) => cp.id);
+      if (checkpointPhaseIds.length > 0) {
+        const hasCheckpointReviews = await hasCompletedReviewsForPhase(checkpointPhaseIds);
+        if (hasCheckpointReviews) {
+          throw new errors.ForbiddenError(
+            "Cannot reopen Checkpoint Submission phase because Checkpoint Screening or Checkpoint Review reviews are already in progress or completed"
+          );
+        }
+      }
+    }
+
+    const hasActualStartDate = !_.isNil(challengePhase.actualStartDate);
+    const hasActualEndDate = !_.isNil(challengePhase.actualEndDate);
+
+    if (hasActualStartDate && hasActualEndDate) {
+      const openPhases = await prisma.challengePhase.findMany({
+        where: {
+          challengeId: challengePhase.challengeId,
+          isOpen: true,
+        },
+        select: {
+          id: true,
+          phaseId: true,
+          predecessor: true,
+          name: true,
+        },
+      });
+
+      if (openPhases.length > 0) {
+        const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)]);
+        if (!_.isNil(challengePhase.phaseId)) {
+          reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
+        }
+        const dependentOpenPhases = openPhases.filter((phase) => {
+          if (!phase || _.isNil(phase.predecessor)) {
+            return false;
+          }
+          return reopenedPhaseIdentifiers.has(String(phase.predecessor));
+        });
+
+        if (dependentOpenPhases.length === 0) {
+          throw new errors.ForbiddenError(
+            `Cannot reopen ${phaseName} because no currently open phase depends on it`,
+          );
+        }
+
+        const appealsDependentPhaseExists = dependentOpenPhases.some(
+          (phase) => String(phase.name || "").toLowerCase() === "appeals"
+        );
+        if (appealsDependentPhaseExists) {
+          const hasSubmittedAppeals = await hasSubmittedAppealsForChallenge(
+            challengePhase.challengeId
+          );
+          if (hasSubmittedAppeals) {
+            throw new errors.ForbiddenError(
+              `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`
+            );
+          }
+        }
+      }
+    }
+
+    if (hasActualStartDate) {
+      data.actualStartDate = challengePhase.actualStartDate;
+    } else if (!("actualStartDate" in data) || _.isNil(data.actualStartDate)) {
+      data.actualStartDate = new Date();
+    }
     data.actualEndDate = null;
   }
 
@@ -273,6 +517,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     constants.Topics.ChallengePhaseUpdated,
     _.assignIn({ id: result.id }, data)
   );
+  await postChallengeUpdatedNotification(challengeId);
   return _.omit(result, constants.auditFields);
 }
 
@@ -352,6 +597,7 @@ async function deleteChallengePhase(currentUser, challengeId, id) {
   const ret = _.omit(result, constants.auditFields);
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengePhaseDeleted, ret);
+  await postChallengeUpdatedNotification(challengeId);
   return ret;
 }
 

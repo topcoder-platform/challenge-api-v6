@@ -1,20 +1,45 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
-const config = require('./config');
+const configModule = require('./config');
 const fs = require('fs');
 const path = require('path');
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const { parseMigrationMode } = configModule;
+const baseConfig = { ...configModule };
+
+if (typeof parseMigrationMode === 'function') {
+  delete baseConfig.parseMigrationMode;
+}
 
 /**
  * Core migration manager that orchestrates the migration process
  */
 class MigrationManager {
   constructor(userConfig = {}) {
+    const overrideConfig = { ...userConfig };
+    let pendingMigrationModeWarning = null;
+
+    if (Object.prototype.hasOwnProperty.call(overrideConfig, 'MIGRATION_MODE') && typeof parseMigrationMode === 'function') {
+      const rawMigrationMode = overrideConfig.MIGRATION_MODE;
+      const normalizedMode = parseMigrationMode(rawMigrationMode);
+      overrideConfig.MIGRATION_MODE = normalizedMode;
+
+      const isNullishOverride = rawMigrationMode === undefined || rawMigrationMode === null;
+      const matchesAllowedString = typeof rawMigrationMode === 'string' && rawMigrationMode.toLowerCase() === normalizedMode;
+
+      if (!isNullishOverride && !matchesAllowedString) {
+        pendingMigrationModeWarning = rawMigrationMode;
+      }
+    }
+
     // Merge default config with user-provided config
     this.config = {
-      ...config,
-      ...userConfig,
+      ...baseConfig,
+      ...overrideConfig,
       defaultValues: {
-        ...config.defaultValues,
-        ...(userConfig.defaultValues || {})
+        ...baseConfig.defaultValues,
+        ...(overrideConfig.defaultValues || {})
       }
     };
     
@@ -29,6 +54,20 @@ class MigrationManager {
     this.dependencies = {};
     // this.logger = this.createLogger(this.config.LOG_LEVEL);
     this.logger = this.createLogger(this.config.LOG_LEVEL, this.config.LOG_FILE || 'migration.log');
+    if (pendingMigrationModeWarning) {
+      this.logger.warn(`Invalid MIGRATION_MODE "${pendingMigrationModeWarning}" provided. Defaulting to 'full'.`);
+    }
+
+    if (this.config.MIGRATION_MODE === 'incremental') {
+      const sinceDate = this.config.INCREMENTAL_SINCE_DATE;
+
+      if (!sinceDate) {
+        this.logger.warn('Incremental migration mode is set but no INCREMENTAL_SINCE_DATE is configured.');
+      } else if (Number.isNaN(Date.parse(sinceDate))) {
+        this.logger.warn(`INCREMENTAL_SINCE_DATE "${sinceDate}" is not a valid ISO date string and will be ignored by subsequent phases.`);
+        this.config.INCREMENTAL_SINCE_DATE = null;
+      }
+    }
     this.migrators = [];
   }
   
@@ -69,8 +108,9 @@ class MigrationManager {
       }
       
       try {
-        if (logStream && !logStream.writableStream) {
-          logStream.write(`${logMessage} ${argsString}\n`);
+        if (logStream?.writable) {
+          const suffix = argsString ? ` ${argsString}` : '';
+          logStream.write(`${logMessage}${suffix}\n`);
         }
       } catch (err) {
         console.error('Error writing to log:', err);
@@ -110,6 +150,13 @@ class MigrationManager {
    */
   isValidDependency(dependencyModel, id) {
     return this.dependencies[dependencyModel]?.has(id) || false;
+  }
+
+  /**
+   * Determine if the migration is running in incremental mode
+   */
+  isIncrementalMode() {
+    return this.config.MIGRATION_MODE === 'incremental';
   }
 
   /**
@@ -191,6 +238,41 @@ class MigrationManager {
     const batchSize = this.config.BATCH_SIZE;
     let processed = 0;
     let skipped = 0;
+    const rawRetryAttempts = Number(this.config.TRANSACTION_RETRY_ATTEMPTS);
+    const retryAttempts = Number.isFinite(rawRetryAttempts) && rawRetryAttempts > 0
+      ? Math.floor(rawRetryAttempts)
+      : 0;
+    const rawRetryDelayMs = Number(this.config.TRANSACTION_RETRY_DELAY_MS);
+    const retryDelayMs = Number.isFinite(rawRetryDelayMs) && rawRetryDelayMs > 0
+      ? Math.floor(rawRetryDelayMs)
+      : 0;
+    const shouldRetryTransactionStart = error =>
+      this.config.USE_TRANSACTIONS &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2028';
+    const executeBatch = async (batch, attempt = 0) => {
+      const uniqueTracker = new Map();
+
+      try {
+        if (this.config.USE_TRANSACTIONS) {
+          return await this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker));
+        }
+        return await processFn(batch, this.prisma, uniqueTracker);
+      } catch (error) {
+        if (attempt < retryAttempts && shouldRetryTransactionStart(error)) {
+          const nextAttempt = attempt + 1;
+          const waitMs = retryDelayMs;
+          const waitSeconds = Math.round(waitMs / 1000) || 0;
+          this.logger.warn(`Unable to start transaction for batch (P2028). Retrying attempt ${nextAttempt} of ${retryAttempts} in ${waitSeconds}s.`);
+          if (waitMs > 0) {
+            await sleep(waitMs);
+          }
+          return executeBatch(batch, nextAttempt);
+        }
+
+        throw error;
+      }
+    };
 
     // Create batches
     const batches = [];
@@ -204,15 +286,7 @@ class MigrationManager {
 
     for (let i = 0; i < batches.length; i += concurrencyLimit) {
       const batchGroup = batches.slice(i, i + concurrencyLimit);
-      const batchPromises = batchGroup.map(batch => {
-      const uniqueTracker = new Map();
-      
-      if (this.config.USE_TRANSACTIONS) {
-        return this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker));
-      } else {
-        return processFn(batch, this.prisma, uniqueTracker);
-      }
-      });
+      const batchPromises = batchGroup.map(batch => executeBatch(batch));
       
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);

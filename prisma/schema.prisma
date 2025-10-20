@@ -19,6 +19,9 @@ enum ChallengeTrackEnum {
 enum ReviewTypeEnum {
   COMMUNITY
   INTERNAL
+  SYSTEM
+  PROVISIONAL
+  EXAMPLE
 }
 
 enum DiscussionTypeEnum {
@@ -588,8 +591,9 @@ model ChallengeReviewer {
   isMemberReview        Boolean
   memberReviewerCount   Int?
   phaseId               String
-  basePayment           Float?
-  incrementalPayment    Float?
+  fixedAmount           Float? @default(0)
+  baseCoefficient           Float?
+  incrementalCoefficient    Float?
   type                  ReviewOpportunityTypeEnum?
   aiWorkflowId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
@@ -625,8 +629,9 @@ model DefaultChallengeReviewer {
   phaseName             String
   // Optional explicit link to Phase for better fidelity
   phaseId               String?
-  basePayment           Float?
-  incrementalPayment    Float?
+  fixedAmount           Float? @default(0)
+  baseCoefficient           Float?
+  incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
   isAIReviewer          Boolean
   shouldOpenOpportunity Boolean                    @default(true)

@@ -297,9 +297,11 @@ class ChallengeHelper {
       );
     }
 
+    const hasWinnerUpdates =
+      (Array.isArray(data.winners) && data.winners.length > 0) ||
+      (Array.isArray(data.checkpointWinners) && data.checkpointWinners.length > 0);
     if (
-      data.winners &&
-      data.winners.length > 0 &&
+      hasWinnerUpdates &&
       challenge.status !== ChallengeStatusEnum.COMPLETED &&
       data.status !== ChallengeStatusEnum.COMPLETED
     ) {

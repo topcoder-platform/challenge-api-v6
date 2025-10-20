@@ -172,8 +172,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             // Database stores values in dollars directly, no amountInCents field exists
             prizeData.value = p.value;
             // calculate only placement and checkpoint prizes
-            if (s.type === PrizeSetTypeEnum.PLACEMENT && p.type === constants.prizeTypes.USD)
-            {
+            if (s.type === PrizeSetTypeEnum.PLACEMENT && p.type === constants.prizeTypes.USD) {
               // Values are already in dollars, no conversion needed
               totalPrizes += p.value;
             }
@@ -229,8 +228,10 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
-          basePayment: _.isNil(r.basePayment) ? null : Number(r.basePayment),
-          incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
+          baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
+          incrementalCoefficient: _.isNil(r.incrementalCoefficient)
+            ? null
+            : Number(r.incrementalCoefficient),
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
             ? false
@@ -243,21 +244,36 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
       }),
     };
   }
-  // winners
+  const allWinnerEntries = [];
   if (!_.isNil(challenge.winners)) {
+    _.forEach(challenge.winners, (winner) => {
+      const entry = {
+        ...auditFields,
+        ..._.pick(winner, ["userId", "handle", "placement", "type"]),
+      };
+      if (_.isNil(entry.type)) {
+        entry.type = PrizeSetTypeEnum.PLACEMENT;
+      } else {
+        entry.type = entry.type.toUpperCase();
+      }
+      allWinnerEntries.push(entry);
+    });
+  }
+  if (!_.isNil(challenge.checkpointWinners)) {
+    _.forEach(challenge.checkpointWinners, (winner) => {
+      const entry = {
+        ...auditFields,
+        ..._.pick(winner, ["userId", "handle", "placement", "type"]),
+      };
+      entry.type = _.isNil(entry.type)
+        ? PrizeSetTypeEnum.CHECKPOINT
+        : entry.type.toUpperCase();
+      allWinnerEntries.push(entry);
+    });
+  }
+  if (allWinnerEntries.length > 0) {
     result.winners = {
-      create: _.map(challenge.winners, (w) => {
-        const t = {
-          ...auditFields,
-          ..._.pick(w, ["userId", "handle", "placement", "type"]),
-        };
-        if (_.isNil(t.type)) {
-          t.type = PrizeSetTypeEnum.PLACEMENT;
-        } else {
-          t.type = t.type.toUpperCase();
-        }
-        return t;
-      }),
+      create: allWinnerEntries,
     };
   }
   // relations
@@ -356,11 +372,17 @@ function convertModelToResponse(ret) {
   // convert attachments
   ret.attachments = _.map(ret.attachments, (r) => _.omit(r, constants.auditFields, "challengeId"));
   // convert winners
-  ret.winners = _.map(ret.winners, (w) => {
-    const winner = _.pick(w, ["userId", "handle", "placement"]);
-
-    return winner;
-  });
+  const winnersForResponse = ret.winners || [];
+  const winnerGroups = _.groupBy(winnersForResponse, (w) => w.type);
+  const placementWinners = winnerGroups[PrizeSetTypeEnum.PLACEMENT] || [];
+  const checkpointWinners = winnerGroups[PrizeSetTypeEnum.CHECKPOINT] || [];
+  ret.winners = _.map(placementWinners, (w) => _.pick(w, ["userId", "handle", "placement"]));
+  delete ret.checkpointWinners;
+  if (checkpointWinners.length > 0) {
+    ret.checkpointWinners = _.map(checkpointWinners, (w) =>
+      _.pick(w, ["userId", "handle", "placement"])
+    );
+  }
   // convert reviewers
   if (ret.reviewers) {
     ret.reviewers = _.map(ret.reviewers, (rv) =>
@@ -369,8 +391,8 @@ function convertModelToResponse(ret) {
         "isMemberReview",
         "memberReviewerCount",
         "phaseId",
-        "basePayment",
-        "incrementalPayment",
+        "baseCoefficient",
+        "incrementalCoefficient",
         "type",
         "aiWorkflowId",
         "shouldOpenOpportunity",
