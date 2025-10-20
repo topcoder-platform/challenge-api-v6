@@ -233,7 +233,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           incrementalPayment: _.isNil(r.incrementalPayment) ? null : Number(r.incrementalPayment),
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
-            ? true
+            ? false
             : !!r.shouldOpenOpportunity,
           createdAt: new Date(Date.now() + index),
         };
