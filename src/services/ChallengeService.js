@@ -287,7 +287,7 @@ async function setDefaultReviewers(currentUser, data) {
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
             isAIReviewer: Joi.boolean().default(false),
-            shouldOpenOpportunity: Joi.boolean().default(true),
+            shouldOpenOpportunity: Joi.boolean().default(false),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
               then: Joi.number().integer().min(1).required(),
