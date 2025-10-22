@@ -2516,7 +2516,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   if (_.isNil(data.phases)) {
     phasesForUpdate = null;
   }
-
+  console.log(JSON(data), 'data from request before')
   // Normalize and validate reviewers' phase references before converting to Prisma input
   if (!_.isNil(data.reviewers)) {
     try {
@@ -2562,6 +2562,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  console.log(JSON(data), 'data from request after 2')
   if (!_.isNil(data.reviewers)) {
     await ensureScorecardChangeDoesNotConflict({
       challengeId,
@@ -2570,8 +2571,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       originalChallengePhases,
     });
   }
-
-  console.log(data, 'data from request')
+  console.log(JSON(data), 'data from request after 3')
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,
