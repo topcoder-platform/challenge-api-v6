@@ -221,7 +221,6 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
   if (!_.isNil(challenge.reviewers)) {
     result.reviewers = {
       create: _.map(challenge.reviewers, (r, index) => {
-        console.log(r.shouldOpenOpportunity, 'r.shouldOpenOpportunity')
         const reviewer = {
           ...auditFields,
           scorecardId: String(r.scorecardId),
