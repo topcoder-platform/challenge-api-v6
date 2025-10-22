@@ -234,7 +234,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
             : Number(r.incrementalCoefficient),
           aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
-            ? false
+            ? true
             : !!r.shouldOpenOpportunity,
           createdAt: new Date(Date.now() + index),
         };
