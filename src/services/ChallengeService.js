@@ -2089,6 +2089,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  // Treat incoming `reviews` payloads as an alias for `reviewers`
+  if (!_.isNil(data.reviews)) {
+    if (!Array.isArray(data.reviews)) {
+      throw new BadRequestError("reviews must be an array");
+    }
+    if (_.isNil(data.reviewers)) {
+      data.reviewers = _.cloneDeep(data.reviews);
+    }
+    delete data.reviews;
+  }
+
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
@@ -3556,6 +3567,96 @@ async function advancePhase(currentUser, challengeId, data) {
   };
 }
 
+async function closeMarathonMatch(currentUser, challengeId) {
+  logger.info(`Close Marathon Match Request - ${challengeId}`);
+  const machineOrAdmin = currentUser && (currentUser.isMachine || hasAdminRole(currentUser));
+  if (!machineOrAdmin) {
+    throw new errors.ForbiddenError(
+      `Admin role or an M2M token is required to close the marathon match.`
+    );
+  }
+
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: includeReturnFields,
+  });
+
+  if (_.isNil(challenge) || _.isNil(challenge.id)) {
+    throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
+  }
+
+  if (!challenge.type || challenge.type.name !== "Marathon Match") {
+    throw new errors.BadRequestError(
+      `Challenge with id: ${challengeId} is not a Marathon Match challenge.`
+    );
+  }
+
+  const reviewSummations = await helper.getReviewSummations(challengeId);
+  const finalSummations = (reviewSummations || []).filter((summation) => summation.isFinal === true);
+
+  const orderedSummations = _.orderBy(
+    finalSummations,
+    ["aggregateScore", "createdAt"],
+    ["desc", "asc"]
+  );
+
+  const winners = orderedSummations.map((summation, index) => {
+    const parsedUserId = Number(summation.submitterId);
+    if (!Number.isFinite(parsedUserId) || !Number.isInteger(parsedUserId)) {
+      throw new errors.BadRequestError(
+        `Invalid submitterId ${summation.submitterId} for review summation winner`
+      );
+    }
+
+    return {
+      userId: parsedUserId,
+      handle: summation.submitterHandle,
+      placement: index + 1,
+      type: PrizeSetTypeEnum.PLACEMENT,
+    };
+  });
+
+  if (winners.length > 0) {
+    const challengeResources = await helper.getChallengeResources(challengeId);
+    const submitterResources = challengeResources.filter(
+      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+    );
+    const missingResources = winners.filter(
+      (winner) =>
+        !submitterResources.some(
+          (resource) => _.toString(resource.memberId) === _.toString(winner.userId)
+        )
+    );
+    if (missingResources.length > 0) {
+      throw new errors.BadRequestError(
+        `Submitter resources are required to close Marathon Match challenge ${challengeId}. Missing submitter resources for userIds: ${missingResources
+          .map((winner) => winner.userId)
+          .join(", ")}`
+      );
+    }
+  }
+
+  const closedAt = new Date().toISOString();
+  const updatedPhases = (challenge.phases || []).map((phase) => ({
+    ...phase,
+    isOpen: false,
+    actualEndDate: closedAt,
+  }));
+
+  const updatedChallenge = await updateChallenge(
+    currentUser,
+    challengeId,
+    {
+      winners,
+      phases: updatedPhases,
+      status: ChallengeStatusEnum.COMPLETED,
+    },
+    { emitEvent: true }
+  );
+
+  return updatedChallenge;
+}
+
 advancePhase.schema = {
   currentUser: Joi.any(),
   challengeId: Joi.id(),
@@ -3565,6 +3666,11 @@ advancePhase.schema = {
       operation: Joi.string().lowercase().valid("open", "close").required(),
     })
     .required(),
+};
+
+closeMarathonMatch.schema = {
+  currentUser: Joi.any(),
+  challengeId: Joi.id(),
 };
 
 async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
@@ -3611,6 +3717,7 @@ module.exports = {
   getChallengeStatistics,
   sendNotifications,
   advancePhase,
+  closeMarathonMatch,
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,

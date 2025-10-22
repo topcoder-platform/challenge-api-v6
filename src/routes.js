@@ -120,6 +120,15 @@ module.exports = {
       scopes: [UPDATE, ALL],
     },
   },
+  "/challenges/:challengeId/close-marathon-match": {
+    post: {
+      controller: "ChallengeController",
+      method: "closeMarathonMatch",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [UPDATE, ALL],
+    },
+  },
   "/challenges/:challengeId/statistics": {
     get: {
       controller: "ChallengeController",

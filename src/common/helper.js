@@ -1306,6 +1306,36 @@ async function getChallengeSubmissions(challengeId) {
 }
 
 /**
+ * Get review summations for a challenge
+ * @param {String} challengeId the challenge ID
+ * @returns {Promise<Array>}
+ */
+async function getReviewSummations(challengeId) {
+  const token = await m2mHelper.getM2MToken();
+  let allReviewSummations = [];
+  let page = 1;
+  while (true) {
+    const result = await axios.get(`${config.REVIEW_SUMMATIONS_API_URL}?challengeId=${challengeId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        page,
+        perPage: 500,
+      },
+    });
+    const reviewSummations = result.data.data || [];
+    if (reviewSummations.length === 0) {
+      break;
+    }
+    allReviewSummations = allReviewSummations.concat(reviewSummations);
+    page += 1;
+    if (result.data.meta.totalPages && page > result.data.meta.totalPages) {
+      break;
+    }
+  }
+  return allReviewSummations;
+}
+
+/**
  * Get member by ID
  * @param {String} userId the user ID
  * @returns {Object}
@@ -1530,6 +1560,7 @@ module.exports = {
   getProjectIdByRoundId,
   getGroupById,
   getChallengeSubmissions,
+  getReviewSummations,
   getMemberById,
   createSelfServiceProject,
   activateProject,

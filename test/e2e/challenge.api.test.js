@@ -14,7 +14,7 @@ const app = require('../../app')
 const constants = require('../../app-constants')
 const AttachmentService = require('../../src/services/AttachmentService')
 const testHelper = require('../testHelper')
-const { ChallengeStatusEnum } = require('../../src/common/prisma')
+const { getClient, ChallengeStatusEnum } = require('../../src/common/prisma')
 
 const should = chai.should()
 chai.use(chaiHttp)
@@ -22,6 +22,8 @@ chai.use(chaiHttp)
 const basePath = `/${config.API_VERSION}/challenges`
 
 const attachmentContent = fs.readFileSync(path.join(__dirname, '../attachment.txt'))
+
+const prisma = getClient()
 
 describe('challenge API E2E tests', () => {
   // created entity id
@@ -1865,6 +1867,100 @@ describe('challenge API E2E tests', () => {
         ] })
       should.equal(response.status, 400)
       should.equal(response.body.message, 'The same member 12345678 cannot have multiple placements')
+    })
+  })
+
+  describe('close marathon match API tests', () => {
+    beforeEach(async () => {
+      await prisma.challengeWinner.deleteMany({ where: { challengeId: data.marathonMatchChallenge.id } })
+      await prisma.challenge.update({
+        where: { id: data.marathonMatchChallenge.id },
+        data: {
+          status: ChallengeStatusEnum.ACTIVE,
+          updatedBy: 'admin'
+        }
+      })
+      await prisma.challengePhase.updateMany({
+        where: { challengeId: data.marathonMatchChallenge.id },
+        data: {
+          isOpen: true,
+          actualEndDate: null,
+          updatedBy: 'admin'
+        }
+      })
+    })
+
+    it('close marathon match successfully with admin token', async () => {
+      const response = await chai.request(app)
+        .post(`${basePath}/${data.marathonMatchChallenge.id}/close-marathon-match`)
+        .set('Authorization', `Bearer ${data.adminToken}`)
+        .send()
+
+      should.equal(response.status, 200)
+      const result = response.body
+      should.equal(result.status, 'Completed')
+      should.exist(result.winners)
+      should.equal(result.winners.length, 3)
+      should.equal(result.winners[0].placement, 1)
+      should.equal(result.winners[0].userId, 12345678)
+      should.equal(result.winners[1].placement, 2)
+      should.equal(result.winners[1].userId, 9876543)
+      should.equal(result.winners[2].placement, 3)
+      should.equal(result.winners[2].userId, 3456789)
+      should.equal(result.winners[0].type.toLowerCase(), 'placement')
+      result.phases.forEach(phase => {
+        should.equal(phase.isOpen, false)
+        should.exist(phase.actualEndDate)
+      })
+    })
+
+    it('close marathon match successfully with M2M token', async () => {
+      const response = await chai.request(app)
+        .post(`${basePath}/${data.marathonMatchChallenge.id}/close-marathon-match`)
+        .set('Authorization', `Bearer ${config.M2M_FULL_ACCESS_TOKEN}`)
+        .send()
+
+      should.equal(response.status, 200)
+      const result = response.body
+      should.equal(result.status, 'Completed')
+      should.exist(result.winners)
+      should.equal(result.winners.length, 3)
+      should.equal(result.winners[0].placement, 1)
+      should.equal(result.winners[1].placement, 2)
+      should.equal(result.winners[2].placement, 3)
+      result.phases.forEach(phase => {
+        should.equal(phase.isOpen, false)
+        should.exist(phase.actualEndDate)
+      })
+    })
+
+    it('close marathon match - 400 error for non-Marathon Match', async () => {
+      const response = await chai.request(app)
+        .post(`${basePath}/${data.challenge.id}/close-marathon-match`)
+        .set('Authorization', `Bearer ${data.adminToken}`)
+        .send()
+
+      should.equal(response.status, 400)
+      should.equal(response.body.message.indexOf('is not a Marathon Match challenge') >= 0, true)
+    })
+
+    it('close marathon match - 403 error for non-admin user', async () => {
+      const response = await chai.request(app)
+        .post(`${basePath}/${data.marathonMatchChallenge.id}/close-marathon-match`)
+        .set('Authorization', `Bearer ${data.userToken}`)
+        .send()
+
+      should.equal(response.status, 403)
+      should.equal(response.body.message.indexOf('Admin role or an M2M token is required to close the marathon match.') >= 0, true)
+    })
+
+    it('close marathon match - 404 error for non-existent challenge', async () => {
+      const response = await chai.request(app)
+        .post(`${basePath}/${notFoundId}/close-marathon-match`)
+        .set('Authorization', `Bearer ${data.adminToken}`)
+        .send()
+
+      should.equal(response.status, 404)
     })
   })
 })

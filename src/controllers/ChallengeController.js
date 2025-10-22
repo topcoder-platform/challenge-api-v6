@@ -126,6 +126,19 @@ async function advancePhase(req, res) {
 }
 
 /**
+ * Close marathon match challenge and determine winners
+ * @param {Object} req the request
+ * @param {Object} res the response
+ */
+async function closeMarathonMatch(req, res) {
+  logger.debug(
+    `closeMarathonMatch User: ${JSON.stringify(req.authUser)} - ChallengeID: ${req.params.challengeId}`
+  );
+  const result = await service.closeMarathonMatch(req.authUser, req.params.challengeId);
+  res.send(result);
+}
+
+/**
  * Get default reviewers for a typeId + trackId
  * @param {Object} req the request
  * @param {Object} res the response
@@ -154,6 +167,7 @@ module.exports = {
   getChallengeStatistics,
   sendNotifications,
   advancePhase,
+  closeMarathonMatch,
   getDefaultReviewers,
   setDefaultReviewers,
 };

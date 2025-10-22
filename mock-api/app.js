@@ -8,6 +8,7 @@ const config = require('config')
 const winston = require('winston')
 const _ = require('lodash')
 const prisma = require('../src/common/prisma').getClient()
+const uuid = require('uuid/v4')
 
 const app = express()
 app.set('port', config.PORT)
@@ -81,6 +82,19 @@ app.get('/v5/resources', (req, res) => {
     challengeId,
     memberId: '12345678',
     memberHandle: 'thomaskranitsas',
+    roleId: '732339e7-8e30-49d7-9198-cccf9451e221'
+  }, {
+    // additional submitter resource
+    id: '22ba038e-48da-487b-96e8-8d3b99b6d184',
+    challengeId,
+    memberId: '9876543',
+    memberHandle: 'tonyj',
+    roleId: '732339e7-8e30-49d7-9198-cccf9451e221'
+  }, {
+    id: '22ba038e-48da-487b-96e8-8d3b99b6d185',
+    challengeId,
+    memberId: '3456789',
+    memberHandle: 'nathanael',
     roleId: '732339e7-8e30-49d7-9198-cccf9451e221'
   }]
 
@@ -275,6 +289,77 @@ app.get('/v5/terms/:termId', (req, res) => {
 app.post('/v5/bus/events', (req, res) => {
   winston.info('Received bus events')
   res.status(200).json({})
+})
+
+app.get('/v6/reviewSummations', (req, res) => {
+  const { challengeId } = req.query
+  const page = Number(req.query.page || 1)
+  const perPage = Number(req.query.perPage || 100)
+
+  if (!challengeId) {
+    res.status(400).json({ message: 'challengeId query parameter is required' })
+    return
+  }
+
+  if (page > 1) {
+    res.json({
+      data: [],
+      meta: {
+        page,
+        perPage,
+        totalPages: 1
+      }
+    })
+    return
+  }
+
+  const data = [
+    {
+      id: uuid(),
+      challengeId,
+      submitterId: '12345678',
+      submitterHandle: 'thomaskranitsas',
+      aggregateScore: 95.5,
+      isFinal: true,
+      createdAt: '2024-02-01T10:00:00.000Z'
+    },
+    {
+      id: uuid(),
+      challengeId,
+      submitterId: '9876543',
+      submitterHandle: 'tonyj',
+      aggregateScore: 92.1,
+      isFinal: true,
+      createdAt: '2024-02-01T11:00:00.000Z'
+    },
+    {
+      id: uuid(),
+      challengeId,
+      submitterId: '3456789',
+      submitterHandle: 'nathanael',
+      aggregateScore: 87.3,
+      isFinal: true,
+      createdAt: '2024-02-01T12:00:00.000Z'
+    },
+    {
+      id: uuid(),
+      challengeId,
+      submitterId: '5555555',
+      submitterHandle: 'spectator',
+      aggregateScore: 90.0,
+      isFinal: false,
+      createdAt: '2024-02-01T13:00:00.000Z'
+    }
+  ]
+
+  res.json({
+    data,
+    meta: {
+      page,
+      perPage,
+      totalPages: 1
+    }
+  })
 })
 
 app.post('/v5/auth0', (req, res) => {
