@@ -2560,6 +2560,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     });
   }
 
+  console.log(data, 'data from request')
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,

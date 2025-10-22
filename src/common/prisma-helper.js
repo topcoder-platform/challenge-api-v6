@@ -67,6 +67,7 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
  * @returns prisma model data to create/update challenge
  */
 function convertChallengeSchemaToPrisma(currentUser, challenge) {
+  console.log(challenge, 'convertChallengeSchemaToPrisma challenge')
   // used id used in createdBy and updatedBy
   const userId = _.toString(currentUser.userId);
   const auditFields = {
