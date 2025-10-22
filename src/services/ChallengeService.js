@@ -3227,6 +3227,7 @@ function sanitizeChallenge(challenge) {
         "fixedAmount",
         "baseCoefficient",
         "incrementalCoefficient",
+        "shouldOpenOpportunity",
         "type",
         "aiWorkflowId",
       ])
