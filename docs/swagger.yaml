@@ -675,6 +675,51 @@ paths:
           description: Internal Server Error
           schema:
             $ref: "#/definitions/ErrorModel"
+  /challenges/{challengeId}/close-marathon-match:
+    post:
+      tags:
+        - Challenges
+      description: >
+        Close a Marathon Match challenge by selecting winners from final review
+        summations, closing all phases, and setting the challenge status to
+        Completed.
+      security:
+        - bearer: []
+      produces:
+        - application/json
+      parameters:
+        - $ref: "#/parameters/app-version"
+        - name: challengeId
+          in: path
+          required: true
+          type: string
+          format: UUID
+          description: The id of the Marathon Match challenge to close
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/Challenge"
+        "400":
+          description: Bad request. The challenge is not a Marathon Match or required data is missing.
+          schema:
+            $ref: "#/definitions/ErrorModel"
+        "401":
+          description: Unauthorized. Fail to authenticate the requester.
+          schema:
+            $ref: "#/definitions/ErrorModel"
+        "403":
+          description: Forbidden. Only admins or M2M tokens with update scope can close the challenge.
+          schema:
+            $ref: "#/definitions/ErrorModel"
+        "404":
+          description: Challenge not found
+          schema:
+            $ref: "#/definitions/ErrorModel"
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: "#/definitions/ErrorModel"
   /challenge-types:
     get:
       tags:
