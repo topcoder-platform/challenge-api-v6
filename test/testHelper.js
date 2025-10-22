@@ -10,11 +10,13 @@ const config = require('config')
 
 let challengeTrack
 let challengeType
+let marathonMatchType
 let phase
 let phase2
 let timelineTemplate
 let challenge
 let taskChallenge
+let marathonMatchChallenge
 let adminToken
 let userToken
 
@@ -36,8 +38,12 @@ const phase2Id = uuid()
 const timelineTemplateId = uuid()
 const challengeId = uuid()
 const taskChallengeId = uuid()
+const marathonMatchTypeId = uuid()
+const marathonMatchChallengeId = uuid()
 const challengePhase1Id = uuid()
 const challengePhase2Id = uuid()
+const marathonMatchChallengePhase1Id = uuid()
+const marathonMatchChallengePhase2Id = uuid()
 const challengePhaseConstrain1Id = uuid()
 const challengePhaseConstrain2Id = uuid()
 
@@ -65,6 +71,17 @@ async function createData () {
       description: 'desc',
       isActive: true,
       abbreviation: 'abbr',
+      createdBy: testUserId,
+      updatedBy: testUserId
+    }
+  })
+  marathonMatchType = await prisma.challengeType.create({
+    data: {
+      id: marathonMatchTypeId,
+      name: 'Marathon Match',
+      description: 'Marathon Match challenge type',
+      isActive: true,
+      abbreviation: 'MM',
       createdBy: testUserId,
       updatedBy: testUserId
     }
@@ -206,6 +223,52 @@ async function createData () {
     updatedBy: 'admin'
   }})
 
+  marathonMatchChallenge = await prisma.challenge.create({ data: {
+    id: marathonMatchChallengeId,
+    name: 'Marathon Match Challenge',
+    description: 'Marathon Match challenge description',
+    privateDescription: 'private description',
+    challengeSource: 'Topcoder',
+    descriptionFormat: 'html',
+    timelineTemplate: { connect: { id: timelineTemplate.id } },
+    type: { connect: { id: marathonMatchTypeId } },
+    track: { connect: { id: challengeTrackId } },
+    tags: ['mm-tag'],
+    projectId: 333,
+    legacyId: 444,
+    startDate: new Date(),
+    status: ChallengeStatusEnum.ACTIVE,
+    createdAt: new Date(),
+    createdBy: 'admin',
+    updatedBy: 'admin'
+  } })
+
+  await prisma.challengePhase.createMany({
+    data: [
+      {
+        id: marathonMatchChallengePhase1Id,
+        challengeId: marathonMatchChallenge.id,
+        phaseId: phase.id,
+        name: 'MM Registration',
+        duration: 3000,
+        isOpen: true,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      },
+      {
+        id: marathonMatchChallengePhase2Id,
+        challengeId: marathonMatchChallenge.id,
+        phaseId: phase2.id,
+        name: 'MM Submission',
+        duration: 4000,
+        predecessor: marathonMatchChallengePhase1Id,
+        isOpen: true,
+        createdBy: 'admin',
+        updatedBy: 'admin'
+      }
+    ]
+  })
+
   adminToken = jwt.sign({
     roles: [
       'Topcoder User',
@@ -274,13 +337,13 @@ const additionalTerm = {
  */
 async function clearData () {
   await prisma.challengePhaseConstraint.deleteMany({ where: { id: { in: [challengePhaseConstrain1Id, challengePhaseConstrain2Id] } } })
-  await prisma.challengePhase.deleteMany({ where: { challengeId: { in: [challengeId, taskChallengeId] } } })
+  await prisma.challengePhase.deleteMany({ where: { challengeId: { in: [challengeId, taskChallengeId, marathonMatchChallengeId] } } })
   await prisma.challenge.deleteMany({
-    where: { id: { in: [challengeId, taskChallengeId] } }
+    where: { id: { in: [challengeId, taskChallengeId, marathonMatchChallengeId] } }
   })
   await prisma.timelineTemplate.deleteMany({ where: { id: timelineTemplateId } })
   await prisma.phase.deleteMany({ where: { id: { in: [phase1Id, phase2Id] } } })
-  await prisma.challengeType.deleteMany({ where: { id: challengeTypeId } })
+  await prisma.challengeType.deleteMany({ where: { id: { in: [challengeTypeId, marathonMatchTypeId] } } })
   await prisma.challengeTrack.deleteMany({ where: { id: challengeTrackId } })
 }
 
@@ -296,6 +359,8 @@ function getData () {
     timelineTemplate,
     challenge,
     taskChallenge,
+    marathonMatchType,
+    marathonMatchChallenge,
     defaultProjectTerms,
     additionalTerm,
     mockTerms,

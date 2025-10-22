@@ -13,6 +13,7 @@ const uuid = require('uuid/v4')
 const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
+const helper = require('../../src/common/helper')
 const testHelper = require('../testHelper')
 const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
 const { getReviewClient } = require('../../src/common/review-prisma')
@@ -847,6 +848,54 @@ describe('challenge service unit tests', () => {
 
         throw new Error('should not reach here')
       })
+
+      it('allows scorecard change via reviews alias when no reviews exist', async () => {
+        const payload = {
+          reviews: [
+            {
+              phaseId: data.phase.id,
+              scorecardId: newScorecardId,
+              isMemberReview: false
+            }
+          ]
+        }
+
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: 'sub3', userId: 22838965 },
+          data.challenge.id,
+          payload
+        )
+
+        should.exist(updated.reviewers)
+        should.equal(updated.reviewers.length, 1)
+        should.equal(updated.reviewers[0].scorecardId, newScorecardId)
+      })
+
+      it('blocks scorecard change via reviews alias when reviews already started', async () => {
+        if (reviewClient) {
+          await reviewClient.$executeRawUnsafe(`INSERT INTO ${reviewTableName} ("id", "phaseId", "scorecardId", "status") VALUES ('${uuid()}', '${data.challengePhase1Id}', '${originalScorecardId}', 'IN_PROGRESS')`)
+        }
+
+        try {
+          await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, data.challenge.id, {
+            reviews: [
+              {
+                phaseId: data.phase.id,
+                scorecardId: newScorecardId,
+                isMemberReview: false
+              }
+            ]
+          })
+        } catch (e) {
+          should.equal(
+            e.message,
+            "Can't change the scorecard at this time because at least one review has already started with the old scorecard"
+          )
+          return
+        }
+
+        throw new Error('should not reach here')
+      })
     })
 
     it('update challenge - creator memberId can modify without matching handle', async () => {
@@ -1035,5 +1084,274 @@ describe('challenge service unit tests', () => {
       }
       throw new Error('should not reach here')
     })
+  })
+
+  describe('close marathon match tests', () => {
+    const adminUser = { isMachine: false, roles: [constants.UserRoles.Admin], userId: 'admin' }
+    const m2mUser = { isMachine: true }
+    const nonAdminUser = { isMachine: false, userId: 'user123', roles: [constants.UserRoles.User] }
+
+    let originalReviewSummations
+    let originalChallengeResources
+
+    beforeEach(async () => {
+      originalReviewSummations = helper.getReviewSummations
+      originalChallengeResources = helper.getChallengeResources
+
+      if (data && data.marathonMatchChallenge) {
+        await prisma.challengeWinner.deleteMany({ where: { challengeId: data.marathonMatchChallenge.id } })
+        await prisma.challenge.update({
+          where: { id: data.marathonMatchChallenge.id },
+          data: {
+            status: ChallengeStatusEnum.ACTIVE,
+            updatedBy: 'admin'
+          }
+        })
+        await prisma.challengePhase.updateMany({
+          where: { challengeId: data.marathonMatchChallenge.id },
+          data: {
+            isOpen: true,
+            actualEndDate: null,
+            updatedBy: 'admin'
+          }
+        })
+      }
+    })
+
+    afterEach(() => {
+      helper.getReviewSummations = originalReviewSummations
+      helper.getChallengeResources = originalChallengeResources
+    })
+
+    it('close marathon match successfully with multiple final review summations', async () => {
+      const originalGetReviewSummations = helper.getReviewSummations
+      helper.getReviewSummations = async () => ([
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 95.5,
+          submitterId: '12345678',
+          submitterHandle: 'thomaskranitsas',
+          createdAt: '2024-02-01T10:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 92.1,
+          submitterId: '9876543',
+          submitterHandle: 'tonyj',
+          createdAt: '2024-02-01T11:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 87.3,
+          submitterId: '3456789',
+          submitterHandle: 'nathanael',
+          createdAt: '2024-02-01T12:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: false,
+          aggregateScore: 99.9,
+          submitterId: '5555555',
+          submitterHandle: 'ignored',
+          createdAt: '2024-02-01T13:00:00.000Z'
+        }
+      ])
+      originalReviewSummations = originalGetReviewSummations
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      helper.getChallengeResources = async () => ([
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 12345678, memberHandle: 'thomaskranitsas' },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 9876543, memberHandle: 'tonyj' },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 3456789, memberHandle: 'nathanael' },
+        { roleId: 'some-other-role', memberId: 11111111 }
+      ])
+      originalChallengeResources = originalGetChallengeResources
+
+      const result = await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id)
+
+      should.exist(result)
+      should.equal(result.status, ChallengeStatusEnum.COMPLETED)
+      should.equal(result.winners.length, 3)
+      should.equal(result.winners[0].placement, 1)
+      should.equal(result.winners[0].userId, 12345678)
+      should.equal(result.winners[0].type, PrizeSetTypeEnum.PLACEMENT)
+      should.equal(result.winners[1].placement, 2)
+      should.equal(result.winners[1].userId, 9876543)
+      should.equal(result.winners[2].placement, 3)
+      should.equal(result.winners[2].userId, 3456789)
+      result.phases.forEach(phase => {
+        should.equal(phase.isOpen, false)
+        should.exist(phase.actualEndDate)
+      })
+    })
+
+    it('close marathon match successfully with M2M token', async () => {
+      const originalGetReviewSummations = helper.getReviewSummations
+      helper.getReviewSummations = async () => ([
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 88.4,
+          submitterId: '12345678',
+          submitterHandle: 'thomaskranitsas',
+          createdAt: '2024-03-01T10:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 84.1,
+          submitterId: '9876543',
+          submitterHandle: 'tonyj',
+          createdAt: '2024-03-01T11:00:00.000Z'
+        }
+      ])
+      originalReviewSummations = originalGetReviewSummations
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      helper.getChallengeResources = async () => ([
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 12345678, memberHandle: 'thomaskranitsas' },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 9876543, memberHandle: 'tonyj' }
+      ])
+      originalChallengeResources = originalGetChallengeResources
+
+      const result = await service.closeMarathonMatch(m2mUser, data.marathonMatchChallenge.id)
+
+      should.exist(result)
+      should.equal(result.status, ChallengeStatusEnum.COMPLETED)
+      should.equal(result.winners.length, 2)
+      should.equal(result.winners[0].userId, 12345678)
+      should.equal(result.winners[0].placement, 1)
+      should.equal(result.winners[1].userId, 9876543)
+      should.equal(result.winners[1].placement, 2)
+      result.phases.forEach(phase => {
+        should.equal(phase.isOpen, false)
+        should.exist(phase.actualEndDate)
+      })
+    })
+
+    it('close marathon match with tie-breaking logic (same aggregateScore, different createdAt)', async () => {
+      const originalGetReviewSummations = helper.getReviewSummations
+      helper.getReviewSummations = async () => ([
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 90.0,
+          submitterId: '12345678',
+          submitterHandle: 'thomaskranitsas',
+          createdAt: '2024-04-01T09:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 90.0,
+          submitterId: '9876543',
+          submitterHandle: 'tonyj',
+          createdAt: '2024-04-01T12:00:00.000Z'
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 80.5,
+          submitterId: '3456789',
+          submitterHandle: 'nathanael',
+          createdAt: '2024-04-01T13:00:00.000Z'
+        }
+      ])
+      originalReviewSummations = originalGetReviewSummations
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      helper.getChallengeResources = async () => ([
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 12345678, memberHandle: 'thomaskranitsas' },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 9876543, memberHandle: 'tonyj' },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 3456789, memberHandle: 'nathanael' }
+      ])
+      originalChallengeResources = originalGetChallengeResources
+
+      const result = await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id)
+
+      should.exist(result)
+      should.equal(result.winners.length, 3)
+      should.equal(result.winners[0].userId, 12345678)
+      should.equal(result.winners[0].placement, 1)
+      should.equal(result.winners[1].userId, 9876543)
+      should.equal(result.winners[1].placement, 2)
+      should.equal(result.winners[2].userId, 3456789)
+      should.equal(result.winners[2].placement, 3)
+    })
+
+    it('close marathon match - non-Marathon Match challenge type', async () => {
+      try {
+        await service.closeMarathonMatch(adminUser, data.challenge.id)
+      } catch (e) {
+        should.equal(e.name, 'BadRequestError')
+        should.equal(e.message.indexOf('is not a Marathon Match challenge') >= 0, true)
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('close marathon match - forbidden for non-admin user', async () => {
+      try {
+        await service.closeMarathonMatch(nonAdminUser, data.marathonMatchChallenge.id)
+      } catch (e) {
+        should.equal(e.name, 'ForbiddenError')
+        should.equal(e.message.indexOf('Admin role or an M2M token is required to close the marathon match.') >= 0, true)
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('close marathon match - challenge not found', async () => {
+      try {
+        await service.closeMarathonMatch(adminUser, notFoundId)
+      } catch (e) {
+        should.equal(e.name, 'NotFoundError')
+        should.equal(e.message.indexOf(`Challenge with id: ${notFoundId} doesn't exist`) >= 0, true)
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('close marathon match - missing submitter resources', async () => {
+      const originalGetReviewSummations = helper.getReviewSummations
+      helper.getReviewSummations = async () => ([
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 70.0,
+          submitterId: '12345678',
+          submitterHandle: 'thomaskranitsas',
+          createdAt: '2024-05-01T09:00:00.000Z'
+        }
+      ])
+      originalReviewSummations = originalGetReviewSummations
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      helper.getChallengeResources = async () => ([])
+      originalChallengeResources = originalGetChallengeResources
+
+      try {
+        await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id)
+      } catch (e) {
+        should.equal(e.name, 'BadRequestError')
+        should.equal(e.message.indexOf('Submitter resources are required to close Marathon Match challenge') >= 0, true)
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
   })
 })
