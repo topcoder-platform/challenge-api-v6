@@ -258,6 +258,7 @@ async function getDefaultReviewers(currentUser, criteria) {
     isMemberReview: r.isMemberReview,
     memberReviewerCount: r.memberReviewerCount,
     phaseName: r.phaseName,
+    phaseId: r.phaseId,
     fixedAmount: r.fixedAmount,
     baseCoefficient: r.baseCoefficient,
     incrementalCoefficient: r.incrementalCoefficient,
