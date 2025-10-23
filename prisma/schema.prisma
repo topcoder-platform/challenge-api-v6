@@ -153,6 +153,10 @@ model Challenge {
   @@index([registrationEndDate])
   @@index([startDate])
   @@index([endDate])
+  @@index([status, startDate])
+  @@index([trackId, typeId, status])
+  @@index([legacyId])
+  @@index([projectId, status])
 }
 
 //////////////////////////////////////////
@@ -329,6 +333,7 @@ model ChallengeWinner {
   updatedBy String
 
   @@index([challengeId])
+  @@index([challengeId, type, placement])
 }
 
 //////////////////////////////////////////
@@ -533,6 +538,8 @@ model ChallengePhase {
   updatedBy String
 
   @@index([challengeId])
+  @@index([challengeId, isOpen])
+  @@index([challengeId, name])
 }
 
 //////////////////////////////////////////
@@ -576,6 +583,7 @@ model ChallengePrizeSet {
   updatedBy String
 
   @@index([challengeId])
+  @@index([challengeId, type])
 }
 
 //////////////////////////////////////////
@@ -611,6 +619,7 @@ model ChallengeReviewer {
 
   @@index([challengeId])
   @@index([phaseId])
+  @@index([challengeId, phaseId])
 }
 
 //////////////////////////////////////////
@@ -697,4 +706,5 @@ model TimelineTemplatePhase {
   timelineTemplate TimelineTemplate @relation(fields: [timelineTemplateId], references: [id], onDelete: Cascade)
 
   @@index([timelineTemplateId])
+  @@index([timelineTemplateId, phaseId])
 }
