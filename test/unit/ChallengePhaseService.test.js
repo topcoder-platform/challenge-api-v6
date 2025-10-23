@@ -366,6 +366,82 @@ describe('challenge phase service unit tests', () => {
       throw new Error('should not reach here')
     })
 
+    it('partially update challenge phase - cannot reopen when review phase has active scorecards', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: true,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const reviewChallengePhaseId = uuid()
+      const registrationStart = new Date('2025-08-01T00:00:00.000Z')
+      const registrationEnd = new Date('2025-08-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: registrationStart,
+          actualEndDate: registrationEnd
+        }
+      })
+
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: true,
+          predecessor: data.challengePhase1Id,
+          actualStartDate: new Date('2025-08-02T06:00:00.000Z'),
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const reviewId = uuid()
+      await reviewClient.$executeRaw(
+        Prisma.sql`
+          INSERT INTO ${reviewTable} ("id", "phaseId", "status")
+          VALUES (${reviewId}, ${reviewChallengePhaseId}, ${'IN_PROGRESS'})
+        `
+      )
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
+          isOpen: true
+        })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 400)
+        should.equal(
+          e.message,
+          "Cannot reopen Registration because the currently open phase 'Review' has reviews in progress or completed"
+        )
+        return
+      } finally {
+        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`)
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase1Id },
+          data: {
+            isOpen: false,
+            actualStartDate: null,
+            actualEndDate: null
+          }
+        })
+      }
+
+      throw new Error('should not reach here')
+    })
+
     it('partially update challenge phase - cannot reopen predecessor when appeals have submitted appeals', async () => {
       const reviewPhase = await prisma.phase.create({
         data: {

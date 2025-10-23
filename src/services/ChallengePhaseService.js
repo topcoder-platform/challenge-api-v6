@@ -16,6 +16,14 @@ const { indexChallengeAndPostToKafka } = require("./ChallengeService");
 const { getClient } = require("../common/prisma");
 const prisma = getClient();
 const PENDING_REVIEW_STATUSES = Object.freeze(["PENDING", "IN_PROGRESS", "DRAFT", "SUBMITTED"]);
+const REVIEW_PHASE_NAMES = Object.freeze([
+  "checkpoint review",
+  "checkpoint screening",
+  "screening",
+  "review",
+  "approval",
+]);
+const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()));
 
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
@@ -370,6 +378,31 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   }
   if (isReopeningPhase) {
     const phaseName = challengePhase.name;
+    const openPhases = await prisma.challengePhase.findMany({
+      where: {
+        challengeId: challengePhase.challengeId,
+        isOpen: true,
+      },
+      select: {
+        id: true,
+        phaseId: true,
+        predecessor: true,
+        name: true,
+      },
+    });
+    const activeReviewPhase = openPhases.find((phase) =>
+      REVIEW_PHASE_NAME_SET.has(String(phase?.name || "").toLowerCase())
+    );
+    if (activeReviewPhase) {
+      const hasActiveScorecards = await hasCompletedReviewsForPhase(
+        activeReviewPhase.id
+      );
+      if (hasActiveScorecards) {
+        throw new errors.BadRequestError(
+          `Cannot reopen ${phaseName} because the currently open phase '${activeReviewPhase.name}' has reviews in progress or completed`
+        );
+      }
+    }
     if (phaseName === "Submission" || phaseName === "Registration") {
       const hasCompletedReviews = await hasCompletedReviewsForPhase(challengePhase.id);
       if (hasCompletedReviews) {
@@ -401,50 +434,36 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     const hasActualStartDate = !_.isNil(challengePhase.actualStartDate);
     const hasActualEndDate = !_.isNil(challengePhase.actualEndDate);
 
-    if (hasActualStartDate && hasActualEndDate) {
-      const openPhases = await prisma.challengePhase.findMany({
-        where: {
-          challengeId: challengePhase.challengeId,
-          isOpen: true,
-        },
-        select: {
-          id: true,
-          phaseId: true,
-          predecessor: true,
-          name: true,
-        },
+    if (hasActualStartDate && hasActualEndDate && openPhases.length > 0) {
+      const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)]);
+      if (!_.isNil(challengePhase.phaseId)) {
+        reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
+      }
+
+      const dependentOpenPhases = openPhases.filter((phase) => {
+        if (!phase || _.isNil(phase.predecessor)) {
+          return false;
+        }
+        return reopenedPhaseIdentifiers.has(String(phase.predecessor));
       });
 
-      if (openPhases.length > 0) {
-        const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)]);
-        if (!_.isNil(challengePhase.phaseId)) {
-          reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
-        }
-        const dependentOpenPhases = openPhases.filter((phase) => {
-          if (!phase || _.isNil(phase.predecessor)) {
-            return false;
-          }
-          return reopenedPhaseIdentifiers.has(String(phase.predecessor));
-        });
-
-        if (dependentOpenPhases.length === 0) {
-          throw new errors.ForbiddenError(
-            `Cannot reopen ${phaseName} because no currently open phase depends on it`,
-          );
-        }
-
-        const appealsDependentPhaseExists = dependentOpenPhases.some(
-          (phase) => String(phase.name || "").toLowerCase() === "appeals"
+      if (dependentOpenPhases.length === 0) {
+        throw new errors.ForbiddenError(
+          `Cannot reopen ${phaseName} because no currently open phase depends on it`
         );
-        if (appealsDependentPhaseExists) {
-          const hasSubmittedAppeals = await hasSubmittedAppealsForChallenge(
-            challengePhase.challengeId
+      }
+
+      const appealsDependentPhaseExists = dependentOpenPhases.some(
+        (phase) => String(phase.name || "").toLowerCase() === "appeals"
+      );
+      if (appealsDependentPhaseExists) {
+        const hasSubmittedAppeals = await hasSubmittedAppealsForChallenge(
+          challengePhase.challengeId
+        );
+        if (hasSubmittedAppeals) {
+          throw new errors.ForbiddenError(
+            `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`
           );
-          if (hasSubmittedAppeals) {
-            throw new errors.ForbiddenError(
-              `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`
-            );
-          }
         }
       }
     }

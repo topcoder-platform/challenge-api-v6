@@ -896,6 +896,84 @@ describe('challenge service unit tests', () => {
 
         throw new Error('should not reach here')
       })
+
+      it('blocks scorecard change when an active review phase has started reviews', async () => {
+        if (!reviewClient) {
+          return
+        }
+
+        let reviewPhase
+        let reviewChallengePhaseId
+
+        const insertedReviewId = uuid()
+
+        try {
+          reviewPhase = await prisma.phase.create({
+            data: {
+              id: uuid(),
+              name: 'Review',
+              description: 'desc',
+              isOpen: true,
+              duration: 86400,
+              createdBy: 'admin',
+              updatedBy: 'admin'
+            }
+          })
+
+          reviewChallengePhaseId = uuid()
+          const now = new Date()
+
+          await prisma.challengePhase.create({
+            data: {
+              id: reviewChallengePhaseId,
+              challengeId: data.challenge.id,
+              phaseId: reviewPhase.id,
+              name: 'Review',
+              isOpen: true,
+              actualStartDate: now,
+              createdBy: 'admin',
+              updatedBy: 'admin'
+            }
+          })
+
+          await prisma.challengeReviewer.updateMany({
+            where: { challengeId: data.challenge.id },
+            data: { phaseId: reviewPhase.id }
+          })
+
+          await reviewClient.$executeRawUnsafe(
+            `INSERT INTO ${reviewTableName} ("id", "phaseId", "scorecardId", "status") VALUES ('${insertedReviewId}', '${reviewChallengePhaseId}', '${originalScorecardId}', 'COMPLETED')`
+          )
+
+          await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, data.challenge.id, {
+            reviewers: [
+              {
+                phaseId: reviewPhase.id,
+                scorecardId: newScorecardId,
+                isMemberReview: false
+              }
+            ]
+          })
+        } catch (e) {
+          should.equal(
+            e.message,
+            "Cannot change the scorecard for phase 'Review' because reviews are already in progress or completed"
+          )
+          return
+        } finally {
+          await reviewClient.$executeRawUnsafe(
+            `DELETE FROM ${reviewTableName} WHERE "id" = '${insertedReviewId}'`
+          )
+          if (reviewChallengePhaseId) {
+            await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+          }
+          if (reviewPhase) {
+            await prisma.phase.delete({ where: { id: reviewPhase.id } })
+          }
+        }
+
+        throw new Error('should not reach here')
+      })
     })
 
     it('update challenge - creator memberId can modify without matching handle', async () => {

@@ -65,6 +65,14 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
+const REVIEW_PHASE_NAMES = Object.freeze([
+  "checkpoint review",
+  "checkpoint screening",
+  "screening",
+  "review",
+  "approval",
+]);
+const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -3078,6 +3086,84 @@ async function ensureScorecardChangeDoesNotConflict({
     logger.debug(
       `Prisma review model is unavailable; falling back to raw query guard for challenge ${challengeId}`
     );
+  }
+
+  const openReviewPhaseNameByKey = new Map();
+  for (const phase of originalChallengePhases || []) {
+    if (!phase || !phase.isOpen) {
+      continue;
+    }
+    const phaseName = String(phase.name || "").trim();
+    if (!phaseName) {
+      continue;
+    }
+    const normalizedName = phaseName.toLowerCase();
+    if (!REVIEW_PHASE_NAME_SET.has(normalizedName)) {
+      continue;
+    }
+    const phaseKey = phase.phaseId ? String(phase.phaseId) : null;
+    if (!phaseKey) {
+      continue;
+    }
+    openReviewPhaseNameByKey.set(phaseKey, phaseName);
+  }
+
+  const reviewPhaseKeysToCheck = Array.from(removedScorecardsByPhase.keys()).filter((phaseKey) =>
+    openReviewPhaseNameByKey.has(phaseKey)
+  );
+
+  if (reviewPhaseKeysToCheck.length > 0) {
+    for (const phaseKey of reviewPhaseKeysToCheck) {
+      const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
+      if (challengePhaseIds.length === 0) {
+        logger.debug(
+          `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`
+        );
+        continue;
+      }
+
+      let activePhaseReviewCount = 0;
+
+      if (hasReviewModel) {
+        activePhaseReviewCount = await reviewClient.review.count({
+          where: {
+            phaseId: { in: challengePhaseIds },
+            status: { in: REVIEW_STATUS_BLOCKING },
+          },
+        });
+      } else if (typeof reviewClient?.$queryRaw === "function") {
+        try {
+          const queryResult = await reviewClient.$queryRaw`
+            SELECT COUNT(*)::int AS count
+            FROM "review"
+            WHERE "phaseId" IN (${Prisma.join(challengePhaseIds)})
+              AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
+          `;
+          const rawCount =
+            Array.isArray(queryResult) && queryResult.length > 0
+              ? Number(queryResult[0]?.count || 0)
+              : 0;
+          activePhaseReviewCount = Number.isFinite(rawCount) ? rawCount : 0;
+        } catch (error) {
+          logger.warn(
+            `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} due to review DB query failure: ${error.message}`
+          );
+          continue;
+        }
+      } else {
+        logger.warn(
+          `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} because review Prisma client does not support raw queries`
+        );
+        continue;
+      }
+
+      if (activePhaseReviewCount > 0) {
+        const phaseName = openReviewPhaseNameByKey.get(phaseKey) || "phase";
+        throw new BadRequestError(
+          `Cannot change the scorecard for phase '${phaseName}' because reviews are already in progress or completed`
+        );
+      }
+    }
   }
 
   for (const [phaseKey, scorecardIds] of removedScorecardsByPhase.entries()) {
