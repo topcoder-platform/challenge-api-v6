@@ -228,6 +228,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
+          fixedAmount: _.isNil(r.fixedAmount) ? null : Number(r.fixedAmount),
           baseCoefficient: _.isNil(r.baseCoefficient) ? null : Number(r.baseCoefficient),
           incrementalCoefficient: _.isNil(r.incrementalCoefficient)
             ? null
@@ -391,6 +392,7 @@ function convertModelToResponse(ret) {
         "isMemberReview",
         "memberReviewerCount",
         "phaseId",
+        "fixedAmount",
         "baseCoefficient",
         "incrementalCoefficient",
         "type",
