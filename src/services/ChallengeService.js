@@ -2064,6 +2064,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
   const auditUserId = _.toString(currentUser.userId);
   const existingPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
+  const payloadIncludesTerms =
+    !_.isNil(data) && Object.prototype.hasOwnProperty.call(data, "terms");
+  const originalTermsValue = payloadIncludesTerms ? data.terms : undefined;
 
   // No conversion needed - values are already in dollars in the database
 
@@ -2111,6 +2114,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
+  const sanitizedIncludesTerms = Object.prototype.hasOwnProperty.call(data, "terms");
+  const shouldReplaceTerms =
+    sanitizedIncludesTerms || (payloadIncludesTerms && originalTermsValue === null);
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
 
   logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
@@ -2639,7 +2645,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (_.isNil(updateData.attachment)) {
       await tx.attachment.deleteMany({ where: { challengeId } });
     }
-    if (_.isNil(updateData.terms)) {
+    if (shouldReplaceTerms) {
       await tx.challengeTerm.deleteMany({ where: { challengeId } });
     }
     // if (_.isNil(updateData.skills)) {
@@ -2987,13 +2993,6 @@ async function ensureScorecardChangeDoesNotConflict({
   updatedReviewers = [],
   originalChallengePhases = [],
 }) {
-  if (!config.REVIEW_DB_URL) {
-    logger.debug(
-      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`
-    );
-    return;
-  }
-
   if (!Array.isArray(originalReviewers) || originalReviewers.length === 0) {
     return;
   }
@@ -3077,15 +3076,31 @@ async function ensureScorecardChangeDoesNotConflict({
     phaseIdToChallengePhaseIds.get(phaseKey).add(String(phase.id));
   }
 
-  const reviewClient = getReviewClient();
-  const hasReviewModel =
-    reviewClient &&
-    typeof reviewClient.review === "object" &&
-    typeof reviewClient.review?.count === "function";
-
-  if (!hasReviewModel) {
+  if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Prisma review model is unavailable; falling back to raw query guard for challenge ${challengeId}`
+      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return;
+  }
+
+  let reviewClient;
+  try {
+    reviewClient = getReviewClient();
+  } catch (error) {
+    logger.warn(
+      `Unable to initialize review Prisma client for challenge ${challengeId}: ${error.message}`
+    );
+    throw new errors.ServiceUnavailableError(
+      "Cannot change the scorecard because review status could not be verified. Please try again later."
+    );
+  }
+
+  if (!reviewClient || typeof reviewClient.$queryRaw !== "function") {
+    logger.warn(
+      `Prisma review client does not support raw queries for challenge ${challengeId}`
+    );
+    throw new errors.ServiceUnavailableError(
+      "Cannot change the scorecard because review status could not be verified. Please try again later."
     );
   }
 
@@ -3113,6 +3128,73 @@ async function ensureScorecardChangeDoesNotConflict({
     openReviewPhaseNameByKey.has(phaseKey)
   );
 
+  const reviewPhaseKeysSet = new Set(removedScorecardsByPhase.keys());
+  const challengePhaseIdsToInspect = new Set();
+  for (const phaseKey of reviewPhaseKeysSet) {
+    const challengePhaseIds = phaseIdToChallengePhaseIds.get(phaseKey);
+    if (!challengePhaseIds) {
+      continue;
+    }
+    for (const challengePhaseId of challengePhaseIds) {
+      if (!_.isNil(challengePhaseId)) {
+        challengePhaseIdsToInspect.add(String(challengePhaseId));
+      }
+    }
+  }
+
+  const blockingCountByPhase = new Map();
+  const blockingCountByPhaseAndScorecard = new Map();
+
+  const challengePhaseIdList = Array.from(challengePhaseIdsToInspect);
+  if (challengePhaseIdList.length > 0) {
+    const reviewSchema = String(config.REVIEW_DB_SCHEMA || "").trim();
+    const reviewTableIdentifier = Prisma.raw(
+      reviewSchema
+        ? `"${reviewSchema.replace(/"/g, '""')}"."review"`
+        : '"review"'
+    );
+
+    let blockingReviewRows = [];
+    try {
+      blockingReviewRows = await reviewClient.$queryRaw`
+        SELECT "phaseId", "scorecardId", COUNT(*)::int AS "count"
+        FROM ${reviewTableIdentifier}
+        WHERE "phaseId" IN (${Prisma.join(challengePhaseIdList)})
+          AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
+        GROUP BY "phaseId", "scorecardId"
+      `;
+    } catch (error) {
+      logger.warn(
+        `Failed to query the review database for challenge ${challengeId}: ${error.message}`
+      );
+      throw new errors.ServiceUnavailableError(
+        "Cannot change the scorecard because review status could not be verified. Please try again later."
+      );
+    }
+
+    for (const row of blockingReviewRows || []) {
+      const phaseId = _.isNil(row?.phaseId) ? null : String(row.phaseId);
+      if (!phaseId) {
+        continue;
+      }
+      const countValue = Number(_.get(row, "count", 0));
+      if (!Number.isFinite(countValue) || countValue <= 0) {
+        continue;
+      }
+
+      blockingCountByPhase.set(phaseId, (blockingCountByPhase.get(phaseId) || 0) + countValue);
+
+      const scorecardId = _.isNil(row?.scorecardId) ? null : String(row.scorecardId);
+      if (scorecardId) {
+        const scorecardKey = `${phaseId}|${scorecardId}`;
+        blockingCountByPhaseAndScorecard.set(
+          scorecardKey,
+          (blockingCountByPhaseAndScorecard.get(scorecardKey) || 0) + countValue
+        );
+      }
+    }
+  }
+
   if (reviewPhaseKeysToCheck.length > 0) {
     for (const phaseKey of reviewPhaseKeysToCheck) {
       const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
@@ -3124,38 +3206,8 @@ async function ensureScorecardChangeDoesNotConflict({
       }
 
       let activePhaseReviewCount = 0;
-
-      if (hasReviewModel) {
-        activePhaseReviewCount = await reviewClient.review.count({
-          where: {
-            phaseId: { in: challengePhaseIds },
-            status: { in: REVIEW_STATUS_BLOCKING },
-          },
-        });
-      } else if (typeof reviewClient?.$queryRaw === "function") {
-        try {
-          const queryResult = await reviewClient.$queryRaw`
-            SELECT COUNT(*)::int AS count
-            FROM "review"
-            WHERE "phaseId" IN (${Prisma.join(challengePhaseIds)})
-              AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
-          `;
-          const rawCount =
-            Array.isArray(queryResult) && queryResult.length > 0
-              ? Number(queryResult[0]?.count || 0)
-              : 0;
-          activePhaseReviewCount = Number.isFinite(rawCount) ? rawCount : 0;
-        } catch (error) {
-          logger.warn(
-            `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} due to review DB query failure: ${error.message}`
-          );
-          continue;
-        }
-      } else {
-        logger.warn(
-          `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} because review Prisma client does not support raw queries`
-        );
-        continue;
+      for (const challengePhaseId of challengePhaseIds) {
+        activePhaseReviewCount += blockingCountByPhase.get(challengePhaseId) || 0;
       }
 
       if (activePhaseReviewCount > 0) {
@@ -3182,42 +3234,11 @@ async function ensureScorecardChangeDoesNotConflict({
         continue;
       }
 
+      const normalizedScorecardId = String(scorecardId);
       let conflictingReviews = 0;
-
-      if (hasReviewModel) {
-        conflictingReviews = await reviewClient.review.count({
-          where: {
-            phaseId: { in: challengePhaseIds },
-            scorecardId,
-            status: { in: REVIEW_STATUS_BLOCKING },
-          },
-        });
-      } else if (typeof reviewClient?.$queryRaw === "function") {
-        try {
-          const queryResult = await reviewClient.$queryRaw`
-            SELECT COUNT(*)::int AS count
-            FROM "review"
-            WHERE "phaseId" IN (${Prisma.join(challengePhaseIds)})
-              AND "scorecardId" = ${scorecardId}
-              AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
-          `;
-
-          const rawCount =
-            Array.isArray(queryResult) && queryResult.length > 0
-              ? Number(queryResult[0]?.count || 0)
-              : 0;
-          conflictingReviews = Number.isFinite(rawCount) ? rawCount : 0;
-        } catch (error) {
-          logger.warn(
-            `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} due to review DB query failure: ${error.message}`
-          );
-          continue;
-        }
-      } else {
-        logger.warn(
-          `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because review Prisma client does not support raw queries`
-        );
-        continue;
+      for (const challengePhaseId of challengePhaseIds) {
+        const scorecardKey = `${challengePhaseId}|${normalizedScorecardId}`;
+        conflictingReviews += blockingCountByPhaseAndScorecard.get(scorecardKey) || 0;
       }
 
       if (conflictingReviews > 0) {

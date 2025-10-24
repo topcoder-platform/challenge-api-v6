@@ -737,6 +737,56 @@ describe('challenge service unit tests', () => {
       should.equal(testHelper.getDatesDiff(result.startDate, testChallengeData.startDate), 0)
     })
 
+    it('preserves existing terms when update payload omits the terms field', async () => {
+      const challengeData = _.cloneDeep(testChallengeData)
+      challengeData.name = `${challengeData.name} Terms ${Date.now()}`
+      challengeData.legacyId = Math.floor(Math.random() * 1000000)
+      const challengeWithTerms = await service.createChallenge(
+        { isMachine: true, sub: 'sub-terms', userId: 22838965 },
+        challengeData,
+        config.M2M_FULL_ACCESS_TOKEN
+      )
+
+      const termRecords = [
+        {
+          challengeId: challengeWithTerms.id,
+          termId: uuid(),
+          roleId: uuid(),
+          createdBy: 'unit-test',
+          updatedBy: 'unit-test'
+        },
+        {
+          challengeId: challengeWithTerms.id,
+          termId: uuid(),
+          roleId: uuid(),
+          createdBy: 'unit-test',
+          updatedBy: 'unit-test'
+        }
+      ]
+      await prisma.challengeTerm.createMany({ data: termRecords })
+
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: 'sub-terms', userId: 22838965 },
+          challengeWithTerms.id,
+          {
+            description: 'Updated description to ensure persistence of terms'
+          }
+        )
+
+        should.exist(updated.terms)
+        should.equal(updated.terms.length, termRecords.length)
+        const sortedTerms = _.sortBy(updated.terms, ['id', 'roleId'])
+        const expectedTerms = _.sortBy(
+          termRecords.map((t) => ({ id: t.termId, roleId: t.roleId })),
+          ['id', 'roleId']
+        )
+        sortedTerms.should.deep.equal(expectedTerms)
+      } finally {
+        await prisma.challenge.delete({ where: { id: challengeWithTerms.id } })
+      }
+    }).timeout(5000)
+
     it('update challenge successfully with winners', async () => {
       const result = await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, data.challenge.id, {
         winners: [{
