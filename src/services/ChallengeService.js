@@ -3162,7 +3162,7 @@ async function ensureScorecardChangeDoesNotConflict({
         SELECT "phaseId", "scorecardId", COUNT(*)::int AS "count"
         FROM ${reviewTableIdentifier}
         WHERE "phaseId" IN (${Prisma.join(challengePhaseIdList)})
-          AND "status" IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
+          AND "status"::text IN (${Prisma.join(REVIEW_STATUS_BLOCKING)})
         GROUP BY "phaseId", "scorecardId"
       `;
     } catch (error) {
