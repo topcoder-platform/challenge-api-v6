@@ -13,6 +13,7 @@ const uuid = require('uuid/v4')
 const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = require('../../src/common/prisma').getClient()
 const service = require('../../src/services/ChallengePhaseService')
+const helper = require('../../src/common/helper')
 const testHelper = require('../testHelper')
 
 const should = chai.should()
@@ -801,6 +802,107 @@ describe('challenge phase service unit tests', () => {
 
       const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { isOpen: true })
       should.equal(challengePhase.isOpen, true)
+    })
+
+    it('partially update challenge phase - cannot open review phase without reviewer resource', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => ([
+        { roleId: 'some-other-role-id' }
+      ])
+      helper.getResourceRoles = async () => ([
+        { id: 'reviewer-role-id', name: 'Reviewer' }
+      ])
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 400)
+        should.equal(
+          e.message,
+          'Cannot open Review phase because the challenge does not have any resource with the Reviewer role'
+        )
+        return
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
+
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - opens review phase when reviewer resource exists', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => ([
+        {
+          roleId: 'reviewer-role-id',
+          resourceRole: { name: 'Reviewer' }
+        }
+      ])
+      helper.getResourceRoles = async () => ([
+        { id: 'reviewer-role-id', name: 'Reviewer' }
+      ])
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
     })
   })
 

@@ -1515,6 +1515,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   // No conversion needed - values are already in dollars in the database
 
   prismaHelper.convertModelToResponse(ret);
+  await enrichSkillsData(ret);
   enrichChallengeForResponse(ret, track, type);
 
   // If the challenge is self-service, add the creating user as the "client manager", *not* the manager
@@ -2683,6 +2684,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   // Convert to response shape before any business-logic checks that expect it
   prismaHelper.convertModelToResponse(updatedChallenge);
+  await enrichSkillsData(updatedChallenge);
   enrichChallengeForResponse(updatedChallenge);
 
   if (_.get(updatedChallenge, "legacy.selfService")) {

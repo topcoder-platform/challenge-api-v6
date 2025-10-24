@@ -24,6 +24,13 @@ const REVIEW_PHASE_NAMES = Object.freeze([
   "approval",
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()));
+const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
+  "iterative review": "Iterative Reviewer",
+  "checkpoint screening": "Checkpoint Screener",
+  screening: "Screener",
+  review: "Reviewer",
+  "checkpoint review": "Checkpoint Reviewer",
+});
 
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
@@ -201,6 +208,48 @@ async function postChallengeUpdatedNotification(challengeId) {
   }
 }
 
+async function ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName) {
+  const normalizedPhaseName = _.toLower(_.trim(phaseName || ""));
+  const requiredRoleName = PHASE_RESOURCE_ROLE_REQUIREMENTS[normalizedPhaseName];
+  if (!requiredRoleName) {
+    return;
+  }
+
+  const challengeResources = await helper.getChallengeResources(challengeId);
+  const requiredRoleNameLower = _.toLower(requiredRoleName);
+  const hasRequiredRoleByName = (challengeResources || []).some((resource) => {
+    const roleName =
+      resource.roleName ||
+      resource.role ||
+      _.get(resource, "role.name") ||
+      _.get(resource, "resourceRoleName") ||
+      _.get(resource, "resourceRole.name");
+    return roleName && _.toLower(roleName) === requiredRoleNameLower;
+  });
+
+  let hasRequiredRole = hasRequiredRoleByName;
+
+  if (!hasRequiredRole) {
+    const resourceRoles = await helper.getResourceRoles();
+    const requiredRoleIds = (resourceRoles || [])
+      .filter((role) => role.name && _.toLower(role.name) === requiredRoleNameLower)
+      .map((role) => _.toString(role.id));
+    if (requiredRoleIds.length > 0) {
+      const requiredRoleIdSet = new Set(requiredRoleIds);
+      hasRequiredRole = (challengeResources || []).some(
+        (resource) => resource.roleId && requiredRoleIdSet.has(_.toString(resource.roleId))
+      );
+    }
+  }
+
+  if (!hasRequiredRole) {
+    const displayPhaseName = phaseName || "phase";
+    throw new errors.BadRequestError(
+      `Cannot open ${displayPhaseName} phase because the challenge does not have any resource with the ${requiredRoleName} role`
+    );
+  }
+}
+
 /**
  * Get all phase information for that challenge
  * @param {String} challengeId the challenge id
@@ -328,6 +377,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         "Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set"
       );
     }
+  }
+
+  if (isOpeningPhase) {
+    const phaseName = data.name || challengePhase.name;
+    await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName);
   }
 
   if (data["scheduledStartDate"] || data["scheduledEndDate"]) {
