@@ -103,7 +103,7 @@ workflows:
             - feature/top-262-projectid-non-mandatory
             - TOP-2364
             - PM-2097
-            - pm-2456
+            - pm-2588
 
     - "build-qa":
         context: org-global
