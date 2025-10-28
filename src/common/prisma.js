@@ -11,9 +11,6 @@ const logger = require("./logger");
 const config = require("config");
 
 const prismaClient = new PrismaClient({
-  transactionOptions: {
-    timeout: config.CHALLENGE_SERVICE_PRISMA_TIMEOUT,
-  },
   log: [
     { level: "query", emit: "event" },
     { level: "info", emit: "event" },
