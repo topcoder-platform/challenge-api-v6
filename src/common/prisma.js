@@ -25,7 +25,7 @@ const prismaClient = new PrismaClient({
   // Allow overriding via environment variables if needed.
   transactionOptions: {
     maxWait: Number(process.env.PRISMA_TRANSACTION_MAX_WAIT_MS || 10000), // wait up to 10s to start
-    timeout: Number(process.env.PRISMA_TRANSACTION_TIMEOUT_MS || 10000), // allow up to 30s per transaction
+    timeout: config.CHALLENGE_SERVICE_PRISMA_TIMEOUT, // allow up to 30s per transaction
   },
 });
 
