@@ -217,7 +217,11 @@ const includeReturnFields = {
   },
   events: true,
   prizeSets: {
-    include: { prizes: true },
+    include: { 
+      prizes: {
+        orderBy: { value: "desc" },
+      },
+    } 
   },
   reviewers: {
     orderBy: { createdAt: "asc" },
