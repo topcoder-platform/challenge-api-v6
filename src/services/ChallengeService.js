@@ -1473,8 +1473,9 @@ async function createChallenge(currentUser, challenge, userToken) {
         // Map phase name -> Phase definition id (Phase.id), NOT ChallengePhase.id
         const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.phaseId]));
         logger.debug(`challenge phases - ${JSON.stringify(challenge.phases)}`)
-        logger.debug(`createChallenge: created phase map ${JSON.stringify(phaseMap)}`)
+        logger.debug(`createChallenge: created phase map ${JSON.stringify(Object.fromEntries(phaseMap))}`)
         logger.debug(`createChallenge: phase names ${JSON.stringify(phaseNames)}`)
+        logger.debug(`createChallenge: default reviewers ${JSON.stringify(defaultReviewers)}`)
         // ensure all required names exist
         const missing = phaseNames.filter((n) => !phaseMap.has(n));
         if (missing.length > 0) {
