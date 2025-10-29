@@ -1446,6 +1446,7 @@ async function createChallenge(currentUser, challenge, userToken) {
         trackId: challenge.trackId,
       };
       let defaultReviewers = [];
+      logger.debug(`challenge default reviewers where - ${JSON.stringify(defaultReviewerWhere)}`)
       if (challenge.timelineTemplateId) {
         defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
           where: {
@@ -1454,8 +1455,10 @@ async function createChallenge(currentUser, challenge, userToken) {
           },
           orderBy: { createdAt: "asc" },
         });
+        logger.debug(`challenge timelineTemplateId present - ${challenge.timelineTemplateId} ${JSON.stringify(defaultReviewers)}`)
       }
       if (_.isEmpty(defaultReviewers)) {
+        logger.debug(`challenge defaultReviewers empty`)
         defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
           where: {
             ...defaultReviewerWhere,
@@ -1463,6 +1466,7 @@ async function createChallenge(currentUser, challenge, userToken) {
           },
           orderBy: { createdAt: "asc" },
         });
+        logger.debug(`challenge timelineTemplateId not present - ${JSON.stringify(defaultReviewers)}`)
       }
       logger.debug(
         `createChallenge: loaded ${defaultReviewers.length} default reviewers ${buildLogContext()}`
