@@ -129,4 +129,5 @@ module.exports = {
   // Database schemas for direct counts (shared DB)
   RESOURCES_DB_SCHEMA: process.env.RESOURCES_DB_SCHEMA || "resources",
   REVIEW_DB_SCHEMA: process.env.REVIEW_DB_SCHEMA || "reviews",
+  CHALLENGE_SERVICE_PRISMA_TIMEOUT: process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT ? parseInt(process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT, 10) : 10000,
 };

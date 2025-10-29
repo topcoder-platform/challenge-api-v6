@@ -19,7 +19,7 @@ const createClient = () =>
     ],
     transactionOptions: {
       maxWait: Number(process.env.PRISMA_TRANSACTION_MAX_WAIT_MS || 10000),
-      timeout: Number(process.env.PRISMA_TRANSACTION_TIMEOUT_MS || 10000),
+      timeout: config.CHALLENGE_SERVICE_PRISMA_TIMEOUT,
     },
   });
 
