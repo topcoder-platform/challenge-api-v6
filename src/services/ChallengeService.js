@@ -1472,7 +1472,7 @@ async function createChallenge(currentUser, challenge, userToken) {
         const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
         // Map phase name -> Phase definition id (Phase.id), NOT ChallengePhase.id
         const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.phaseId]));
-
+        logger.debug(`challenge phases - ${JSON.stringify(challenge.phases)}`)
         logger.debug(`createChallenge: created phase map ${JSON.stringify(phaseMap)}`)
         logger.debug(`createChallenge: phase names ${JSON.stringify(phaseNames)}`)
         // ensure all required names exist
