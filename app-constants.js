@@ -65,6 +65,9 @@ const Topics = {
   ChallengeTimelineTemplateDeleted: "challenge.action.challenge.timeline.deleted",
   ChallengePhaseUpdated: "challenge.action.phase.updated",
   ChallengePhaseDeleted: "challenge.action.phase.deleted",
+  DefaultChallengeReviewerCreated: "challenge.action.default.reviewer.created",
+  DefaultChallengeReviewerUpdated: "challenge.action.default.reviewer.updated",
+  DefaultChallengeReviewerDeleted: "challenge.action.default.reviewer.deleted",
   // Self Service topics
   Notifications: "notifications.action.create",
 };
@@ -95,6 +98,9 @@ const DisabledTopics = [
   Topics.ChallengeTimelineTemplateDeleted,
   Topics.ChallengePhaseUpdated,
   Topics.ChallengePhaseDeleted,
+  Topics.DefaultChallengeReviewerCreated,
+  Topics.DefaultChallengeReviewerUpdated,
+  Topics.DefaultChallengeReviewerDeleted,
 ];
 
 const challengeTextSortField = {
