@@ -14,8 +14,81 @@ const parseMigrationMode = value => {
   return ALLOWED_MIGRATION_MODES.has(normalized) ? normalized : 'full';
 };
 
-// Default configuration with fallbacks
-module.exports = {
+const RECOMMENDED_INCREMENTAL_FIELDS = ['updatedAt', 'updatedBy'];
+
+const collectKnownSchemaFields = migratorConfig => {
+  const knownFields = new Set();
+  if (!migratorConfig) {
+    return knownFields;
+  }
+
+  Object.values(migratorConfig).forEach(definition => {
+    if (!definition || typeof definition !== 'object') {
+      return;
+    }
+    (definition.requiredFields || []).forEach(field => knownFields.add(field));
+    (definition.optionalFields || []).forEach(field => knownFields.add(field));
+    const defaults = definition.hasDefaults || [];
+    defaults.forEach(field => knownFields.add(field));
+  });
+
+  return knownFields;
+};
+
+const validateIncrementalFieldConfiguration = (config) => {
+  const incrementalFields = Array.isArray(config.INCREMENTAL_FIELDS) ? config.INCREMENTAL_FIELDS : [];
+  const isIncrementalMode = config.MIGRATION_MODE === 'incremental';
+  const knownFields = collectKnownSchemaFields(config.migrator);
+
+  const result = {
+    warnings: [],
+    errors: []
+  };
+
+  if (isIncrementalMode && incrementalFields.length === 0) {
+    result.errors.push('INCREMENTAL_FIELDS must be configured when running incremental migrations.');
+  }
+
+  incrementalFields.forEach(field => {
+    if (!knownFields.has(field)) {
+      result.warnings.push(`Incremental field "${field}" is not present in any migrator schema and will be ignored.`);
+    }
+  });
+
+  const recommendedMissing = RECOMMENDED_INCREMENTAL_FIELDS.filter(field => incrementalFields.length > 0 && !incrementalFields.includes(field));
+  if (recommendedMissing.length) {
+    result.warnings.push(`Consider including ${recommendedMissing.join(', ')} in INCREMENTAL_FIELDS to preserve audit columns during updates.`);
+  }
+
+  if (incrementalFields.length) {
+    console.info(`[config] Incremental fields configured: ${incrementalFields.join(', ')}`);
+  }
+
+  result.warnings.forEach(message => console.warn(`[config] ${message}`));
+  result.errors.forEach(message => console.error(`[config] ${message}`));
+
+  return result;
+};
+
+/**
+ * Migration configuration with environment-driven overrides.
+ *
+ * Environment variables:
+ * - DATABASE_URL: Postgres connection string.
+ * - DATA_DIRECTORY: Root directory where migration payloads are stored.
+ * - MIGRATION_MODE: 'full' or 'incremental' (defaults to 'full').
+ * - INCREMENTAL_SINCE_DATE: ISO-8601 date used to filter source records.
+ * - INCREMENTAL_FIELDS: Comma-separated list of fields updated during incremental runs.
+ * - INCREMENTAL_FIELDS examples:
+ *     INCREMENTAL_FIELDS=updatedAt,updatedBy,status
+ *     INCREMENTAL_FIELDS=updatedAt,updatedBy,status,currentPhaseNames
+ *   Fields not listed remain unchanged during incremental updates.
+ * - INCREMENTAL_DATE_FIELDS: Ordered list of timestamp fields to evaluate for incremental filtering (default: updatedAt,updated).
+ * - MISSING_DATE_FIELD_BEHAVIOR: Behaviour when timestamps are missing (skip, include, warn-and-skip, warn-and-include).
+ * - INVALID_DATE_FIELD_BEHAVIOR: Behaviour when timestamps are invalid or suspicious (same options as above).
+ * - CREATED_BY / UPDATED_BY: Attribution columns written during migration.
+ */
+const config = {
   // Database connection
   DATABASE_URL: process.env.DATABASE_URL,
   
@@ -24,6 +97,9 @@ module.exports = {
   BATCH_SIZE: parseInt(process.env.BATCH_SIZE || '100', 10),
   CONCURRENCY_LIMIT: parseInt(process.env.CONCURRENCY_LIMIT || '10', 10),
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+  LOG_VERBOSITY: (process.env.LOG_VERBOSITY || 'normal').toLowerCase(),
+  SUMMARY_LOG_LIMIT: parseInt(process.env.SUMMARY_LOG_LIMIT || '5', 10),
+  COLLECT_UPSERT_STATS: process.env.COLLECT_UPSERT_STATS === 'true',
   
   // Migration behavior
   SKIP_MISSING_REQUIRED: process.env.SKIP_MISSING_REQUIRED === 'true',
@@ -34,7 +110,15 @@ module.exports = {
   // Incremental migration settings
   MIGRATION_MODE: parseMigrationMode(process.env.MIGRATION_MODE),
   INCREMENTAL_SINCE_DATE: process.env.INCREMENTAL_SINCE_DATE || null,
+  /**
+   * Fields that should be mutated when MIGRATION_MODE=incremental.
+   * Only columns listed here are included in UPDATE operations; omitted columns retain their existing values.
+   * Works in tandem with INCREMENTAL_SINCE_DATE to scope the incremental window.
+   */
   INCREMENTAL_FIELDS: parseListEnv(process.env.INCREMENTAL_FIELDS),
+  INCREMENTAL_DATE_FIELDS: parseListEnv(process.env.INCREMENTAL_DATE_FIELDS) || ['updatedAt', 'updated'],
+  MISSING_DATE_FIELD_BEHAVIOR: (process.env.MISSING_DATE_FIELD_BEHAVIOR || 'warn-and-skip').toLowerCase(),
+  INVALID_DATE_FIELD_BEHAVIOR: (process.env.INVALID_DATE_FIELD_BEHAVIOR || 'warn-and-skip').toLowerCase(),
   
   // Migration attribution
   CREATED_BY: process.env.CREATED_BY || 'migration',
@@ -424,7 +508,16 @@ module.exports = {
   }, 
 };
 
+config.incrementalFieldValidation = validateIncrementalFieldConfiguration(config);
+
+module.exports = config;
+
 Object.defineProperty(module.exports, 'parseMigrationMode', {
   value: parseMigrationMode,
+  enumerable: false
+});
+
+Object.defineProperty(module.exports, 'validateIncrementalFieldConfiguration', {
+  value: validateIncrementalFieldConfiguration,
   enumerable: false
 });

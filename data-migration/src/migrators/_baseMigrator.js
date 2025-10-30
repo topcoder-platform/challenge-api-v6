@@ -18,6 +18,7 @@ class BaseMigrator {
     this.requiredFields = this.manager.config.migrator?.[this.modelName]?.requiredFields || [];
     this.optionalFields = this.manager.config.migrator?.[this.modelName]?.optionalFields || [];
     this.validIds = new Set();
+    this.collectUpsertStats = this.manager.config.COLLECT_UPSERT_STATS === true;
   }
   
   /**
@@ -69,6 +70,28 @@ class BaseMigrator {
     const incrementalFields = Array.isArray(this.manager.config.INCREMENTAL_FIELDS)
       ? this.manager.config.INCREMENTAL_FIELDS
       : [];
+    this._incrementalFieldStats = null;
+    this._upsertStats = null;
+
+    if (isIncremental) {
+      if (!sinceDate || sinceDate === 'unspecified date') {
+        this.manager.logger.warn(`${this.modelName} incremental run has no INCREMENTAL_SINCE_DATE; entire dataset will be considered.`);
+      } else {
+        const sinceDateObj = new Date(sinceDate);
+        if (Number.isNaN(sinceDateObj.getTime())) {
+          this.manager.logger.error(`${this.modelName} incremental run received invalid INCREMENTAL_SINCE_DATE "${sinceDate}".`);
+        } else {
+          const now = new Date();
+          if (sinceDateObj > now) {
+            this.manager.logger.error(`${this.modelName} incremental run date ${sinceDateObj.toISOString()} is in the future; this may yield zero records.`);
+          }
+          const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+          if ((now - sinceDateObj) > oneYearMs) {
+            this.manager.logger.warn(`${this.modelName} incremental run uses a date older than one year (${sinceDateObj.toISOString()}); verify this is intentional.`);
+          }
+        }
+      }
+    }
 
     if (isIncremental) {
       this.manager.logger.info(`Running in INCREMENTAL mode since ${sinceDate}`);
@@ -80,6 +103,11 @@ class BaseMigrator {
     }
 
     const data = await this.loadData();
+    if (isIncremental) {
+      this.manager.logger.info(`Incremental filter retained ${data.length} ${this.modelName} records for processing.`);
+    } else {
+      this.manager.logger.info(`Loaded ${data.length} ${this.modelName} records for full migration.`);
+    }
 
     // Allow subclasses to perform pre-processing
     const processedData = await this.beforeMigration(data);
@@ -92,6 +120,9 @@ class BaseMigrator {
     
     // Allow subclasses to perform post-processing
     await this.afterMigration(result);
+
+    this.reportIncrementalFieldStats();
+    this.reportUpsertStats();
     
     // Return statistics for this migrator
     return {
@@ -304,13 +335,19 @@ class BaseMigrator {
     const incrementalFields = Array.isArray(this.manager.config.INCREMENTAL_FIELDS)
       ? this.manager.config.INCREMENTAL_FIELDS
       : [];
+    const stats = this._ensureIncrementalFieldStats();
+    stats.totalProcessed += 1;
 
     if (!incrementalFields.length) {
+      if (!stats.emptyWarningLogged) {
+        stats.emptyWarningLogged = true;
+        this.manager.logger.warn(`${this.modelName} incremental migration has no INCREMENTAL_FIELDS configured; falling back to full updates.`);
+      }
+      stats.fallbackToFull = true;
       return this.createUpsertData(record, idField);
     }
 
     const updateData = {};
-    const missingFields = [];
 
     for (const field of incrementalFields) {
       if (field === idField) {
@@ -319,24 +356,27 @@ class BaseMigrator {
 
       if (record[field] !== undefined) {
         updateData[field] = record[field];
+        stats.updatedCounts.set(field, (stats.updatedCounts.get(field) || 0) + 1);
       } else {
         updateData[field] = Prisma.skip;
-        missingFields.push(field);
+        stats.missingCounts.set(field, (stats.missingCounts.get(field) || 0) + 1);
+
+        if (!stats.missingExamples.has(field)) {
+          const recordIdentifier = record[idField] ?? '[unknown id]';
+          stats.missingExamples.set(field, recordIdentifier !== undefined ? [recordIdentifier] : []);
+          // TODO: expose warnAlways flag in configuration when more granular logging is required.
+          this.manager.logger.warn(`${this.modelName} record ${recordIdentifier} is missing incremental field "${field}"; skipping updates for this field on this record.`);
+        } else {
+          const examples = stats.missingExamples.get(field);
+          if (examples.length < 5 && record[idField] !== undefined && !examples.includes(record[idField])) {
+            examples.push(record[idField]);
+          }
+        }
       }
     }
 
     updateData.updatedAt = record.updatedAt ? new Date(record.updatedAt) : new Date();
     updateData.updatedBy = record.updatedBy;
-
-    if (missingFields.length) {
-      this._missingIncrementalFieldWarnings = this._missingIncrementalFieldWarnings || new Set();
-      for (const field of missingFields) {
-        if (!this._missingIncrementalFieldWarnings.has(field)) {
-          this._missingIncrementalFieldWarnings.add(field);
-          this.manager.logger.warn(`Configured incremental field "${field}" is missing on some ${this.modelName} records; skipping updates for this field`);
-        }
-      }
-    }
 
     const createData = { ...record };
     createData.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
@@ -346,6 +386,20 @@ class BaseMigrator {
       update: updateData,
       create: createData
     };
+  }
+
+  _ensureIncrementalFieldStats() {
+    if (!this._incrementalFieldStats) {
+      this._incrementalFieldStats = {
+        totalProcessed: 0,
+        fallbackToFull: false,
+        emptyWarningLogged: false,
+        updatedCounts: new Map(),
+        missingCounts: new Map(),
+        missingExamples: new Map()
+      };
+    }
+    return this._incrementalFieldStats;
   }
 
   /**
@@ -450,6 +504,112 @@ class BaseMigrator {
   customizeUpsertData(upsertData, _record) {
     return upsertData; // Default implementation returns unmodified data
   }
+
+  _extractUpdatedFields(upsertData) {
+    const updateSection = upsertData?.update || {};
+    const idField = this.getIdField();
+    return Object.entries(updateSection)
+      .filter(([field, value]) => field !== idField && value !== Prisma.skip)
+      .map(([field]) => field);
+  }
+
+  _recordUpsertStats(operation, durationMs, upsertData) {
+    if (!this._upsertStats) {
+      this._upsertStats = {
+        creates: 0,
+        updates: 0,
+        totalDurationMs: 0,
+        totalOperations: 0,
+        fieldUpdateCounts: new Map()
+      };
+    }
+
+    if (operation === 'create') {
+      this._upsertStats.creates += 1;
+    } else {
+      this._upsertStats.updates += 1;
+    }
+    this._upsertStats.totalDurationMs += durationMs;
+    this._upsertStats.totalOperations += 1;
+
+    const fields = this._extractUpdatedFields(upsertData);
+    fields.forEach(field => {
+      this._upsertStats.fieldUpdateCounts.set(field, (this._upsertStats.fieldUpdateCounts.get(field) || 0) + 1);
+    });
+  }
+
+  reportIncrementalFieldStats() {
+    if (!this.manager.isIncrementalMode() || !this._incrementalFieldStats) {
+      return;
+    }
+
+    const stats = this._incrementalFieldStats;
+    if (stats.fallbackToFull) {
+      this.manager.logger.warn(`${this.modelName} incremental run defaulted to full updates because INCREMENTAL_FIELDS was empty.`);
+    }
+
+    if (stats.updatedCounts.size) {
+      const updatedSummary = Array.from(stats.updatedCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([field, count]) => `${field}=${count}`)
+        .join(', ');
+      this.manager.logger.info(`${this.modelName} incremental field coverage: ${updatedSummary}`);
+    }
+
+    if (stats.missingCounts.size) {
+      stats.missingCounts.forEach((count, field) => {
+        const examples = stats.missingExamples.get(field) || [];
+        this.manager.logger.warn(`${this.modelName} missing incremental field "${field}" on ${count} record(s). Example IDs: ${examples.join(', ') || 'none captured'}`);
+      });
+    }
+  }
+
+  reportUpsertStats() {
+    if (!this.collectUpsertStats || !this._upsertStats || !this._upsertStats.totalOperations) {
+      return;
+    }
+
+    const { creates = 0, updates = 0, totalDurationMs, totalOperations, fieldUpdateCounts } = this._upsertStats;
+    const averageDuration = (totalDurationMs / totalOperations).toFixed(2);
+    this.manager.logger.info(`${this.modelName} upsert summary: ${creates} creates, ${updates} updates, avg ${averageDuration}ms per operation.`);
+
+    if (fieldUpdateCounts && fieldUpdateCounts.size) {
+      const topFields = Array.from(fieldUpdateCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([field, count]) => `${field}=${count}`)
+        .join(', ');
+      this.manager.logger.debug(`${this.modelName} most frequently updated fields: ${topFields}`);
+    }
+  }
+
+  async _executeUpsertWithStats(prisma, upsertData) {
+    const start = Date.now();
+    let existing = null;
+    if (this.collectUpsertStats) {
+      try {
+        existing = await prisma[this.queryName].findUnique({
+          where: upsertData.where
+        });
+      } catch (lookupError) {
+        this.manager.logger.debug(`Unable to pre-fetch ${this.modelName} ${this.describeRecord(upsertData)} before upsert: ${lookupError.message}`);
+      }
+    }
+    const data = await prisma[this.queryName].upsert(upsertData);
+    const durationMs = Date.now() - start;
+    if (this.collectUpsertStats) {
+      const operation = existing ? 'update' : 'create';
+      const updatedFields = this._extractUpdatedFields(upsertData);
+      const updatedFieldSummary = updatedFields.length ? updatedFields.join(', ') : 'none';
+
+      this.manager.logger.debug(`${this.modelName} ${operation} completed in ${durationMs}ms for ${this.describeRecord(upsertData)} (updated fields: ${updatedFieldSummary}).`);
+      this._recordUpsertStats(operation, durationMs, upsertData);
+    } else {
+      this.manager.logger.debug(`${this.modelName} upsert completed in ${durationMs}ms for ${this.describeRecord(upsertData)}.`);
+    }
+
+    return { data };
+  }
   
   /**
    * Perform the upsert operation
@@ -459,15 +619,13 @@ class BaseMigrator {
    */
   async performUpsert(prisma, upsertData) {
     try {
-      const data = await prisma[this.queryName].upsert(upsertData);
-      return { data };
+      return await this._executeUpsertWithStats(prisma, upsertData);
     } catch (error) {
       const resolution = await this.handleUpsertError(error, upsertData);
 
       if (resolution?.retryData) {
         try {
-          const data = await prisma[this.queryName].upsert(resolution.retryData);
-          return { data };
+          return await this._executeUpsertWithStats(prisma, resolution.retryData);
         } catch (retryError) {
           this.manager.logger.error(`Retry upsert failed for ${this.modelName} ${this.describeRecord(upsertData)}:`, retryError);
           return { skip: true };
@@ -475,6 +633,7 @@ class BaseMigrator {
       }
 
       if (resolution?.skip) {
+        this.manager.logger.warn(`Skipping ${this.modelName} ${this.describeRecord(upsertData)} due to unresolved upsert error: ${error.message}`);
         return { skip: true };
       }
 
