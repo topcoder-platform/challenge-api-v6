@@ -19,6 +19,8 @@ const defaultInclude = {
   phase: true,
 };
 
+const reviewerIdSchema = Joi.string().trim().required();
+
 /**
  * Normalize record by removing audit fields
  *
@@ -360,7 +362,7 @@ async function getDefaultChallengeReviewer(id) {
 }
 
 getDefaultChallengeReviewer.schema = {
-  id: Joi.id(),
+  id: reviewerIdSchema,
 };
 
 /**
@@ -396,7 +398,7 @@ async function fullyUpdateDefaultChallengeReviewer(authUser, id, data) {
 
 fullyUpdateDefaultChallengeReviewer.schema = {
   authUser: Joi.any(),
-  id: Joi.id(),
+  id: reviewerIdSchema,
   data: Joi.object()
     .keys({
       typeId: Joi.id().required(),
@@ -496,7 +498,7 @@ async function partiallyUpdateDefaultChallengeReviewer(authUser, id, data) {
 
 partiallyUpdateDefaultChallengeReviewer.schema = {
   authUser: Joi.any(),
-  id: Joi.id(),
+  id: reviewerIdSchema,
   data: Joi.object()
     .keys({
       typeId: Joi.optionalId(),
@@ -543,7 +545,7 @@ async function deleteDefaultChallengeReviewer(id) {
 }
 
 deleteDefaultChallengeReviewer.schema = {
-  id: Joi.id(),
+  id: reviewerIdSchema,
 };
 
 module.exports = {
