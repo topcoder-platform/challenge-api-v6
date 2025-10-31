@@ -155,6 +155,8 @@ model Challenge {
   @@index([endDate])
   @@index([status, startDate])
   @@index([trackId, typeId, status])
+  @@index([status, typeId, trackId, createdAt(sort: Desc)], map: "challenge_status_type_track_created_at_idx")
+  @@index([name], type: Gin, ops: [gin_trgm_ops], map: "challenge_name_trgm_idx")
   @@index([legacyId])
   @@index([projectId, status])
 }
@@ -540,6 +542,7 @@ model ChallengePhase {
   @@index([challengeId])
   @@index([challengeId, isOpen])
   @@index([challengeId, name])
+  @@index([challengeId, isOpen, scheduledEndDate, actualEndDate], map: "challenge_phase_challenge_open_end_idx")
 }
 
 //////////////////////////////////////////
