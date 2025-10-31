@@ -10,4 +10,4 @@ CREATE INDEX IF NOT EXISTS "challenge_phase_challenge_open_end_idx"
 
 CREATE INDEX IF NOT EXISTS "challenge_name_trgm_idx"
   ON "Challenge"
-  USING gin ("name" gin_trgm_ops);
+  USING gin ("name" pg_catalog.gin_trgm_ops);
