@@ -13,6 +13,7 @@ const uuid = require('uuid/v4')
 const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = require('../../src/common/prisma').getClient()
 const service = require('../../src/services/ChallengePhaseService')
+const helper = require('../../src/common/helper')
 const testHelper = require('../testHelper')
 
 const should = chai.should()
@@ -80,10 +81,17 @@ describe('challenge phase service unit tests', () => {
         "reviewItemCommentId" varchar(14) NOT NULL
       )
     `)
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "${reviewSchema}"."appealResponse" (
+        "id" varchar(14) PRIMARY KEY,
+        "appealId" varchar(14) UNIQUE NOT NULL
+      )
+    `)
   })
 
   after(async () => {
     if (reviewClient) {
+      await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appealResponse"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appeal"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItemComment"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItem"`)
@@ -695,6 +703,126 @@ describe('challenge phase service unit tests', () => {
       }
     })
 
+    it('partially update challenge phase - cannot close Appeals Response when appeals lack responses', async function () {
+      this.timeout(50000)
+      const appealsPhaseId = uuid()
+      const appealsChallengePhaseId = uuid()
+      const submissionId = shortId()
+      const reviewId = uuid()
+      const reviewItemId = shortId()
+      const reviewItemCommentId = shortId()
+      const appealId = shortId()
+
+      await prisma.phase.create({
+        data: {
+          id: appealsPhaseId,
+          name: 'Appeals Response',
+          description: 'Appeals Response phase',
+          isOpen: true,
+          duration: 123,
+          createdBy: 'testuser',
+          updatedBy: 'testuser'
+        }
+      })
+
+      await prisma.challengePhase.create({
+        data: {
+          id: appealsChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: appealsPhaseId,
+          name: 'Appeals Response',
+          isOpen: true,
+          duration: 1000,
+          actualStartDate: new Date(),
+          createdBy: 'testuser',
+          updatedBy: 'testuser'
+        }
+      })
+
+      try {
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${submissionTable} ("id", "challengeId")
+            VALUES (${submissionId}, ${data.challenge.id})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${reviewTable} ("id", "phaseId", "submissionId", "status")
+            VALUES (${reviewId}, ${appealsChallengePhaseId}, ${submissionId}, ${'COMPLETED'})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${reviewItemTable} ("id", "reviewId")
+            VALUES (${reviewItemId}, ${reviewId})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${reviewItemCommentTable} ("id", "reviewItemId")
+            VALUES (${reviewItemCommentId}, ${reviewItemId})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        await reviewClient.$executeRaw(
+          Prisma.sql`
+            INSERT INTO ${appealTable} ("id", "reviewItemCommentId")
+            VALUES (${appealId}, ${reviewItemCommentId})
+            ON CONFLICT ("id") DO NOTHING
+          `
+        )
+
+        let caughtError
+        try {
+          await service.partiallyUpdateChallengePhase(
+            authUser,
+            data.challenge.id,
+            appealsChallengePhaseId,
+            { isOpen: false }
+          )
+        } catch (e) {
+          caughtError = e
+        }
+
+        should.exist(caughtError)
+        should.equal(caughtError.httpStatus || caughtError.statusCode, 400)
+        should.equal(
+          caughtError.message,
+          "Appeals Response phase can't be closed because there are still appeals that haven't been responded to"
+        )
+      } finally {
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${appealTable} WHERE "id" = ${appealId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewItemCommentTable} WHERE "id" = ${reviewItemCommentId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewItemTable} WHERE "id" = ${reviewItemId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${submissionTable} WHERE "id" = ${submissionId}`
+        )
+        await prisma.challengePhase.delete({
+          where: { id: appealsChallengePhaseId }
+        })
+        await prisma.phase.delete({
+          where: { id: appealsPhaseId }
+        })
+      }
+    })
+
     it('partially update challenge phase - unexpected field', async () => {
       try {
         await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'xx', other: 'xx' })
@@ -801,6 +929,107 @@ describe('challenge phase service unit tests', () => {
 
       const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { isOpen: true })
       should.equal(challengePhase.isOpen, true)
+    })
+
+    it('partially update challenge phase - cannot open review phase without reviewer resource', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => ([
+        { roleId: 'some-other-role-id' }
+      ])
+      helper.getResourceRoles = async () => ([
+        { id: 'reviewer-role-id', name: 'Reviewer' }
+      ])
+
+      try {
+        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 400)
+        should.equal(
+          e.message,
+          'Cannot open Review phase because the challenge does not have any resource with the Reviewer role'
+        )
+        return
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
+
+      throw new Error('should not reach here')
+    })
+
+    it('partially update challenge phase - opens review phase when reviewer resource exists', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => ([
+        {
+          roleId: 'reviewer-role-id',
+          resourceRole: { name: 'Reviewer' }
+        }
+      ])
+      helper.getResourceRoles = async () => ([
+        { id: 'reviewer-role-id', name: 'Reviewer' }
+      ])
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
     })
   })
 

@@ -24,6 +24,13 @@ const REVIEW_PHASE_NAMES = Object.freeze([
   "approval",
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()));
+const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
+  "iterative review": "Iterative Reviewer",
+  "checkpoint screening": "Checkpoint Screener",
+  screening: "Screener",
+  review: "Reviewer",
+  "checkpoint review": "Checkpoint Reviewer",
+});
 
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
@@ -173,6 +180,57 @@ async function hasSubmittedAppealsForChallenge(challengeId) {
   return Number(count) > 0;
 }
 
+async function hasPendingAppealResponsesForChallenge(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping pending appeal response check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`);
+  const appealResponseTable = Prisma.raw(`"${reviewSchema}"."appealResponse"`);
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`);
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`);
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT a."id")::int AS count
+        FROM ${appealTable} a
+        LEFT JOIN ${appealResponseTable} ar ON ar."appealId" = a."id"
+        INNER JOIN ${reviewItemCommentTable} ric ON ric."id" = a."reviewItemCommentId"
+        INNER JOIN ${reviewItemTable} ri ON ri."id" = ric."reviewItemId"
+        INNER JOIN ${reviewTable} r ON r."id" = ri."reviewId"
+        WHERE ar."id" IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM ${submissionTable} s
+            WHERE s."challengeId" = ${challengeId}
+              AND (
+                (r."submissionId" IS NOT NULL AND s."id" = r."submissionId")
+                OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
+              )
+          )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check pending appeal responses for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
@@ -198,6 +256,48 @@ async function postChallengeUpdatedNotification(challengeId) {
       error
     );
     throw error;
+  }
+}
+
+async function ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName) {
+  const normalizedPhaseName = _.toLower(_.trim(phaseName || ""));
+  const requiredRoleName = PHASE_RESOURCE_ROLE_REQUIREMENTS[normalizedPhaseName];
+  if (!requiredRoleName) {
+    return;
+  }
+
+  const challengeResources = await helper.getChallengeResources(challengeId);
+  const requiredRoleNameLower = _.toLower(requiredRoleName);
+  const hasRequiredRoleByName = (challengeResources || []).some((resource) => {
+    const roleName =
+      resource.roleName ||
+      resource.role ||
+      _.get(resource, "role.name") ||
+      _.get(resource, "resourceRoleName") ||
+      _.get(resource, "resourceRole.name");
+    return roleName && _.toLower(roleName) === requiredRoleNameLower;
+  });
+
+  let hasRequiredRole = hasRequiredRoleByName;
+
+  if (!hasRequiredRole) {
+    const resourceRoles = await helper.getResourceRoles();
+    const requiredRoleIds = (resourceRoles || [])
+      .filter((role) => role.name && _.toLower(role.name) === requiredRoleNameLower)
+      .map((role) => _.toString(role.id));
+    if (requiredRoleIds.length > 0) {
+      const requiredRoleIdSet = new Set(requiredRoleIds);
+      hasRequiredRole = (challengeResources || []).some(
+        (resource) => resource.roleId && requiredRoleIdSet.has(_.toString(resource.roleId))
+      );
+    }
+  }
+
+  if (!hasRequiredRole) {
+    const displayPhaseName = phaseName || "phase";
+    throw new errors.BadRequestError(
+      `Cannot open ${displayPhaseName} phase because the challenge does not have any resource with the ${requiredRoleName} role`
+    );
   }
 }
 
@@ -330,6 +430,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     }
   }
 
+  if (isOpeningPhase) {
+    const phaseName = data.name || challengePhase.name;
+    await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName);
+  }
+
   if (data["scheduledStartDate"] || data["scheduledEndDate"]) {
     const startDate = data["scheduledStartDate"] || challengePhase.scheduledStartDate;
     const endDate = data["scheduledEndDate"] || challengePhase.scheduledEndDate;
@@ -365,11 +470,20 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   const isReopeningPhase =
     "isOpen" in data && data["isOpen"] === true && !challengePhase.isOpen;
   if (isClosingPhase) {
+    const closingPhaseName = data.name || challengePhase.name;
     const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id);
     if (pendingScorecards) {
-      const phaseName = challengePhase.name || "phase";
+      const phaseName = closingPhaseName || "phase";
       throw new errors.ForbiddenError(
         `Cannot close ${phaseName} because there are still pending scorecards`
+      );
+    }
+    if (
+      String(closingPhaseName || "").toLowerCase() === "appeals response" &&
+      (await hasPendingAppealResponsesForChallenge(challengePhase.challengeId))
+    ) {
+      throw new errors.BadRequestError(
+        "Appeals Response phase can't be closed because there are still appeals that haven't been responded to"
       );
     }
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {

@@ -316,6 +316,52 @@ module.exports = {
       scopes: [DELETE, ALL],
     },
   },
+  "/default-challenge-reviewers": {
+    get: {
+      controller: "DefaultChallengeReviewerController",
+      method: "searchDefaultChallengeReviewers",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [READ, ALL],
+    },
+    post: {
+      controller: "DefaultChallengeReviewerController",
+      method: "createDefaultChallengeReviewer",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [CREATE, ALL],
+    },
+  },
+  "/default-challenge-reviewers/:defaultChallengeReviewerId": {
+    get: {
+      controller: "DefaultChallengeReviewerController",
+      method: "getDefaultChallengeReviewer",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [READ, ALL],
+    },
+    put: {
+      controller: "DefaultChallengeReviewerController",
+      method: "fullyUpdateDefaultChallengeReviewer",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [UPDATE, ALL],
+    },
+    patch: {
+      controller: "DefaultChallengeReviewerController",
+      method: "partiallyUpdateDefaultChallengeReviewer",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [UPDATE, ALL],
+    },
+    delete: {
+      controller: "DefaultChallengeReviewerController",
+      method: "deleteDefaultChallengeReviewer",
+      auth: "jwt",
+      access: [constants.UserRoles.Admin],
+      scopes: [DELETE, ALL],
+    },
+  },
   "/timeline-templates": {
     get: {
       controller: "TimelineTemplateController",
