@@ -120,12 +120,17 @@ npm run migrate:reset # Reset the db and run the migration tool
 
 ### Prize Set Comparison Utility
 
-Fix up prize sets that maybe got mixed up during the incremental imports.  Prints differences from v5 to v6
+Fix up prize sets that may have drifted during incremental imports. Use the helper to review differences between the legacy payload and v6:
 ```
 npm run compare:prizesets -- --since 2025-01-01T00:00:00Z
 ```
 
-Any mismatch prints the challenge ID along with the legacy and v6 `prizeSets` arrays.
+Add `--verbose` to print the full legacy/v6 arrays when you need additional context. Include `--apply` to overwrite the v6 prize sets with the legacy values for each mismatch:
+```
+npm run compare:prizesets -- --since 2025-01-01T00:00:00Z --apply
+```
+
+When `--apply` is omitted, the script simply reports any differences and suggests next steps.
 
 ### Configuration Options
 
