@@ -12,6 +12,7 @@
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
+        "compare:prizesets": "node src/scripts/comparePrizeSets.js",
         "migrate:test": "npm run migrate && npm run test",
         "migrate:reset:test": "npm run migrate:reset && npm run test",
         "lint": "eslint .",

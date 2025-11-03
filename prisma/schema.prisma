@@ -542,7 +542,7 @@ model ChallengePhase {
   @@index([challengeId])
   @@index([challengeId, isOpen])
   @@index([challengeId, name])
-  @@index([challengeId, isOpen, scheduledEndDate, actualEndDate], map: "challenge_phase_challenge_open_end_idx")
+  @@index([challengeId, isOpen, scheduledEndDate, actualEndDate, name], map: "challenge_phase_order_idx") // Supports phase sorting: open first, then by scheduled/actual dates and name
 }
 
 //////////////////////////////////////////

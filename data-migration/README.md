@@ -118,6 +118,15 @@ For more details on incremental migrations, see the `Incremental Updates` sectio
 npm run migrate:reset # Reset the db and run the migration tool
 ```
 
+### Prize Set Comparison Utility
+
+Fix up prize sets that maybe got mixed up during the incremental imports.  Prints differences from v5 to v6
+```
+npm run compare:prizesets -- --since 2025-01-01T00:00:00Z
+```
+
+Any mismatch prints the challenge ID along with the legacy and v6 `prizeSets` arrays.
+
 ### Configuration Options
 
 The migration tool is configurable through environment variables. You can set these in your `.env` file or pass them directly on the command line.
