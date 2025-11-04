@@ -7,7 +7,9 @@ const fs = require('fs')
 const path = require('path')
 const { v4: uuid } = require('uuid');
 const chai = require('chai')
-const awsMock = require('aws-sdk-mock')
+const { mockClient } = require('aws-sdk-client-mock')
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3')
+const { Readable } = require('stream')
 const service = require('../../src/services/AttachmentService')
 const testHelper = require('../testHelper')
 const prisma = require('../../src/common/prisma').getClient()
@@ -15,6 +17,9 @@ const prisma = require('../../src/common/prisma').getClient()
 const should = chai.should()
 
 const attachmentContent = fs.readFileSync(path.join(__dirname, '../attachment.txt'))
+
+// Create S3 mock client
+const s3Mock = mockClient(S3Client)
 
 describe('attachment service unit tests', () => {
   // created attachment id
@@ -26,10 +31,12 @@ describe('attachment service unit tests', () => {
   const notFoundId = uuid()
 
   before(async () => {
-    // mock S3 before creating S3 instance
-    awsMock.mock('S3', 'getObject', (params, callback) => {
-      callback(null, { Body: Buffer.from(attachmentContent) });
+    // mock S3 GetObject command
+    s3Mock.on(GetObjectCommand).resolves({
+      Body: Readable.from([attachmentContent]),
+      ContentType: 'text/plain'
     });
+    
     await testHelper.createData()
     data = testHelper.getData()
     // create attachment
@@ -60,8 +67,8 @@ describe('attachment service unit tests', () => {
   after(async () => {
     await testHelper.clearData()
     await prisma.attachment.deleteMany({ where: { id }})
-    // restore S3
-    awsMock.restore('S3');
+    // reset S3 mock
+    s3Mock.reset()
   })
 
   describe('download attachment tests', () => {
