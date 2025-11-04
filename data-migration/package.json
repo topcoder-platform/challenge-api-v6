@@ -13,6 +13,7 @@
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "compare:prizesets": "node src/scripts/comparePrizeSets.js",
+        "compare:winners-phases": "node src/scripts/compareWinnersAndPhases.js",
         "find:duplicate-phases": "node src/scripts/findDuplicateChallengePhases.js",
         "migrate:test": "npm run migrate && npm run test",
         "migrate:reset:test": "npm run migrate:reset && npm run test",

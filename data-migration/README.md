@@ -132,6 +132,18 @@ npm run compare:prizesets -- --since 2025-01-01T00:00:00Z --apply
 
 When `--apply` is omitted, the script simply reports any differences and suggests next steps.
 
+### Winner & Phase Comparison Utility
+
+Duplicate winners or phases can creep in when incremental runs are retried. Use the combined checker to flag and optionally repair those arrays:
+```
+npm run compare:winners-phases -- --since 2025-01-01T00:00:00Z
+```
+
+Add `--targets=winners` or `--targets=phases` to scope the check, `--verbose` for detailed output, and `--apply` to replace the v6 records with the legacy definitions in one shot:
+```
+npm run compare:winners-phases -- --since 2025-01-01T00:00:00Z --targets=phases --apply
+```
+
 ### Configuration Options
 
 The migration tool is configurable through environment variables. You can set these in your `.env` file or pass them directly on the command line.
