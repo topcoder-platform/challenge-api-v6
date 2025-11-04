@@ -100,10 +100,7 @@ workflows:
           branches:
             only:
             - develop
-            - feature/top-262-projectid-non-mandatory
-            - TOP-2364
-            - PM-2097
-            - pm-2539
+            - module-updates
 
     - "build-qa":
         context: org-global
