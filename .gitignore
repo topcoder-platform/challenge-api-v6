@@ -67,7 +67,7 @@ ecr-login.sh
 test.js
 
 # pnpm lock
-pnpm-lock.yaml
+# pnpm-lock.yaml
 
 .cursor
 .idea
