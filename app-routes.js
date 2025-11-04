@@ -121,7 +121,7 @@ module.exports = (app) => {
   });
 
   // Check if the route is not found or HTTP method is not supported
-  app.use("*", (req, res) => {
+  app.use((req, res) => {
     if (routes[req.baseUrl]) {
       res.status(HttpStatus.METHOD_NOT_ALLOWED).json({
         message: "The requested HTTP method is not supported.",
