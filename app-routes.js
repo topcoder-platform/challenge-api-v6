@@ -5,7 +5,7 @@
 const _ = require("lodash");
 const config = require("config");
 const HttpStatus = require("http-status-codes");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const helper = require("./src/common/helper");
 const errors = require("./src/common/errors");
 const logger = require("./src/common/logger");

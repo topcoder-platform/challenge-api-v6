@@ -4,7 +4,7 @@
 const _ = require("lodash");
 const Joi = require("joi");
 const { Prisma } = require("@prisma/client");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const config = require("config");
 const xss = require("xss");
 const helper = require("../common/helper");

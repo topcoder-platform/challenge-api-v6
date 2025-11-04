@@ -3,7 +3,7 @@
  */
 
 require('../../app-bootstrap')
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 const chai = require('chai')
 const service = require('../../src/services/TimelineTemplateService')
 const prisma = require('../../src/common/prisma').getClient()
