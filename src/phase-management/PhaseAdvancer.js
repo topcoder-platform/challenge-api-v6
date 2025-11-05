@@ -1,4 +1,4 @@
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const { Engine } = require("json-rules-engine");
 const { Prisma } = require("@prisma/client");
 const config = require("config");

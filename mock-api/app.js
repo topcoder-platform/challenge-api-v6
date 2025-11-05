@@ -8,7 +8,7 @@ const config = require('config')
 const winston = require('winston')
 const _ = require('lodash')
 const prisma = require('../src/common/prisma').getClient()
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 
 const app = express()
 app.set('port', config.PORT)

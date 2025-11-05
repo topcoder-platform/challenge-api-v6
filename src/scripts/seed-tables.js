@@ -3,7 +3,7 @@
  */
 const _ = require("lodash");
 const util = require("util");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const logger = require("../common/logger");
 const prismaHelper = require("../common/prisma-helper");
 

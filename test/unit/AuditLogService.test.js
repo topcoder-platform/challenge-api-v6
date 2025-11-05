@@ -4,7 +4,7 @@
 
 require('../../app-bootstrap')
 const _ = require('lodash')
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 const chai = require('chai')
 const service = require('../../src/services/AuditLogService')
 const prisma = require('../../src/common/prisma').getClient()
