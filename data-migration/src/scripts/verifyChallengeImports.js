@@ -52,6 +52,13 @@ const DEPENDENT_MIGRATORS = [
   ChallengeLegacyMigrator
 ];
 
+const DEPENDENCY_SOURCES = [
+  { modelName: 'ChallengeType', prismaProperty: 'challengeType' },
+  { modelName: 'ChallengeTrack', prismaProperty: 'challengeTrack' },
+  { modelName: 'TimelineTemplate', prismaProperty: 'timelineTemplate' },
+  { modelName: 'Phase', prismaProperty: 'phase' }
+];
+
 const parseArgs = () => {
   const args = process.argv.slice(2);
   const options = {
@@ -448,6 +455,17 @@ const insertMissingChallenges = async (records, options) => {
   const stats = {};
 
   try {
+    for (const { modelName, prismaProperty } of DEPENDENCY_SOURCES) {
+      const client = prisma[prismaProperty];
+      if (!client || typeof client.findMany !== 'function') {
+        continue;
+      }
+      const existing = await client.findMany({ select: { id: true } });
+      const idSet = new Set(existing.map(entry => entry.id));
+      manager.registerDependency(modelName, idSet);
+      console.log(`[backfill] Primed ${idSet.size} existing IDs for ${modelName} dependency checks.`);
+    }
+
     const challengeMigrator = new ChallengeMigrator();
     const challengeStats = await executeMigrator(manager, challengeMigrator, records);
     stats.Challenge = challengeStats;
