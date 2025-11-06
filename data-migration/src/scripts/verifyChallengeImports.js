@@ -7,6 +7,12 @@ const config = require('../config');
 const { loadData } = require('../utils/dataLoader');
 const { MigrationManager } = require('../migrationManager');
 const { ChallengeMigrator } = require('../migrators/challengeMigrator');
+const { ChallengeTypeMigrator } = require('../migrators/challengeTypeMigrator');
+const { ChallengeTrackMigrator } = require('../migrators/challengeTrackMigrator');
+const { TimelineTemplateMigrator } = require('../migrators/timelineTemplateMigrator');
+const { TimelineTemplatePhaseMigrator } = require('../migrators/timelineTemplatePhaseMigrator');
+const { ChallengeTimelineTemplateMigrator } = require('../migrators/challengeTimelineTemplateMigrator');
+const { PhaseMigrator } = require('../migrators/phaseMigrator');
 const { ChallengeConstraintMigrator } = require('../migrators/challengeConstraintMigrator');
 const { ChallengeDiscussionMigrator } = require('../migrators/challengeDiscussionMigrator');
 const { ChallengeDiscussionOptionMigrator } = require('../migrators/challengeDiscussionOptionMigrator');
@@ -52,9 +58,19 @@ const DEPENDENT_MIGRATORS = [
   ChallengeLegacyMigrator
 ];
 
+const PRE_MIGRATORS = [
+  ChallengeTypeMigrator,
+  ChallengeTrackMigrator,
+  PhaseMigrator,
+  TimelineTemplateMigrator,
+  TimelineTemplatePhaseMigrator,
+  ChallengeTimelineTemplateMigrator
+];
+
 const DEPENDENCY_SOURCES = [
   { modelName: 'ChallengeType', prismaProperty: 'challengeType' },
   { modelName: 'ChallengeTrack', prismaProperty: 'challengeTrack' },
+  { modelName: 'ChallengeTimelineTemplate', prismaProperty: 'challengeTimelineTemplate' },
   { modelName: 'TimelineTemplate', prismaProperty: 'timelineTemplate' },
   { modelName: 'Phase', prismaProperty: 'phase' }
 ];
@@ -175,13 +191,11 @@ const parseStatusSet = (value) => {
   if (!value) {
     return null;
   }
-
   const entries = value
     .split(',')
     .map(entry => entry.trim())
     .filter(Boolean)
     .map(entry => entry.toLowerCase());
-
   return entries.length ? new Set(entries) : null;
 };
 
@@ -205,12 +219,10 @@ const normalizeLegacyId = (value) => {
   if (value === null || value === undefined) {
     return null;
   }
-
   const normalized = String(value).trim();
   if (!normalized || normalized.toLowerCase() === 'null') {
     return null;
   }
-
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -322,6 +334,123 @@ const buildFilter = (options) => {
   };
 
   return { predicate, stats: filterStats, statusSet, updatedBeforeDate, createdBeforeDate };
+};
+
+const collectChallengeDependencies = (records, options = {}) => {
+  const {
+    treatTimelineAsChallengeTemplate = false
+  } = options;
+
+  const dependencies = {
+    ChallengeType: new Set(),
+    ChallengeTrack: new Set(),
+    ChallengeTimelineTemplate: new Set(),
+    TimelineTemplate: new Set(),
+    Phase: new Set()
+  };
+
+  records.forEach((record) => {
+    if (record?.typeId) {
+      dependencies.ChallengeType.add(record.typeId);
+    }
+    if (record?.trackId) {
+      dependencies.ChallengeTrack.add(record.trackId);
+    }
+    if (record?.timelineTemplateId) {
+      if (treatTimelineAsChallengeTemplate) {
+        dependencies.ChallengeTimelineTemplate.add(record.timelineTemplateId);
+      } else {
+        dependencies.TimelineTemplate.add(record.timelineTemplateId);
+      }
+    }
+    if (Array.isArray(record?.phases)) {
+      record.phases.forEach((phase) => {
+        if (phase?.phaseId) {
+          dependencies.Phase.add(phase.phaseId);
+        }
+      });
+    }
+  });
+
+  return dependencies;
+};
+
+const determineMissingDependencies = (manager, requiredDependencies) => {
+  const missing = {};
+  const dependencyMap = manager.dependencies || {};
+
+  Object.entries(requiredDependencies).forEach(([modelName, requiredSet]) => {
+    if (!requiredSet || !requiredSet.size) {
+      return;
+    }
+
+    const knownSet = dependencyMap[modelName] || new Set();
+    const missingIds = Array.from(requiredSet).filter(id => !knownSet.has(id));
+
+    if (missingIds.length) {
+      missing[modelName] = new Set(missingIds);
+    }
+  });
+
+  return missing;
+};
+
+const hasMissingDependencies = (missingMap) => Object.keys(missingMap).length > 0;
+
+const logMissingDependencies = (missingMap) => {
+  Object.entries(missingMap).forEach(([modelName, ids]) => {
+    console.warn(`[backfill] Missing ${modelName} dependencies: ${Array.from(ids).join(', ')}`);
+  });
+};
+
+const filterChallengesByMissingDependencies = (records, missingMap) => {
+  if (!hasMissingDependencies(missingMap)) {
+    return { filteredRecords: records, dropped: [] };
+  }
+
+  const missingTypeIds = missingMap.ChallengeType || new Set();
+  const missingTrackIds = missingMap.ChallengeTrack || new Set();
+  const missingChallengeTimelineTemplateIds = missingMap.ChallengeTimelineTemplate || new Set();
+  const missingTemplateIds = missingMap.TimelineTemplate || new Set();
+  const missingPhaseIds = missingMap.Phase || new Set();
+
+  const filteredRecords = [];
+  const dropped = [];
+
+  records.forEach((record) => {
+    const reasons = [];
+
+    if (record?.typeId && missingTypeIds.has(record.typeId)) {
+      reasons.push(`Missing ChallengeType ${record.typeId}`);
+    }
+
+    if (record?.trackId && missingTrackIds.has(record.trackId)) {
+      reasons.push(`Missing ChallengeTrack ${record.trackId}`);
+    }
+
+    if (record?.timelineTemplateId && missingChallengeTimelineTemplateIds.has(record.timelineTemplateId)) {
+      reasons.push(`Missing ChallengeTimelineTemplate ${record.timelineTemplateId}`);
+    }
+
+    if (record?.timelineTemplateId && missingTemplateIds.has(record.timelineTemplateId)) {
+      reasons.push(`Missing TimelineTemplate ${record.timelineTemplateId}`);
+    }
+
+    if (Array.isArray(record?.phases)) {
+      const missingPhaseFound = record.phases.some(phase => phase?.phaseId && missingPhaseIds.has(phase.phaseId));
+      if (missingPhaseFound) {
+        reasons.push('Missing Phase for one or more phase entries');
+      }
+    }
+
+    if (reasons.length) {
+      dropped.push({ record, reasons });
+    } else {
+      filteredRecords.push(record);
+    }
+  });
+
+  return { filteredRecords, dropped };
 };
 
 const findMissingChallenges = async (records, options) => {
@@ -437,6 +566,74 @@ const executeMigrator = async (manager, migrator, dataOverride = null) => {
   return { ...stats, empty: false };
 };
 
+const primeDependencies = async (manager) => {
+  for (const { modelName, prismaProperty } of DEPENDENCY_SOURCES) {
+    const client = prisma[prismaProperty];
+    if (!client || typeof client.findMany !== 'function') {
+      continue;
+    }
+
+    const existing = await client.findMany({ select: { id: true } });
+    const idSet = new Set(
+      existing
+        .map(entry => entry?.id)
+        .filter(id => id !== null && id !== undefined)
+    );
+    manager.registerDependency(modelName, idSet);
+    console.log(`[backfill] Primed ${idSet.size} existing IDs for ${modelName} dependency checks.`);
+  }
+};
+
+const loadChallengeTimelineTemplateMap = async () => {
+  const templates = await prisma.challengeTimelineTemplate.findMany({
+    select: { id: true, timelineTemplateId: true }
+  });
+
+  const map = new Map();
+  templates.forEach((entry) => {
+    if (entry?.id) {
+      map.set(entry.id, entry.timelineTemplateId || null);
+    }
+  });
+  return map;
+};
+
+const normalizeTimelineTemplateReferences = (records, timelineTemplateMap, existingTimelineTemplates) => {
+  if (!timelineTemplateMap || !timelineTemplateMap.size) {
+    return { filteredRecords: records, unresolved: [] };
+  }
+
+  const unresolved = [];
+  const unresolvedIds = new Set();
+
+  records.forEach((record) => {
+    if (!record || !record.timelineTemplateId) {
+      return;
+    }
+
+    const currentId = record.timelineTemplateId;
+    const mappedId = timelineTemplateMap.get(currentId);
+
+    if (mappedId) {
+      record.timelineTemplateId = mappedId;
+      return;
+    }
+
+    if (existingTimelineTemplates?.has(currentId)) {
+      return;
+    }
+
+    unresolved.push({
+      challengeId: record.id || '<missing id>',
+      timelineTemplateId: currentId
+    });
+    unresolvedIds.add(record.id);
+  });
+
+  const filteredRecords = records.filter(record => record && !unresolvedIds.has(record.id));
+  return { filteredRecords, unresolved };
+};
+
 const insertMissingChallenges = async (records, options) => {
   if (!records.length) {
     return {};
@@ -455,19 +652,91 @@ const insertMissingChallenges = async (records, options) => {
   const stats = {};
 
   try {
-    for (const { modelName, prismaProperty } of DEPENDENCY_SOURCES) {
-      const client = prisma[prismaProperty];
-      if (!client || typeof client.findMany !== 'function') {
-        continue;
+    let candidateRecords = Array.isArray(records) ? records.slice() : [];
+
+    let requiredDependencies = collectChallengeDependencies(candidateRecords, { treatTimelineAsChallengeTemplate: true });
+    await primeDependencies(manager);
+    let existingTimelineTemplates = manager.dependencies?.TimelineTemplate || new Set();
+
+    let missingDependencies = determineMissingDependencies(manager, requiredDependencies);
+
+    if (options.apply && hasMissingDependencies(missingDependencies)) {
+      console.log('[backfill] Missing dependency records detected; attempting to backfill prerequisite data.');
+      for (const MigratorClass of PRE_MIGRATORS) {
+        const migrator = new MigratorClass();
+        await executeMigrator(manager, migrator);
       }
-      const existing = await client.findMany({ select: { id: true } });
-      const idSet = new Set(existing.map(entry => entry.id));
-      manager.registerDependency(modelName, idSet);
-      console.log(`[backfill] Primed ${idSet.size} existing IDs for ${modelName} dependency checks.`);
+      await primeDependencies(manager);
+      existingTimelineTemplates = manager.dependencies?.TimelineTemplate || new Set();
+      missingDependencies = determineMissingDependencies(manager, requiredDependencies);
+    }
+
+    if (hasMissingDependencies(missingDependencies)) {
+      logMissingDependencies(missingDependencies);
+      const { filteredRecords, dropped } = filterChallengesByMissingDependencies(candidateRecords, missingDependencies);
+
+      if (dropped.length) {
+        dropped.slice(0, options.maxReport).forEach(({ record, reasons }) => {
+          console.warn(`  Skipping ${record.id || '<missing id>'}: ${reasons.join('; ')}`);
+        });
+        if (dropped.length > options.maxReport) {
+          console.warn(`  ... ${dropped.length - options.maxReport} additional challenges omitted due to missing dependencies.`);
+        }
+      }
+
+      if (!filteredRecords.length) {
+        console.warn('[backfill] All candidate challenges reference missing dependencies; aborting insert.');
+        return stats;
+      }
+
+      candidateRecords = filteredRecords;
+    }
+
+    const challengeTimelineTemplateMap = await loadChallengeTimelineTemplateMap();
+    const normalizationResult = normalizeTimelineTemplateReferences(candidateRecords, challengeTimelineTemplateMap, existingTimelineTemplates);
+
+    if (normalizationResult.unresolved.length) {
+      normalizationResult.unresolved.slice(0, options.maxReport).forEach(({ challengeId, timelineTemplateId }) => {
+        console.warn(`  Unable to resolve timeline template for challenge ${challengeId}: missing ChallengeTimelineTemplate ${timelineTemplateId}`);
+      });
+      if (normalizationResult.unresolved.length > options.maxReport) {
+        console.warn(`  ... ${normalizationResult.unresolved.length - options.maxReport} additional challenges omitted due to missing ChallengeTimelineTemplate mappings.`);
+      }
+    }
+
+    candidateRecords = normalizationResult.filteredRecords;
+
+    if (!candidateRecords.length) {
+      console.warn('[backfill] No challenges remain after resolving timeline template mappings; aborting insert.');
+      return stats;
+    }
+
+    requiredDependencies = collectChallengeDependencies(candidateRecords, { treatTimelineAsChallengeTemplate: false });
+    missingDependencies = determineMissingDependencies(manager, requiredDependencies);
+
+    if (hasMissingDependencies(missingDependencies)) {
+      logMissingDependencies(missingDependencies);
+      const { filteredRecords, dropped } = filterChallengesByMissingDependencies(candidateRecords, missingDependencies);
+
+      if (dropped.length) {
+        dropped.slice(0, options.maxReport).forEach(({ record, reasons }) => {
+          console.warn(`  Skipping ${record.id || '<missing id>'}: ${reasons.join('; ')}`);
+        });
+        if (dropped.length > options.maxReport) {
+          console.warn(`  ... ${dropped.length - options.maxReport} additional challenges omitted due to missing dependencies.`);
+        }
+      }
+
+      if (!filteredRecords.length) {
+        console.warn('[backfill] All candidate challenges reference missing dependencies after normalization; aborting insert.');
+        return stats;
+      }
+
+      candidateRecords = filteredRecords;
     }
 
     const challengeMigrator = new ChallengeMigrator();
-    const challengeStats = await executeMigrator(manager, challengeMigrator, records);
+    const challengeStats = await executeMigrator(manager, challengeMigrator, candidateRecords);
     stats.Challenge = challengeStats;
 
     for (const MigratorClass of DEPENDENT_MIGRATORS) {
