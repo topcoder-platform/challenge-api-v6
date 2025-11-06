@@ -35,11 +35,51 @@ const DEFAULT_FILE_NAME = (config.migrator?.Challenge && config.migrator.Challen
   || 'challenge-api.challenge.json';
 const DEFAULT_BATCH_SIZE = Math.max(
   1,
-  parseInt(process.env.VERIFY_CHALLENGE_BATCH_SIZE || '500', 10)
+  parseInt(process.env.VERIFY_CHALLENGE_BATCH_SIZE || '100', 10)
 );
 const DEFAULT_STATUS_FILTER = process.env.VERIFY_CHALLENGE_STATUS || 'Completed';
 const DEFAULT_UPDATED_BEFORE = process.env.VERIFY_CHALLENGE_UPDATED_BEFORE || '2025-10-01';
 const DEFAULT_CREATED_BEFORE = process.env.VERIFY_CHALLENGE_CREATED_BEFORE || '2025-10-01';
+const DEFAULT_TRANSACTION_TIMEOUT_MS = Math.max(
+  1,
+  parseInt(
+    process.env.VERIFY_CHALLENGE_TRANSACTION_TIMEOUT_MS
+      || process.env.PRISMA_TRANSACTION_TIMEOUT_MS
+      || '60000',
+    10
+  )
+);
+const DEFAULT_TRANSACTION_MAX_WAIT_MS = Math.max(
+  1,
+  parseInt(
+    process.env.VERIFY_CHALLENGE_TRANSACTION_MAX_WAIT_MS
+      || process.env.PRISMA_TRANSACTION_MAX_WAIT_MS
+      || '15000',
+    10
+  )
+);
+const DEFAULT_CONCURRENCY_LIMIT = Math.max(
+  1,
+  parseInt(process.env.VERIFY_CHALLENGE_CONCURRENCY || '3', 10)
+);
+const DEFAULT_TRANSACTION_RETRY_ATTEMPTS = Math.max(
+  0,
+  parseInt(
+    process.env.VERIFY_CHALLENGE_TRANSACTION_RETRY_ATTEMPTS
+      || process.env.TRANSACTION_RETRY_ATTEMPTS
+      || '3',
+    10
+  )
+);
+const DEFAULT_TRANSACTION_RETRY_DELAY_MS = Math.max(
+  0,
+  parseInt(
+    process.env.VERIFY_CHALLENGE_TRANSACTION_RETRY_DELAY_MS
+      || process.env.TRANSACTION_RETRY_DELAY_MS
+      || '15000',
+    10
+  )
+);
 
 const DEPENDENT_MIGRATORS = [
   ChallengeConstraintMigrator,
@@ -88,7 +128,13 @@ const parseArgs = () => {
     createdBefore: DEFAULT_CREATED_BEFORE,
     apply: process.env.VERIFY_CHALLENGE_APPLY === 'true',
     logLevel: process.env.VERIFY_CHALLENGE_LOG_LEVEL || config.LOG_LEVEL,
-    logFile: process.env.VERIFY_CHALLENGE_LOG_FILE || config.LOG_FILE
+    logFile: process.env.VERIFY_CHALLENGE_LOG_FILE || config.LOG_FILE,
+    useTransactions: process.env.VERIFY_CHALLENGE_USE_TRANSACTIONS !== 'false',
+    concurrencyLimit: DEFAULT_CONCURRENCY_LIMIT,
+    transactionTimeout: DEFAULT_TRANSACTION_TIMEOUT_MS,
+    transactionMaxWait: DEFAULT_TRANSACTION_MAX_WAIT_MS,
+    transactionRetryAttempts: DEFAULT_TRANSACTION_RETRY_ATTEMPTS,
+    transactionRetryDelay: DEFAULT_TRANSACTION_RETRY_DELAY_MS
   };
 
   for (let i = 0; i < args.length; i += 1) {
@@ -179,6 +225,50 @@ const parseArgs = () => {
       } else {
         throw new Error(`${arg} expects a value`);
       }
+    } else if (arg === '--concurrency') {
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        options.concurrencyLimit = Math.max(1, parseInt(next, 10));
+        i += 1;
+      } else {
+        throw new Error(`${arg} expects a value`);
+      }
+    } else if (arg === '--transaction-timeout') {
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        options.transactionTimeout = Math.max(1, parseInt(next, 10));
+        i += 1;
+      } else {
+        throw new Error(`${arg} expects a value`);
+      }
+    } else if (arg === '--transaction-max-wait') {
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        options.transactionMaxWait = Math.max(1, parseInt(next, 10));
+        i += 1;
+      } else {
+        throw new Error(`${arg} expects a value`);
+      }
+    } else if (arg === '--transaction-retry-attempts') {
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        options.transactionRetryAttempts = Math.max(0, parseInt(next, 10));
+        i += 1;
+      } else {
+        throw new Error(`${arg} expects a value`);
+      }
+    } else if (arg === '--transaction-retry-delay') {
+      const next = args[i + 1];
+      if (next && !next.startsWith('--')) {
+        options.transactionRetryDelay = Math.max(0, parseInt(next, 10));
+        i += 1;
+      } else {
+        throw new Error(`${arg} expects a value`);
+      }
+    } else if (arg === '--no-transactions') {
+      options.useTransactions = false;
+    } else if (arg === '--transactions') {
+      options.useTransactions = true;
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -646,7 +736,13 @@ const insertMissingChallenges = async (records, options) => {
     LOG_FILE: options.logFile,
     MIGRATION_MODE: 'full',
     COLLECT_UPSERT_STATS: false,
-    prismaClient: prisma
+    prismaClient: prisma,
+    USE_TRANSACTIONS: options.useTransactions,
+    CONCURRENCY_LIMIT: options.concurrencyLimit,
+    PRISMA_TRANSACTION_TIMEOUT_MS: options.transactionTimeout,
+    PRISMA_TRANSACTION_MAX_WAIT_MS: options.transactionMaxWait,
+    TRANSACTION_RETRY_ATTEMPTS: options.transactionRetryAttempts,
+    TRANSACTION_RETRY_DELAY_MS: options.transactionRetryDelay
   });
 
   const stats = {};

@@ -255,6 +255,20 @@ class MigrationManager {
 
       try {
         if (this.config.USE_TRANSACTIONS) {
+          const transactionOptions = {};
+          const timeoutMs = Number(this.config.PRISMA_TRANSACTION_TIMEOUT_MS);
+          if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+            transactionOptions.timeout = Math.floor(timeoutMs);
+          }
+          const maxWaitMs = Number(this.config.PRISMA_TRANSACTION_MAX_WAIT_MS);
+          if (Number.isFinite(maxWaitMs) && maxWaitMs > 0) {
+            transactionOptions.maxWait = Math.floor(maxWaitMs);
+          }
+
+          if (Object.keys(transactionOptions).length) {
+            return await this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker), transactionOptions);
+          }
+
           return await this.prisma.$transaction(tx => processFn(batch, tx, uniqueTracker));
         }
         return await processFn(batch, this.prisma, uniqueTracker);
