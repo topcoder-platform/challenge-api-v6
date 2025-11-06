@@ -1260,12 +1260,16 @@ function sumOfPrizes(prizes) {
  */
 async function getGroupById(groupId) {
   const token = await m2mHelper.getM2MToken();
+  logger.debug(`helper.getGroupById: GET ${config.GROUPS_API_URL}/${groupId} with token: ${token}`);
   try {
     const result = await axios.get(`${config.GROUPS_API_URL}/${groupId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return result.data;
   } catch (err) {
+    logger.debug(`helper.getGroupById: error for group ${groupId} - status ${
+      _.get(err, "response.status", "n/a")
+    }: ${err.message}`);
     if (err.response.status === HttpStatus.NOT_FOUND) {
       return;
     }
@@ -1371,6 +1375,7 @@ async function getMemberByHandle(handle) {
  */
 async function getMembersByHandles(handles) {
   const token = await m2mHelper.getM2MToken();
+  console.log(`${config.MEMBERS_API_URL}/?fields=handle&handlesLower=["${_.join(handles, '","')}"]`)
   const res = await axios.get(
     `${config.MEMBERS_API_URL}/?fields=handle&handlesLower=["${_.join(handles, '","')}"]`,
     {

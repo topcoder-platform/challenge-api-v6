@@ -197,9 +197,11 @@ class ChallengeHelper {
       }
     }
 
+    console.log("Groups validated, now checking skills...");
     // check skills
     await this.validateSkills(challenge);
 
+    console.log("Skills validated successfully.");
     if (challenge.constraints) {
       await ChallengeHelper.validateChallengeConstraints(challenge.constraints);
     }
@@ -322,6 +324,7 @@ class ChallengeHelper {
   }
 
   static async validateAllowedRegistrants(allowedRegistrants) {
+    console.log("Validating allowed registrants:", allowedRegistrants);
     const members = await helper.getMembersByHandles(allowedRegistrants);
     const incorrectHandles = _.difference(
       allowedRegistrants,

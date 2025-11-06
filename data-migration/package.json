@@ -15,7 +15,8 @@
         "migrate:test": "npm run migrate && npm run test",
         "migrate:reset:test": "npm run migrate:reset && npm run test",
         "lint": "eslint .",
-        "lint:fix": "eslint . --fix"
+        "lint:fix": "eslint . --fix",
+        "verify:challenges": "node src/scripts/verifyChallengeImports.js"
     },
     "dependencies": {
         "@prisma/client": "~6.8.2",
