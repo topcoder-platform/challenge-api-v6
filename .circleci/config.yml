@@ -101,6 +101,7 @@ workflows:
             only:
             - develop
             - module-updates
+            - pm-2540
 
     - "build-qa":
         context: org-global
