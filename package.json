@@ -13,6 +13,7 @@
     "standard-lint:fix": "standard --fix",
     "create-tables": "npx prisma migrate dev",
     "seed-tables": "node src/scripts/seed-tables.js",
+    "backfill:challenge-billing": "node src/scripts/backfill-challenge-billing.js",
     "check-timeline-templates": "node src/scripts/check-templates.js",
     "update-topgear-challenge-phases": "node src/scripts/update-topgear-challenge-phases.js",
     "test": "NODE_ENV=test mocha \"test/unit/**/*.test.js\" --exit",

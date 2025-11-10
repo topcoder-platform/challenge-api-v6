@@ -76,6 +76,8 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
 5. Check the logs of all the depending services for local deployment: `npm run services:logs`
 6. Initialize the local environments: `npm run local:init`
 7. Reset the local environments: `npm run local:reset`
+8. Backfill missing challenge billing records: `npm run backfill:challenge-billing`
+   - Requires `PROJECTS_DATABASE_URL` (tc-project-service DB) and `BILLING_DATABASE_URL` (billing-accounts-api-v6 DB) environment variables in addition to the standard `DATABASE_URL`.
 
 ### Notes
 
