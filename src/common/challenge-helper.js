@@ -12,6 +12,8 @@ const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
 
+const SUBMISSION_PHASE_PRIORITY = ["Topcoder Submission", "Submission"];
+
 class ChallengeHelper {
   /**
    * @param {Object} challenge the challenge object
@@ -356,7 +358,9 @@ class ChallengeHelper {
   enrichChallengeForResponse(challenge, track, type, options = {}) {
     if (challenge.phases && challenge.phases.length > 0) {
       const registrationPhase = _.find(challenge.phases, (p) => p.name === "Registration");
-      const submissionPhase = _.find(challenge.phases, (p) => p.name === "Submission");
+      const submissionPhase =
+        _.find(challenge.phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[0]) ||
+        _.find(challenge.phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[1]);
 
       // select last started open phase as current phase
       _.forEach(challenge.phases, (p) => {
