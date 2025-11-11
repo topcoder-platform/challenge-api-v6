@@ -946,6 +946,14 @@ async function searchChallenges(currentUser, criteria) {
 
   if (criteria.memberId) {
     memberChallengeIds = await helper.listChallengesByMember(criteria.memberId);
+    if (
+      currentUser &&
+      !_hasAdminRole &&
+      !_.get(currentUser, "isMachine", false) &&
+      _.toString(criteria.memberId) === _.toString(currentUser.userId)
+    ) {
+      currentUserChallengeIds = memberChallengeIds;
+    }
     prismaFilter.where.AND.push({
       id: { in: memberChallengeIds },
     });
