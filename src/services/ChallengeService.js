@@ -964,8 +964,12 @@ async function searchChallenges(currentUser, criteria) {
 
   // FIXME: Tech Debt
   let excludeTasks = true;
-  // if you're an admin or m2m, security rules wont be applied
-  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+  if (requestedMemberId) {
+    // When an explicit memberId is provided we already join MemberChallengeAccess,
+    // so re-running the per-challenge resource check is redundant.
+    excludeTasks = false;
+  } else if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+    // if you're an admin or m2m, security rules won't be applied
     excludeTasks = false;
   }
 
