@@ -959,8 +959,12 @@ async function searchChallenges(currentUser, criteria) {
 
   // FIXME: Tech Debt
   let excludeTasks = true;
-  // if you're an admin or m2m, security rules wont be applied
-  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+  if (!_.isNil(criteria.memberId)) {
+    // When we already restrict the result set to a specific member,
+    // rerunning the generic task visibility filter is redundant.
+    excludeTasks = false;
+  } else if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+    // if you're an admin or m2m, security rules wont be applied
     excludeTasks = false;
   }
 
