@@ -977,32 +977,6 @@ function calculateChallengeEndDate(challenge, data) {
 }
 
 /**
- * Lists challenge ids that given member has access to.
- * @param {Number} memberId the member id
- * @returns {Promise<Array>} an array of challenge ids represents challenges that given member has access to.
- */
-async function listChallengesByMember(memberId) {
-  const token = await m2mHelper.getM2MToken();
-  let allIds = [];
-
-  try {
-    const result = await axios.get(`${config.RESOURCES_API_URL}/${memberId}/challenges`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
-        useScroll: true,
-      },
-    });
-
-    allIds = result.data || [];
-  } catch (e) {
-    // only log the error but don't throw it, so the following logic can still be executed.
-    logger.debug(`Failed to get challenges that accessible to the memberId ${memberId}`, e);
-  }
-
-  return allIds;
-}
-
-/**
  * Lists resources that given member has in the given challenge.
  * @param {Number} memberId the member id
  * @param {String} id the challenge id
@@ -1544,7 +1518,6 @@ module.exports = {
   dedupeChallengeTerms,
   postBusEvent,
   calculateChallengeEndDate,
-  listChallengesByMember,
   listResourcesByMemberAndChallenge,
   getProjectDefaultTerms,
   validateChallengeTerms,
