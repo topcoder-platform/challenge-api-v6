@@ -6,10 +6,10 @@ const querystring = require("querystring");
 const constants = require("../../app-constants");
 const errors = require("./errors");
 const util = require("util");
-const AWS = require("aws-sdk");
+const { S3Client, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const config = require("config");
 const axios = require("axios");
-const axiosRetry = require("axios-retry");
+const axiosRetry = require("axios-retry").default;
 const busApi = require("topcoder-bus-api-wrapper");
 const NodeCache = require("node-cache");
 const HttpStatus = require("http-status-codes");
@@ -24,19 +24,17 @@ const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
 // Bus API Client
 let busApiClient;
 
-AWS.config.update({
-  s3: config.AMAZON.S3_API_VERSION,
-  // accessKeyId: config.AMAZON.AWS_ACCESS_KEY_ID,
-  // secretAccessKey: config.AMAZON.AWS_SECRET_ACCESS_KEY,
+// Create S3 Client
+const s3Client = new S3Client({
   region: config.AMAZON.AWS_REGION,
 });
 
 let s3;
 
-// lazy initialization of S3 instance
+// lazy initialization of S3 instance (kept for backward compatibility)
 function getS3() {
   if (!s3) {
-    s3 = new AWS.S3();
+    s3 = s3Client;
   }
   return s3;
 }
@@ -204,10 +202,19 @@ async function downloadFromFileStack(url) {
  * @return {Promise} promise resolved to downloaded data
  */
 async function downloadFromS3(bucket, key) {
-  const file = await getS3().getObject({ Bucket: bucket, Key: key }).promise();
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  const response = await s3Client.send(command);
+  
+  // Convert the readable stream to buffer
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(chunk);
+  }
+  const buffer = Buffer.concat(chunks);
+  
   return {
-    data: file.Body,
-    mimetype: file.ContentType,
+    data: buffer,
+    mimetype: response.ContentType,
   };
 }
 
@@ -218,7 +225,8 @@ async function downloadFromS3(bucket, key) {
  * @return {Promise} promise resolved to deleted data
  */
 async function deleteFromS3(bucket, key) {
-  return getS3().deleteObject({ Bucket: bucket, Key: key }).promise();
+  const command = new DeleteObjectCommand({ Bucket: bucket, Key: key });
+  return s3Client.send(command);
 }
 
 /**

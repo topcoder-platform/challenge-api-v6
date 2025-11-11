@@ -4,7 +4,7 @@
 const _ = require("lodash");
 const Joi = require("joi");
 const { Prisma } = require("@prisma/client");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const config = require("config");
 const xss = require("xss");
 const helper = require("../common/helper");
@@ -315,7 +315,7 @@ async function setDefaultReviewers(currentUser, data) {
             incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiWorkflowId: Joi.when("isMemberReview", {
@@ -1162,7 +1162,7 @@ searchChallenges.schema = {
       projectId: Joi.number().integer().positive(),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
       group: Joi.string(),
       startDateStart: Joi.date(),
       startDateEnd: Joi.date(),
@@ -1186,7 +1186,7 @@ searchChallenges.schema = {
       isLightweight: Joi.boolean().default(false),
       memberId: Joi.string(),
       sortBy: Joi.string().valid(...allowedSortByValues),
-      sortOrder: Joi.string().valid(["asc", "desc"]),
+      sortOrder: Joi.string().valid("asc", "desc"),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       ids: Joi.array().items(Joi.optionalId()).unique().min(1),
       isTask: Joi.boolean(),
@@ -1588,7 +1588,7 @@ createChallenge.schema = {
       trackId: Joi.id(),
       legacy: Joi.object().keys({
         reviewType: Joi.string()
-          .valid(_.values(ReviewTypeEnum))
+          .valid(..._.values(ReviewTypeEnum))
           .insensitive()
           .default(ReviewTypeEnum.INTERNAL),
         confidentialityType: Joi.string().default(config.DEFAULT_CONFIDENTIALITY_TYPE),
@@ -1660,7 +1660,7 @@ createChallenge.schema = {
         Joi.object().keys({
           id: Joi.optionalId(),
           name: Joi.string().required(),
-          type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
+          type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
           provider: Joi.string().required(),
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
@@ -1680,7 +1680,7 @@ createChallenge.schema = {
           phaseId: Joi.id().required(),
           type: Joi.when("isMemberReview", {
             is: true,
-            then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
             otherwise: Joi.forbidden(),
           }),
           aiWorkflowId: Joi.when("isMemberReview", {
@@ -1695,7 +1695,7 @@ createChallenge.schema = {
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
-          type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
+          type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
           description: Joi.string(),
           prizes: Joi.array()
             .items(
@@ -1718,12 +1718,12 @@ createChallenge.schema = {
         })
         .optional(),
       startDate: Joi.date().iso(),
-      status: Joi.string().valid([
+      status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
         ChallengeStatusEnum.DRAFT,
-        ChallengeStatusEnum.APPROVED,
-      ]),
+        ChallengeStatusEnum.APPROVED
+      ),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
       terms: Joi.array().items(
@@ -2761,7 +2761,7 @@ updateChallenge.schema = {
           track: Joi.string(),
           subTrack: Joi.string(),
           reviewType: Joi.string()
-            .valid(_.values(ReviewTypeEnum))
+            .valid(..._.values(ReviewTypeEnum))
             .insensitive()
             .default(ReviewTypeEnum.INTERNAL),
           confidentialityType: Joi.string()
@@ -2853,7 +2853,7 @@ updateChallenge.schema = {
           Joi.object().keys({
             id: Joi.optionalId(),
             name: Joi.string().required(),
-            type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
+            type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
             provider: Joi.string().required(),
             url: Joi.string(),
             options: Joi.array().items(Joi.object()),
@@ -2875,7 +2875,7 @@ updateChallenge.schema = {
             phaseId: Joi.id().required(),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiWorkflowId: Joi.when("isMemberReview", {
@@ -2894,7 +2894,7 @@ updateChallenge.schema = {
         .items(
           Joi.object()
             .keys({
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
               description: Joi.string(),
               prizes: Joi.array()
                 .items(
@@ -2918,7 +2918,7 @@ updateChallenge.schema = {
           allowedRegistrants: Joi.array().items(Joi.string().trim().lowercase()).optional(),
         })
         .optional(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -2938,7 +2938,7 @@ updateChallenge.schema = {
               userId: Joi.number().integer().positive().required(),
               handle: Joi.string().required(),
               placement: Joi.number().integer().positive().required(),
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
             .unknown(true)
         )
@@ -2950,7 +2950,7 @@ updateChallenge.schema = {
               userId: Joi.number().integer().positive().required(),
               handle: Joi.string().required(),
               placement: Joi.number().integer().positive().required(),
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
             .unknown(true)
         )

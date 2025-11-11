@@ -1,6 +1,6 @@
 const _ = require("lodash");
 
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const moment = require("moment");
 
 const errors = require("./errors");
@@ -91,6 +91,7 @@ class ChallengePhaseHelper {
       timelineTemplateId
     );
     const { phaseDefinitionMap } = await this.getPhaseDefinitionsAndMap();
+    const challengePhaseIds = new Set(_.map(challengePhases, "phaseId"));
 
     // Ensure deterministic processing order based on the timeline template sequence
     // DB returns phases ordered by dates, which can cause "fixedStartDate" logic below
@@ -107,9 +108,18 @@ class ChallengePhaseHelper {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
       const newPhase = _.find(newPhases, (p) => p.phaseId === phase.phaseId);
+      const templatePredecessor = _.get(phaseFromTemplate, "predecessor");
+      // Prefer template predecessor only when that phase exists on the challenge, otherwise keep the stored link.
+      const resolvedPredecessor = _.isNil(phaseFromTemplate)
+        ? phase.predecessor
+        : _.isNil(templatePredecessor)
+        ? null
+        : challengePhaseIds.has(templatePredecessor)
+        ? templatePredecessor
+        : phase.predecessor;
       const updatedPhase = {
         ...phase,
-        predecessor: phaseFromTemplate && phaseFromTemplate.predecessor,
+        predecessor: resolvedPredecessor,
         description: phaseDefinition.description,
       };
       if (updatedPhase.name === "Post-Mortem") {
@@ -157,6 +167,9 @@ class ChallengePhaseHelper {
       const predecessorPhase = _.find(updatedPhases, {
         phaseId: phase.predecessor,
       });
+      if (_.isNil(predecessorPhase)) {
+        continue;
+      }
       if (phase.name === "Iterative Review") {
         if (!iterativeReviewSet) {
           if (_.isNil(phase.actualStartDate)) {
