@@ -15,14 +15,6 @@ install_deploysuite: &install_deploysuite
     cp ./../buildscript/awsconfiguration.sh .
     cp ./../buildscript/psvar-processor.sh .
 
-restore_cache_settings_for_build: &restore_cache_settings_for_build
-  key: docker-node-modules-{{ checksum "yarn.lock" }}
-
-save_cache_settings: &save_cache_settings
-  key: docker-node-modules-{{ checksum "yarn.lock" }}
-  paths:
-  - node_modules
-
 finger_print_add: &finger_print_add
     fingerprints:
             - SHA256:KJYSvQh9CxkY9yRXxp+Geo6cllnfSiiKAH3LFQ/X9f4
@@ -33,7 +25,6 @@ builddeploy_steps: &builddeploy_steps
 - setup_remote_docker
 - run: *install_dependency
 - run: *install_deploysuite
-- restore_cache: *restore_cache_settings_for_build
 - run:
     name: "Authenticate with CodeArtifact and build Docker image"
     command: |
@@ -51,7 +42,6 @@ builddeploy_steps: &builddeploy_steps
       source buildvar_env
       rm -f awsenvconf
       ./build.sh ${APPNAME}     
-- save_cache: *save_cache_settings
 - deploy:
     name: Running MasterScript.
     command: |
