@@ -938,32 +938,28 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  let memberChallengeIds;
-  let currentUserChallengeIds;
-  let currentUserChallengeIdSet;
+  const requestedMemberId = !_.isNil(criteria.memberId)
+    ? _.toString(criteria.memberId)
+    : null;
+  const currentUserMemberId =
+    currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)
+      ? _.toString(currentUser.userId)
+      : null;
+  const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
 
   // FIXME: This is wrong!
   // if (!_.isUndefined(currentUser) && currentUser.handle) {
   //   accessQuery.push({ match_phrase: { createdBy: currentUser.handle } })
   // }
 
-  if (criteria.memberId) {
-    memberChallengeIds = await helper.listChallengesByMember(criteria.memberId);
-    if (
-      currentUser &&
-      !_hasAdminRole &&
-      !_.get(currentUser, "isMachine", false) &&
-      _.toString(criteria.memberId) === _.toString(currentUser.userId)
-    ) {
-      currentUserChallengeIds = memberChallengeIds;
-    }
-
+  if (requestedMemberId) {
     prismaFilter.where.AND.push({
-      id: { in: memberChallengeIds },
+      memberAccesses: {
+        some: {
+          memberId: requestedMemberId,
+        },
+      },
     });
-  } else if (currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
-    currentUserChallengeIds = await helper.listChallengesByMember(currentUser.userId);
-    memberChallengeIds = currentUserChallengeIds;
   }
 
   // FIXME: Tech Debt
@@ -1000,9 +996,11 @@ async function searchChallenges(currentUser, criteria) {
     }
   } else if (excludeTasks) {
     const taskFilter = [];
-    if (_.get(memberChallengeIds, "length", 0) > 0) {
+    if (memberIdForTaskFilter) {
       taskFilter.push({
-        id: { in: memberChallengeIds },
+        memberAccesses: {
+          some: { memberId: memberIdForTaskFilter },
+        },
       });
     }
     taskFilter.push({
@@ -1025,12 +1023,22 @@ async function searchChallenges(currentUser, criteria) {
   const sortFilter = {};
   sortFilter[sortByProp] = sortOrderProp;
 
+  const challengeInclude = currentUserMemberId
+    ? {
+        ...includeReturnFields,
+        memberAccesses: {
+          where: { memberId: currentUserMemberId },
+          select: { memberId: true },
+        },
+      }
+    : includeReturnFields;
+
   const prismaQuery = {
     ...prismaFilter,
     take: perPage,
     skip: (page - 1) * perPage,
     orderBy: [sortFilter],
-    include: includeReturnFields,
+    include: challengeInclude,
   };
 
   try {
@@ -1088,20 +1096,13 @@ async function searchChallenges(currentUser, criteria) {
     if (!currentUser.isMachine && !_hasAdminRole) {
       result.forEach((challenge) => {
         _.unset(challenge, "billing");
-      });
-
-      if (!currentUserChallengeIds) {
-        currentUserChallengeIds = await helper.listChallengesByMember(currentUser.userId);
-      }
-
-      const accessibleIds = currentUserChallengeIds || [];
-      currentUserChallengeIdSet = currentUserChallengeIdSet || new Set(accessibleIds);
-
-      result.forEach((challenge) => {
-        if (!currentUserChallengeIdSet.has(challenge.id)) {
+        if (!_.get(challenge, "memberAccesses.length")) {
           _.unset(challenge, "privateDescription");
         }
+        _.unset(challenge, "memberAccesses");
       });
+    } else {
+      result.forEach((challenge) => _.unset(challenge, "memberAccesses"));
     }
   } else {
     result.forEach((challenge) => {

@@ -127,6 +127,7 @@ model Challenge {
   terms       ChallengeTerm[]
   skills      ChallengeSkill[]
   auditLogs   AuditLog[]
+  memberAccesses MemberChallengeAccess[]
 
   // Relation to ChallengeType (FK: typeId)
   type  ChallengeType  @relation(fields: [typeId], references: [id])
@@ -159,6 +160,20 @@ model Challenge {
   @@index([name(ops: raw("pg_catalog.gin_trgm_ops"))], type: Gin, map: "challenge_name_trgm_idx")
   @@index([legacyId])
   @@index([projectId, status])
+}
+
+//////////////////////////////////////////
+// MemberChallengeAccess view – member/challenge pairs from resources schema
+//////////////////////////////////////////
+
+model MemberChallengeAccess {
+  challengeId String
+  memberId    String
+
+  challenge Challenge @relation(fields: [challengeId], references: [id])
+
+  @@id([challengeId, memberId])
+  @@map("MemberChallengeAccess")
 }
 
 //////////////////////////////////////////
