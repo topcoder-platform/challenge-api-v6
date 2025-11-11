@@ -3,6 +3,8 @@ const Decimal = require("decimal.js");
 const constants = require("../../app-constants");
 const { PrizeSetTypeEnum } = require("@prisma/client");
 const { dedupeChallengeTerms } = require("./helper");
+
+const SUBMISSION_PHASE_PRIORITY = ["Topcoder Submission", "Submission"];
 /**
  * Convert phases data to prisma model.
  *
@@ -11,6 +13,7 @@ const { dedupeChallengeTerms } = require("./helper");
  * @param {Object} auditFields createdBy and updatedBy
  */
 function convertChallengePhaseSchema(challenge, result, auditFields) {
+  const phases = _.isArray(challenge.phases) ? challenge.phases : [];
   // keep phase data
   const phaseFields = [
     "name",
@@ -25,24 +28,29 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
     "challengeSource",
   ];
   // current phase names
-  result.currentPhaseNames = _.map(
-    _.filter(challenge.phases, (p) => p.isOpen === true),
-    "name"
-  );
-  // get registration date and submission date
-  _.forEach(challenge.phases, (p) => {
-    if (p.name === "Registration") {
-      result.registrationStartDate = p.actualStartDate || p.scheduledStartDate;
-      result.registrationEndDate = p.actualEndDate || p.scheduledEndDate;
-    } else if (p.name === "Submission") {
-      result.submissionStartDate = p.actualStartDate || p.scheduledStartDate;
-      result.submissionEndDate = p.actualEndDate || p.scheduledEndDate;
-    }
-  });
+  result.currentPhaseNames = _.map(_.filter(phases, (p) => p.isOpen === true), "name");
+
+  const registrationPhase = _.find(phases, (p) => p.name === "Registration");
+  const submissionPhase =
+    _.find(phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[0]) ||
+    _.find(phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[1]);
+
+  if (registrationPhase) {
+    result.registrationStartDate =
+      registrationPhase.actualStartDate || registrationPhase.scheduledStartDate;
+    result.registrationEndDate =
+      registrationPhase.actualEndDate || registrationPhase.scheduledEndDate;
+  }
+  if (submissionPhase) {
+    result.submissionStartDate =
+      submissionPhase.actualStartDate || submissionPhase.scheduledStartDate;
+    result.submissionEndDate =
+      submissionPhase.actualEndDate || submissionPhase.scheduledEndDate;
+  }
   // set phases array data
-  if (!_.isEmpty(challenge.phases)) {
+  if (!_.isEmpty(phases)) {
     result.phases = {
-      create: _.map(challenge.phases, (p) => {
+      create: _.map(phases, (p) => {
         const phaseData = {
           phase: { connect: { id: p.phaseId } },
           ..._.pick(p, phaseFields),
