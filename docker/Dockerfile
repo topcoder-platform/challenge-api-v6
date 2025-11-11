@@ -19,7 +19,10 @@ ENV PRISMA_LOG_LEVEL=info
 
 RUN mkdir -p /challenge-api/reports
 
-RUN echo "Running database migrations..."
-RUN npx prisma migrate deploy
+# Copy entrypoint script and make it executable
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-CMD ["node","/challenge-api/app.js"]
+# Use entrypoint to run migrations at startup (not build time)
+# Prisma uses PostgreSQL advisory locks to prevent concurrent migrations
+ENTRYPOINT ["/entrypoint.sh"]
