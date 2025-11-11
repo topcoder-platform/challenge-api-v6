@@ -19,4 +19,7 @@ ENV PRISMA_LOG_LEVEL=info
 
 RUN mkdir -p /challenge-api/reports
 
+RUN echo "Running database migrations..."
+RUN npx prisma migrate deploy
+
 CMD ["node","/challenge-api/app.js"]
