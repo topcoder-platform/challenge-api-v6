@@ -148,6 +148,7 @@ model Challenge {
   @@index([updatedAt])
   @@index([typeId])
   @@index([trackId])
+  @@index([groups], type: Gin, map: "challenge_groups_gin_idx")
   @@index([submissionStartDate])
   @@index([submissionEndDate])
   @@index([registrationStartDate])

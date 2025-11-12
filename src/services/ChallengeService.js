@@ -237,6 +237,26 @@ const includeReturnFields = {
 };
 
 /**
+ * Build the Prisma include payload for challenges, optionally projecting the
+ * memberAccesses relation when we need to know whether the current user can
+ * see private fields.
+ * @param {string|null} memberId
+ * @returns {Object} prisma include payload
+ */
+function buildChallengeInclude(memberId) {
+  if (!memberId) {
+    return includeReturnFields;
+  }
+  return {
+    ...includeReturnFields,
+    memberAccesses: {
+      where: { memberId },
+      select: { memberId: true },
+    },
+  };
+}
+
+/**
  * Get default reviewers for a given typeId and trackId
  * @param {Object} currentUser
  * @param {Object} criteria { typeId, trackId }
@@ -436,6 +456,135 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
 }
 
 /**
+ * Specialized search path when filtering by a specific memberId. We pivot through the
+ * Resource table to load the member's challenge ids, then apply the remaining filters in
+ * manageable chunks so the database never has to process thousands of correlated joins.
+ * @param {Object} options
+ * @param {string} options.requestedMemberId
+ * @param {Object} options.challengeWhere Prisma where clause ({ AND: [...] })
+ * @param {Object} options.sortFilter e.g. { startDate: "desc" }
+ * @param {string} options.sortByProp normalized challenge column name
+ * @param {string} options.sortOrderProp "asc" | "desc"
+ * @param {number} options.page
+ * @param {number} options.perPage
+ * @param {Object} options.challengeInclude include payload
+ * @param {Function} options.markTiming timing logger
+ * @returns {Promise<{ total: number, challenges: Array<Object> }>}
+ */
+async function searchChallengesViaMemberAccess({
+  requestedMemberId,
+  challengeWhere,
+  sortFilter,
+  sortByProp,
+  sortOrderProp,
+  page,
+  perPage,
+  challengeInclude,
+  markTiming,
+}) {
+  const chunkSize = Number(process.env.SEARCH_MEMBER_CHUNK_SIZE || 500);
+  const memberChallengeIdStart = Date.now();
+  const memberChallengeIdRows =
+    await prisma.$queryRaw`SELECT DISTINCT r."challengeId" FROM resources."Resource" r WHERE r."memberId" = ${requestedMemberId} AND r."challengeId" IS NOT NULL`;
+  const memberChallengeIds = memberChallengeIdRows
+    .map((row) => row.challengeId)
+    .filter((id) => !_.isNil(id));
+  markTiming("memberResourceChallengeIds", {
+    durationMs: Date.now() - memberChallengeIdStart,
+    count: memberChallengeIds.length,
+  });
+  if (memberChallengeIds.length === 0) {
+    return { total: 0, challenges: [] };
+  }
+
+  const summarySelect = { id: true };
+  summarySelect[sortByProp] = true;
+
+  const baseWhere = _.cloneDeep(challengeWhere);
+  const summaryStart = Date.now();
+  const summaryRecords = [];
+  const idChunks = _.chunk(memberChallengeIds, chunkSize);
+
+  for (const chunk of idChunks) {
+    const chunkWhere = _.cloneDeep(baseWhere);
+    chunkWhere.AND = [...(chunkWhere.AND || []), { id: { in: chunk } }];
+    const rows = await prisma.challenge.findMany({
+      where: chunkWhere,
+      select: summarySelect,
+    });
+    summaryRecords.push(...rows);
+  }
+
+  markTiming("memberChunkScan", {
+    durationMs: Date.now() - summaryStart,
+    chunkCount: idChunks.length,
+    candidateCount: summaryRecords.length,
+  });
+
+  if (summaryRecords.length === 0) {
+    return { total: 0, challenges: [] };
+  }
+
+  const compareValues = (aValue, bValue) => {
+    if (aValue === bValue) {
+      return 0;
+    }
+    if (_.isNil(aValue)) {
+      return 1;
+    }
+    if (_.isNil(bValue)) {
+      return -1;
+    }
+    if (_.isNumber(aValue) && _.isNumber(bValue)) {
+      return aValue - bValue;
+    }
+    if (aValue instanceof Date && bValue instanceof Date) {
+      return aValue - bValue;
+    }
+    const aStr = `${aValue}`;
+    const bStr = `${bValue}`;
+    return aStr.localeCompare(bStr);
+  };
+
+  const sortDirection = sortOrderProp === "asc" ? 1 : -1;
+  summaryRecords.sort((a, b) => compareValues(a[sortByProp], b[sortByProp]) * sortDirection);
+
+  const total = summaryRecords.length;
+  const offset = (page - 1) * perPage;
+  const pageSummaries = summaryRecords.slice(offset, offset + perPage);
+  const pageIds = pageSummaries.map((summary) => summary.id);
+
+  if (pageIds.length === 0) {
+    return { total, challenges: [] };
+  }
+
+  const fetchWhere = _.cloneDeep(baseWhere);
+  fetchWhere.AND = [...(fetchWhere.AND || []), { id: { in: pageIds } }];
+
+  const fetchStart = Date.now();
+  const challenges = await prisma.challenge.findMany({
+    where: fetchWhere,
+    include: challengeInclude,
+  });
+  markTiming("memberChunkFetch", {
+    durationMs: Date.now() - fetchStart,
+    fetched: challenges.length,
+  });
+
+  const challengesById = new Map();
+  challenges.forEach((challenge) => {
+    challengesById.set(challenge.id, challenge);
+  });
+
+  const orderedChallenges = pageIds.map((id) => challengesById.get(id)).filter((c) => !!c);
+
+  return {
+    total,
+    challenges: orderedChallenges,
+  };
+}
+
+/**
  * Search challenges
  * @param {Object} currentUser the user who perform operation
  * @param {Object} criteria the search criteria
@@ -444,6 +593,23 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
 async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 20;
+  const searchTimingEnabled =
+    process.env.SEARCH_CHALLENGE_TIMING === "true" ||
+    (typeof config.has === "function" &&
+      config.has("challengeSearch.debugTimings") &&
+      config.get("challengeSearch.debugTimings"));
+  const searchTimingStart = Date.now();
+  const searchTimingMarks = [];
+  const markTiming = (label, extra = {}) => {
+    if (!searchTimingEnabled) {
+      return;
+    }
+    searchTimingMarks.push({
+      label,
+      elapsedMs: Date.now() - searchTimingStart,
+      ...extra,
+    });
+  };
 
   if (criteria.sortBy && sortByAliases[criteria.sortBy]) {
     criteria.sortBy = sortByAliases[criteria.sortBy];
@@ -837,14 +1003,32 @@ async function searchChallenges(currentUser, criteria) {
     }
   }
 
+  const requestedMemberId = !_.isNil(criteria.memberId)
+    ? _.toString(criteria.memberId)
+    : null;
+  const currentUserMemberId =
+    currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)
+      ? _.toString(currentUser.userId)
+      : null;
+  const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
+  const isSelfMemberSearch =
+    Boolean(requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId);
+  const shouldApplyGroupVisibilityFilter =
+    Boolean(currentUser && !currentUser.isMachine && !_hasAdminRole && !isSelfMemberSearch);
+
   let groupsToFilter = [];
   let accessibleGroups = [];
   let accessibleGroupsSet = new Set();
 
-  if (currentUser && !currentUser.isMachine && !_hasAdminRole) {
+  if (shouldApplyGroupVisibilityFilter) {
+    const accessibleGroupsStart = Date.now();
     const rawAccessibleGroups = await helper.getCompleteUserGroupTreeIds(currentUser.userId);
     accessibleGroups = normalizeGroupIdList(rawAccessibleGroups);
     accessibleGroupsSet = new Set(accessibleGroups);
+    markTiming("loaded-accessible-groups", {
+      durationMs: Date.now() - accessibleGroupsStart,
+      groupCount: accessibleGroups.length,
+    });
   }
 
   // Filter all groups from the criteria to make sure the user can access those
@@ -874,7 +1058,7 @@ async function searchChallenges(currentUser, criteria) {
         });
         await Promise.all(promises);
       }
-    } else if (!currentUser.isMachine && !_hasAdminRole) {
+    } else if (shouldApplyGroupVisibilityFilter) {
       const normalizedGroup = normalizeGroupIdValue(criteria.group);
       if (normalizedGroup && accessibleGroupsSet.has(normalizedGroup)) {
         groupsToFilter.push(normalizedGroup);
@@ -912,7 +1096,7 @@ async function searchChallenges(currentUser, criteria) {
       prismaFilter.where.AND.push({
         groups: { isEmpty: true },
       });
-    } else if (!currentUser.isMachine && !_hasAdminRole) {
+    } else if (shouldApplyGroupVisibilityFilter) {
       prismaFilter.where.AND.push({
         OR: [
           {
@@ -938,34 +1122,14 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  const requestedMemberId = !_.isNil(criteria.memberId)
-    ? _.toString(criteria.memberId)
-    : null;
-  const currentUserMemberId =
-    currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)
-      ? _.toString(currentUser.userId)
-      : null;
-  const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
-
-  // FIXME: This is wrong!
-  // if (!_.isUndefined(currentUser) && currentUser.handle) {
-  //   accessQuery.push({ match_phrase: { createdBy: currentUser.handle } })
-  // }
-
-  if (requestedMemberId) {
-    prismaFilter.where.AND.push({
-      memberAccesses: {
-        some: {
-          memberId: requestedMemberId,
-        },
-      },
-    });
-  }
-
   // FIXME: Tech Debt
   let excludeTasks = true;
-  // if you're an admin or m2m, security rules wont be applied
-  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+  if (requestedMemberId) {
+    // When we already restrict the result set to a specific member,
+    // rerunning the generic task visibility filter is redundant.
+    excludeTasks = false;
+  } else if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+    // if you're an admin or m2m, security rules wont be applied
     excludeTasks = false;
   }
 
@@ -1023,15 +1187,7 @@ async function searchChallenges(currentUser, criteria) {
   const sortFilter = {};
   sortFilter[sortByProp] = sortOrderProp;
 
-  const challengeInclude = currentUserMemberId
-    ? {
-        ...includeReturnFields,
-        memberAccesses: {
-          where: { memberId: currentUserMemberId },
-          select: { memberId: true },
-        },
-      }
-    : includeReturnFields;
+  const challengeInclude = buildChallengeInclude(currentUserMemberId);
 
   const prismaQuery = {
     ...prismaFilter,
@@ -1042,18 +1198,37 @@ async function searchChallenges(currentUser, criteria) {
   };
 
   try {
-    const logContext = {
-      where: prismaFilter.where,
-      orderBy: prismaQuery.orderBy,
-      pagination: {
-        page,
-        perPage,
-        take: perPage,
-        skip: (page - 1) * perPage,
-      },
-      groupsToFilter,
-      accessibleGroups,
-    };
+    const logContext = requestedMemberId
+      ? {
+          memberAccessWhere: {
+            memberId: requestedMemberId,
+            challenge: prismaFilter.where,
+          },
+          orderBy: [
+            {
+              challenge: sortFilter,
+            },
+          ],
+          pagination: {
+            page,
+            perPage,
+            take: perPage,
+            skip: (page - 1) * perPage,
+          },
+        }
+      : {
+          where: prismaFilter.where,
+          orderBy: prismaQuery.orderBy,
+          pagination: {
+            page,
+            perPage,
+            take: perPage,
+            skip: (page - 1) * perPage,
+          },
+          groupsToFilterCount: groupsToFilter.length,
+          accessibleGroupsCount: accessibleGroups.length,
+          shouldApplyGroupVisibilityFilter,
+        };
     const logPayload = JSON.stringify(logContext, (_key, value) => {
       if (typeof value === "bigint") {
         return value.toString();
@@ -1071,14 +1246,37 @@ async function searchChallenges(currentUser, criteria) {
   let challenges = [];
   let total = 0;
   try {
-    total = await prisma.challenge.count({ ...prismaFilter });
-    challenges = await prisma.challenge.findMany(prismaQuery);
+    if (requestedMemberId) {
+      ({ total, challenges } = await searchChallengesViaMemberAccess({
+        requestedMemberId,
+        challengeWhere: prismaFilter.where,
+        sortFilter,
+        sortByProp,
+        sortOrderProp,
+        page,
+        perPage,
+        challengeInclude,
+        markTiming,
+      }));
+    } else {
+      const countStart = Date.now();
+      total = await prisma.challenge.count({ ...prismaFilter });
+      markTiming("count", { durationMs: Date.now() - countStart, total });
+      const findManyStart = Date.now();
+      challenges = await prisma.challenge.findMany(prismaQuery);
+      markTiming("findMany", {
+        durationMs: Date.now() - findManyStart,
+        resultCount: challenges.length,
+      });
+    }
 
     challenges.forEach((challenge) => {
       prismaHelper.convertModelToResponse(challenge);
     });
 
+    const enrichStart = Date.now();
     await enrichSkillsDataBulk(challenges);
+    markTiming("enrichSkillsDataBulk", { durationMs: Date.now() - enrichStart });
 
     challenges.forEach((challenge) => {
       enrichChallengeForResponse(challenge, challenge.track, challenge.type);
@@ -1096,7 +1294,9 @@ async function searchChallenges(currentUser, criteria) {
     if (!currentUser.isMachine && !_hasAdminRole) {
       result.forEach((challenge) => {
         _.unset(challenge, "billing");
-        if (!_.get(challenge, "memberAccesses.length")) {
+        const hasCurrentUserAccess =
+          _.get(challenge, "memberAccesses.length", 0) > 0;
+        if (!hasCurrentUserAccess) {
           _.unset(challenge, "privateDescription");
         }
         _.unset(challenge, "memberAccesses");
@@ -1108,6 +1308,7 @@ async function searchChallenges(currentUser, criteria) {
     result.forEach((challenge) => {
       _.unset(challenge, "billing");
       _.unset(challenge, "privateDescription");
+      _.unset(challenge, "memberAccesses");
     });
   }
 
@@ -1129,6 +1330,15 @@ async function searchChallenges(currentUser, criteria) {
   });
 
   const sanitizedResult = result.map((challenge) => helper.removeNullProperties(challenge));
+
+  if (searchTimingEnabled) {
+    logger.info(
+      `SearchChallenges timings (page=${page}, perPage=${perPage}): ${JSON.stringify({
+        totalElapsedMs: Date.now() - searchTimingStart,
+        marks: searchTimingMarks,
+      })}`
+    );
+  }
 
   return { total, page, perPage, result: sanitizedResult };
 }
