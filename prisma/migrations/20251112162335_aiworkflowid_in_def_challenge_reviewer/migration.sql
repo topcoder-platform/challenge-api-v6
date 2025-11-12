@@ -6,5 +6,5 @@
 */
 -- AlterTable
 ALTER TABLE "DefaultChallengeReviewer" DROP COLUMN "isAIReviewer",
-ADD COLUMN     "aiWorkflowId" TEXT,
+ADD COLUMN     "aiWorkflowId" VARCHAR(14),
 ALTER COLUMN "scorecardId" DROP NOT NULL;

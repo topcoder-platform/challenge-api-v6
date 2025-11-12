@@ -659,7 +659,7 @@ model DefaultChallengeReviewer {
   baseCoefficient           Float?
   incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
-  aiWorkflowId          String?
+  aiWorkflowId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
 
   // Relations
