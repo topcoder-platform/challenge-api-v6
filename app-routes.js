@@ -5,7 +5,7 @@
 const _ = require("lodash");
 const config = require("config");
 const HttpStatus = require("http-status-codes");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const helper = require("./src/common/helper");
 const errors = require("./src/common/errors");
 const logger = require("./src/common/logger");
@@ -121,7 +121,7 @@ module.exports = (app) => {
   });
 
   // Check if the route is not found or HTTP method is not supported
-  app.use("*", (req, res) => {
+  app.use((req, res) => {
     if (routes[req.baseUrl]) {
       res.status(HttpStatus.METHOD_NOT_ALLOWED).json({
         message: "The requested HTTP method is not supported.",

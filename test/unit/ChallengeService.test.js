@@ -9,7 +9,7 @@ if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
 require('../../app-bootstrap')
 const _ = require('lodash')
 const config = require('config')
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')

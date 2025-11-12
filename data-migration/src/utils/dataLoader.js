@@ -175,7 +175,7 @@ async function loadData(dataDir, fileName, isElasticsearch = false, sinceDate = 
 
     if (suspiciousReason) {
       if (invalidDateBehavior.warn) {
-        console.warn(`${fileName}: record ${recordIdentifier} has ${suspiciousReason.replace('|', ' & ')} (${parsedDate.toISOString()}); strategy=${invalidDateBehavior.strategy}`);
+        console.warn(`${fileName}: record ${recordIdentifier} has ${suspiciousReason.replace(/\|/g, ' & ')} (${parsedDate.toISOString()}); strategy=${invalidDateBehavior.strategy}`);
       }
       if (!invalidDateBehavior.include) {
         invalidDateSkippedCount += 1;
