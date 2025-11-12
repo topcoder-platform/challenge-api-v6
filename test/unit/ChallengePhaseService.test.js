@@ -330,7 +330,7 @@ describe('challenge phase service unit tests', () => {
       }
     })
 
-    it('partially update challenge phase - cannot reopen when open phase is not a successor', async () => {
+    it('partially update challenge phase - can reopen registration when submission is open', async () => {
       const startDate = new Date('2025-06-01T00:00:00.000Z')
       const endDate = new Date('2025-06-02T00:00:00.000Z')
 
@@ -351,6 +351,60 @@ describe('challenge phase service unit tests', () => {
       })
 
       try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: true
+          }
+        )
+        should.equal(challengePhase.id, data.challengePhase1Id)
+        should.equal(challengePhase.isOpen, true)
+        should.equal(challengePhase.actualEndDate, null)
+      } finally {
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase1Id },
+          data: {
+            isOpen: false,
+            actualStartDate: startDate,
+            actualEndDate: endDate
+          }
+        })
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase2Id },
+          data: {
+            isOpen: false,
+            predecessor: data.challengePhase1Id,
+            name: 'Submission'
+          }
+        })
+      }
+
+    })
+
+    it('partially update challenge phase - cannot reopen when open phase is not a successor or submission variant', async () => {
+      const startDate = new Date('2025-06-01T00:00:00.000Z')
+      const endDate = new Date('2025-06-02T00:00:00.000Z')
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: false,
+          actualStartDate: startDate,
+          actualEndDate: endDate
+        }
+      })
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          predecessor: null,
+          name: 'Review'
+        }
+      })
+
+      try {
         await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
           isOpen: true
         })
@@ -366,7 +420,16 @@ describe('challenge phase service unit tests', () => {
           where: { id: data.challengePhase2Id },
           data: {
             isOpen: false,
-            predecessor: data.challengePhase1Id
+            predecessor: data.challengePhase1Id,
+            name: 'Submission'
+          }
+        })
+        await prisma.challengePhase.update({
+          where: { id: data.challengePhase1Id },
+          data: {
+            isOpen: false,
+            actualStartDate: startDate,
+            actualEndDate: endDate
           }
         })
       }
