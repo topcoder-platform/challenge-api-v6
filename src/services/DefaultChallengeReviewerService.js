@@ -325,7 +325,7 @@ createDefaultChallengeReviewer.schema = {
       typeId: Joi.id().required(),
       trackId: Joi.id().required(),
       timelineTemplateId: Joi.optionalId().allow(null),
-      scorecardId: Joi.string().required(),
+      scorecardId: Joi.string().optional(),
       isMemberReview: Joi.boolean().required(),
       memberReviewerCount: Joi.when("isMemberReview", {
         is: true,
@@ -408,7 +408,7 @@ fullyUpdateDefaultChallengeReviewer.schema = {
       typeId: Joi.id().required(),
       trackId: Joi.id().required(),
       timelineTemplateId: Joi.optionalId().allow(null),
-      scorecardId: Joi.string().required(),
+      scorecardId: Joi.string().optional(),
       isMemberReview: Joi.boolean().required(),
       memberReviewerCount: Joi.when("isMemberReview", {
         is: true,
