@@ -31,6 +31,10 @@ const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
   review: "Reviewer",
   "checkpoint review": "Checkpoint Reviewer",
 });
+const SUBMISSION_PHASE_NAME_SET = new Set(["submission", "topgear submission"]);
+const REGISTRATION_PHASE_NAME = "registration";
+
+const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
 
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
@@ -561,7 +565,14 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         return reopenedPhaseIdentifiers.has(String(phase.predecessor));
       });
 
-      if (dependentOpenPhases.length === 0) {
+      const normalizedPhaseName = normalizePhaseName(phaseName);
+      const hasSubmissionVariantOpen = openPhases.some((phase) =>
+        SUBMISSION_PHASE_NAME_SET.has(normalizePhaseName(phase?.name))
+      );
+      const allowRegistrationReopenWithoutExplicitDependency =
+        normalizedPhaseName === REGISTRATION_PHASE_NAME && hasSubmissionVariantOpen;
+
+      if (dependentOpenPhases.length === 0 && !allowRegistrationReopenWithoutExplicitDependency) {
         throw new errors.ForbiddenError(
           `Cannot reopen ${phaseName} because no currently open phase depends on it`
         );
