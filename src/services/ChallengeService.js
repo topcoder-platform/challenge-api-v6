@@ -300,7 +300,6 @@ async function getDefaultReviewers(currentUser, criteria) {
     incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
-    isAIReviewer: r.isAIReviewer,
     shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
   }));
 }
@@ -322,7 +321,6 @@ async function setDefaultReviewers(currentUser, data) {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
-            isAIReviewer: Joi.boolean().default(false),
             shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
@@ -403,7 +401,7 @@ async function setDefaultReviewers(currentUser, data) {
           timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
-          isAIReviewer: !!r.isAIReviewer,
+          aiWorkflowId:_.isNil(r.aiWorkflowId) ? null : r.aiWorkflowId,
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
@@ -414,7 +412,6 @@ async function setDefaultReviewers(currentUser, data) {
             ? null
             : Number(r.incrementalCoefficient),
           opportunityType: r.type ? _.toUpper(r.type) : null,
-          aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
             ? true
             : !!r.shouldOpenOpportunity,
@@ -1712,7 +1709,6 @@ async function createChallenge(currentUser, challenge, userToken) {
           incrementalCoefficient: r.incrementalCoefficient,
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
-          isAIReviewer: r.isAIReviewer ?? false,
           shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
             ? r.shouldOpenOpportunity
             : true,
@@ -1880,7 +1876,6 @@ createChallenge.schema = {
         Joi.object().keys({
           scorecardId: Joi.string().required(),
           isMemberReview: Joi.boolean().required(),
-          isAIReviewer: Joi.boolean().default(false),
           shouldOpenOpportunity: Joi.boolean().default(true),
           memberReviewerCount: Joi.when("isMemberReview", {
             is: true,
@@ -3075,7 +3070,6 @@ updateChallenge.schema = {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
-            isAIReviewer: Joi.boolean().default(false),
             shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
@@ -3555,7 +3549,6 @@ function sanitizeChallenge(challenge) {
       _.pick(rv, [
         "scorecardId",
         "isMemberReview",
-        "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
         "fixedAmount",
