@@ -148,6 +148,7 @@ model Challenge {
   @@index([updatedAt])
   @@index([typeId])
   @@index([trackId])
+  @@index([groups], type: Gin, map: "challenge_groups_gin_idx")
   @@index([submissionStartDate])
   @@index([submissionEndDate])
   @@index([registrationStartDate])
@@ -648,7 +649,7 @@ model DefaultChallengeReviewer {
   trackId               String
   timelineTemplateId    String?
   // Reviewer configuration (mirrors ChallengeReviewer)
-  scorecardId           String
+  scorecardId           String?
   isMemberReview        Boolean
   memberReviewerCount   Int?
   phaseName             String
@@ -658,7 +659,7 @@ model DefaultChallengeReviewer {
   baseCoefficient           Float?
   incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
-  isAIReviewer          Boolean?
+  aiWorkflowId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
 
   // Relations
