@@ -61,7 +61,7 @@
     "moment": "^2.30.1",
     "node-cache": "^5.1.2",
     "swagger-ui-express": "^5.0.1",
-    "tc-core-library-js": "github:appirio-tech/tc-core-library-js#v2.6.4",
+    "tc-core-library-js": "github:appirio-tech/tc-core-library-js#master",
     "topcoder-bus-api-wrapper": "github:topcoder-platform/tc-bus-api-wrapper",
     "uuid": "^11.0.3",
     "winston": "^3.18.3",
