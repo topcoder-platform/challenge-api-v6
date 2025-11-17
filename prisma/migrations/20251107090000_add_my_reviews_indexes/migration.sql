@@ -11,11 +11,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA skills;
 CREATE INDEX IF NOT EXISTS "challenge_status_type_track_created_at_idx"
   ON "Challenge" ("status", "typeId", "trackId", "createdAt" DESC);
 
-DROP INDEX IF EXISTS "challenge_name_idx";
-
-CREATE INDEX IF NOT EXISTS "challenge_name_trgm_idx"
-  ON "Challenge" USING gin ("name" pg_catalog.gin_trgm_ops);
-
 DO
 $$
 DECLARE
