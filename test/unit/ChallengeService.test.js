@@ -672,6 +672,152 @@ describe('challenge service unit tests', () => {
   })
 
   describe('update challenge tests', () => {
+    const ensureSkipTimelineTemplate = async () => {
+      const templateId = config.SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID
+      let template = await prisma.timelineTemplate.findUnique({ where: { id: templateId } })
+      if (!template) {
+        template = await prisma.timelineTemplate.create({
+          data: {
+            id: templateId,
+            name: `skip-template-${templateId}`,
+            description: 'Template used to bypass project requirements in activation tests',
+            isActive: true,
+            createdBy: 'activation-test',
+            updatedBy: 'activation-test'
+          }
+        })
+      }
+
+      const existingPhases = await prisma.timelineTemplatePhase.findMany({
+        where: { timelineTemplateId: templateId }
+      })
+      const existingPhaseIds = new Set(existingPhases.map(p => p.phaseId))
+      const phaseRows = []
+      if (!existingPhaseIds.has(data.phase.id)) {
+        phaseRows.push({
+          timelineTemplateId: templateId,
+          phaseId: data.phase.id,
+          defaultDuration: 1000,
+          createdBy: 'activation-test',
+          updatedBy: 'activation-test'
+        })
+      }
+      if (!existingPhaseIds.has(data.phase2.id)) {
+        phaseRows.push({
+          timelineTemplateId: templateId,
+          phaseId: data.phase2.id,
+          predecessor: data.phase.id,
+          defaultDuration: 1000,
+          createdBy: 'activation-test',
+          updatedBy: 'activation-test'
+        })
+      }
+      if (phaseRows.length > 0) {
+        await prisma.timelineTemplatePhase.createMany({ data: phaseRows })
+      }
+      return templateId
+    }
+
+    const createChallengeWithRequiredReviewPhases = async () => {
+      await ensureSkipTimelineTemplate()
+
+      const phaseNames = ['Screening', 'Review']
+      const createdPhaseIds = []
+      const phaseRecords = []
+
+      for (const phaseName of phaseNames) {
+        let phaseRecord = await prisma.phase.findFirst({ where: { name: phaseName } })
+        if (!phaseRecord) {
+          phaseRecord = await prisma.phase.create({
+            data: {
+              id: uuid(),
+              name: phaseName,
+              description: `${phaseName} phase`,
+              isOpen: false,
+              duration: 86400,
+              createdBy: 'activation-test',
+              updatedBy: 'activation-test'
+            }
+          })
+          createdPhaseIds.push(phaseRecord.id)
+        }
+        phaseRecords.push(phaseRecord)
+      }
+
+      const challenge = await prisma.challenge.create({
+        data: {
+          id: uuid(),
+          name: `Activation coverage ${Date.now()}`,
+          description: 'Activation coverage test',
+          typeId: data.challenge.typeId,
+          trackId: data.challenge.trackId,
+          timelineTemplateId: config.SKIP_PROJECT_ID_BY_TIMLINE_TEMPLATE_ID,
+          startDate: new Date(),
+          status: ChallengeStatusEnum.DRAFT,
+          tags: [],
+          groups: [],
+          createdBy: 'activation-test',
+          updatedBy: 'activation-test'
+        }
+      })
+
+      const challengePhaseIds = []
+      await prisma.challengePhase.createMany({
+        data: phaseRecords.map((phase) => {
+          const cpId = uuid()
+          challengePhaseIds.push(cpId)
+          return {
+            id: cpId,
+            challengeId: challenge.id,
+            phaseId: phase.id,
+            name: phase.name,
+            duration: phase.duration || 86400,
+            isOpen: false,
+            createdBy: 'activation-test',
+            updatedBy: 'activation-test'
+          }
+        })
+      })
+
+      return { challenge, phaseRecords, createdPhaseIds, challengePhaseIds }
+    }
+
+    const cleanupChallengeWithRequiredReviewPhases = async ({
+      challenge,
+      createdPhaseIds = [],
+      challengePhaseIds = []
+    }) => {
+      if (challengePhaseIds.length > 0) {
+        await prisma.challengePhase.deleteMany({ where: { id: { in: challengePhaseIds } } })
+      }
+      if (challenge) {
+        await prisma.challenge.delete({ where: { id: challenge.id } })
+      }
+      if (createdPhaseIds.length > 0) {
+        await prisma.phase.deleteMany({ where: { id: { in: createdPhaseIds } } })
+      }
+    }
+
+    const createActivationChallenge = async (status = ChallengeStatusEnum.NEW) => {
+      const timelineTemplateId = await ensureSkipTimelineTemplate()
+      return prisma.challenge.create({
+        data: {
+          id: uuid(),
+          name: `Activation reviewer check ${Date.now()}`,
+          description: 'activation reviewer check',
+          typeId: data.challenge.typeId,
+          trackId: data.challenge.trackId,
+          timelineTemplateId,
+          startDate: new Date(),
+          status,
+          tags: [],
+          groups: [],
+          createdBy: 'activation-test',
+          updatedBy: 'activation-test'
+        }
+      })
+    }
+
     it('update challenge successfully 1', async () => {
       const challengeData = testChallengeData
       const result = await service.updateChallenge({ isMachine: true, sub: 'sub3', userId: 22838965 }, id, {
@@ -1126,6 +1272,107 @@ describe('challenge service unit tests', () => {
         return
       }
       throw new Error('should not reach here')
+    })
+
+    it('update challenge - prevent activating without reviewers', async () => {
+      const activationChallenge = await createActivationChallenge(ChallengeStatusEnum.DRAFT)
+      try {
+        await service.updateChallenge({ isMachine: true, sub: 'sub-activate' }, activationChallenge.id, {
+          status: ChallengeStatusEnum.ACTIVE
+        })
+      } catch (e) {
+        should.equal(e.message.indexOf('reviewer configured') >= 0, true)
+        return
+      } finally {
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } })
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('update challenge - allow activating with reviewers provided', async () => {
+      const activationChallenge = await createActivationChallenge()
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: 'sub-activate', userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: [
+              {
+                phaseId: data.phase.id,
+                scorecardId: 'activation-scorecard',
+                isMemberReview: false,
+                aiWorkflowId: 'workflow-123'
+              }
+            ]
+          }
+        )
+        should.equal(updated.status, ChallengeStatusEnum.ACTIVE)
+        should.exist(updated.reviewers)
+        should.equal(updated.reviewers.length, 1)
+        should.equal(updated.reviewers[0].scorecardId, 'activation-scorecard')
+      } finally {
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } })
+      }
+    })
+
+    it('update challenge - enforce reviewers for required phases', async () => {
+      const setup = await createChallengeWithRequiredReviewPhases()
+      try {
+        await service.updateChallenge(
+          { isMachine: true, sub: 'sub-activate', userId: 22838965 },
+          setup.challenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: [
+              {
+                phaseId: setup.phaseRecords[0].id,
+                scorecardId: 'screening-scorecard',
+                isMemberReview: false,
+                aiWorkflowId: 'workflow-screening'
+              }
+            ]
+          }
+        )
+      } catch (e) {
+        should.equal(e.message.indexOf('missing reviewers for phase(s): Review') >= 0, true)
+        return
+      } finally {
+        await cleanupChallengeWithRequiredReviewPhases(setup)
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('update challenge - allow activation when required phases have reviewers', async () => {
+      const setup = await createChallengeWithRequiredReviewPhases()
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: 'sub-activate', userId: 22838965 },
+          setup.challenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: [
+              {
+                phaseId: setup.phaseRecords[0].id,
+                scorecardId: 'screening-scorecard',
+                isMemberReview: false,
+                aiWorkflowId: 'workflow-screening'
+              },
+              {
+                phaseId: setup.phaseRecords[1].id,
+                scorecardId: 'review-scorecard',
+                isMemberReview: false,
+                aiWorkflowId: 'workflow-review'
+              }
+            ]
+          }
+        )
+        should.equal(updated.status, ChallengeStatusEnum.ACTIVE)
+        should.exist(updated.reviewers)
+        should.equal(updated.reviewers.length, 2)
+      } finally {
+        await cleanupChallengeWithRequiredReviewPhases(setup)
+      }
     })
 
     it('update challenge - set winners with non-completed Active status', async () => {
