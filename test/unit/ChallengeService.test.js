@@ -1316,6 +1316,38 @@ describe('challenge service unit tests', () => {
       }
     })
 
+    it('update challenge - prevent activating when reviewer is missing required fields', async () => {
+      const activationChallenge = await createActivationChallenge()
+      await prisma.challengeReviewer.create({
+        data: {
+          id: uuid(),
+          challengeId: activationChallenge.id,
+          scorecardId: '',
+          isMemberReview: false,
+          phaseId: data.phase.id,
+          aiWorkflowId: 'wf-missing',
+          createdBy: 'activation-test',
+          updatedBy: 'activation-test'
+        }
+      })
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, sub: 'sub-activate', userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE
+          }
+        )
+      } catch (e) {
+        should.equal(e.message.indexOf('reviewers are missing required fields') >= 0, true)
+        return
+      } finally {
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } })
+      }
+      throw new Error('should not reach here')
+    })
+
     it('update challenge - enforce reviewers for required phases', async () => {
       const setup = await createChallengeWithRequiredReviewPhases()
       try {
