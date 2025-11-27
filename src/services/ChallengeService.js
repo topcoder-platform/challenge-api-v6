@@ -2816,6 +2816,30 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       : Array.isArray(challenge.reviewers)
       ? challenge.reviewers
       : [];
+
+    const reviewersMissingFields = [];
+    effectiveReviewers.forEach((reviewer, index) => {
+      const hasScorecardId =
+        reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
+      const hasPhaseId =
+        reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
+
+      if (!hasScorecardId || !hasPhaseId) {
+        const missing = [];
+        if (!hasScorecardId) missing.push("scorecardId");
+        if (!hasPhaseId) missing.push("phaseId");
+        reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
+      }
+    });
+
+    if (reviewersMissingFields.length > 0) {
+      throw new errors.BadRequestError(
+        `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
+          "; "
+        )}`
+      );
+    }
+
     const reviewerPhaseIds = new Set(
       effectiveReviewers
         .filter((reviewer) => reviewer && reviewer.phaseId)
