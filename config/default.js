@@ -49,7 +49,7 @@ module.exports = {
   // TODO: change this to localhost
   RESOURCE_ROLES_API_URL:
     process.env.RESOURCE_ROLES_API_URL || "http://api.topcoder-dev.com/v5/resource-roles",
-  GROUPS_API_URL: process.env.GROUPS_API_URL || "http://localhost:4000/v5/groups",
+  GROUPS_API_URL: process.env.GROUPS_API_URL || "http://localhost:4000/v6/groups",
   PROJECTS_API_URL: process.env.PROJECTS_API_URL || "http://localhost:4000/v5/projects",
   TERMS_API_URL: process.env.TERMS_API_URL || "http://localhost:4000/v5/terms",
   CUSTOMER_PAYMENTS_URL:

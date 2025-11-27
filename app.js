@@ -50,6 +50,9 @@ const { getClient } = require("./src/common/prisma");
 // setup express app
 const app = express();
 
+// Use extended query parsing so bracket syntax like types[]=F2F is handled as arrays
+app.set("query parser", "extended");
+
 // Disable POST, PUT, PATCH, DELETE operations if READONLY is set to true
 app.use((req, res, next) => {
   if (config.READONLY === true && ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {

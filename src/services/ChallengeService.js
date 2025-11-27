@@ -4,7 +4,7 @@
 const _ = require("lodash");
 const Joi = require("joi");
 const { Prisma } = require("@prisma/client");
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const config = require("config");
 const xss = require("xss");
 const helper = require("../common/helper");
@@ -73,6 +73,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
   "approval",
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
+const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -300,7 +301,6 @@ async function getDefaultReviewers(currentUser, criteria) {
     incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
     aiWorkflowId: r.aiWorkflowId,
-    isAIReviewer: r.isAIReviewer,
     shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
   }));
 }
@@ -322,7 +322,6 @@ async function setDefaultReviewers(currentUser, data) {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
-            isAIReviewer: Joi.boolean().default(false),
             shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
@@ -335,7 +334,7 @@ async function setDefaultReviewers(currentUser, data) {
             incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiWorkflowId: Joi.when("isMemberReview", {
@@ -403,7 +402,7 @@ async function setDefaultReviewers(currentUser, data) {
           timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
-          isAIReviewer: !!r.isAIReviewer,
+          aiWorkflowId:_.isNil(r.aiWorkflowId) ? null : r.aiWorkflowId,
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
@@ -414,7 +413,6 @@ async function setDefaultReviewers(currentUser, data) {
             ? null
             : Number(r.incrementalCoefficient),
           opportunityType: r.type ? _.toUpper(r.type) : null,
-          aiWorkflowId: r.aiWorkflowId,
           shouldOpenOpportunity: _.isNil(r.shouldOpenOpportunity)
             ? true
             : !!r.shouldOpenOpportunity,
@@ -1372,7 +1370,7 @@ searchChallenges.schema = {
       projectId: Joi.number().integer().positive(),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
       group: Joi.string(),
       startDateStart: Joi.date(),
       startDateEnd: Joi.date(),
@@ -1396,7 +1394,7 @@ searchChallenges.schema = {
       isLightweight: Joi.boolean().default(false),
       memberId: Joi.string(),
       sortBy: Joi.string().valid(...allowedSortByValues),
-      sortOrder: Joi.string().valid(["asc", "desc"]),
+      sortOrder: Joi.string().valid("asc", "desc"),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       ids: Joi.array().items(Joi.optionalId()).unique().min(1),
       isTask: Joi.boolean(),
@@ -1712,7 +1710,6 @@ async function createChallenge(currentUser, challenge, userToken) {
           incrementalCoefficient: r.incrementalCoefficient,
           type: r.opportunityType,
           aiWorkflowId: r.aiWorkflowId,
-          isAIReviewer: r.isAIReviewer ?? false,
           shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
             ? r.shouldOpenOpportunity
             : true,
@@ -1798,7 +1795,7 @@ createChallenge.schema = {
       trackId: Joi.id(),
       legacy: Joi.object().keys({
         reviewType: Joi.string()
-          .valid(_.values(ReviewTypeEnum))
+          .valid(..._.values(ReviewTypeEnum))
           .insensitive()
           .default(ReviewTypeEnum.INTERNAL),
         confidentialityType: Joi.string().default(config.DEFAULT_CONFIDENTIALITY_TYPE),
@@ -1870,7 +1867,7 @@ createChallenge.schema = {
         Joi.object().keys({
           id: Joi.optionalId(),
           name: Joi.string().required(),
-          type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
+          type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
           provider: Joi.string().required(),
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
@@ -1880,7 +1877,6 @@ createChallenge.schema = {
         Joi.object().keys({
           scorecardId: Joi.string().required(),
           isMemberReview: Joi.boolean().required(),
-          isAIReviewer: Joi.boolean().default(false),
           shouldOpenOpportunity: Joi.boolean().default(true),
           memberReviewerCount: Joi.when("isMemberReview", {
             is: true,
@@ -1890,7 +1886,7 @@ createChallenge.schema = {
           phaseId: Joi.id().required(),
           type: Joi.when("isMemberReview", {
             is: true,
-            then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+            then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
             otherwise: Joi.forbidden(),
           }),
           aiWorkflowId: Joi.when("isMemberReview", {
@@ -1905,7 +1901,7 @@ createChallenge.schema = {
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
-          type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
+          type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
           description: Joi.string(),
           prizes: Joi.array()
             .items(
@@ -1928,12 +1924,12 @@ createChallenge.schema = {
         })
         .optional(),
       startDate: Joi.date().iso(),
-      status: Joi.string().valid([
+      status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
         ChallengeStatusEnum.DRAFT,
-        ChallengeStatusEnum.APPROVED,
-      ]),
+        ChallengeStatusEnum.APPROVED
+      ),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
       terms: Joi.array().items(
@@ -2361,6 +2357,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   validateTask(currentUser, challenge, data, challengeResources);
   const taskCompletionInfo = prepareTaskCompletionData(challenge, challengeResources, data);
 
+  const isStatusChangingToActive =
+    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -2464,8 +2462,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   /* END self-service stuffs */
 
-  const isStatusChangingToActive =
-    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   if (data.status) {
@@ -2811,6 +2807,81 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     });
   }
 
+  if (
+    isStatusChangingToActive &&
+    (challenge.status === ChallengeStatusEnum.NEW || challenge.status === ChallengeStatusEnum.DRAFT)
+  ) {
+    const effectiveReviewers = Array.isArray(data.reviewers)
+      ? data.reviewers
+      : Array.isArray(challenge.reviewers)
+      ? challenge.reviewers
+      : [];
+
+    const reviewersMissingFields = [];
+    effectiveReviewers.forEach((reviewer, index) => {
+      const hasScorecardId =
+        reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
+      const hasPhaseId =
+        reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
+
+      if (!hasScorecardId || !hasPhaseId) {
+        const missing = [];
+        if (!hasScorecardId) missing.push("scorecardId");
+        if (!hasPhaseId) missing.push("phaseId");
+        reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
+      }
+    });
+
+    if (reviewersMissingFields.length > 0) {
+      throw new errors.BadRequestError(
+        `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
+          "; "
+        )}`
+      );
+    }
+
+    const reviewerPhaseIds = new Set(
+      effectiveReviewers
+        .filter((reviewer) => reviewer && reviewer.phaseId)
+        .map((reviewer) => String(reviewer.phaseId))
+    );
+
+    if (reviewerPhaseIds.size === 0) {
+      throw new errors.BadRequestError(
+        "Cannot activate a challenge without at least one reviewer configured"
+      );
+    }
+
+    const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
+    const effectivePhases =
+      (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
+        ? phasesForUpdate
+        : challenge.phases) || [];
+
+    const missingPhaseNames = new Set();
+    for (const phase of effectivePhases) {
+      if (!phase) {
+        continue;
+      }
+      const normalizedName = normalizePhaseName(phase.name);
+      if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
+        continue;
+      }
+      const phaseId = _.get(phase, "phaseId");
+      if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
+        missingPhaseNames.add(phase.name || "Unknown phase");
+      }
+    }
+
+    if (missingPhaseNames.size > 0) {
+      throw new errors.BadRequestError(
+        `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
+          missingPhaseNames
+        ).join(", ")}`
+      );
+    }
+  }
+
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,
@@ -2971,7 +3042,7 @@ updateChallenge.schema = {
           track: Joi.string(),
           subTrack: Joi.string(),
           reviewType: Joi.string()
-            .valid(_.values(ReviewTypeEnum))
+            .valid(..._.values(ReviewTypeEnum))
             .insensitive()
             .default(ReviewTypeEnum.INTERNAL),
           confidentialityType: Joi.string()
@@ -3063,7 +3134,7 @@ updateChallenge.schema = {
           Joi.object().keys({
             id: Joi.optionalId(),
             name: Joi.string().required(),
-            type: Joi.string().required().valid(_.values(DiscussionTypeEnum)),
+            type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
             provider: Joi.string().required(),
             url: Joi.string(),
             options: Joi.array().items(Joi.object()),
@@ -3075,7 +3146,6 @@ updateChallenge.schema = {
           Joi.object().keys({
             scorecardId: Joi.string().required(),
             isMemberReview: Joi.boolean().required(),
-            isAIReviewer: Joi.boolean().default(false),
             shouldOpenOpportunity: Joi.boolean().default(true),
             memberReviewerCount: Joi.when("isMemberReview", {
               is: true,
@@ -3085,7 +3155,7 @@ updateChallenge.schema = {
             phaseId: Joi.id().required(),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(_.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiWorkflowId: Joi.when("isMemberReview", {
@@ -3104,7 +3174,7 @@ updateChallenge.schema = {
         .items(
           Joi.object()
             .keys({
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)).required(),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
               description: Joi.string(),
               prizes: Joi.array()
                 .items(
@@ -3128,7 +3198,7 @@ updateChallenge.schema = {
           allowedRegistrants: Joi.array().items(Joi.string().trim().lowercase()).optional(),
         })
         .optional(),
-      status: Joi.string().valid(_.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -3148,7 +3218,7 @@ updateChallenge.schema = {
               userId: Joi.number().integer().positive().required(),
               handle: Joi.string().required(),
               placement: Joi.number().integer().positive().required(),
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
             .unknown(true)
         )
@@ -3160,7 +3230,7 @@ updateChallenge.schema = {
               userId: Joi.number().integer().positive().required(),
               handle: Joi.string().required(),
               placement: Joi.number().integer().positive().required(),
-              type: Joi.string().valid(_.values(PrizeSetTypeEnum)),
+              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
             .unknown(true)
         )
@@ -3555,7 +3625,6 @@ function sanitizeChallenge(challenge) {
       _.pick(rv, [
         "scorecardId",
         "isMemberReview",
-        "isAIReviewer",
         "memberReviewerCount",
         "phaseId",
         "fixedAmount",

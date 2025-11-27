@@ -2,7 +2,7 @@
  * This file defines common helper methods used for tests
  */
 const _ = require('lodash')
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 const { ChallengeStatusEnum } = require('../src/common/prisma')
 const prisma = require('../src/common/prisma').getClient()
 const jwt = require('jsonwebtoken')

@@ -1,6 +1,6 @@
 const _ = require("lodash");
 
-const uuid = require("uuid/v4");
+const { v4: uuid } = require('uuid');
 const moment = require("moment");
 
 const errors = require("./errors");
