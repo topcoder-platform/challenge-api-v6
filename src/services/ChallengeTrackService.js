@@ -74,7 +74,7 @@ searchChallengeTracks.schema = {
     isActive: Joi.boolean(),
     abbreviation: Joi.string(),
     legacyId: Joi.number().integer().positive(),
-    track: Joi.string().valid(_.values(ChallengeTrackEnum)),
+    track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
   }),
 };
 
@@ -140,7 +140,7 @@ createChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(_.values(ChallengeTrackEnum)),
+      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
     })
     .required(),
 };
@@ -209,7 +209,7 @@ fullyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(_.values(ChallengeTrackEnum)),
+      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
     })
     .required(),
 };
@@ -251,7 +251,7 @@ partiallyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean(),
       abbreviation: Joi.string(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(_.values(ChallengeTrackEnum)),
+      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
     })
     .required(),
 };

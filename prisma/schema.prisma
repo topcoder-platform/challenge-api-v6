@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions"]
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
 }
 
 // Enum for allowed challenge track values (matches app-constants)
@@ -158,7 +158,6 @@ model Challenge {
   @@index([status, startDate])
   @@index([trackId, typeId, status])
   @@index([status, typeId, trackId, createdAt(sort: Desc)], map: "challenge_status_type_track_created_at_idx")
-  @@index([name(ops: raw("pg_catalog.gin_trgm_ops"))], type: Gin, map: "challenge_name_trgm_idx")
   @@index([legacyId])
   @@index([projectId, status])
 }
@@ -167,13 +166,12 @@ model Challenge {
 // MemberChallengeAccess view – member/challenge pairs from resources schema
 //////////////////////////////////////////
 
-model MemberChallengeAccess {
+view MemberChallengeAccess {
   challengeId String
   memberId    String
 
   challenge Challenge @relation(fields: [challengeId], references: [id])
 
-  @@id([challengeId, memberId])
   @@map("MemberChallengeAccess")
 }
 
@@ -651,7 +649,7 @@ model DefaultChallengeReviewer {
   trackId               String
   timelineTemplateId    String?
   // Reviewer configuration (mirrors ChallengeReviewer)
-  scorecardId           String
+  scorecardId           String?
   isMemberReview        Boolean
   memberReviewerCount   Int?
   phaseName             String
@@ -661,7 +659,7 @@ model DefaultChallengeReviewer {
   baseCoefficient           Float?
   incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
-  isAIReviewer          Boolean
+  aiWorkflowId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
 
   // Relations

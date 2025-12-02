@@ -9,7 +9,7 @@ require('../../app-bootstrap')
 const chai = require('chai')
 const config = require('config')
 const { Prisma } = require('@prisma/client')
-const uuid = require('uuid/v4')
+const { v4: uuid } = require('uuid');
 const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = require('../../src/common/prisma').getClient()
 const service = require('../../src/services/ChallengePhaseService')
