@@ -2710,13 +2710,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.info(`${challengeId} is not a pureV5 challenge or has no winners set yet.`);
   }
 
+  const finalTypeId = data.typeId || challenge.typeId;
+  const finalTrackId = data.trackId || challenge.trackId;
   const { track, type } = await challengeHelper.validateAndGetChallengeTypeAndTrack({
-    typeId: challenge.typeId,
-    trackId: challenge.trackId,
+    typeId: finalTypeId,
+    trackId: finalTrackId,
     timelineTemplateId: timelineTemplateChanged
       ? finalTimelineTemplateId
       : challenge.timelineTemplateId,
   });
+  const isStandardTaskType =
+    _.isString(_.get(type, "name")) && _.get(type, "name").trim().toLowerCase() === "task";
 
   if (_.get(type, "isTask")) {
     if (!_.isEmpty(_.get(data, "task.memberId"))) {
@@ -2809,6 +2813,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   if (
     isStatusChangingToActive &&
+    !isStandardTaskType &&
     (challenge.status === ChallengeStatusEnum.NEW || challenge.status === ChallengeStatusEnum.DRAFT)
   ) {
     const effectiveReviewers = Array.isArray(data.reviewers)
