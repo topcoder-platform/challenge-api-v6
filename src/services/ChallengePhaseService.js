@@ -33,8 +33,110 @@ const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
 });
 const SUBMISSION_PHASE_NAME_SET = new Set(["submission", "topgear submission"]);
 const REGISTRATION_PHASE_NAME = "registration";
+const REVIEW_PHASE_NAME = "review";
 
 const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
+const isReviewPhase = (name) => normalizePhaseName(name) === REVIEW_PHASE_NAME;
+
+function datesAreSame(dateA, dateB) {
+  if (_.isNil(dateA) && _.isNil(dateB)) {
+    return true;
+  }
+  if (_.isNil(dateA) || _.isNil(dateB)) {
+    return false;
+  }
+  return new Date(dateA).getTime() === new Date(dateB).getTime();
+}
+
+function buildPhaseIdentifiers(phase) {
+  const identifiers = [];
+  if (phase && phase.id) {
+    identifiers.push(String(phase.id));
+  }
+  if (phase && !_.isNil(phase.phaseId)) {
+    identifiers.push(String(phase.phaseId));
+  }
+  return identifiers;
+}
+
+async function recalculateDependentPhaseDates(tx, challengeId, predecessorPhase, currentUserId) {
+  if (!predecessorPhase || _.isNil(predecessorPhase.scheduledEndDate)) {
+    return;
+  }
+
+  const phases = await tx.challengePhase.findMany({
+    where: { challengeId },
+  });
+
+  const successorsByPredecessor = new Map();
+  for (const phase of phases) {
+    if (_.isNil(phase.predecessor)) {
+      continue;
+    }
+    const key = String(phase.predecessor);
+    if (!successorsByPredecessor.has(key)) {
+      successorsByPredecessor.set(key, []);
+    }
+    successorsByPredecessor.get(key).push(phase);
+  }
+
+  const queue = [predecessorPhase];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const currentPhase = queue.shift();
+    const currentEndDate = currentPhase?.scheduledEndDate;
+    if (_.isNil(currentEndDate)) {
+      continue;
+    }
+    const predecessorKeys = buildPhaseIdentifiers(currentPhase);
+
+    for (const predecessorKey of predecessorKeys) {
+      const successors = successorsByPredecessor.get(predecessorKey) || [];
+      for (const successor of successors) {
+        if (visited.has(successor.id)) {
+          continue;
+        }
+
+        let successorForQueue = successor;
+        if (_.isNil(successor.actualStartDate)) {
+          const desiredStartDate = new Date(currentEndDate);
+          const durationSeconds = Number(successor.duration);
+          if (!Number.isFinite(durationSeconds) || Number.isNaN(desiredStartDate.getTime())) {
+            visited.add(successor.id);
+            queue.push(successorForQueue);
+            continue;
+          }
+          const desiredEndDate = new Date(desiredStartDate.getTime() + durationSeconds * 1000);
+          const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate);
+          const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate);
+
+          if (startChanged || endChanged) {
+            successorForQueue = await tx.challengePhase.update({
+              data: {
+                scheduledStartDate: desiredStartDate,
+                scheduledEndDate: desiredEndDate,
+                updatedBy: currentUserId,
+              },
+              where: {
+                id: successor.id,
+              },
+            });
+          } else {
+            successorForQueue = {
+              ...successor,
+              scheduledStartDate: successor.scheduledStartDate,
+              scheduledEndDate: successor.scheduledEndDate,
+            };
+          }
+        }
+
+        visited.add(successor.id);
+        queue.push(successorForQueue);
+      }
+    }
+  }
+}
 
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
@@ -377,6 +479,12 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`
     );
   }
+  const originalScheduledStartDate = challengePhase.scheduledStartDate;
+  const originalScheduledEndDate = challengePhase.scheduledEndDate;
+  const isReviewPhaseUpdate = isReviewPhase(data.name || challengePhase.name);
+  const shouldAttemptSuccessorRecalc =
+    isReviewPhaseUpdate &&
+    (data.duration || data.scheduledStartDate || data.scheduledEndDate);
   // isOpen should be false if it's passed as null
   if ("isOpen" in data) {
     if (!data["isOpen"]) {
@@ -602,7 +710,8 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   }
 
   // Update ChallengePhase
-  data.updatedBy = String(currentUser.userId);
+  const currentUserId = String(currentUser.userId);
+  data.updatedBy = currentUserId;
   if (!_.isNil(data.duration)) {
     const startInput = !_.isNil(data.scheduledStartDate)
       ? data.scheduledStartDate
@@ -621,12 +730,21 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   }
   const dataToUpdate = _.omit(data, "constraints");
   const result = await prisma.$transaction(async (tx) => {
-    const result = await tx.challengePhase.update({
+    const updatedPhase = await tx.challengePhase.update({
       data: dataToUpdate,
       where: {
         id: challengePhase.id,
       },
     });
+    if (shouldAttemptSuccessorRecalc) {
+      const scheduleChanged =
+        !datesAreSame(originalScheduledStartDate, updatedPhase.scheduledStartDate) ||
+        !datesAreSame(originalScheduledEndDate, updatedPhase.scheduledEndDate);
+
+      if (scheduleChanged) {
+        await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
+      }
+    }
     if (data["constraints"]) {
       for (const constraint of data["constraints"]) {
         if (constraint.id) {
@@ -634,7 +752,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
             data: {
               name: constraint.name,
               value: constraint.value,
-              updatedBy: String(currentUser.userId),
+              updatedBy: currentUserId,
             },
             where: {
               id: constraint.id,
@@ -645,15 +763,15 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
             data: {
               name: constraint.name,
               value: constraint.value,
-              challengePhaseId: result.id,
-              createdBy: String(currentUser.userId),
-              updatedBy: String(currentUser.userId),
+              challengePhaseId: updatedPhase.id,
+              createdBy: currentUserId,
+              updatedBy: currentUserId,
             },
           });
         }
       }
     }
-    return result;
+    return updatedPhase;
   });
   helper.flushInternalCache();
   // post bus event
