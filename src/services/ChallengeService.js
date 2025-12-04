@@ -73,6 +73,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
   "approval",
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
+const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -2356,6 +2357,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   validateTask(currentUser, challenge, data, challengeResources);
   const taskCompletionInfo = prepareTaskCompletionData(challenge, challengeResources, data);
 
+  const isStatusChangingToActive =
+    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -2459,8 +2462,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   /* END self-service stuffs */
 
-  const isStatusChangingToActive =
-    data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   if (data.status) {
@@ -2709,13 +2710,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.info(`${challengeId} is not a pureV5 challenge or has no winners set yet.`);
   }
 
+  const finalTypeId = data.typeId || challenge.typeId;
+  const finalTrackId = data.trackId || challenge.trackId;
   const { track, type } = await challengeHelper.validateAndGetChallengeTypeAndTrack({
-    typeId: challenge.typeId,
-    trackId: challenge.trackId,
+    typeId: finalTypeId,
+    trackId: finalTrackId,
     timelineTemplateId: timelineTemplateChanged
       ? finalTimelineTemplateId
       : challenge.timelineTemplateId,
   });
+  const isStandardTaskType =
+    _.isString(_.get(type, "name")) && _.get(type, "name").trim().toLowerCase() === "task";
 
   if (_.get(type, "isTask")) {
     if (!_.isEmpty(_.get(data, "task.memberId"))) {
@@ -2804,6 +2809,82 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       updatedReviewers: data.reviewers,
       originalChallengePhases,
     });
+  }
+
+  if (
+    isStatusChangingToActive &&
+    !isStandardTaskType &&
+    (challenge.status === ChallengeStatusEnum.NEW || challenge.status === ChallengeStatusEnum.DRAFT)
+  ) {
+    const effectiveReviewers = Array.isArray(data.reviewers)
+      ? data.reviewers
+      : Array.isArray(challenge.reviewers)
+      ? challenge.reviewers
+      : [];
+
+    const reviewersMissingFields = [];
+    effectiveReviewers.forEach((reviewer, index) => {
+      const hasScorecardId =
+        reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
+      const hasPhaseId =
+        reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
+
+      if (!hasScorecardId || !hasPhaseId) {
+        const missing = [];
+        if (!hasScorecardId) missing.push("scorecardId");
+        if (!hasPhaseId) missing.push("phaseId");
+        reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
+      }
+    });
+
+    if (reviewersMissingFields.length > 0) {
+      throw new errors.BadRequestError(
+        `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
+          "; "
+        )}`
+      );
+    }
+
+    const reviewerPhaseIds = new Set(
+      effectiveReviewers
+        .filter((reviewer) => reviewer && reviewer.phaseId)
+        .map((reviewer) => String(reviewer.phaseId))
+    );
+
+    if (reviewerPhaseIds.size === 0) {
+      throw new errors.BadRequestError(
+        "Cannot activate a challenge without at least one reviewer configured"
+      );
+    }
+
+    const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
+    const effectivePhases =
+      (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
+        ? phasesForUpdate
+        : challenge.phases) || [];
+
+    const missingPhaseNames = new Set();
+    for (const phase of effectivePhases) {
+      if (!phase) {
+        continue;
+      }
+      const normalizedName = normalizePhaseName(phase.name);
+      if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
+        continue;
+      }
+      const phaseId = _.get(phase, "phaseId");
+      if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
+        missingPhaseNames.add(phase.name || "Unknown phase");
+      }
+    }
+
+    if (missingPhaseNames.size > 0) {
+      throw new errors.BadRequestError(
+        `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
+          missingPhaseNames
+        ).join(", ")}`
+      );
+    }
   }
 
   // convert data to prisma models
