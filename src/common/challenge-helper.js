@@ -104,18 +104,24 @@ class ChallengeHelper {
   validatePrizeSetsAndGetPrizeType(prizeSets) {
     if (_.isEmpty(prizeSets)) return null;
 
-    const firstType = _.get(prizeSets, "[0].prizes[0].type", null);
-    if (!firstType) return null;
-
-    const isConsistent = _.every(prizeSets, (prizeSet) =>
-      _.every(prizeSet.prizes, (prize) => prize.type === firstType)
+    const prizeTypes = _.uniq(
+      _.filter(
+        _.flatMap(prizeSets, (prizeSet) =>
+          _.map(prizeSet.prizes || [], (prize) => _.get(prize, "type"))
+        )
+      )
     );
 
-    if (!isConsistent) {
-      throw new errors.BadRequestError("All prizes must be of the same type");
+    if (prizeTypes.length === 0) {
+      return null;
     }
 
-    return firstType;
+    // If more than one prize type is present, return a hint that the set is mixed.
+    if (prizeTypes.length > 1) {
+      return "mixed";
+    }
+
+    return prizeTypes[0];
   }
 
   /**

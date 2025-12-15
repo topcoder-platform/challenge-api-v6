@@ -2284,7 +2284,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   prismaHelper.convertModelToResponse(challenge);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
   const auditUserId = _.toString(currentUser.userId);
-  const existingPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
   const payloadIncludesTerms =
     !_.isNil(data) && Object.prototype.hasOwnProperty.call(data, "terms");
   const originalTermsValue = payloadIncludesTerms ? data.terms : undefined;
@@ -2899,12 +2898,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     delete updateData.phases;
   }
 
-  const newPrizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updateData.prizeSets);
-  if (newPrizeType != null && existingPrizeType != null && newPrizeType !== existingPrizeType) {
-    throw new errors.BadRequestError(
-      `Cannot change prize type from ${existingPrizeType} to ${newPrizeType}`
-    );
-  }
   const updatedChallenge = await prisma.$transaction(async (tx) => {
     if (Array.isArray(phasesForUpdate)) {
       await syncChallengePhases(
