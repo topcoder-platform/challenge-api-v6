@@ -1196,7 +1196,10 @@ describe('challenge service unit tests', () => {
       try {
         await service.updateChallenge({ userId: '16096823', handle: '' }, id, { projectId: 200 })
       } catch (e) {
-        should.equal(e.message, 'Only M2M, admin, challenge\'s copilot or users with full access can perform modification.')
+        should.equal(
+          e.message,
+          'Only M2M, admin, challenge\'s copilot, users with full access, or project members with write/full/copilot access can perform modification.'
+        )
         return
       }
       throw new Error('should not reach here')

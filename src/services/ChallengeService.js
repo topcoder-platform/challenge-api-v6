@@ -1984,12 +1984,18 @@ async function getChallenge(currentUser, id, checkIfExists) {
         !_.get(challenge, "task.isTask", false) ||
         !_.get(challenge, "task.isAssigned", false)
       ) {
-        const memberResources = await helper.listResourcesByMemberAndChallenge(
-          currentUser.userId,
-          challenge.id
+        const hasProjectWriteAccess = await helper.userHasProjectWriteAccess(
+          challenge.projectId,
+          currentUser
         );
-        if (_.isEmpty(memberResources)) {
-          _.unset(challenge, "privateDescription");
+        if (!hasProjectWriteAccess) {
+          const memberResources = await helper.listResourcesByMemberAndChallenge(
+            currentUser.userId,
+            challenge.id
+          );
+          if (_.isEmpty(memberResources)) {
+            _.unset(challenge, "privateDescription");
+          }
         }
       }
     }

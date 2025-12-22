@@ -20,6 +20,7 @@ const m2mHelper = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 
 const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
+const PROJECT_WRITE_ACCESS_ROLES = new Set(["manager", "copilot", "customer", "write"]);
 
 // Bus API Client
 let busApiClient;
@@ -696,6 +697,41 @@ async function userHasFullAccess(challengeId, userId, challengeResources) {
 }
 
 /**
+ * Check if a user has write/full/copilot access to a project.
+ * @param {Number|String} projectId the project id
+ * @param {Object} currentUser the current user
+ * @returns {Promise<Boolean>} true if user has project access
+ */
+async function userHasProjectWriteAccess(projectId, currentUser) {
+  if (!projectId || !currentUser || !currentUser.userId) {
+    return false;
+  }
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+  try {
+    const project = await projectHelper.getProject(projectId, currentUser);
+    const member = _.find(
+      _.get(project, "members", []),
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+    );
+    const role = _.toLower(_.get(member, "role", ""));
+    return PROJECT_WRITE_ACCESS_ROLES.has(role);
+  } catch (err) {
+    const status = _.get(err, "httpStatus") || _.get(err, "response.status");
+    if (status === HttpStatus.FORBIDDEN || status === HttpStatus.NOT_FOUND) {
+      return false;
+    }
+    logger.debug(
+      `helper.userHasProjectWriteAccess: error for project ${projectId} - status ${
+        status || "n/a"
+      }: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
  * Get all user groups
  * @param {String} userId the user id
  * @returns {Promise<Array>} the user groups
@@ -1212,9 +1248,15 @@ async function ensureUserCanModifyChallenge(currentUser, challenge, challengeRes
     !isChallengeCreator &&
     !isUserHasFullAccess
   ) {
-    throw new errors.ForbiddenError(
-      `Only M2M, admin, challenge's copilot or users with full access can perform modification.`
+    const hasProjectWriteAccess = await userHasProjectWriteAccess(
+      challenge.projectId,
+      currentUser
     );
+    if (!hasProjectWriteAccess) {
+      throw new errors.ForbiddenError(
+        "Only M2M, admin, challenge's copilot, users with full access, or project members with write/full/copilot access can perform modification."
+      );
+    }
   }
 }
 
@@ -1537,6 +1579,7 @@ module.exports = {
   ensureUserCanViewChallenge,
   ensureUserCanModifyChallenge,
   userHasFullAccess,
+  userHasProjectWriteAccess,
   sumOfPrizes,
   getProjectIdByRoundId,
   getGroupById,
