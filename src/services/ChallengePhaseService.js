@@ -33,10 +33,8 @@ const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
 });
 const SUBMISSION_PHASE_NAME_SET = new Set(["submission", "topgear submission"]);
 const REGISTRATION_PHASE_NAME = "registration";
-const REVIEW_PHASE_NAME = "review";
 
 const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
-const isReviewPhase = (name) => normalizePhaseName(name) === REVIEW_PHASE_NAME;
 
 function datesAreSame(dateA, dateB) {
   if (_.isNil(dateA) && _.isNil(dateB)) {
@@ -46,6 +44,18 @@ function datesAreSame(dateA, dateB) {
     return false;
   }
   return new Date(dateA).getTime() === new Date(dateB).getTime();
+}
+
+function dateIsAfter(dateA, dateB) {
+  if (_.isNil(dateA) || _.isNil(dateB)) {
+    return false;
+  }
+  const timeA = new Date(dateA).getTime();
+  const timeB = new Date(dateB).getTime();
+  if (Number.isNaN(timeA) || Number.isNaN(timeB)) {
+    return false;
+  }
+  return timeA > timeB;
 }
 
 function buildPhaseIdentifiers(phase) {
@@ -100,7 +110,12 @@ async function recalculateDependentPhaseDates(tx, challengeId, predecessorPhase,
 
         let successorForQueue = successor;
         if (_.isNil(successor.actualStartDate)) {
-          const desiredStartDate = new Date(currentEndDate);
+          const alignToPredecessorStart = normalizePhaseName(successor.name) === "iterative review";
+          const desiredStartDate = new Date(
+            alignToPredecessorStart && currentPhase.scheduledStartDate
+              ? currentPhase.scheduledStartDate
+              : currentEndDate
+          );
           const durationSeconds = Number(successor.duration);
           if (!Number.isFinite(durationSeconds) || Number.isNaN(desiredStartDate.getTime())) {
             visited.add(successor.id);
@@ -479,12 +494,10 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`
     );
   }
-  const originalScheduledStartDate = challengePhase.scheduledStartDate;
   const originalScheduledEndDate = challengePhase.scheduledEndDate;
-  const isReviewPhaseUpdate = isReviewPhase(data.name || challengePhase.name);
-  const shouldAttemptSuccessorRecalc =
-    isReviewPhaseUpdate &&
-    (data.duration || data.scheduledStartDate || data.scheduledEndDate);
+  const shouldAttemptSuccessorRecalc = Boolean(
+    data.duration || data.scheduledStartDate || data.scheduledEndDate
+  );
   // isOpen should be false if it's passed as null
   if ("isOpen" in data) {
     if (!data["isOpen"]) {
@@ -737,11 +750,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       },
     });
     if (shouldAttemptSuccessorRecalc) {
-      const scheduleChanged =
-        !datesAreSame(originalScheduledStartDate, updatedPhase.scheduledStartDate) ||
-        !datesAreSame(originalScheduledEndDate, updatedPhase.scheduledEndDate);
-
-      if (scheduleChanged) {
+      const scheduleExtended = dateIsAfter(
+        updatedPhase.scheduledEndDate,
+        originalScheduledEndDate
+      );
+      if (scheduleExtended) {
         await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
       }
     }

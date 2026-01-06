@@ -205,19 +205,19 @@ paths:
           required: false
           type: string
           enum:
-            - New
-            - Draft
-            - Cancelled
-            - Active
-            - Completed
-            - Deleted
-            - Cancelled - Failed Review
-            - Cancelled - Failed Screening
-            - Cancelled - Zero Submissions
-            - Cancelled - Winner Unresponsive
-            - Cancelled - Client Request
-            - Cancelled - Requirements Infeasible
-            - Cancelled - Zero Registrations
+            - NEW
+            - DRAFT
+            - CANCELLED
+            - ACTIVE
+            - COMPLETED
+            - DELETED
+            - CANCELLED_FAILED_REVIEW
+            - CANCELLED_FAILED_SCREENING
+            - CANCELLED_ZERO_SUBMISSIONS
+            - CANCELLED_WINNER_UNRESPONSIVE
+            - CANCELLED_CLIENT_REQUEST
+            - CANCELLED_REQUIREMENTS_INFEASIBLE
+            - CANCELLED_ZERO_REGISTRATIONS
         - name: group
           in: query
           description: Filter by group name, case-insensitive, partial matches are allowed.
@@ -638,7 +638,7 @@ paths:
       tags:
         - Challenges
       description: Delete the challenge with the provided id.
-        Only challenges with status of "New" can be deleted.
+        Only challenges with status of "NEW" can be deleted.
       security:
         - bearer: []
       produces:
@@ -682,7 +682,7 @@ paths:
       description: >
         Close a Marathon Match challenge by selecting winners from final review
         summations, closing all phases, and setting the challenge status to
-        Completed.
+        COMPLETED.
       security:
         - bearer: []
       produces:
@@ -2593,19 +2593,19 @@ definitions:
         type: string
         description: the status
         enum:
-          - New
-          - Draft
-          - Cancelled
-          - Active
-          - Completed
-          - Deleted
-          - Cancelled - Failed Review
-          - Cancelled - Failed Screening
-          - Cancelled - Zero Submissions
-          - Cancelled - Winner Unresponsive
-          - Cancelled - Client Request
-          - Cancelled - Requirements Infeasible
-          - Cancelled - Zero Registrations
+          - NEW
+          - DRAFT
+          - CANCELLED
+          - ACTIVE
+          - COMPLETED
+          - DELETED
+          - CANCELLED_FAILED_REVIEW
+          - CANCELLED_FAILED_SCREENING
+          - CANCELLED_ZERO_SUBMISSIONS
+          - CANCELLED_WINNER_UNRESPONSIVE
+          - CANCELLED_CLIENT_REQUEST
+          - CANCELLED_REQUIREMENTS_INFEASIBLE
+          - CANCELLED_ZERO_REGISTRATIONS
       attachments:
         type: array
         items:
@@ -2882,19 +2882,19 @@ definitions:
         type: string
         description: the status
         enum:
-          - New
-          - Draft
-          - Cancelled
-          - Active
-          - Completed
-          - Deleted
-          - Cancelled - Failed Review
-          - Cancelled - Failed Screening
-          - Cancelled - Zero Submissions
-          - Cancelled - Winner Unresponsive
-          - Cancelled - Client Request
-          - Cancelled - Requirements Infeasible
-          - Cancelled - Zero Registrations
+          - NEW
+          - DRAFT
+          - CANCELLED
+          - ACTIVE
+          - COMPLETED
+          - DELETED
+          - CANCELLED_FAILED_REVIEW
+          - CANCELLED_FAILED_SCREENING
+          - CANCELLED_ZERO_SUBMISSIONS
+          - CANCELLED_WINNER_UNRESPONSIVE
+          - CANCELLED_CLIENT_REQUEST
+          - CANCELLED_REQUIREMENTS_INFEASIBLE
+          - CANCELLED_ZERO_REGISTRATIONS
       groups:
         type: array
         items:
@@ -3055,19 +3055,19 @@ definitions:
         type: string
         description: the status
         enum:
-          - New
-          - Draft
-          - Cancelled
-          - Active
-          - Completed
-          - Deleted
-          - Cancelled - Failed Review
-          - Cancelled - Failed Screening
-          - Cancelled - Zero Submissions
-          - Cancelled - Winner Unresponsive
-          - Cancelled - Client Request
-          - Cancelled - Requirements Infeasible
-          - Cancelled - Zero Registrations
+          - NEW
+          - DRAFT
+          - CANCELLED
+          - ACTIVE
+          - COMPLETED
+          - DELETED
+          - CANCELLED_FAILED_REVIEW
+          - CANCELLED_FAILED_SCREENING
+          - CANCELLED_ZERO_SUBMISSIONS
+          - CANCELLED_WINNER_UNRESPONSIVE
+          - CANCELLED_CLIENT_REQUEST
+          - CANCELLED_REQUIREMENTS_INFEASIBLE
+          - CANCELLED_ZERO_REGISTRATIONS
       attachments:
         type: array
         items:
@@ -3271,19 +3271,19 @@ definitions:
         type: string
         description: the status
         enum:
-          - New
-          - Draft
-          - Cancelled
-          - Active
-          - Completed
-          - Deleted
-          - Cancelled - Failed Review
-          - Cancelled - Failed Screening
-          - Cancelled - Zero Submissions
-          - Cancelled - Winner Unresponsive
-          - Cancelled - Client Request
-          - Cancelled - Requirements Infeasible
-          - Cancelled - Zero Registrations
+          - NEW
+          - DRAFT
+          - CANCELLED
+          - ACTIVE
+          - COMPLETED
+          - DELETED
+          - CANCELLED_FAILED_REVIEW
+          - CANCELLED_FAILED_SCREENING
+          - CANCELLED_ZERO_SUBMISSIONS
+          - CANCELLED_WINNER_UNRESPONSIVE
+          - CANCELLED_CLIENT_REQUEST
+          - CANCELLED_REQUIREMENTS_INFEASIBLE
+          - CANCELLED_ZERO_REGISTRATIONS
       attachments:
         type: array
         items:

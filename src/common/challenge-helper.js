@@ -137,10 +137,10 @@ class ChallengeHelper {
     const ids = _.uniq(_.map(challenge.skills, "id"));
 
     if (oldChallenge && oldChallenge.status === ChallengeStatusEnum.COMPLETED) {
-      // Don't allow edit skills for Completed challenges
+      // Don't allow edit skills for COMPLETED challenges
       if (!_.isEqual(ids, _.uniq(_.map(oldChallenge.skills, "id")))) {
         throw new errors.BadRequestError(
-          "Cannot update skills for challenges with Completed status"
+          "Cannot update skills for challenges with COMPLETED status"
         );
       }
     }
@@ -187,7 +187,7 @@ class ChallengeHelper {
 
     if (challenge.status === ChallengeStatusEnum.ACTIVE) {
       throw new errors.BadRequestError(
-        "You cannot create an Active challenge. Please create a Draft challenge and then change the status to Active."
+        "You cannot create an ACTIVE challenge. Please create a DRAFT challenge and then change the status to ACTIVE."
       );
     }
 

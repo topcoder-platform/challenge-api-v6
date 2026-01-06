@@ -2171,11 +2171,11 @@ function validateTask(currentUser, challenge, data, challengeResources) {
     return;
   }
 
-  // Status changed to Active, indicating launch a Task
+  // Status changed to ACTIVE, indicating launch a Task
   const isLaunchTask =
     data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
 
-  // Status changed to Completed, indicating complete a Task
+  // Status changed to COMPLETED, indicating complete a Task
   const isCompleteTask =
     data.status === ChallengeStatusEnum.COMPLETED &&
     challenge.status !== ChallengeStatusEnum.COMPLETED;
@@ -2508,7 +2508,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         !_.get(challenge, "legacy.pureV5") &&
         challenge.status !== ChallengeStatusEnum.ACTIVE
       ) {
-        throw new errors.BadRequestError("You cannot mark a Draft challenge as Completed");
+        throw new errors.BadRequestError("You cannot mark a DRAFT challenge as COMPLETED");
       }
       sendCompletedEmail = true;
     }
@@ -2605,7 +2605,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       challenge.status.indexOf(ChallengeStatusEnum.CANCELLED) > -1
     ) {
       throw new BadRequestError(
-        `Challenge phase/start date can not be modified for Completed or Cancelled challenges.`
+        `Challenge phase/start date can not be modified for COMPLETED or CANCELLED challenges.`
       );
     }
     const newStartDate = data.startDate || challenge.startDate;
@@ -3860,7 +3860,7 @@ async function advancePhase(currentUser, challengeId, data) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
-    throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in Active status.`);
+    throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
@@ -3896,7 +3896,7 @@ async function advancePhase(currentUser, challengeId, data) {
     "submissionEndDate",
   ]);
 
-  // TODO: This is a temporary solution to update the challenge status to Completed; We currently do not have a way to get winner list using v5 data
+  // TODO: This is a temporary solution to update the challenge status to COMPLETED; We currently do not have a way to get winner list using v5 data
   // TODO: With the implementation of v5 review API we'll develop a mechanism to maintain the winner list in v5 data that challenge-api can use to create the winners list
   if (phaseAdvancerResult.hasWinningSubmission === true) {
     newChallengeData.status = ChallengeStatusEnum.COMPLETED;
@@ -4109,7 +4109,7 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
 
   await helper.postBusEvent(constants.Topics.ChallengeUpdated, updatedChallenge, {
     key:
-      updatedChallenge.status === "Completed"
+      updatedChallenge.status === ChallengeStatusEnum.COMPLETED
         ? `${updatedChallenge.id}:${updatedChallenge.status}`
         : undefined,
   });

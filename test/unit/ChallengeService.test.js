@@ -257,7 +257,7 @@ describe('challenge service unit tests', () => {
 
     it('create challenge - invalid status', async () => {
       const challengeData = _.clone(testChallengeData)
-      challengeData.status = ['Active']
+      challengeData.status = ['ACTIVE']
       try {
         await service.createChallenge({ isMachine: true, sub: 'sub', userId: 'testuser' }, challengeData, config.M2M_FULL_ACCESS_TOKEN)
       } catch (e) {
@@ -1271,7 +1271,7 @@ describe('challenge service unit tests', () => {
           status: ChallengeStatusEnum.ACTIVE
         })
       } catch (e) {
-        should.equal(e.message.indexOf('Cannot change Completed challenge status to Active status') >= 0, true)
+        should.equal(e.message.indexOf('Cannot change COMPLETED challenge status to ACTIVE status') >= 0, true)
         return
       }
       throw new Error('should not reach here')
