@@ -29,6 +29,7 @@ const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
   "checkpoint screening": "Checkpoint Screener",
   screening: "Screener",
   review: "Reviewer",
+  approval: "Approver",
   "checkpoint review": "Checkpoint Reviewer",
 });
 const SUBMISSION_PHASE_NAME_SET = new Set(["submission", "topgear submission"]);
