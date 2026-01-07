@@ -91,6 +91,7 @@ workflows:
               only:
                 - develop
                 - security
+                - PM-3327
 
       - "build-qa":
           context: org-global
