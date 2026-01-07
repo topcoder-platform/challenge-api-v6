@@ -12,7 +12,7 @@ const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
 
-const SUBMISSION_PHASE_PRIORITY = ["Topcoder Submission", "Submission"];
+const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 
 class ChallengeHelper {
   /**
