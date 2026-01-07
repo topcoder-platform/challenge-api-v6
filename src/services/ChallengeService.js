@@ -126,7 +126,7 @@ async function enrichSkillsData(challenge, { skillLookup } = {}) {
     return lookup[skillId];
   };
 
-  challenge.skills = challenge.skills.map((skill) => {
+  challenge.skills = _.uniqBy(challenge.skills, (skill) => skill.skillId || skill.id).map((skill) => {
     const skillId = skill.skillId || skill.id;
     const found = getFromLookup(skillId);
     if (found) {
