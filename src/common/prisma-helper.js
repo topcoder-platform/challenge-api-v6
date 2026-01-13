@@ -4,7 +4,7 @@ const constants = require("../../app-constants");
 const { PrizeSetTypeEnum } = require("@prisma/client");
 const { dedupeChallengeTerms } = require("./helper");
 
-const SUBMISSION_PHASE_PRIORITY = ["Topcoder Submission", "Submission"];
+const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 /**
  * Convert phases data to prisma model.
  *

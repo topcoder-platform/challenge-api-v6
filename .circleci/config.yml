@@ -1,7 +1,7 @@
 version: 2.1
 defaults: &defaults
   docker:
-  - image: cimg/python:3.12.1-browsers
+    - image: cimg/python:3.12.1-browsers
 install_dependency: &install_dependency
   name: Installation of build and deployment dependencies.
   command: |
@@ -16,40 +16,40 @@ install_deploysuite: &install_deploysuite
     cp ./../buildscript/psvar-processor.sh .
 
 finger_print_add: &finger_print_add
-    fingerprints:
-            - SHA256:KJYSvQh9CxkY9yRXxp+Geo6cllnfSiiKAH3LFQ/X9f4
+  fingerprints:
+    - SHA256:KJYSvQh9CxkY9yRXxp+Geo6cllnfSiiKAH3LFQ/X9f4
 
 builddeploy_steps: &builddeploy_steps
-- add_ssh_keys: *finger_print_add 
-- checkout
-- setup_remote_docker
-- run: *install_dependency
-- run: *install_deploysuite
-- run:
-    name: "Authenticate with CodeArtifact and build Docker image"
-    command: |
-      ./awsconfiguration.sh ${CODEARTIFACT_ENV}
-      source awsenvconf
-      aws codeartifact login --tool npm --repository topcoder-framework --domain topcoder --domain-owner $AWS_ACCOUNT_ID --region $AWS_REGION --namespace @topcoder-framework
-      cp ~/.npmrc .
-      rm -f awsenvconf
-- run:
-    name: "Build docker image"
-    command: |
-      ./awsconfiguration.sh ${DEPLOY_ENV}
-      source awsenvconf
-      ./psvar-processor.sh -t appenv -p /config/${APPNAME}/buildvar
-      source buildvar_env
-      rm -f awsenvconf
-      ./build.sh ${APPNAME}     
-- deploy:
-    name: Running MasterScript.
-    command: |
-      ./awsconfiguration.sh $DEPLOY_ENV
-      source awsenvconf
-      ./psvar-processor.sh -t appenv -p /config/${APPNAME}/deployvar
-      source deployvar_env
-      ./master_deploy.sh -d ECS -e $DEPLOY_ENV -t latest -j /config/common/global-appvar,/config/${APPNAME}/appvar -i ${APPNAME} -p FARGATE
+  - add_ssh_keys: *finger_print_add
+  - checkout
+  - setup_remote_docker
+  - run: *install_dependency
+  - run: *install_deploysuite
+  - run:
+      name: "Authenticate with CodeArtifact and build Docker image"
+      command: |
+        ./awsconfiguration.sh ${CODEARTIFACT_ENV}
+        source awsenvconf
+        aws codeartifact login --tool npm --repository topcoder-framework --domain topcoder --domain-owner $AWS_ACCOUNT_ID --region $AWS_REGION --namespace @topcoder-framework
+        cp ~/.npmrc .
+        rm -f awsenvconf
+  - run:
+      name: "Build docker image"
+      command: |
+        ./awsconfiguration.sh ${DEPLOY_ENV}
+        source awsenvconf
+        ./psvar-processor.sh -t appenv -p /config/${APPNAME}/buildvar
+        source buildvar_env
+        rm -f awsenvconf
+        ./build.sh ${APPNAME}
+  - deploy:
+      name: Running MasterScript.
+      command: |
+        ./awsconfiguration.sh $DEPLOY_ENV
+        source awsenvconf
+        ./psvar-processor.sh -t appenv -p /config/${APPNAME}/deployvar
+        source deployvar_env
+        ./master_deploy.sh -d ECS -e $DEPLOY_ENV -t latest -j /config/common/global-appvar,/config/${APPNAME}/appvar -i ${APPNAME} -p FARGATE
 jobs:
   # Build & Deploy against development backend
   "build-dev":
@@ -83,26 +83,27 @@ workflows:
   version: 2
   build:
     jobs:
-    # Development builds are executed on "develop" branch only.
-    - "build-dev":
-        context: org-global
-        filters:
-          branches:
-            only:
-            - develop
-            - module-updates
+      # Development builds are executed on "develop" branch only.
+      - "build-dev":
+          context: org-global
+          filters:
+            branches:
+              only:
+                - develop
+                - security
+                - PM-3327
 
-    - "build-qa":
-        context: org-global
-        filters:
-          branches:
-            only:
-            - qa
+      - "build-qa":
+          context: org-global
+          filters:
+            branches:
+              only:
+                - qa
 
-    # Production builds are exectuted only on tagged commits to the
-    # master branch.
-    - "build-prod":
-        context: org-global
-        filters:
-          branches:
-            only: master
+      # Production builds are exectuted only on tagged commits to the
+      # master branch.
+      - "build-prod":
+          context: org-global
+          filters:
+            branches:
+              only: master

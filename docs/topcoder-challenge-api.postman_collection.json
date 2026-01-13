@@ -509,7 +509,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.task.isTask).to.be.true\r",
 									"    pm.expect(response.task.isAssigned).to.be.true\r",
@@ -540,7 +540,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -589,7 +589,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Completed')\r",
+									"    pm.expect(response.status).to.eq('COMPLETED')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.task.isTask).to.be.true\r",
 									"    pm.expect(response.task.isAssigned).to.be.true\r",
@@ -623,7 +623,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Completed\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
+							"raw": "{\n    \"status\": \"COMPLETED\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1063,7 +1063,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.task.isTask).to.be.true\r",
 									"    pm.expect(response.task.isAssigned).to.be.true\r",
@@ -1094,7 +1094,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1144,7 +1144,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_TASK'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Completed')\r",
+									"    pm.expect(response.status).to.eq('COMPLETED')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.task.isTask).to.be.true\r",
 									"    pm.expect(response.task.isAssigned).to.be.true\r",
@@ -1178,7 +1178,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Completed\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_V5_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
+							"raw": "{\n    \"status\": \"COMPLETED\",\n    \"winners\": [\n        {\n            \"userId\": {{CHALLENGE_PAYMENT_V5_MEMBER_ID}},\n            \"handle\": \"{{MEMBER_HANDLE}}\",\n            \"placement\": 1\n        }\n    ]\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1627,7 +1627,7 @@
 									"    pm.expect(response.tags[0]).to.eq('Other')\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -1722,7 +1722,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1774,7 +1774,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -2270,7 +2270,7 @@
 									"    pm.expect(response.tags[0]).to.eq('Other')\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -2365,7 +2365,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2417,7 +2417,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -2913,7 +2913,7 @@
 									"    pm.expect(response.tags[0]).to.eq('Other')\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -3008,7 +3008,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -3060,7 +3060,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -3556,7 +3556,7 @@
 									"    pm.expect(response.tags[0]).to.eq('Other')\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -3651,7 +3651,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"status\": \"Active\"\n}",
+							"raw": "{\n    \"status\": \"ACTIVE\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -3703,7 +3703,7 @@
 									"    pm.expect(response.timelineTemplateId).to.eq(pm.collectionVariables.get('TIMELINE_TEMPLATE_CHALLENGE'))\r",
 									"    pm.expect(response.projectId).to.eq(Number(pm.collectionVariables.get('PROJECT_ID')))\r",
 									"    pm.expect(response).to.have.property('startDate')\r",
-									"    pm.expect(response.status).to.eq('Active')\r",
+									"    pm.expect(response.status).to.eq('ACTIVE')\r",
 									"    pm.expect(response).to.have.property('billing')\r",
 									"    pm.expect(response.phases[0].name).to.eq('Registration')\r",
 									"    pm.expect(response.phases[1].name).to.eq('Submission')\r",
@@ -3827,7 +3827,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?status=Active&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"raw": "{{URL}}/challenges?status=ACTIVE&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
 							"host": [
 								"{{URL}}"
 							],
@@ -3837,7 +3837,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Active"
+									"value": "ACTIVE"
 								},
 								{
 									"key": "tracks",
@@ -3929,7 +3929,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?tco=true&status=Active",
+							"raw": "{{URL}}/challenges?tco=true&status=ACTIVE",
 							"host": [
 								"{{URL}}"
 							],
@@ -3943,7 +3943,7 @@
 								},
 								{
 									"key": "status",
-									"value": "Active"
+									"value": "ACTIVE"
 								}
 							]
 						}
@@ -4129,7 +4129,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?status=Active",
+							"raw": "{{URL}}/challenges?status=ACTIVE",
 							"host": [
 								"{{URL}}"
 							],
@@ -4139,7 +4139,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Active"
+									"value": "ACTIVE"
 								},
 								{
 									"key": "tracks",
@@ -4243,7 +4243,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?status=Active&currentPhaseName=Registration&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"raw": "{{URL}}/challenges?status=ACTIVE&currentPhaseName=Registration&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
 							"host": [
 								"{{URL}}"
 							],
@@ -4253,7 +4253,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Active"
+									"value": "ACTIVE"
 								},
 								{
 									"key": "currentPhaseName",
@@ -4354,7 +4354,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?status=Completed&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"raw": "{{URL}}/challenges?status=COMPLETED&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
 							"host": [
 								"{{URL}}"
 							],
@@ -4364,7 +4364,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Completed"
+									"value": "COMPLETED"
 								},
 								{
 									"key": "tracks",
@@ -4594,7 +4594,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{URL}}/challenges?status=Completed&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
+							"raw": "{{URL}}/challenges?status=COMPLETED&tracks=DS&tracks=QA&tracks=Des&tracks=Dev&types=CH&types=F2F&types=TSK",
 							"host": [
 								"{{URL}}"
 							],
@@ -4604,7 +4604,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Completed"
+									"value": "COMPLETED"
 								},
 								{
 									"key": "tracks",

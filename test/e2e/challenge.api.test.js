@@ -478,7 +478,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.M2M_UPDATE_ACCESS_TOKEN}`)
         .send(challengeData)
       should.equal(response.status, 400)
-      should.equal(response.body.message, '"status" must be one of [New, Draft, Cancelled, Active, Completed]')
+      should.equal(response.body.message, '"status" must be one of [NEW, DRAFT, CANCELLED, ACTIVE, COMPLETED]')
     })
 
     it('create challenge - unexpected field', async () => {
@@ -899,7 +899,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
         .query({ status: 'abc' })
       should.equal(response.status, 400)
-      should.equal(response.body.message, '"status" must be one of [New, Draft, Cancelled, Active, Completed]')
+      should.equal(response.body.message, '"status" must be one of [NEW, DRAFT, CANCELLED, ACTIVE, COMPLETED]')
     })
 
     it('search challenges - invalid createdDateStart', async () => {
@@ -1317,7 +1317,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
         .send(challengeData)
       should.equal(response.status, 400)
-      should.equal(response.body.message, 'Cannot change Completed challenge status to Active status')
+      should.equal(response.body.message, 'Cannot change COMPLETED challenge status to ACTIVE status')
     })
 
     it('fully update challenge - set winners with non-completed Active status', async () => {
@@ -1328,7 +1328,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
         .send(challengeData)
       should.equal(response.status, 400)
-      should.equal(response.body.message, 'Cannot set winners for challenge with non-completed Active status')
+      should.equal(response.body.message, 'Cannot set winners for challenge with non-completed ACTIVE status')
     })
 
     it('fully update challenge - Duplicate member with placement 1', async () => {
@@ -1797,7 +1797,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
         .send({ status: ChallengeStatusEnum.ACTIVE })
       should.equal(response.status, 400)
-      should.equal(response.body.message, 'Cannot change Completed challenge status to Active status')
+      should.equal(response.body.message, 'Cannot change COMPLETED challenge status to ACTIVE status')
     })
 
     it('partially update challenge - set winners with non-completed Active status', async () => {
@@ -1806,7 +1806,7 @@ describe('challenge API E2E tests', () => {
         .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
         .send({ winners })
       should.equal(response.status, 400)
-      should.equal(response.body.message, 'Cannot set winners for challenge with non-completed Active status')
+      should.equal(response.body.message, 'Cannot set winners for challenge with non-completed ACTIVE status')
     })
 
     it('partially update challenge - Duplicate member with placement 1', async () => {
@@ -1898,7 +1898,7 @@ describe('challenge API E2E tests', () => {
 
       should.equal(response.status, 200)
       const result = response.body
-      should.equal(result.status, 'Completed')
+      should.equal(result.status, 'COMPLETED')
       should.exist(result.winners)
       should.equal(result.winners.length, 3)
       should.equal(result.winners[0].placement, 1)
@@ -1922,7 +1922,7 @@ describe('challenge API E2E tests', () => {
 
       should.equal(response.status, 200)
       const result = response.body
-      should.equal(result.status, 'Completed')
+      should.equal(result.status, 'COMPLETED')
       should.exist(result.winners)
       should.equal(result.winners.length, 3)
       should.equal(result.winners[0].placement, 1)

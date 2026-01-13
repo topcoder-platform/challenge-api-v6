@@ -766,6 +766,180 @@ describe('challenge phase service unit tests', () => {
       }
     })
 
+    it('partially update challenge phase - recalculates successor schedules when review is extended', async function () {
+      this.timeout(50000)
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const appealsPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Appeals',
+          description: 'desc',
+          isOpen: false,
+          duration: 43200,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const appealsResponsePhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Appeals Response',
+          description: 'desc',
+          isOpen: false,
+          duration: 21600,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const approvalPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Approval',
+          description: 'desc',
+          isOpen: false,
+          duration: 10800,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const reviewChallengePhaseId = uuid()
+      const appealsChallengePhaseId = uuid()
+      const appealsResponseChallengePhaseId = uuid()
+      const approvalChallengePhaseId = uuid()
+
+      const reviewStartDate = new Date('2025-08-01T00:00:00.000Z')
+      const reviewDuration = 86400
+      const appealsDuration = 43200
+      const appealsResponseDuration = 21600
+      const approvalDuration = 10800
+
+      const reviewEndDate = new Date(reviewStartDate.getTime() + reviewDuration * 1000)
+      const appealsEndDate = new Date(reviewEndDate.getTime() + appealsDuration * 1000)
+      const appealsResponseEndDate = new Date(appealsEndDate.getTime() + appealsResponseDuration * 1000)
+      const approvalEndDate = new Date(appealsResponseEndDate.getTime() + approvalDuration * 1000)
+
+      await prisma.challengePhase.createMany({
+        data: [
+          {
+            id: reviewChallengePhaseId,
+            challengeId: data.challenge.id,
+            phaseId: reviewPhase.id,
+            name: 'Review',
+            duration: reviewDuration,
+            scheduledStartDate: reviewStartDate,
+            scheduledEndDate: reviewEndDate,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          },
+          {
+            id: appealsChallengePhaseId,
+            challengeId: data.challenge.id,
+            phaseId: appealsPhase.id,
+            predecessor: reviewPhase.id,
+            name: 'Appeals',
+            duration: appealsDuration,
+            scheduledStartDate: reviewEndDate,
+            scheduledEndDate: appealsEndDate,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          },
+          {
+            id: appealsResponseChallengePhaseId,
+            challengeId: data.challenge.id,
+            phaseId: appealsResponsePhase.id,
+            predecessor: appealsPhase.id,
+            name: 'Appeals Response',
+            duration: appealsResponseDuration,
+            scheduledStartDate: appealsEndDate,
+            scheduledEndDate: appealsResponseEndDate,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          },
+          {
+            id: approvalChallengePhaseId,
+            challengeId: data.challenge.id,
+            phaseId: approvalPhase.id,
+            predecessor: appealsResponsePhase.id,
+            name: 'Approval',
+            duration: approvalDuration,
+            scheduledStartDate: appealsResponseEndDate,
+            scheduledEndDate: approvalEndDate,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          }
+        ]
+      })
+
+      try {
+        const extendedDuration = reviewDuration * 2
+        const updatedReview = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          reviewChallengePhaseId,
+          { duration: extendedDuration }
+        )
+
+        const expectedReviewEnd = new Date(
+          reviewStartDate.getTime() + extendedDuration * 1000
+        ).toISOString()
+        should.equal(new Date(updatedReview.scheduledEndDate).toISOString(), expectedReviewEnd)
+
+        const updatedAppeals = await prisma.challengePhase.findUnique({
+          where: { id: appealsChallengePhaseId }
+        })
+        should.equal(new Date(updatedAppeals.scheduledStartDate).toISOString(), expectedReviewEnd)
+        const expectedAppealsEnd = new Date(
+          new Date(expectedReviewEnd).getTime() + appealsDuration * 1000
+        ).toISOString()
+        should.equal(new Date(updatedAppeals.scheduledEndDate).toISOString(), expectedAppealsEnd)
+
+        const updatedAppealsResponse = await prisma.challengePhase.findUnique({
+          where: { id: appealsResponseChallengePhaseId }
+        })
+        should.equal(
+          new Date(updatedAppealsResponse.scheduledStartDate).toISOString(),
+          expectedAppealsEnd
+        )
+        const expectedAppealsResponseEnd = new Date(
+          new Date(expectedAppealsEnd).getTime() + appealsResponseDuration * 1000
+        ).toISOString()
+        should.equal(
+          new Date(updatedAppealsResponse.scheduledEndDate).toISOString(),
+          expectedAppealsResponseEnd
+        )
+
+        const updatedApproval = await prisma.challengePhase.findUnique({
+          where: { id: approvalChallengePhaseId }
+        })
+        should.equal(
+          new Date(updatedApproval.scheduledStartDate).toISOString(),
+          expectedAppealsResponseEnd
+        )
+        const expectedApprovalEnd = new Date(
+          new Date(expectedAppealsResponseEnd).getTime() + approvalDuration * 1000
+        ).toISOString()
+        should.equal(new Date(updatedApproval.scheduledEndDate).toISOString(), expectedApprovalEnd)
+      } finally {
+        await prisma.challengePhase.deleteMany({
+          where: { id: { in: [reviewChallengePhaseId, appealsChallengePhaseId, appealsResponseChallengePhaseId, approvalChallengePhaseId] } }
+        })
+        await prisma.phase.deleteMany({
+          where: { id: { in: [reviewPhase.id, appealsPhase.id, appealsResponsePhase.id, approvalPhase.id] } }
+        })
+      }
+    })
+
     it('partially update challenge phase - cannot close Appeals Response when appeals lack responses', async function () {
       this.timeout(50000)
       const appealsPhaseId = uuid()

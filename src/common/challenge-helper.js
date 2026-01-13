@@ -12,7 +12,7 @@ const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
 
-const SUBMISSION_PHASE_PRIORITY = ["Topcoder Submission", "Submission"];
+const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 
 class ChallengeHelper {
   /**
@@ -104,18 +104,24 @@ class ChallengeHelper {
   validatePrizeSetsAndGetPrizeType(prizeSets) {
     if (_.isEmpty(prizeSets)) return null;
 
-    const firstType = _.get(prizeSets, "[0].prizes[0].type", null);
-    if (!firstType) return null;
-
-    const isConsistent = _.every(prizeSets, (prizeSet) =>
-      _.every(prizeSet.prizes, (prize) => prize.type === firstType)
+    const prizeTypes = _.uniq(
+      _.filter(
+        _.flatMap(prizeSets, (prizeSet) =>
+          _.map(prizeSet.prizes || [], (prize) => _.get(prize, "type"))
+        )
+      )
     );
 
-    if (!isConsistent) {
-      throw new errors.BadRequestError("All prizes must be of the same type");
+    if (prizeTypes.length === 0) {
+      return null;
     }
 
-    return firstType;
+    // If more than one prize type is present, return a hint that the set is mixed.
+    if (prizeTypes.length > 1) {
+      return "mixed";
+    }
+
+    return prizeTypes[0];
   }
 
   /**
@@ -131,10 +137,10 @@ class ChallengeHelper {
     const ids = _.uniq(_.map(challenge.skills, "id"));
 
     if (oldChallenge && oldChallenge.status === ChallengeStatusEnum.COMPLETED) {
-      // Don't allow edit skills for Completed challenges
+      // Don't allow edit skills for COMPLETED challenges
       if (!_.isEqual(ids, _.uniq(_.map(oldChallenge.skills, "id")))) {
         throw new errors.BadRequestError(
-          "Cannot update skills for challenges with Completed status"
+          "Cannot update skills for challenges with COMPLETED status"
         );
       }
     }
@@ -181,7 +187,7 @@ class ChallengeHelper {
 
     if (challenge.status === ChallengeStatusEnum.ACTIVE) {
       throw new errors.BadRequestError(
-        "You cannot create an Active challenge. Please create a Draft challenge and then change the status to Active."
+        "You cannot create an ACTIVE challenge. Please create a DRAFT challenge and then change the status to ACTIVE."
       );
     }
 

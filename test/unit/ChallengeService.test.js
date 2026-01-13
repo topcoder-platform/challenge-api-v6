@@ -257,7 +257,7 @@ describe('challenge service unit tests', () => {
 
     it('create challenge - invalid status', async () => {
       const challengeData = _.clone(testChallengeData)
-      challengeData.status = ['Active']
+      challengeData.status = ['ACTIVE']
       try {
         await service.createChallenge({ isMachine: true, sub: 'sub', userId: 'testuser' }, challengeData, config.M2M_FULL_ACCESS_TOKEN)
       } catch (e) {
@@ -1196,7 +1196,10 @@ describe('challenge service unit tests', () => {
       try {
         await service.updateChallenge({ userId: '16096823', handle: '' }, id, { projectId: 200 })
       } catch (e) {
-        should.equal(e.message, 'Only M2M, admin, challenge\'s copilot or users with full access can perform modification.')
+        should.equal(
+          e.message,
+          'Only M2M, admin, challenge\'s copilot, users with full access, or project members with write/full/copilot access can perform modification.'
+        )
         return
       }
       throw new Error('should not reach here')
@@ -1268,7 +1271,7 @@ describe('challenge service unit tests', () => {
           status: ChallengeStatusEnum.ACTIVE
         })
       } catch (e) {
-        should.equal(e.message.indexOf('Cannot change Completed challenge status to Active status') >= 0, true)
+        should.equal(e.message.indexOf('Cannot change COMPLETED challenge status to ACTIVE status') >= 0, true)
         return
       }
       throw new Error('should not reach here')
