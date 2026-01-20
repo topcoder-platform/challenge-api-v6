@@ -47,6 +47,7 @@ const helper = require("../../../src/common/helper");
 const DEFAULT_ACTOR = process.env.UPDATED_BY || process.env.CREATED_BY || "winner-recalc";
 const CREATED_BY = process.env.CREATED_BY || DEFAULT_ACTOR;
 const UPDATED_BY = process.env.UPDATED_BY || DEFAULT_ACTOR;
+const CONTEST_SUBMISSION_TYPE = "CONTEST_SUBMISSION";
 
 const roundScore = (value) => Math.round(value * 100) / 100;
 
@@ -210,6 +211,7 @@ const getChallengeIds = async (prisma, reviewClient, submissionTable, options) =
       SELECT DISTINCT "challengeId" AS id
       FROM ${submissionTable}
       WHERE "challengeId" IS NOT NULL
+        AND "type" = ${CONTEST_SUBMISSION_TYPE}
       ORDER BY "challengeId" DESC
     `;
     challengeIds = rows.map((row) => row.id).filter(Boolean);
@@ -256,6 +258,7 @@ const loadSubmissionScores = async (reviewClient, tables, challengeId) => {
     FROM ${tables.submission} s
     INNER JOIN ${tables.review} r ON r."submissionId" = s.id
     WHERE s."challengeId" = ${challengeId}
+      AND s."type" = ${CONTEST_SUBMISSION_TYPE}
       AND r."committed" = true
     GROUP BY s.id, s."challengeId", s."memberId", s."submittedDate", s."createdAt"
   `;
