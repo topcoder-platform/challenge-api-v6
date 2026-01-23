@@ -3,15 +3,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-generator externalClient {
-  provider      = "prisma-client-js"
-  output        = "../packages/challenge-prisma-client"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
-}
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
+}
+
+generator externalClient {
+  provider        = "prisma-client-js"
+  output          = "../packages/challenge-prisma-client"
+  previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
 }
 
 // Enum for allowed challenge track values (matches app-constants)
