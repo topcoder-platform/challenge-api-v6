@@ -27,7 +27,7 @@
  * Notes:
  * - Review score is the average of committed final scores (falls back to initial score).
  * - Passing requires review score >= scorecard minimumPassingScore (falls back to minScore).
- * - Review scores only consider committed reviews from the Review phase.
+ * - Review scores only consider committed reviews from the Review/Iterative Review phases.
  * - Winners are capped by placement prize count when placement prizes exist.
  * - Tie breaker for equal scores: earlier submission date wins the higher placement.
  */
@@ -323,10 +323,11 @@ const getReviewPhaseIds = (challenge) => {
   if (!challenge || !Array.isArray(challenge.phases)) {
     return [];
   }
+  const eligiblePhases = new Set(["review", "iterative review"]);
   const phaseIds = new Set();
   challenge.phases.forEach((phase) => {
     const name = String(phase.name || "").trim().toLowerCase();
-    if (name !== "review") {
+    if (!eligiblePhases.has(name)) {
       return;
     }
     [phase.id, phase.phaseId]
@@ -471,7 +472,7 @@ async function main() {
     const reviewPhaseIds = getReviewPhaseIds(challenge);
     if (!isMarathonMatch && reviewPhaseIds.length === 0) {
       console.warn(
-        `Challenge ${challengeId} has no Review phase; skipping review-score processing.`
+        `Challenge ${challengeId} has no Review/Iterative Review phase; skipping review-score processing.`
       );
     }
 
