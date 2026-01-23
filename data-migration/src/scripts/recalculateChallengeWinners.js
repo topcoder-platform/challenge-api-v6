@@ -15,7 +15,7 @@
  *    - node data-migration/src/scripts/recalculateChallengeWinners.js --csv-only --csv-path /tmp/winners.csv
  * 3) Validate CSV output (challenge ordering is DESC by ID):
  *    - Submission ID, Challenge ID, Submitter handle, Submission date, Review score (avg),
- *      Scorecard score (min), Placement
+ *      Scorecard min passing score, Placement
  * 4) Run write mode to apply winners:
  *    - node data-migration/src/scripts/recalculateChallengeWinners.js
  * 5) Optional filters:
@@ -26,7 +26,8 @@
  *
  * Notes:
  * - Review score is the average of committed final scores (falls back to initial score).
- * - Passing requires review score >= scorecard minScore.
+ * - Passing requires review score >= scorecard minimumPassingScore (falls back to minScore).
+ * - Review scores only consider committed reviews from the Review phase.
  * - Winners are capped by placement prize count when placement prizes exist.
  * - Tie breaker for equal scores: earlier submission date wins the higher placement.
  */
@@ -246,9 +247,13 @@ const getChallengeIds = async (prisma, reviewClient, submissionTable, options) =
   return filtered;
 };
 
-const loadSubmissionScores = async (reviewClient, tables, challenge) => {
+const loadSubmissionScores = async (reviewClient, tables, challenge, reviewPhaseIds) => {
   const challengeType = CHALLENGE_TYPE_BY_ID.get(challenge.typeId);
   const isMarathonMatch = challengeType === "Marathon Match";
+  const phaseFilterClause =
+    reviewPhaseIds && reviewPhaseIds.length > 0
+      ? Prisma.sql`r."phaseId" IN (${Prisma.join(reviewPhaseIds)})`
+      : Prisma.sql`FALSE`;
 
   const rows = isMarathonMatch
     ? await reviewClient.$queryRaw`
@@ -286,26 +291,50 @@ const loadSubmissionScores = async (reviewClient, tables, challenge) => {
         WHERE s."challengeId" = ${challenge.id}
           AND s."type" = ${CONTEST_SUBMISSION_TYPE}::reviews."SubmissionType"
           AND r."committed" = true
+          AND ${phaseFilterClause}
         GROUP BY s.id, s."challengeId", s."memberId", s."submittedDate", s."createdAt"
       `;
 
   return rows || [];
 };
 
-const loadScorecardMinScores = async (reviewClient, scorecardTable, scorecardIds) => {
+const loadScorecardPassingScores = async (reviewClient, scorecardTable, scorecardIds) => {
   if (!scorecardIds.length) {
     return new Map();
   }
 
   const rows = await reviewClient.$queryRaw`
-    SELECT id, "minScore"
+    SELECT id, "minScore", "minimumPassingScore"
     FROM ${scorecardTable}
     WHERE id IN (${Prisma.join(scorecardIds)})
   `;
 
   return new Map(
-    (rows || []).map((row) => [row.id, toNumber(row.minScore) ?? 0])
+    (rows || []).map((row) => {
+      const minimumPassingScore = toNumber(row.minimumPassingScore);
+      const minScore = toNumber(row.minScore);
+      const passingScore = minimumPassingScore !== null ? minimumPassingScore : (minScore ?? 0);
+      return [row.id, passingScore];
+    })
   );
+};
+
+const getReviewPhaseIds = (challenge) => {
+  if (!challenge || !Array.isArray(challenge.phases)) {
+    return [];
+  }
+  const phaseIds = new Set();
+  challenge.phases.forEach((phase) => {
+    const name = String(phase.name || "").trim().toLowerCase();
+    if (name !== "review") {
+      return;
+    }
+    [phase.id, phase.phaseId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((value) => phaseIds.add(value));
+  });
+  return Array.from(phaseIds);
 };
 
 const loadSubmitterHandles = async (challengeId) => {
@@ -403,7 +432,7 @@ async function main() {
         "Submitter handle",
         "Submission date",
         "Review score",
-        "Scorecard score",
+        "Scorecard min passing score",
         "Placement",
         "Prize type",
       ]
@@ -421,6 +450,15 @@ async function main() {
 
     const challenge = await prisma.challenge.findUnique({
       where: { id: challengeId },
+      include: {
+        phases: {
+          select: {
+            id: true,
+            name: true,
+            phaseId: true,
+          },
+        },
+      },
     });
     if (!challenge) {
       console.warn(`Challenge ${challengeId} not found, skipping.`);
@@ -428,7 +466,21 @@ async function main() {
       continue;
     }
 
-    const submissions = await loadSubmissionScores(reviewClient, tables, challenge);
+    const challengeType = CHALLENGE_TYPE_BY_ID.get(challenge.typeId);
+    const isMarathonMatch = challengeType === "Marathon Match";
+    const reviewPhaseIds = getReviewPhaseIds(challenge);
+    if (!isMarathonMatch && reviewPhaseIds.length === 0) {
+      console.warn(
+        `Challenge ${challengeId} has no Review phase; skipping review-score processing.`
+      );
+    }
+
+    const submissions = await loadSubmissionScores(
+      reviewClient,
+      tables,
+      challenge,
+      reviewPhaseIds
+    );
 
     if (!submissions.length) {
       skipped += 1;
@@ -442,22 +494,21 @@ async function main() {
           .filter((id) => typeof id === "string" && id.length > 0)
       )
     );
-    const minScoreByScorecard = await loadScorecardMinScores(
+    const passingScoreByScorecard = await loadScorecardPassingScores(
       reviewClient,
       tables.scorecard,
       scorecardIds
     );
-
-    const challengeType = CHALLENGE_TYPE_BY_ID.get(challenge.typeId);
-    const isMarathonMatch = challengeType === "Marathon Match";
 
     const normalized = submissions.map((row) => {
       const reviewScoreValue = toNumber(row.reviewScore);
       const reviewScore = reviewScoreValue === null ? null : roundScore(reviewScoreValue);
       const scorecardScore = isMarathonMatch
         ? 0
-        : toNumber(minScoreByScorecard.get(row.scorecardId)) ?? 0;
-      const isPassing = reviewScore !== null && (isMarathonMatch ? reviewScore > 0 : reviewScore >= scorecardScore);
+        : toNumber(passingScoreByScorecard.get(row.scorecardId)) ?? 0;
+      const isPassing =
+        reviewScore !== null &&
+        (isMarathonMatch ? reviewScore > 0 : reviewScore >= scorecardScore);
       return {
         submissionId: row.submissionId,
         challengeId: row.challengeId,
