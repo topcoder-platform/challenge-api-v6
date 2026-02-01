@@ -769,6 +769,7 @@ exports.PrizeSetTypeEnum = exports.$Enums.PrizeSetTypeEnum = {
   PLACEMENT: 'PLACEMENT',
   COPILOT: 'COPILOT',
   REVIEWER: 'REVIEWER',
+  PASSED_REVIEW: 'PASSED_REVIEW',
   CHECKPOINT: 'CHECKPOINT'
 };
 

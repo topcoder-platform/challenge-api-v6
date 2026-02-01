@@ -1286,6 +1286,23 @@ async function searchChallenges(currentUser, criteria) {
       });
     }
 
+    const taskSyncTargets = challenges.filter((challenge) => {
+      const taskInfo = helper.getTaskInfo(challenge);
+      return taskInfo.isTask && !taskInfo.isAssigned && _.isNil(taskInfo.memberId);
+    });
+    if (taskSyncTargets.length > 0) {
+      await Promise.all(
+        taskSyncTargets.map((challenge) => helper.syncTaskAssignmentFromResources(challenge))
+      );
+    }
+    if (!currentUser) {
+      challenges = challenges.filter((challenge) => {
+        const taskInfo = helper.getTaskInfo(challenge);
+        const hasAssignee = taskInfo.isAssigned || !_.isNil(taskInfo.memberId);
+        return !taskInfo.isTask || !hasAssignee;
+      });
+    }
+
     challenges.forEach((challenge) => {
       prismaHelper.convertModelToResponse(challenge);
     });

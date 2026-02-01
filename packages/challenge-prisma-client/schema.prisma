@@ -57,6 +57,7 @@ enum PrizeSetTypeEnum {
   PLACEMENT
   COPILOT
   REVIEWER
+  PASSED_REVIEW
   CHECKPOINT
 }
 
