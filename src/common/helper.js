@@ -1235,13 +1235,41 @@ function getTaskInfo(challenge) {
 }
 
 /**
+ * Sync task assignment status from submitter resources when task flags are stale.
+ * @param {Object} challenge the challenge to update
+ * @returns {Promise<Object>} task info { isTask, isAssigned, memberId }
+ */
+async function syncTaskAssignmentFromResources(challenge) {
+  const taskInfo = getTaskInfo(challenge);
+  if (!taskInfo.isTask) {
+    return taskInfo;
+  }
+  let isAssigned = taskInfo.isAssigned || !_.isNil(taskInfo.memberId);
+  if (!isAssigned) {
+    const counts = await getChallengeResourcesCount(
+      challenge.id,
+      config.SUBMITTER_ROLE_ID
+    );
+    const submitterCount = _.get(counts, config.SUBMITTER_ROLE_ID, 0);
+    if (submitterCount > 0) {
+      isAssigned = true;
+      if (_.has(challenge, "task")) {
+        _.set(challenge, "task.isAssigned", true);
+      }
+      challenge.taskIsAssigned = true;
+    }
+  }
+  return { ...taskInfo, isAssigned };
+}
+
+/**
  * Ensure the user can access a task challenge.
  *
  * @param {Object} currentUser the user who perform operation
  * @param {Object} challenge the challenge to check
  */
 async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
-  const taskInfo = getTaskInfo(challenge);
+  const taskInfo = await syncTaskAssignmentFromResources(challenge);
   const hasAssignee = taskInfo.isAssigned || !_.isNil(taskInfo.memberId);
   // Check if challenge is task and apply security rules for assigned tasks
   if (taskInfo.isTask && hasAssignee) {
@@ -1651,6 +1679,7 @@ module.exports = {
   getResourceRoles,
   ensureAccessibleByGroupsAccess,
   getTaskInfo,
+  syncTaskAssignmentFromResources,
   ensureUserCanViewChallenge,
   ensureUserCanModifyChallenge,
   userHasFullAccess,
