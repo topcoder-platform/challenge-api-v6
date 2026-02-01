@@ -15,7 +15,7 @@
  *    - node data-migration/src/scripts/recalculateChallengeWinners.js --csv-only --csv-path /tmp/winners.csv
  * 3) Validate CSV output (challenge ordering is DESC by ID):
  *    - Submission ID, Challenge ID, Submitter handle, Submission date, Review score (avg),
- *      Scorecard score (min), Placement
+ *      Scorecard min passing score, Placement
  * 4) Run write mode to apply winners:
  *    - node data-migration/src/scripts/recalculateChallengeWinners.js
  * 5) Optional filters:
@@ -26,7 +26,8 @@
  *
  * Notes:
  * - Review score is the average of committed final scores (falls back to initial score).
- * - Passing requires review score >= scorecard minScore.
+ * - Passing requires review score >= scorecard minimumPassingScore (falls back to minScore).
+ * - Review scores only consider committed reviews from the Review/Iterative Review phases.
  * - Winners are capped by placement prize count when placement prizes exist.
  * - Tie breaker for equal scores: earlier submission date wins the higher placement.
  */
@@ -48,6 +49,13 @@ const DEFAULT_ACTOR = process.env.UPDATED_BY || process.env.CREATED_BY || "winne
 const CREATED_BY = process.env.CREATED_BY || DEFAULT_ACTOR;
 const UPDATED_BY = process.env.UPDATED_BY || DEFAULT_ACTOR;
 const CONTEST_SUBMISSION_TYPE = "CONTEST_SUBMISSION";
+const CHALLENGE_TYPE_BY_ID = new Map([
+  ["ecd58c69-238f-43a4-a4bb-d172719b9f31", "Task"],
+  ["929bc408-9cf2-4b3e-ba71-adfbf693046c", "Marathon Match"],
+  ["927abff4-7af9-4145-8ba1-577c16e64e2e", "Challenge"],
+  ["dc876fa4-ef2d-4eee-b701-b555fcc6544c", "First2Finish"],
+  ["e76afccb-b6c6-488d-950e-76bddfea5df9", "Topgear Task"],
+]);
 
 const roundScore = (value) => Math.round(value * 100) / 100;
 
@@ -211,7 +219,7 @@ const getChallengeIds = async (prisma, reviewClient, submissionTable, options) =
       SELECT DISTINCT "challengeId" AS id
       FROM ${submissionTable}
       WHERE "challengeId" IS NOT NULL
-        AND "type" = ${CONTEST_SUBMISSION_TYPE}
+        AND "type" = ${CONTEST_SUBMISSION_TYPE}::reviews."SubmissionType"
       ORDER BY "challengeId" DESC
     `;
     challengeIds = rows.map((row) => row.id).filter(Boolean);
@@ -239,47 +247,95 @@ const getChallengeIds = async (prisma, reviewClient, submissionTable, options) =
   return filtered;
 };
 
-const loadSubmissionScores = async (reviewClient, tables, challengeId) => {
-  const rows = await reviewClient.$queryRaw`
-    SELECT
-      s.id AS "submissionId",
-      s."challengeId" AS "challengeId",
-      s."memberId" AS "memberId",
-      s."submittedDate" AS "submittedDate",
-      s."createdAt" AS "createdAt",
-      MIN(r."scorecardId") AS "scorecardId",
-      AVG(
-        CASE
-          WHEN r."finalScore" IS NOT NULL THEN r."finalScore"
-          WHEN r."initialScore" IS NOT NULL THEN r."initialScore"
-          ELSE NULL
-        END
-      ) AS "reviewScore"
-    FROM ${tables.submission} s
-    INNER JOIN ${tables.review} r ON r."submissionId" = s.id
-    WHERE s."challengeId" = ${challengeId}
-      AND s."type" = ${CONTEST_SUBMISSION_TYPE}
-      AND r."committed" = true
-    GROUP BY s.id, s."challengeId", s."memberId", s."submittedDate", s."createdAt"
-  `;
+const loadSubmissionScores = async (reviewClient, tables, challenge, reviewPhaseIds) => {
+  const challengeType = CHALLENGE_TYPE_BY_ID.get(challenge.typeId);
+  const isMarathonMatch = challengeType === "Marathon Match";
+  const phaseFilterClause =
+    reviewPhaseIds && reviewPhaseIds.length > 0
+      ? Prisma.sql`r."phaseId" IN (${Prisma.join(reviewPhaseIds)})`
+      : Prisma.sql`FALSE`;
+
+  const rows = isMarathonMatch
+    ? await reviewClient.$queryRaw`
+        SELECT
+          s.id AS "submissionId",
+          s."challengeId" AS "challengeId",
+          s."memberId" AS "memberId",
+          s."submittedDate" AS "submittedDate",
+          s."createdAt" AS "createdAt",
+          MIN(rs."scorecardId") AS "scorecardId",
+          AVG(rs."aggregateScore") AS "reviewScore"
+        FROM ${tables.submission} s
+        INNER JOIN ${tables.reviewSummation} rs ON rs."submissionId" = s.id
+        WHERE s."challengeId" = ${challenge.id}
+          AND s."type" = ${CONTEST_SUBMISSION_TYPE}::reviews."SubmissionType"
+        GROUP BY s.id, s."challengeId", s."memberId", s."submittedDate", s."createdAt"
+      `
+    : await reviewClient.$queryRaw`
+        SELECT
+          s.id AS "submissionId",
+          s."challengeId" AS "challengeId",
+          s."memberId" AS "memberId",
+          s."submittedDate" AS "submittedDate",
+          s."createdAt" AS "createdAt",
+          MIN(r."scorecardId") AS "scorecardId",
+          AVG(
+            CASE
+              WHEN r."finalScore" IS NOT NULL THEN r."finalScore"
+              WHEN r."initialScore" IS NOT NULL THEN r."initialScore"
+              ELSE NULL
+            END
+          ) AS "reviewScore"
+        FROM ${tables.submission} s
+        INNER JOIN ${tables.review} r ON r."submissionId" = s.id
+        WHERE s."challengeId" = ${challenge.id}
+          AND s."type" = ${CONTEST_SUBMISSION_TYPE}::reviews."SubmissionType"
+          AND r."committed" = true
+          AND ${phaseFilterClause}
+        GROUP BY s.id, s."challengeId", s."memberId", s."submittedDate", s."createdAt"
+      `;
 
   return rows || [];
 };
 
-const loadScorecardMinScores = async (reviewClient, scorecardTable, scorecardIds) => {
+const loadScorecardPassingScores = async (reviewClient, scorecardTable, scorecardIds) => {
   if (!scorecardIds.length) {
     return new Map();
   }
 
   const rows = await reviewClient.$queryRaw`
-    SELECT id, "minScore"
+    SELECT id, "minScore", "minimumPassingScore"
     FROM ${scorecardTable}
     WHERE id IN (${Prisma.join(scorecardIds)})
   `;
 
   return new Map(
-    (rows || []).map((row) => [row.id, toNumber(row.minScore) ?? 0])
+    (rows || []).map((row) => {
+      const minimumPassingScore = toNumber(row.minimumPassingScore);
+      const minScore = toNumber(row.minScore);
+      const passingScore = minimumPassingScore !== null ? minimumPassingScore : (minScore ?? 0);
+      return [row.id, passingScore];
+    })
   );
+};
+
+const getReviewPhaseIds = (challenge) => {
+  if (!challenge || !Array.isArray(challenge.phases)) {
+    return [];
+  }
+  const eligiblePhases = new Set(["review", "iterative review"]);
+  const phaseIds = new Set();
+  challenge.phases.forEach((phase) => {
+    const name = String(phase.name || "").trim().toLowerCase();
+    if (!eligiblePhases.has(name)) {
+      return;
+    }
+    [phase.id, phase.phaseId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((value) => phaseIds.add(value));
+  });
+  return Array.from(phaseIds);
 };
 
 const loadSubmitterHandles = async (challengeId) => {
@@ -318,7 +374,7 @@ const buildCsvWriter = (csvPath) => {
   if (!csvPath) {
     return {
       writeLine: (line) => process.stdout.write(`${line}\n`),
-      end: () => {},
+      end: () => { },
     };
   }
 
@@ -350,6 +406,7 @@ async function main() {
     submission: buildSchemaTable(reviewSchema, "submission"),
     review: buildSchemaTable(reviewSchema, "review"),
     scorecard: buildSchemaTable(reviewSchema, "scorecard"),
+    reviewSummation: buildSchemaTable(reviewSchema, "reviewSummation"),
   };
 
   const prisma = new PrismaClient();
@@ -376,8 +433,9 @@ async function main() {
         "Submitter handle",
         "Submission date",
         "Review score",
-        "Scorecard score",
+        "Scorecard min passing score",
         "Placement",
+        "Prize type",
       ]
         .map(toCsvValue)
         .join(",")
@@ -390,7 +448,40 @@ async function main() {
 
   for (const challengeId of challengeIds) {
     processed += 1;
-    const submissions = await loadSubmissionScores(reviewClient, tables, challengeId);
+
+    const challenge = await prisma.challenge.findUnique({
+      where: { id: challengeId },
+      include: {
+        phases: {
+          select: {
+            id: true,
+            name: true,
+            phaseId: true,
+          },
+        },
+      },
+    });
+    if (!challenge) {
+      console.warn(`Challenge ${challengeId} not found, skipping.`);
+      skipped += 1;
+      continue;
+    }
+
+    const challengeType = CHALLENGE_TYPE_BY_ID.get(challenge.typeId);
+    const isMarathonMatch = challengeType === "Marathon Match";
+    const reviewPhaseIds = getReviewPhaseIds(challenge);
+    if (!isMarathonMatch && reviewPhaseIds.length === 0) {
+      console.warn(
+        `Challenge ${challengeId} has no Review/Iterative Review phase; skipping review-score processing.`
+      );
+    }
+
+    const submissions = await loadSubmissionScores(
+      reviewClient,
+      tables,
+      challenge,
+      reviewPhaseIds
+    );
 
     if (!submissions.length) {
       skipped += 1;
@@ -404,7 +495,7 @@ async function main() {
           .filter((id) => typeof id === "string" && id.length > 0)
       )
     );
-    const minScoreByScorecard = await loadScorecardMinScores(
+    const passingScoreByScorecard = await loadScorecardPassingScores(
       reviewClient,
       tables.scorecard,
       scorecardIds
@@ -413,8 +504,12 @@ async function main() {
     const normalized = submissions.map((row) => {
       const reviewScoreValue = toNumber(row.reviewScore);
       const reviewScore = reviewScoreValue === null ? null : roundScore(reviewScoreValue);
-      const scorecardScore = toNumber(minScoreByScorecard.get(row.scorecardId)) ?? 0;
-      const isPassing = reviewScore !== null && reviewScore >= scorecardScore;
+      const scorecardScore = isMarathonMatch
+        ? 0
+        : toNumber(passingScoreByScorecard.get(row.scorecardId)) ?? 0;
+      const isPassing =
+        reviewScore !== null &&
+        (isMarathonMatch ? reviewScore > 0 : reviewScore >= scorecardScore);
       return {
         submissionId: row.submissionId,
         challengeId: row.challengeId,
@@ -449,16 +544,31 @@ async function main() {
     });
 
     const placementBySubmission = new Map();
-    passingSorted.forEach((row, index) => {
-      placementBySubmission.set(row.submissionId, index + 1);
-    });
 
     const placementPrizeCount = await getPlacementPrizeCount(prisma, challengeId);
     const winnerLimit = placementPrizeCount > 0 ? placementPrizeCount : passingSorted.length;
     const winners = passingSorted.slice(0, winnerLimit);
+    const passedReview = passingSorted.slice(winnerLimit);
+
+    winners.forEach((row, index) => {
+      placementBySubmission.set(row.submissionId, {
+        placement: index + 1,
+        type: PrizeSetTypeEnum.PLACEMENT,
+      });
+    });
+    passedReview.forEach((row, index) => {
+      placementBySubmission.set(row.submissionId, {
+        placement: index + 1,
+        type: PrizeSetTypeEnum.PASSED_REVIEW,
+      });
+    });
+
+    console.info(
+      `Challenge ${challengeId}: ${winners.length} winner(s), ${passedReview.length} passed review`
+    );
 
     let handleMap = null;
-    if (csvWriter || (!options.csvOnly && winners.length > 0)) {
+    if (csvWriter || (!options.csvOnly && (winners.length > 0 || passedReview.length > 0))) {
       handleMap = await loadSubmitterHandles(challengeId);
     }
 
@@ -471,7 +581,9 @@ async function main() {
         return String(a.submissionId).localeCompare(String(b.submissionId));
       });
       rowsForCsv.forEach((row) => {
-        const placement = placementBySubmission.get(row.submissionId) || "";
+        const placementInfo = placementBySubmission.get(row.submissionId);
+        const placement = placementInfo ? placementInfo.placement : "";
+        const prizeType = placementInfo ? placementInfo.type : "";
         const submitterHandle =
           handleMap && row.memberId ? handleMap.get(String(row.memberId)) || "" : "";
         csvWriter.writeLine(
@@ -479,10 +591,11 @@ async function main() {
             row.submissionId,
             row.challengeId,
             submitterHandle,
-            toIsoString(row.submittedAt),
+            toIsoString(row.submittedAt || row.createdAt),
             row.reviewScore === null ? "" : row.reviewScore,
             row.scorecardScore,
             placement,
+            prizeType,
           ]
             .map(toCsvValue)
             .join(",")
@@ -491,37 +604,51 @@ async function main() {
     }
 
     if (!options.csvOnly) {
-      const winnerRecords = winners
-        .map((row, index) => {
-          const parsedUserId = Number.parseInt(row.memberId, 10);
-          if (!Number.isFinite(parsedUserId)) {
-            console.warn(
-              `Skipping winner for submission ${row.submissionId} (challenge ${challengeId}) due to invalid memberId ${row.memberId}`
-            );
-            return null;
-          }
-          const handle =
-            (handleMap && handleMap.get(String(parsedUserId))) ||
-            (handleMap && handleMap.get(String(row.memberId))) ||
-            String(parsedUserId);
-          return {
-            challengeId,
-            userId: parsedUserId,
-            handle,
-            placement: index + 1,
-            type: PrizeSetTypeEnum.PLACEMENT,
-            createdBy: CREATED_BY,
-            updatedBy: UPDATED_BY,
-          };
-        })
-        .filter(Boolean);
+      const buildRecord = (row) => {
+        const placementInfo = placementBySubmission.get(row.submissionId);
+        if (!placementInfo) {
+          console.warn(
+            `Skipping entry for submission ${row.submissionId} (challenge ${challengeId}) due to missing placement info`
+          );
+          return null;
+        }
+        const { placement, type } = placementInfo;
+        const parsedUserId = Number.parseInt(row.memberId, 10);
+        if (!Number.isFinite(parsedUserId)) {
+          console.warn(
+            `Skipping ${type} entry for submission ${row.submissionId} (challenge ${challengeId}) due to invalid memberId ${row.memberId}`
+          );
+          return null;
+        }
+        const handle =
+          (handleMap && handleMap.get(String(parsedUserId))) ||
+          (handleMap && handleMap.get(String(row.memberId))) ||
+          String(parsedUserId);
+        return {
+          challengeId,
+          userId: parsedUserId,
+          handle,
+          placement,
+          type,
+          createdBy: CREATED_BY,
+          updatedBy: UPDATED_BY,
+        };
+      };
+
+      const winnerRecords = winners.map(buildRecord).filter(Boolean);
+
+      const passedReviewRecords = passedReview.map(buildRecord).filter(Boolean);
 
       await prisma.$transaction(async (tx) => {
         await tx.challengeWinner.deleteMany({
-          where: { challengeId, type: PrizeSetTypeEnum.PLACEMENT },
+          where: {
+            challengeId,
+            type: { in: [PrizeSetTypeEnum.PLACEMENT, PrizeSetTypeEnum.PASSED_REVIEW] },
+          },
         });
-        if (winnerRecords.length > 0) {
-          await tx.challengeWinner.createMany({ data: winnerRecords });
+        const toCreate = [...winnerRecords, ...passedReviewRecords];
+        if (toCreate.length > 0) {
+          await tx.challengeWinner.createMany({ data: toCreate });
         }
       });
 

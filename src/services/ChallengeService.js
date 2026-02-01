@@ -642,6 +642,7 @@ async function searchChallenges(currentUser, criteria) {
   ];
 
   const _hasAdminRole = hasAdminRole(currentUser);
+  const _isMachineToken = _.get(currentUser, "isMachine", false);
 
   const normalizeGroupIdValue = (value) => {
     if (_.isNil(value)) {
@@ -1005,14 +1006,27 @@ async function searchChallenges(currentUser, criteria) {
     ? _.toString(criteria.memberId)
     : null;
   const currentUserMemberId =
-    currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)
+    currentUser && !_hasAdminRole && !_isMachineToken
       ? _.toString(currentUser.userId)
       : null;
   const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
   const isSelfMemberSearch =
     Boolean(requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId);
   const shouldApplyGroupVisibilityFilter =
-    Boolean(currentUser && !currentUser.isMachine && !_hasAdminRole && !isSelfMemberSearch);
+    Boolean(currentUser && !_isMachineToken && !_hasAdminRole && !isSelfMemberSearch);
+
+  let hasProjectManagerAccessForSearch = false;
+  if (
+    currentUser &&
+    !_hasAdminRole &&
+    !_isMachineToken &&
+    !_.isNil(criteria.projectId)
+  ) {
+    hasProjectManagerAccessForSearch = await helper.userHasProjectManagerAccess(
+      criteria.projectId,
+      currentUser
+    );
+  }
 
   let groupsToFilter = [];
   let accessibleGroups = [];
@@ -1126,7 +1140,10 @@ async function searchChallenges(currentUser, criteria) {
     // When we already restrict the result set to a specific member,
     // rerunning the generic task visibility filter is redundant.
     excludeTasks = false;
-  } else if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+  } else if (
+    currentUser &&
+    (_hasAdminRole || _isMachineToken || hasProjectManagerAccessForSearch)
+  ) {
     // if you're an admin or m2m, security rules wont be applied
     excludeTasks = false;
   }
@@ -1139,7 +1156,7 @@ async function searchChallenges(currentUser, criteria) {
    * For admins/m2m:
    * - All tasks will be returned
    */
-  if (currentUser && (_hasAdminRole || _.get(currentUser, "isMachine", false))) {
+  if (currentUser && (_hasAdminRole || _isMachineToken)) {
     // For admins/m2m, allow filtering based on task properties
     if (!_.isNil(criteria.isTask)) {
       prismaFilter.where.AND.push({
@@ -1171,8 +1188,9 @@ async function searchChallenges(currentUser, criteria) {
     taskFilter.push({
       taskIsTask: true,
       taskIsAssigned: false,
+      taskMemberId: null,
     });
-    if (currentUser && !_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
+    if (currentUser && !_hasAdminRole && !_isMachineToken) {
       taskFilter.push({
         taskMemberId: currentUser.userId,
       });
@@ -1973,6 +1991,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
     return _.pick(challenge, ["id", "legacyId"]);
   }
   await helper.ensureUserCanViewChallenge(currentUser, challenge);
+  const taskInfo = helper.getTaskInfo(challenge);
 
   // Remove privateDescription for unregistered users
   if (currentUser) {
@@ -1981,8 +2000,8 @@ async function getChallenge(currentUser, id, checkIfExists) {
       if (_.isEmpty(challenge.privateDescription)) {
         _.unset(challenge, "privateDescription");
       } else if (
-        !_.get(challenge, "task.isTask", false) ||
-        !_.get(challenge, "task.isAssigned", false)
+        !taskInfo.isTask ||
+        !taskInfo.isAssigned
       ) {
         const hasProjectWriteAccess = await helper.userHasProjectWriteAccess(
           challenge.projectId,

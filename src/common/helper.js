@@ -21,6 +21,7 @@ const { hasAdminRole } = require("./role-helper");
 
 const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
 const PROJECT_WRITE_ACCESS_ROLES = new Set(["manager", "copilot", "customer", "write"]);
+const PROJECT_MANAGER_ACCESS_ROLES = new Set(["manager"]);
 
 // Bus API Client
 let busApiClient;
@@ -732,6 +733,41 @@ async function userHasProjectWriteAccess(projectId, currentUser) {
 }
 
 /**
+ * Check if a user is a project manager for a project.
+ * @param {Number|String} projectId the project id
+ * @param {Object} currentUser the current user
+ * @returns {Promise<Boolean>} true if user has project manager access
+ */
+async function userHasProjectManagerAccess(projectId, currentUser) {
+  if (!projectId || !currentUser || !currentUser.userId) {
+    return false;
+  }
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+  try {
+    const project = await projectHelper.getProject(projectId, currentUser);
+    const member = _.find(
+      _.get(project, "members", []),
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+    );
+    const role = _.toLower(_.get(member, "role", ""));
+    return PROJECT_MANAGER_ACCESS_ROLES.has(role);
+  } catch (err) {
+    const status = _.get(err, "httpStatus") || _.get(err, "response.status");
+    if (status === HttpStatus.FORBIDDEN || status === HttpStatus.NOT_FOUND) {
+      return false;
+    }
+    logger.debug(
+      `helper.userHasProjectManagerAccess: error for project ${projectId} - status ${
+        status || "n/a"
+      }: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
  * Get all user groups
  * @param {String} userId the user id
  * @returns {Promise<Array>} the user groups
@@ -1181,24 +1217,62 @@ async function ensureAccessibleByGroupsAccess(currentUser, challenge) {
 }
 
 /**
+ * Get task info from either flattened or nested task fields.
+ * @param {Object} challenge the challenge to read
+ * @returns {Object} task info { isTask, isAssigned, memberId }
+ */
+function getTaskInfo(challenge) {
+  const taskIsTask = _.get(challenge, "task.isTask");
+  const taskIsAssigned = _.get(challenge, "task.isAssigned");
+  const taskMemberId = _.get(challenge, "task.memberId");
+  return {
+    isTask: _.isNil(taskIsTask) ? _.get(challenge, "taskIsTask", false) : taskIsTask,
+    isAssigned: _.isNil(taskIsAssigned)
+      ? _.get(challenge, "taskIsAssigned", false)
+      : taskIsAssigned,
+    memberId: !_.isNil(taskMemberId) ? taskMemberId : _.get(challenge, "taskMemberId", null),
+  };
+}
+
+/**
  * Ensure the user can access a task challenge.
  *
  * @param {Object} currentUser the user who perform operation
  * @param {Object} challenge the challenge to check
  */
 async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
-  let memberResources;
-  // Check if challenge is task and apply security rules
-  if (_.get(challenge, "task.isTask", false) && _.get(challenge, "task.isAssigned", false)) {
-    if (currentUser) {
-      if (!currentUser.isMachine) {
-        memberResources = await listResourcesByMemberAndChallenge(currentUser.userId, challenge.id);
-      }
+  const taskInfo = getTaskInfo(challenge);
+  const hasAssignee = taskInfo.isAssigned || !_.isNil(taskInfo.memberId);
+  // Check if challenge is task and apply security rules for assigned tasks
+  if (taskInfo.isTask && hasAssignee) {
+    if (!currentUser) {
+      throw new errors.ForbiddenError(`You don't have access to view this challenge`);
     }
-    const canAccesChallenge = _.isUndefined(currentUser)
-      ? false
-      : currentUser.isMachine || hasAdminRole(currentUser) || !_.isEmpty(memberResources);
-    if (!canAccesChallenge) {
+    if (currentUser.isMachine || hasAdminRole(currentUser)) {
+      return;
+    }
+    if (
+      !_.isNil(taskInfo.memberId) &&
+      _.toString(taskInfo.memberId) === _.toString(currentUser.userId)
+    ) {
+      return;
+    }
+    const hasProjectManagerAccess = await userHasProjectManagerAccess(
+      challenge.projectId,
+      currentUser
+    );
+    if (hasProjectManagerAccess) {
+      return;
+    }
+    const memberResources = await listResourcesByMemberAndChallenge(
+      currentUser.userId,
+      challenge.id
+    );
+    const isSubmitterResource = _.some(
+      memberResources,
+      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+    );
+    if (!isSubmitterResource) {
       throw new errors.ForbiddenError(`You don't have access to view this challenge`);
     }
   }
@@ -1576,10 +1650,12 @@ module.exports = {
   expandWithParentGroups,
   getResourceRoles,
   ensureAccessibleByGroupsAccess,
+  getTaskInfo,
   ensureUserCanViewChallenge,
   ensureUserCanModifyChallenge,
   userHasFullAccess,
   userHasProjectWriteAccess,
+  userHasProjectManagerAccess,
   sumOfPrizes,
   getProjectIdByRoundId,
   getGroupById,
