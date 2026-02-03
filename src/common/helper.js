@@ -1296,6 +1296,16 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
       currentUser.userId,
       challenge.id
     );
+    const copilotRoleIds = _.map(
+      [].concat(config.COPILOT_RESOURCE_ROLE_IDS || []),
+      (roleId) => _.toString(roleId)
+    );
+    const isCopilotResource = _.some(memberResources, (resource) =>
+      copilotRoleIds.includes(_.toString(resource.roleId))
+    );
+    if (isCopilotResource) {
+      return;
+    }
     const isSubmitterResource = _.some(
       memberResources,
       (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
