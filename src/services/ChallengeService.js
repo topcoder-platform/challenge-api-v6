@@ -2975,7 +2975,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (!_.isNil(updateData.reviewers)) {
       await tx.challengeReviewer.deleteMany({ where: { challengeId } });
     }
-    if (_.isNil(updateData.winners)) {
+    if (!_.isNil(updateData.winners)) {
       await tx.challengeWinner.deleteMany({ where: { challengeId } });
     }
     if (_.isNil(updateData.attachment)) {
