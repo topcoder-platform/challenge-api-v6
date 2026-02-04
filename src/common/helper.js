@@ -22,6 +22,7 @@ const { hasAdminRole } = require("./role-helper");
 const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
 const PROJECT_WRITE_ACCESS_ROLES = new Set(["manager", "copilot", "customer", "write"]);
 const PROJECT_MANAGER_ACCESS_ROLES = new Set(["manager"]);
+const PROJECT_TASK_VIEW_ACCESS_ROLES = new Set(["manager", "copilot"]);
 
 // Bus API Client
 let busApiClient;
@@ -768,6 +769,41 @@ async function userHasProjectManagerAccess(projectId, currentUser) {
 }
 
 /**
+ * Check if a user is a project manager or copilot for a project.
+ * @param {Number|String} projectId the project id
+ * @param {Object} currentUser the current user
+ * @returns {Promise<Boolean>} true if user has project task-view access
+ */
+async function userHasProjectTaskViewAccess(projectId, currentUser) {
+  if (!projectId || !currentUser || !currentUser.userId) {
+    return false;
+  }
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+  try {
+    const project = await projectHelper.getProject(projectId, currentUser);
+    const member = _.find(
+      _.get(project, "members", []),
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+    );
+    const role = _.toLower(_.get(member, "role", ""));
+    return PROJECT_TASK_VIEW_ACCESS_ROLES.has(role);
+  } catch (err) {
+    const status = _.get(err, "httpStatus") || _.get(err, "response.status");
+    if (status === HttpStatus.FORBIDDEN || status === HttpStatus.NOT_FOUND) {
+      return false;
+    }
+    logger.debug(
+      `helper.userHasProjectTaskViewAccess: error for project ${projectId} - status ${
+        status || "n/a"
+      }: ${err.message}`
+    );
+    return false;
+  }
+}
+
+/**
  * Get all user groups
  * @param {String} userId the user id
  * @returns {Promise<Array>} the user groups
@@ -1285,11 +1321,11 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
     ) {
       return;
     }
-    const hasProjectManagerAccess = await userHasProjectManagerAccess(
+    const hasProjectTaskViewAccess = await userHasProjectTaskViewAccess(
       challenge.projectId,
       currentUser
     );
-    if (hasProjectManagerAccess) {
+    if (hasProjectTaskViewAccess) {
       return;
     }
     const memberResources = await listResourcesByMemberAndChallenge(
@@ -1300,9 +1336,11 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
       [].concat(config.COPILOT_RESOURCE_ROLE_IDS || []),
       (roleId) => _.toString(roleId)
     );
-    const isCopilotResource = _.some(memberResources, (resource) =>
-      copilotRoleIds.includes(_.toString(resource.roleId))
-    );
+    const isCopilotResource = _.some(memberResources, (resource) => {
+      const roleId = _.toString(resource.roleId);
+      const roleName = _.toLower(_.get(resource, "roleName", ""));
+      return copilotRoleIds.includes(roleId) || roleName === "copilot";
+    });
     if (isCopilotResource) {
       return;
     }
