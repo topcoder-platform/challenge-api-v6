@@ -482,8 +482,11 @@ async function searchChallengesViaMemberAccess({
 }) {
   const chunkSize = Number(process.env.SEARCH_MEMBER_CHUNK_SIZE || 500);
   const memberChallengeIdStart = Date.now();
-  const memberChallengeIdRows =
-    await prisma.$queryRaw`SELECT DISTINCT r."challengeId" FROM resources."Resource" r WHERE r."memberId" = ${requestedMemberId} AND r."challengeId" IS NOT NULL`;
+  const memberChallengeIdRows = await prisma.memberChallengeAccess.findMany({
+    where: { memberId: requestedMemberId },
+    select: { challengeId: true },
+    distinct: ["challengeId"],
+  });
   const memberChallengeIds = memberChallengeIdRows
     .map((row) => row.challengeId)
     .filter((id) => !_.isNil(id));
