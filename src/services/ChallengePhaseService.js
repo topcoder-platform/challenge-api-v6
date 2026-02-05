@@ -743,6 +743,9 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     }
   }
   const dataToUpdate = _.omit(data, "constraints");
+  const shouldRefreshPhaseNames =
+    Object.prototype.hasOwnProperty.call(data, "isOpen") ||
+    Object.prototype.hasOwnProperty.call(data, "name");
   const result = await prisma.$transaction(async (tx) => {
     const updatedPhase = await tx.challengePhase.update({
       data: dataToUpdate,
@@ -784,6 +787,22 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
           });
         }
       }
+    }
+    if (shouldRefreshPhaseNames) {
+      const openPhases = await tx.challengePhase.findMany({
+        where: { challengeId, isOpen: true },
+        select: { name: true },
+      });
+      const currentPhaseNames = _.uniq(
+        openPhases.map((phase) => phase.name).filter((name) => !_.isNil(name))
+      );
+      await tx.challenge.update({
+        where: { id: challengeId },
+        data: {
+          currentPhaseNames,
+          updatedBy: currentUserId,
+        },
+      });
     }
     return updatedPhase;
   });
