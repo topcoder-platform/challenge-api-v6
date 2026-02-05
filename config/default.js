@@ -60,7 +60,10 @@ module.exports = {
   // copilot resource role ids allowed to upload attachment
   COPILOT_RESOURCE_ROLE_IDS: process.env.COPILOT_RESOURCE_ROLE_IDS
     ? process.env.COPILOT_RESOURCE_ROLE_IDS.split(",")
-    : ["10ba038e-48da-487b-96e8-8d3b99b6d18b"],
+    : [
+        "10ba038e-48da-487b-96e8-8d3b99b6d18b",
+        "cfe12b3f-2a24-4639-9d8b-ec86726f76bd",
+      ],
   SUBMITTER_ROLE_ID: process.env.SUBMITTER_ROLE_ID || "732339e7-8e30-49d7-9198-cccf9451e221",
   SUBMITTER_ROLE_NAME: process.env.SUBMITTER_ROLE_NAME || "Submitter",
   // registrant role id (defaults to SUBMITTER_ROLE_ID)
