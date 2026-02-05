@@ -91,6 +91,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
     "tags",
     "projectId",
     "startDate",
+    "endDate",
     "groups",
     "legacyId",
     "wiproAllowed",

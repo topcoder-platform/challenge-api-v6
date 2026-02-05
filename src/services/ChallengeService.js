@@ -2295,6 +2295,7 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
   return {
     shouldTriggerPayments: true,
     completionTime,
+    startTime,
   };
 }
 
@@ -2689,6 +2690,25 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
     if (!_.isNil(endSource)) {
       data.endDate = convertToISOString(endSource);
+    }
+  }
+
+  if (taskCompletionInfo) {
+    const { completionTime, startTime } = taskCompletionInfo;
+    if (_.isNil(data.startDate)) {
+      data.startDate = startTime;
+    }
+    data.endDate = completionTime;
+
+    if (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0) {
+      const normalizedStartDate = data.startDate || startTime;
+      phasesForUpdate = phasesForUpdate.map((phase) => ({
+        ...phase,
+        actualStartDate: phase.actualStartDate || normalizedStartDate,
+        actualEndDate: phase.actualEndDate || completionTime,
+        isOpen: false,
+      }));
+      data.phases = phasesForUpdate;
     }
   }
 
