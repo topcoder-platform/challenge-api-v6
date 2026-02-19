@@ -3597,6 +3597,18 @@ definitions:
             type: string
             description: The timeline template id.
             format: UUID
+          typeId:
+            type: string
+            description: The challenge type id mapped to this timeline template row.
+            format: UUID
+          trackId:
+            type: string
+            description: The challenge track id mapped to this timeline template row.
+            format: UUID
+          isDefault:
+            type: boolean
+            description: Indicates this timeline template is the default for the mapped type/track.
+            default: false
       - $ref: "#/definitions/TimelineTemplateData"
     required:
       - id

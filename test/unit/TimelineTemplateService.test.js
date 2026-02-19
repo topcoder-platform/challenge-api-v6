@@ -207,6 +207,62 @@ describe('timeline template service unit tests', () => {
       should.equal(result.result[0].phases[0].defaultDuration, 123)
     })
 
+    it('search timeline templates includes challenge timeline mapping data', async () => {
+      const challengeTypeId = uuid()
+      const challengeTrackId = uuid()
+      const challengeTimelineTemplateId = uuid()
+
+      await prisma.challengeType.create({
+        data: {
+          id: challengeTypeId,
+          name: `type-${new Date().getTime()}`,
+          description: 'desc',
+          isActive: true,
+          abbreviation: `tp-${new Date().getTime()}`,
+          createdBy: authUser.userId,
+          updatedBy: authUser.userId
+        }
+      })
+
+      await prisma.challengeTrack.create({
+        data: {
+          id: challengeTrackId,
+          name: `track-${new Date().getTime()}`,
+          description: 'desc',
+          isActive: true,
+          abbreviation: `tr-${new Date().getTime()}`,
+          createdBy: authUser.userId,
+          updatedBy: authUser.userId
+        }
+      })
+
+      try {
+        await prisma.challengeTimelineTemplate.create({
+          data: {
+            id: challengeTimelineTemplateId,
+            isDefault: true,
+            timelineTemplateId: id,
+            trackId: challengeTrackId,
+            typeId: challengeTypeId,
+            createdBy: authUser.userId,
+            updatedBy: authUser.userId
+          }
+        })
+
+        const result = await service.searchTimelineTemplates({ page: 1, perPage: 10, name })
+        should.equal(result.total, 1)
+        should.equal(result.result.length, 1)
+        should.equal(result.result[0].id, id)
+        should.equal(result.result[0].isDefault, true)
+        should.equal(result.result[0].trackId, challengeTrackId)
+        should.equal(result.result[0].typeId, challengeTypeId)
+      } finally {
+        await prisma.challengeTimelineTemplate.deleteMany({ where: { id: challengeTimelineTemplateId } })
+        await prisma.challengeType.deleteMany({ where: { id: challengeTypeId } })
+        await prisma.challengeTrack.deleteMany({ where: { id: challengeTrackId } })
+      }
+    })
+
     it('search timeline templates successfully 2', async () => {
       const result = await service.searchTimelineTemplates({ name: 'xyzxyz123' })
       should.equal(result.total, 0)
