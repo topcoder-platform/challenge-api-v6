@@ -1644,6 +1644,7 @@ async function sendSelfServiceNotification(type, recipients, data) {
  * @param {String} challenge name
  * @param {String} challenge phase name
  * @param {String} operation to be performed on the phase - open | close | reopen
+ * @param {String|Date} at - The date/time when the phase opened/closed
  */
 function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, operation, at }) {
   const isOpen = operation === 'open' || operation === 'reopen';
@@ -1663,7 +1664,7 @@ function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, oper
 /**
  * Send phase change notification
  * @param {String} type the notification type
- * @param {Array} recipients the array of recipients in { userId || email || handle } format
+ * @param {Array} recipients the array of recipients emails
  * @param {Object} data the data
  */
 async function sendPhaseChangeNotification(type, recipients, data) {
