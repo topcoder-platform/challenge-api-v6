@@ -1703,23 +1703,20 @@ async function sendPhaseChangeNotification(type, recipients, data) {
     );
 
 
-    await postBusEvent('external.action.email', {
-      notifications: [
-        {
-          serviceId: 'email',
-          type,
-          details: {
-            from: config.EMAIL_FROM,
-            recipients: [...safeRecipients],
-            cc: [...(settings.cc || [])],
-            data: {
-              ...data,
-            },
-            sendgridTemplateId: settings.sendgridTemplateId,
-            version: 'v3',
-          },
-        },
-      ], 
+    await postBusEvent('external.action.email', 
+      {
+        from: config.EMAIL_FROM,
+        replyTo: config.EMAIL_FROM,
+        recipients: safeRecipients,
+        data: data,
+        sendgrid_template_id: settings.sendgridTemplateId,
+        version: 'v3',
+      }, 
+    );
+    
+    logger.debug(`sendPhaseChangeNotification: published`, {
+      type,
+      recipientsCount: safeRecipients.length,
     });
   } catch (e) {
     logger.debug(`Failed to post notification ${type}: ${e.message}`);
