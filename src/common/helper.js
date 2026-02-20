@@ -1614,7 +1614,7 @@ async function getStandSkills(ids) {
  */
 async function sendSelfServiceNotification(type, recipients, data) {
   try {
-    await postBusEvent('external.action.email', {
+    await postBusEvent(constants.Topics.Notifications, {
       notifications: [
         {
           serviceId: "email",
@@ -1703,7 +1703,7 @@ async function sendPhaseChangeNotification(type, recipients, data) {
     );
 
 
-    await postBusEvent(constants.Topics.Notifications, {
+    await postBusEvent('external.action.email', {
       notifications: [
         {
           serviceId: 'email',
