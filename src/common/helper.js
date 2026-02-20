@@ -1614,7 +1614,7 @@ async function getStandSkills(ids) {
  */
 async function sendSelfServiceNotification(type, recipients, data) {
   try {
-    await postBusEvent(constants.Topics.Notifications, {
+    await postBusEvent(constants.Topics.ChallengePhaseUpdated, {
       notifications: [
         {
           serviceId: "email",
