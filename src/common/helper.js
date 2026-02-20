@@ -1688,21 +1688,6 @@ async function sendPhaseChangeNotification(type, recipients, data) {
       return;
     }
 
-    logger.debug(
-      `sendPhaseChangeNotification: preparing email`,
-      {
-        type,
-        recipientsCount: safeRecipients.length,
-        recipients: safeRecipients,
-      }
-    );
-
-    logger.debug(
-      `sendPhaseChangeNotification: payload`,
-      data
-    );
-
-
     await postBusEvent('external.action.email', 
       {
         from: config.EMAIL_FROM,
@@ -1713,11 +1698,6 @@ async function sendPhaseChangeNotification(type, recipients, data) {
         version: 'v3',
       }, 
     );
-    
-    logger.debug(`sendPhaseChangeNotification: published`, {
-      type,
-      recipientsCount: safeRecipients.length,
-    });
   } catch (e) {
     logger.debug(`Failed to post notification ${type}: ${e.message}`);
   }

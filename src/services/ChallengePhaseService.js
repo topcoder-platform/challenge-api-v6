@@ -851,12 +851,6 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         )
       );
 
-      logger.debug(`phase change: resolved emails`, {
-        challengeId,
-        emailsCount: recipients.length,
-        emails: recipients,
-      });
-
       if (!recipients.length) {
         logger.debug(
           `phase change notification skipped: no recipients for challenge ${challengeId}`
