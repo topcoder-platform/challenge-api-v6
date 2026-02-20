@@ -96,6 +96,7 @@ const DisabledTopics = [
   Topics.ChallengeTimelineTemplateCreated,
   Topics.ChallengeTimelineTemplateUpdated,
   Topics.ChallengeTimelineTemplateDeleted,
+  Topics.ChallengePhaseUpdated,
   Topics.ChallengePhaseDeleted,
   Topics.DefaultChallengeReviewerCreated,
   Topics.DefaultChallengeReviewerUpdated,
