@@ -1688,6 +1688,21 @@ async function sendPhaseChangeNotification(type, recipients, data) {
       return;
     }
 
+    logger.debug(
+      `sendPhaseChangeNotification: preparing email`,
+      {
+        type,
+        recipientsCount: safeRecipients.length,
+        recipients: safeRecipients,
+      }
+    );
+
+    logger.debug(
+      `sendPhaseChangeNotification: payload`,
+      data
+    );
+
+
     await postBusEvent(constants.Topics.Notifications, {
       notifications: [
         {
