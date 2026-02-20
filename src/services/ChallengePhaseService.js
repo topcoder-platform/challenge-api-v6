@@ -887,7 +887,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       at,
     });
 
-    await sendPhaseChangeNotification(notificationType, recipients, payload);
+    await helper.sendPhaseChangeNotification(notificationType, recipients, payload);
   } catch (e) {
     logger.debug(
       `phase change notification failed for challenge ${challengeId}, phase ${id}: ${e.message}`
