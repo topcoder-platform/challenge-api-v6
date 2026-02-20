@@ -845,29 +845,20 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     // build recipients
     const resources = await helper.getChallengeResources(challengeId);
 
-    const seen = new Set();
-    const recipients = [];
+    const recipients = Array.from(
+      new Set(
+        (resources || [])
+          .map(r => r?.email || r?.memberEmail)
+          .filter(Boolean)
+          .map(e => String(e).trim().toLowerCase())
+      )
+    );
 
-    for (const r of resources || []) {
-      const userId = r?.memberId ? String(r.memberId).trim() : null;
-      const handle = r?.memberHandle ? String(r.memberHandle).trim() : null;
-
-      let key = null;
-      let rec = null;
-
-      if (userId) {
-        key = `userId:${userId}`;
-        rec = { userId };
-      } else if (handle) {
-        const norm = handle.toLowerCase();
-        key = `handle:${norm}`;
-        rec = { handle: norm };
-      }
-
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      recipients.push(rec);
-    }
+    logger.debug(`phase change: resolved emails`, {
+      challengeId,
+      emailsCount: recipientEmails.length,
+      emails: recipientEmails,
+    });
 
     if (!recipients.length) {
       logger.debug(
