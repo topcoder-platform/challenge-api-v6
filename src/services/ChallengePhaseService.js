@@ -856,8 +856,8 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
     logger.debug(`phase change: resolved emails`, {
       challengeId,
-      emailsCount: recipientEmails.length,
-      emails: recipientEmails,
+      emailsCount: recipients.length,
+      emails: recipients,
     });
 
     if (!recipients.length) {
