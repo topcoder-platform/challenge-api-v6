@@ -819,7 +819,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     const shouldNotifyClose = Boolean(isClosingPhase);
     const shouldNotifyOpen = Boolean(isOpeningPhase); // includes reopen
 
-    if (shouldNotifyClose && shouldNotifyOpen) {
+    if (shouldNotifyClose || shouldNotifyOpen) {
       // Single template - single type
       const notificationType = "PHASE_CHANGE";
 
