@@ -151,6 +151,14 @@ const PhaseFact = {
   UNRECOGNIZED: -1
 }
 
+exports.PhaseChangeNotificationSettings = {
+  PHASE_CHANGE: {
+    sendgridTemplateId: process.env.PHASE_CHANGE_SENDGRID_TEMPLATE_ID,
+    cc: [],
+  },
+};
+
+
 const auditFields = [
   'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
 ]

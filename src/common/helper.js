@@ -1639,6 +1639,79 @@ async function sendSelfServiceNotification(type, recipients, data) {
 }
 
 /**
+ * Build payload for phase change email notification
+ * @param {String} challenge Id
+ * @param {String} challenge name
+ * @param {String} challenge phase name
+ * @param {String} operation to be performed on the phase - open | close | reopen
+ */
+function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, operation, at }) {
+  const isOpen = operation === 'open' || operation === 'reopen';
+  const isClose = operation === 'close';
+
+  return {
+    challengeURL: `${config.CHALLENGE_URL}/${challengeId}`,
+    challengeName,
+    phaseOpen: isOpen ? phaseName : null,
+    phaseOpenDate: isOpen ? at : null,
+    phaseClose: isClose ? phaseName : null,
+    phaseCloseDate: isClose ? at : null,
+  };
+}
+
+
+/**
+ * Send phase change notification
+ * @param {String} type the notification type
+ * @param {Array} recipients the array of recipients in { userId || email || handle } format
+ * @param {Object} data the data
+ */
+async function sendPhaseChangeNotification(type, recipients, data) {
+  try {
+    const settings = constants.PhaseChangeNotificationSettings?.[type];
+
+    if (!settings) {
+      logger.debug(`sendPhaseChangeNotification: unknown type ${type}`);
+      return;
+    }
+
+    if (!settings.sendgridTemplateId) {
+      logger.debug(
+        `sendPhaseChangeNotification: sendgridTemplateId not configured for type ${type}`
+      );
+      return;
+    }
+    const safeRecipients = Array.isArray(recipients) ? recipients.filter(Boolean) : [];
+
+    if (!safeRecipients.length) {
+      logger.debug(`sendPhaseChangeNotification: no recipients for type ${type}`);
+      return;
+    }
+
+    await postBusEvent(constants.Topics.Notifications, {
+      notifications: [
+        {
+          serviceId: 'email',
+          type,
+          details: {
+            from: config.EMAIL_FROM,
+            recipients: [...safeRecipients],
+            cc: [...(settings.cc || [])],
+            data: {
+              ...data,
+            },
+            sendgridTemplateId: settings.sendgridTemplateId,
+            version: 'v3',
+          },
+        },
+      ], 
+    });
+  } catch (e) {
+    logger.debug(`Failed to post notification ${type}: ${e.message}`);
+  }
+}
+
+/**
  * Submit a request to zendesk
  * @param {Object} request the request
  */
@@ -1756,6 +1829,8 @@ module.exports = {
   setToInternalCache,
   flushInternalCache,
   removeNullProperties,
+  buildPhaseChangeEmailData,
+  sendPhaseChangeNotification
 };
 
 logger.buildService(module.exports);
