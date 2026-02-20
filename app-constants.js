@@ -153,7 +153,7 @@ const PhaseFact = {
 
 exports.PhaseChangeNotificationSettings = {
   PHASE_CHANGE: {
-    sendgridTemplateId: process.env.PHASE_CHANGE_SENDGRID_TEMPLATE_ID,
+    sendgridTemplateId: config.PHASE_CHANGE_SENDGRID_TEMPLATE_ID,
     cc: [],
   },
 };
