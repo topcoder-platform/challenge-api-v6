@@ -819,66 +819,64 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     const shouldNotifyClose = Boolean(isClosingPhase);
     const shouldNotifyOpen = Boolean(isOpeningPhase); // includes reopen
 
-    if (!shouldNotifyClose && !shouldNotifyOpen) {
-      return _.omit(result, constants.auditFields);
-    }
+    if (shouldNotifyClose && shouldNotifyOpen) {
+      // Single template - single type
+      const notificationType = "PHASE_CHANGE";
 
-    // Single template - single type
-    const notificationType = "PHASE_CHANGE";
+      const operation = shouldNotifyClose
+        ? "close"
+        : (isReopeningPhase ? "reopen" : "open");
 
-    const operation = shouldNotifyClose
-      ? "close"
-      : (isReopeningPhase ? "reopen" : "open");
+      const at = shouldNotifyClose
+        ? (result.actualEndDate || new Date().toISOString())
+        : (result.actualStartDate || new Date().toISOString());
 
-    const at = shouldNotifyClose
-      ? (result.actualEndDate || new Date().toISOString())
-      : (result.actualStartDate || new Date().toISOString());
+      // fetch challenge name
+      const challenge = await prisma.challenge.findUnique({
+        where: { id: challengeId },
+        select: { name: true },
+      });
 
-    // fetch challenge name
-    const challenge = await prisma.challenge.findUnique({
-      where: { id: challengeId },
-      select: { name: true },
-    });
+      const challengeName = challenge?.name;
 
-    const challengeName = challenge?.name;
+      // build recipients
+      const resources = await helper.getChallengeResources(challengeId);
 
-    // build recipients
-    const resources = await helper.getChallengeResources(challengeId);
-
-    const recipients = Array.from(
-      new Set(
-        (resources || [])
-          .map(r => r?.email || r?.memberEmail)
-          .filter(Boolean)
-          .map(e => String(e).trim().toLowerCase())
-      )
-    );
-
-    logger.debug(`phase change: resolved emails`, {
-      challengeId,
-      emailsCount: recipients.length,
-      emails: recipients,
-    });
-
-    if (!recipients.length) {
-      logger.debug(
-        `phase change notification skipped: no recipients for challenge ${challengeId}`
+      const recipients = Array.from(
+        new Set(
+          (resources || [])
+            .map(r => r?.email || r?.memberEmail)
+            .filter(Boolean)
+            .map(e => String(e).trim().toLowerCase())
+        )
       );
-      return _.omit(result, constants.auditFields);
+
+      logger.debug(`phase change: resolved emails`, {
+        challengeId,
+        emailsCount: recipients.length,
+        emails: recipients,
+      });
+
+      if (!recipients.length) {
+        logger.debug(
+          `phase change notification skipped: no recipients for challenge ${challengeId}`
+        );
+        return _.omit(result, constants.auditFields);
+      }
+
+      // build payload that matches the SendGrid HTML template
+      const phaseName = result.name || data.name || challengePhase.name;
+
+      const payload = helper.buildPhaseChangeEmailData({
+        challengeId,
+        challengeName,
+        phaseName,
+        operation,
+        at,
+      });
+
+      await helper.sendPhaseChangeNotification(notificationType, recipients, payload);
     }
-
-    // build payload that matches the SendGrid HTML template
-    const phaseName = result.name || data.name || challengePhase.name;
-
-    const payload = helper.buildPhaseChangeEmailData({
-      challengeId,
-      challengeName,
-      phaseName,
-      operation,
-      at,
-    });
-
-    await helper.sendPhaseChangeNotification(notificationType, recipients, payload);
   } catch (e) {
     logger.debug(
       `phase change notification failed for challenge ${challengeId}, phase ${id}: ${e.message}`
