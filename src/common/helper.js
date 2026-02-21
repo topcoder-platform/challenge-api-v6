@@ -1428,22 +1428,48 @@ function sumOfPrizes(prizes) {
 }
 
 /**
- * Get group by id
- * @param {String} groupId the group id
+ * Get group by id, with oldId fallback for backward compatibility.
+ * @param {String} groupId the group id or oldId
  * @returns {Promise<Object>} the group
  */
 async function getGroupById(groupId) {
+  const normalizedGroupId = _.toString(groupId || "").trim();
+  if (!normalizedGroupId) {
+    return;
+  }
+
   const token = await m2mHelper.getM2MToken();
+  const requestHeaders = { Authorization: `Bearer ${token}` };
   try {
-    const result = await axios.get(`${config.GROUPS_API_URL}/${groupId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const result = await axios.get(`${config.GROUPS_API_URL}/${encodeURIComponent(normalizedGroupId)}`, {
+      headers: requestHeaders,
     });
     return result.data;
   } catch (err) {
-    if (err.response.status === HttpStatus.NOT_FOUND) {
-      return;
+    const status = _.get(err, "response.status");
+    if (status !== HttpStatus.NOT_FOUND) {
+      throw err;
     }
-    throw err;
+  }
+
+  try {
+    const result = await axios.get(config.GROUPS_API_URL, {
+      headers: requestHeaders,
+      params: {
+        page: 1,
+        perPage: 1,
+        oldId: normalizedGroupId,
+      },
+    });
+    const groups = _.get(result, "data", []);
+    if (groups.length > 0) {
+      return groups[0];
+    }
+  } catch (err) {
+    const status = _.get(err, "response.status");
+    if (status !== HttpStatus.NOT_FOUND) {
+      throw err;
+    }
   }
 }
 
