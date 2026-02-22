@@ -96,6 +96,7 @@ describe('challenge service unit tests', () => {
       description: 'Prisma Test Challenge',
       privateDescription: 'Prisma Test Challenge',
       descriptionFormat: 'html',
+      funChallenge: true,
       metadata: [
         {
           name: 'meta-name',
@@ -200,6 +201,7 @@ describe('challenge service unit tests', () => {
       should.equal(result.legacyId, testChallengeData.legacyId)
       should.equal(result.forumId, testChallengeData.forumId)
       should.equal(result.status, testChallengeData.status)
+      should.equal(result.funChallenge, testChallengeData.funChallenge)
       should.equal(result.createdBy, 'testuser')
       should.exist(result.startDate)
       should.exist(result.created)
@@ -861,6 +863,7 @@ describe('challenge service unit tests', () => {
       should.equal(result.legacyId, challengeData.legacyId)
       should.equal(result.forumId, challengeData.forumId)
       should.equal(result.status, challengeData.status)
+      should.equal(result.funChallenge, challengeData.funChallenge)
       should.equal(!result.attachments || result.attachments.length === 0, true)
       should.equal(result.createdBy, 'testuser')
       should.equal(result.updatedBy, '22838965')

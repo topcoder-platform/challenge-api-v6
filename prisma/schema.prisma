@@ -92,6 +92,7 @@ model Challenge {
   currentPhaseNames          String[] // current phase names
 
   wiproAllowed Boolean @default(false)
+  funChallenge Boolean @default(false)
 
   // simple arrays for tags and groups (PostgreSQL native array type)
   tags   String[]

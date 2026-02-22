@@ -95,6 +95,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
     "groups",
     "legacyId",
     "wiproAllowed",
+    "funChallenge",
     "numOfRegistrants",
     "numOfSubmissions",
     "numOfCheckpointSubmissions",
