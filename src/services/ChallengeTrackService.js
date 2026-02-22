@@ -11,6 +11,30 @@ const constants = require("../../app-constants");
 const { getClient, ChallengeTrackEnum } = require("../common/prisma");
 const prisma = getClient();
 
+// Backward compatible aliases kept for payloads still using legacy track enum values.
+const legacyTrackAliases = {
+  DEVELOP: ChallengeTrackEnum.DEVELOPMENT,
+  QA: ChallengeTrackEnum.QUALITY_ASSURANCE,
+};
+
+const supportedTrackValues = _.uniq([
+  ..._.values(ChallengeTrackEnum),
+  ...Object.keys(legacyTrackAliases),
+]);
+
+/**
+ * Normalize legacy track aliases to current enum values.
+ * @param {String} track raw track value
+ * @returns {String|null|undefined} normalized track value
+ */
+function normalizeTrackValue(track) {
+  if (_.isNil(track)) {
+    return track;
+  }
+  const normalized = _.toUpper(_.trim(track));
+  return legacyTrackAliases[normalized] || normalized;
+}
+
 /**
  * Search challenge types
  * @param {Object} criteria the search criteria
@@ -60,7 +84,7 @@ function getSearchFilter(criteria) {
     ret.legacyId = { equals: criteria.legacyId };
   }
   if (!_.isEmpty(criteria.track)) {
-    ret.track = { equals: criteria.track };
+    ret.track = { equals: normalizeTrackValue(criteria.track) };
   }
   return ret;
 }
@@ -74,7 +98,7 @@ searchChallengeTracks.schema = {
     isActive: Joi.boolean(),
     abbreviation: Joi.string(),
     legacyId: Joi.number().integer().positive(),
-    track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
+    track: Joi.string().uppercase().valid(...supportedTrackValues),
   }),
 };
 
@@ -117,9 +141,11 @@ async function checkTrackAbrv(abbreviation) {
 async function createChallengeTrack(authUser, type) {
   await checkTrackName(type.name);
   await checkTrackAbrv(type.abbreviation);
+  const normalizedTrack = normalizeTrackValue(type.track);
   let ret = await prisma.challengeTrack.create({
     data: {
       ...type,
+      track: normalizedTrack,
       createdBy: authUser.userId,
       updatedBy: authUser.userId,
     },
@@ -140,7 +166,7 @@ createChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
+      track: Joi.string().uppercase().valid(...supportedTrackValues),
     })
     .required(),
 };
@@ -186,6 +212,8 @@ async function fullyUpdateChallengeTrack(authUser, id, data) {
   }
   if (_.isUndefined(data.track)) {
     data.track = null;
+  } else {
+    data.track = normalizeTrackValue(data.track);
   }
   data.updatedBy = authUser.userId;
   let ret = await prisma.challengeTrack.update({
@@ -209,7 +237,7 @@ fullyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
+      track: Joi.string().uppercase().valid(...supportedTrackValues),
     })
     .required(),
 };
@@ -228,6 +256,9 @@ async function partiallyUpdateChallengeTrack(authUser, id, data) {
   }
   if (data.abbreviation && type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
     await checkTrackAbrv(data.abbreviation);
+  }
+  if (!_.isUndefined(data.track)) {
+    data.track = normalizeTrackValue(data.track);
   }
   data.updatedBy = authUser.userId;
   let ret = await prisma.challengeTrack.update({
@@ -251,7 +282,7 @@ partiallyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean(),
       abbreviation: Joi.string(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().valid(..._.values(ChallengeTrackEnum)),
+      track: Joi.string().uppercase().valid(...supportedTrackValues),
     })
     .required(),
 };
