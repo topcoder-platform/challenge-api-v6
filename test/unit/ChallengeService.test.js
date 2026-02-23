@@ -14,6 +14,7 @@ const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
 const helper = require('../../src/common/helper')
+const projectHelper = require('../../src/common/project-helper')
 const testHelper = require('../testHelper')
 const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
 const { getReviewClient } = require('../../src/common/review-prisma')
@@ -154,9 +155,16 @@ describe('challenge service unit tests', () => {
   })
 
   after(async () => {
-    await prisma.challenge.deleteMany({
-      where: {id}
-    })
+    const idsToDelete = _.compact([id, id2])
+    if (idsToDelete.length > 0) {
+      await prisma.challenge.deleteMany({
+        where: {
+          id: {
+            in: idsToDelete
+          }
+        }
+      })
+    }
     await testHelper.clearData()
   })
 
@@ -207,6 +215,23 @@ describe('challenge service unit tests', () => {
       should.exist(result.created)
       should.equal(result.numOfSubmissions, 0)
       should.equal(result.numOfRegistrants, 0)
+    })
+
+    it('create challenge successfully when project directProjectId is a numeric string', async () => {
+      const challengeData = _.cloneDeep(testChallengeData)
+      const originalGetProject = projectHelper.getProject
+      projectHelper.getProject = async () => ({ directProjectId: '33541' })
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: 'sub', userId: 'testuser' },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN
+        )
+        id2 = result.id
+        should.equal(_.get(result, 'legacy.directProjectId'), 33541)
+      } finally {
+        projectHelper.getProject = originalGetProject
+      }
     })
 
     it('create challenge - type not found', async () => {

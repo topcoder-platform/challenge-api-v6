@@ -1519,8 +1519,17 @@ async function createChallenge(currentUser, challenge, userToken) {
 
     logger.debug(`createChallenge: fetching project details ${buildLogContext()}`);
     const { directProjectId } = await projectHelper.getProject(projectId, currentUser);
+    let normalizedDirectProjectId = directProjectId;
+    if (!_.isNil(directProjectId)) {
+      normalizedDirectProjectId = _.toNumber(directProjectId);
+      if (!Number.isInteger(normalizedDirectProjectId)) {
+        throw new errors.BadRequestError(
+          `Project with id: ${projectId} has invalid directProjectId: ${directProjectId}`
+        );
+      }
+    }
     logger.debug(
-      `createChallenge: fetched project details (directProjectId=${directProjectId}) ${buildLogContext()}`
+      `createChallenge: fetched project details (directProjectId=${normalizedDirectProjectId}) ${buildLogContext()}`
     );
     logger.debug(`createChallenge: fetching billing information ${buildLogContext()}`);
     const { billingAccountId, markup } = await projectHelper.getProjectBillingInformation(
@@ -1532,7 +1541,7 @@ async function createChallenge(currentUser, challenge, userToken) {
       }, markup=${markup}) ${buildLogContext()}`
     );
 
-    _.set(challenge, "legacy.directProjectId", directProjectId);
+    _.set(challenge, "legacy.directProjectId", normalizedDirectProjectId);
     // Ensure billingAccountId is a string or null to match Prisma schema
     if (billingAccountId !== null && billingAccountId !== undefined) {
       _.set(challenge, "billing.billingAccountId", String(billingAccountId));
