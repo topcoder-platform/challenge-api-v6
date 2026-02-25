@@ -212,6 +212,85 @@ class ChallengeHelper {
     }
   }
 
+  /**
+   * If challenge reviewers are not provided, apply default reviewers for
+   * the challenge type/track (timeline-template specific first, then generic fallback).
+   *
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   */
+  async applyDefaultMemberReviewersForChallengeCreation(challenge, prisma, logDebugMessage) {
+    if (!challenge || !prisma) {
+      return;
+    }
+
+    if (Array.isArray(challenge.reviewers) && challenge.reviewers.length > 0) {
+      return;
+    }
+
+    if (!challenge.typeId || !challenge.trackId) {
+      return;
+    }
+
+    logDebugMessage(`loading default member reviewers (trackId=${challenge.trackId}, typeId=${challenge.typeId})`);
+    const defaultReviewerWhere = {
+      typeId: challenge.typeId,
+      trackId: challenge.trackId,
+    };
+
+    let defaultReviewers = [];
+    if (challenge.timelineTemplateId) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: true,
+          timelineTemplateId: challenge.timelineTemplateId,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (_.isEmpty(defaultReviewers)) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: true,
+          timelineTemplateId: null,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+    logDebugMessage(`loaded ${defaultReviewerWhere.length} default member reviewers`);
+
+    if (!defaultReviewers || defaultReviewers.length === 0) {
+      return;
+    }
+
+    const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
+    const phaseMap = new Map((challenge.phases || []).map((p) => [p.name, p.phaseId]));
+
+    const missing = phaseNames.filter((name) => !phaseMap.has(name));
+    if (missing.length > 0) {
+      throw new errors.BadRequestError(
+        `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
+      );
+    }
+
+    challenge.reviewers = defaultReviewers.map((reviewer) => ({
+      scorecardId: reviewer.scorecardId,
+      isMemberReview: reviewer.isMemberReview,
+      memberReviewerCount: reviewer.memberReviewerCount,
+      phaseId: phaseMap.get(reviewer.phaseName),
+      fixedAmount: reviewer.fixedAmount,
+      baseCoefficient: reviewer.baseCoefficient,
+      incrementalCoefficient: reviewer.incrementalCoefficient,
+      type: reviewer.opportunityType,
+      shouldOpenOpportunity: _.isBoolean(reviewer.shouldOpenOpportunity)
+        ? reviewer.shouldOpenOpportunity
+        : true,
+    }));
+  }
+
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {
     if (process.env.LOCAL != "true") {
       await helper.ensureUserCanModifyChallenge(currentUser, challenge, challengeResources);

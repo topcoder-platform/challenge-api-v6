@@ -331,7 +331,7 @@ async function getDefaultReviewers(currentUser, criteria) {
     baseCoefficient: r.baseCoefficient,
     incrementalCoefficient: r.incrementalCoefficient,
     type: r.opportunityType,
-    aiWorkflowId: r.aiWorkflowId,
+    aiConfigTemplateId: r.aiConfigTemplateId,
     shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity) ? r.shouldOpenOpportunity : true,
   }));
 }
@@ -368,7 +368,7 @@ async function setDefaultReviewers(currentUser, data) {
               then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
               otherwise: Joi.forbidden(),
             }),
-            aiWorkflowId: Joi.when("isMemberReview", {
+            aiConfigTemplateId: Joi.when("isMemberReview", {
               is: false,
               then: Joi.string().required(),
               otherwise: Joi.forbidden(),
@@ -433,7 +433,7 @@ async function setDefaultReviewers(currentUser, data) {
           timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
-          aiWorkflowId:_.isNil(r.aiWorkflowId) ? null : r.aiWorkflowId,
+          aiConfigTemplateId:_.isNil(r.aiConfigTemplateId) ? null : r.aiConfigTemplateId,
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
@@ -1779,72 +1779,9 @@ async function createChallenge(currentUser, challenge, userToken) {
     `createChallenge: final prize validation complete (prizeType=${prizeType}) ${buildLogContext()}`
   );
 
-  // If reviewers not provided, apply defaults for this (typeId, trackId)
-  if (!challenge.reviewers || challenge.reviewers.length === 0) {
-    if (challenge.typeId && challenge.trackId) {
-      logger.debug(
-        `createChallenge: loading default reviewers (trackId=${challenge.trackId}, typeId=${
-          challenge.typeId
-        }) ${buildLogContext()}`
-      );
-      const defaultReviewerWhere = {
-        typeId: challenge.typeId,
-        trackId: challenge.trackId,
-      };
-      let defaultReviewers = [];
-      if (challenge.timelineTemplateId) {
-        defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
-          where: {
-            ...defaultReviewerWhere,
-            timelineTemplateId: challenge.timelineTemplateId,
-          },
-          orderBy: { createdAt: "asc" },
-        });
-      }
-      if (_.isEmpty(defaultReviewers)) {
-        defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
-          where: {
-            ...defaultReviewerWhere,
-            timelineTemplateId: null,
-          },
-          orderBy: { createdAt: "asc" },
-        });
-      }
-      logger.debug(
-        `createChallenge: loaded ${defaultReviewers.length} default reviewers ${buildLogContext()}`
-      );
-      if (defaultReviewers && defaultReviewers.length > 0) {
-        // Resolve phaseId by name
-        const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
-        // Map phase name -> Phase definition id (Phase.id), NOT ChallengePhase.id
-        const phaseMap = new Map(challenge.phases.map((p) => [p.name, p.phaseId]));
-
-        // ensure all required names exist
-        const missing = phaseNames.filter((n) => !phaseMap.has(n));
-        if (missing.length > 0) {
-          throw new BadRequestError(
-            `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
-          );
-        }
-
-        challenge.reviewers = defaultReviewers.map((r) => ({
-          scorecardId: r.scorecardId,
-          isMemberReview: r.isMemberReview,
-          memberReviewerCount: r.memberReviewerCount,
-          // connect reviewers to the Phase model via its id
-          phaseId: phaseMap.get(r.phaseName),
-          fixedAmount: r.fixedAmount,
-          baseCoefficient: r.baseCoefficient,
-          incrementalCoefficient: r.incrementalCoefficient,
-          type: r.opportunityType,
-          aiWorkflowId: r.aiWorkflowId,
-          shouldOpenOpportunity: _.isBoolean(r.shouldOpenOpportunity)
-            ? r.shouldOpenOpportunity
-            : true,
-        }));
-      }
-    }
-  }
+  // If reviewers are not provided, apply defaults for this challenge.
+  const debugLog = (message) => logger.debug(`createChallenge: ${message} ${buildLogContext()}`);
+  await challengeHelper.applyDefaultMemberReviewersForChallengeCreation(challenge, prisma, debugLog);
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   logger.info(
