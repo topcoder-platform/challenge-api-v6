@@ -47,6 +47,37 @@ const allowedSortByValues = _.uniq([
   ...Object.keys(sortByAliases),
 ]);
 
+function normalizeStatusSortValue(statusValue) {
+  if (_.isNil(statusValue)) {
+    return null;
+  }
+
+  const normalizedStatus = _.toString(statusValue).trim().toUpperCase();
+  if (!normalizedStatus) {
+    return null;
+  }
+
+  return normalizedStatus;
+}
+
+function compareStatusSortValues(aStatusValue, bStatusValue) {
+  const normalizedA = normalizeStatusSortValue(aStatusValue);
+  const normalizedB = normalizeStatusSortValue(bStatusValue);
+
+  if (normalizedA === normalizedB) {
+    return _.toString(aStatusValue).localeCompare(_.toString(bStatusValue));
+  }
+
+  if (_.isNil(normalizedA)) {
+    return 1;
+  }
+  if (_.isNil(normalizedB)) {
+    return -1;
+  }
+
+  return normalizedA.localeCompare(normalizedB);
+}
+
 // Minimal domain adapter for PhaseAdvancer to fetch phase-specific facts.
 // For now this returns an empty factResponses array which makes the
 // PhaseAdvancer default to conservative behavior when such facts are needed.
@@ -529,6 +560,9 @@ async function searchChallengesViaMemberAccess({
   const compareValues = (aValue, bValue) => {
     if (aValue === bValue) {
       return 0;
+    }
+    if (sortByProp === "status") {
+      return compareStatusSortValues(aValue, bValue);
     }
     if (_.isNil(aValue)) {
       return 1;
@@ -1277,6 +1311,53 @@ async function searchChallenges(currentUser, criteria) {
         challengeInclude,
         markTiming,
       }));
+    } else if (sortByProp === "status") {
+      const summaryStart = Date.now();
+      const summaryRecords = await prisma.challenge.findMany({
+        where: prismaFilter.where,
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+      markTiming("statusSortSummaryScan", {
+        durationMs: Date.now() - summaryStart,
+        candidateCount: summaryRecords.length,
+      });
+
+      const sortDirection = sortOrderProp === "asc" ? 1 : -1;
+      summaryRecords.sort(
+        (a, b) => compareStatusSortValues(a.status, b.status) * sortDirection
+      );
+
+      total = summaryRecords.length;
+      const offset = (page - 1) * perPage;
+      const pageSummaries = summaryRecords.slice(offset, offset + perPage);
+      const pageIds = pageSummaries.map((summary) => summary.id);
+      if (pageIds.length === 0) {
+        challenges = [];
+      } else {
+        const fetchWhere = _.cloneDeep(prismaFilter.where);
+        fetchWhere.AND = [...(fetchWhere.AND || []), { id: { in: pageIds } }];
+
+        const findManyStart = Date.now();
+        const fetchedChallenges = await prisma.challenge.findMany({
+          where: fetchWhere,
+          include: challengeInclude,
+        });
+        markTiming("statusSortFetch", {
+          durationMs: Date.now() - findManyStart,
+          resultCount: fetchedChallenges.length,
+        });
+
+        const challengesById = new Map();
+        fetchedChallenges.forEach((challenge) => {
+          challengesById.set(challenge.id, challenge);
+        });
+        challenges = pageIds
+          .map((challengeId) => challengesById.get(challengeId))
+          .filter((challenge) => !!challenge);
+      }
     } else {
       const countStart = Date.now();
       total = await prisma.challenge.count({ ...prismaFilter });
