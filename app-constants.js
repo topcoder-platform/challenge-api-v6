@@ -151,6 +151,14 @@ const PhaseFact = {
   UNRECOGNIZED: -1
 }
 
+const PhaseChangeNotificationSettings = {
+  PHASE_CHANGE: {
+    sendgridTemplateId: config.PHASE_CHANGE_SENDGRID_TEMPLATE_ID,
+    cc: [],
+  },
+};
+
+
 const auditFields = [
   'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
 ]
@@ -168,4 +176,5 @@ module.exports = {
   SelfServiceNotificationSettings,
   PhaseFact,
   auditFields,
+  PhaseChangeNotificationSettings,
 };
