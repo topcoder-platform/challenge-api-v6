@@ -58,7 +58,7 @@ async function createData () {
       name: `type-${new Date().getTime()}`,
       description: 'desc',
       isActive: true,
-      track: 'DEVELOP',
+      track: 'DEVELOPMENT',
       abbreviation: 'abbr',
       createdBy: testUserId,
       updatedBy: testUserId

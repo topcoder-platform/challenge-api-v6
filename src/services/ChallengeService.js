@@ -1758,6 +1758,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.events == null) challenge.events = [];
   if (challenge.attachments == null) challenge.attachments = [];
   if (challenge.prizeSets == null) challenge.prizeSets = [];
+  const hasProvidedReviewers = Array.isArray(challenge.reviewers) && challenge.reviewers.length > 0;
   if (challenge.reviewers == null) challenge.reviewers = [];
   if (challenge.metadata == null) challenge.metadata = [];
   if (challenge.groups == null) challenge.groups = [];
@@ -1781,7 +1782,16 @@ async function createChallenge(currentUser, challenge, userToken) {
 
   // If reviewers are not provided, apply defaults for this challenge.
   const debugLog = (message) => logger.debug(`createChallenge: ${message} ${buildLogContext()}`);
-  await challengeHelper.applyDefaultMemberReviewersForChallengeCreation(challenge, prisma, debugLog);
+  await challengeHelper.applyDefaultMemberReviewersForChallengeCreation(
+    challenge,
+    prisma,
+    debugLog,
+  );
+  const aiReviewConfigsForCreation = !hasProvidedReviewers ? await challengeHelper.applyDefaultAIConfigForChallengeCreation(
+    challenge,
+    prisma,
+    debugLog,
+  ) : [];
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   logger.info(
@@ -1796,6 +1806,14 @@ async function createChallenge(currentUser, challenge, userToken) {
     include: includeReturnFields,
   });
   logger.info(`createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`);
+
+  if (!hasProvidedReviewers) {
+    await challengeHelper.createAIReviewConfigsForChallengeCreation(
+      ret.id,
+      aiReviewConfigsForCreation,
+      debugLog,
+    );
+  }
 
   ret.overview = { totalPrizes: ret.overviewTotalPrizes };
   // No conversion needed - values are already in dollars in the database

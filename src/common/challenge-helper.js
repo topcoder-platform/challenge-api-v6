@@ -219,8 +219,16 @@ class ChallengeHelper {
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    */
-  async applyDefaultMemberReviewersForChallengeCreation(challenge, prisma, logDebugMessage) {
+  async applyDefaultMemberReviewersForChallengeCreation(
+    challenge,
+    prisma,
+    logDebugMessage,
+  ) {
     if (!challenge || !prisma) {
+      return;
+    }
+
+    if (Array.isArray(challenge.reviewers) && challenge.reviewers.length > 0) {
       return;
     }
 
@@ -260,7 +268,7 @@ class ChallengeHelper {
         orderBy: { createdAt: "asc" },
       });
     }
-    logDebugMessage(`loaded ${defaultReviewerWhere.length} default member reviewers`);
+    logDebugMessage(`loaded ${defaultReviewers.length} default member reviewers`);
 
     if (!defaultReviewers || defaultReviewers.length === 0) {
       return;
@@ -289,6 +297,212 @@ class ChallengeHelper {
         ? reviewer.shouldOpenOpportunity
         : true,
     }));
+  }
+
+  /**
+   * If challenge reviewers are not provided, apply default reviewers for
+   * the challenge type/track (timeline-template specific first, then generic fallback).
+   *
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   */
+  async applyDefaultAIConfigForChallengeCreation(challenge, prisma, logDebugMessage) {
+    if (!challenge || !prisma) {
+      return;
+    }
+
+    if (!challenge.typeId || !challenge.trackId) {
+      return;
+    }
+
+    logDebugMessage(`loading default ai configs (trackId=${challenge.trackId}, typeId=${challenge.typeId})`);
+    const defaultReviewerWhere = {
+      typeId: challenge.typeId,
+      trackId: challenge.trackId,
+    };
+
+    let defaultReviewers = [];
+    if (challenge.timelineTemplateId) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: false,
+          timelineTemplateId: challenge.timelineTemplateId,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (_.isEmpty(defaultReviewers)) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: false,
+          timelineTemplateId: null,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+    logDebugMessage(`loaded ${defaultReviewers.length} default ai configs`);
+
+    if (!defaultReviewers || defaultReviewers.length === 0) {
+      return;
+    }
+
+    const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
+    const phaseMap = new Map((challenge.phases || []).map((p) => [p.name, p.phaseId]));
+
+    const missing = phaseNames.filter((name) => !phaseMap.has(name));
+    if (missing.length > 0) {
+      throw new errors.BadRequestError(
+        `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
+      );
+    }
+
+    const aiTemplates = new Map();
+    const aiConfigsByTemplateId = new Map();
+    const aiReviewers = [];
+
+    for (const reviewer of defaultReviewers) {
+      if (!reviewer.aiConfigTemplateId) {
+        throw new errors.BadRequestError(
+          `Default AI reviewer is missing aiConfigTemplateId for phaseName: ${reviewer.phaseName}`
+        );
+      }
+
+      if (!aiTemplates.has(reviewer.aiConfigTemplateId)) {
+        aiTemplates.set(
+          reviewer.aiConfigTemplateId,
+          await this.getAIReviewTemplateById(reviewer.aiConfigTemplateId)
+        );
+      }
+
+      const template = aiTemplates.get(reviewer.aiConfigTemplateId);
+      const workflows = _.get(template, "workflows", []);
+      if (!Array.isArray(workflows) || workflows.length === 0) {
+        throw new errors.BadRequestError(
+          `AI review template '${reviewer.aiConfigTemplateId}' has no workflows`
+        );
+      }
+
+      const workflowIds = _.uniq(
+        workflows.map((workflow) => workflow.workflowId).filter((workflowId) => !!workflowId)
+      );
+      if (workflowIds.length === 0) {
+        throw new errors.BadRequestError(
+          `AI review template '${reviewer.aiConfigTemplateId}' has no valid workflowId values`
+        );
+      }
+
+      for (const workflowId of workflowIds) {
+        aiReviewers.push({
+          scorecardId: reviewer.scorecardId,
+          isMemberReview: false,
+          memberReviewerCount: null,
+          phaseId: phaseMap.get(reviewer.phaseName),
+          fixedAmount: reviewer.fixedAmount,
+          baseCoefficient: reviewer.baseCoefficient,
+          incrementalCoefficient: reviewer.incrementalCoefficient,
+          aiWorkflowId: workflowId,
+          shouldOpenOpportunity: _.isBoolean(reviewer.shouldOpenOpportunity)
+            ? reviewer.shouldOpenOpportunity
+            : true,
+        });
+      }
+
+      if (!aiConfigsByTemplateId.has(reviewer.aiConfigTemplateId)) {
+        aiConfigsByTemplateId.set(reviewer.aiConfigTemplateId, {
+          templateId: reviewer.aiConfigTemplateId,
+          minPassingThreshold: template.minPassingThreshold,
+          mode: template.mode,
+          autoFinalize: template.autoFinalize,
+          formula: _.isNil(template.formula) ? {} : template.formula,
+          workflows: workflows
+            .filter((workflow) => !!workflow.workflowId)
+            .map((workflow) => ({
+              workflowId: workflow.workflowId,
+              weightPercent: workflow.weightPercent,
+              isGating: !!workflow.isGating,
+            })),
+        });
+      }
+    }
+
+    challenge.reviewers = [...(challenge.reviewers || []), ...aiReviewers];
+    return Array.from(aiConfigsByTemplateId.values());
+  }
+
+  async createAIReviewConfigsForChallengeCreation(challengeId, aiReviewConfigs, logDebugMessage) {
+    if (!challengeId || !Array.isArray(aiReviewConfigs) || aiReviewConfigs.length === 0) {
+      return;
+    }
+
+    const token = await getM2MToken();
+    const reviewsApiBaseUrl = _.trimEnd(
+      config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+      "/"
+    );
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/configs`;
+
+    for (const aiReviewConfig of aiReviewConfigs) {
+      const payload = {
+        challengeId,
+        minPassingThreshold: aiReviewConfig.minPassingThreshold,
+        mode: aiReviewConfig.mode,
+        autoFinalize: aiReviewConfig.autoFinalize,
+        formula: _.isNil(aiReviewConfig.formula) ? {} : aiReviewConfig.formula,
+        templateId: aiReviewConfig.templateId,
+        workflows: aiReviewConfig.workflows,
+      };
+
+      logDebugMessage(
+        `creating ai review config (challengeId=${challengeId}, templateId=${aiReviewConfig.templateId}, workflowCount=${_.get(
+          aiReviewConfig,
+          "workflows.length",
+          0
+        )})`
+      );
+
+      try {
+        await axios.post(url, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (err) {
+        if (
+          _.get(err, "response.status") === HttpStatus.NOT_FOUND ||
+          _.get(err, "response.status") === HttpStatus.BAD_REQUEST
+        ) {
+          throw new errors.BadRequestError(
+            `Failed to create AI review config for templateId '${aiReviewConfig.templateId}'`
+          );
+        }
+        throw err;
+      }
+    }
+  }
+
+  async getAIReviewTemplateById(templateId) {
+    const token = await getM2MToken();
+    const reviewsApiBaseUrl = _.trimEnd(
+      config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+      "/"
+    );
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/templates/${templateId}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (err) {
+      if (_.get(err, "response.status") === HttpStatus.NOT_FOUND) {
+        throw new errors.BadRequestError(
+          `AI review template with id: ${templateId} doesn't exist`
+        );
+      }
+
+      throw err;
+    }
   }
 
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {
