@@ -1,1 +1,1 @@
-ALTER TABLE "DefaultChallengeReviewer" RENAME COLUMN "isAIReviewer" TO "aiConfigTemplateId";
+ALTER TABLE "DefaultChallengeReviewer" RENAME COLUMN "aiWorkflowId" TO "aiConfigTemplateId";
