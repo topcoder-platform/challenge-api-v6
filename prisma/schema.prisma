@@ -376,6 +376,8 @@ model ChallengeTerm {
   createdBy String
   updatedAt DateTime @updatedAt
   updatedBy String
+
+  @@index([challengeId])
 }
 
 //////////////////////////////////////////
