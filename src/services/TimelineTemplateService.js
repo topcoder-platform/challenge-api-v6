@@ -26,12 +26,28 @@ async function searchTimelineTemplates(criteria) {
   const perPage = criteria.perPage || 50;
   let items = await prisma.timelineTemplate.findMany({
     where: searchFilter,
-    include: { phases: true },
+    include: { phases: true, challengeTimelineTemplates: true },
   });
-  items = _.map(items, (r) => _.omit(r, constants.auditFields));
-  items.forEach((item) => {
-    item.phases = _.map(item.phases, (p) => _.omit(p, constants.auditFields));
+  items = _.flatMap(items, (template) => {
+    const phases = _.map(template.phases, (phase) => _.omit(phase, constants.auditFields));
+    const baseTemplate = {
+      ..._.omit(template, [...constants.auditFields, "phases", "challengeTimelineTemplates"]),
+      phases,
+    };
+    const challengeTimelineTemplates = template.challengeTimelineTemplates || [];
+
+    if (!challengeTimelineTemplates.length) {
+      return [baseTemplate];
+    }
+
+    return _.map(challengeTimelineTemplates, (challengeTimelineTemplate) => ({
+      ...baseTemplate,
+      isDefault: challengeTimelineTemplate.isDefault === true,
+      trackId: challengeTimelineTemplate.trackId,
+      typeId: challengeTimelineTemplate.typeId,
+    }));
   });
+
   const total = items.length;
   const result = items.slice((page - 1) * perPage, page * perPage);
 

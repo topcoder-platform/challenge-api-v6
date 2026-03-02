@@ -14,6 +14,7 @@ const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
 const helper = require('../../src/common/helper')
+const projectHelper = require('../../src/common/project-helper')
 const testHelper = require('../testHelper')
 const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
 const { getReviewClient } = require('../../src/common/review-prisma')
@@ -96,6 +97,7 @@ describe('challenge service unit tests', () => {
       description: 'Prisma Test Challenge',
       privateDescription: 'Prisma Test Challenge',
       descriptionFormat: 'html',
+      funChallenge: true,
       metadata: [
         {
           name: 'meta-name',
@@ -153,9 +155,16 @@ describe('challenge service unit tests', () => {
   })
 
   after(async () => {
-    await prisma.challenge.deleteMany({
-      where: {id}
-    })
+    const idsToDelete = _.compact([id, id2])
+    if (idsToDelete.length > 0) {
+      await prisma.challenge.deleteMany({
+        where: {
+          id: {
+            in: idsToDelete
+          }
+        }
+      })
+    }
     await testHelper.clearData()
   })
 
@@ -200,11 +209,29 @@ describe('challenge service unit tests', () => {
       should.equal(result.legacyId, testChallengeData.legacyId)
       should.equal(result.forumId, testChallengeData.forumId)
       should.equal(result.status, testChallengeData.status)
+      should.equal(result.funChallenge, testChallengeData.funChallenge)
       should.equal(result.createdBy, 'testuser')
       should.exist(result.startDate)
       should.exist(result.created)
       should.equal(result.numOfSubmissions, 0)
       should.equal(result.numOfRegistrants, 0)
+    })
+
+    it('create challenge successfully when project directProjectId is a numeric string', async () => {
+      const challengeData = _.cloneDeep(testChallengeData)
+      const originalGetProject = projectHelper.getProject
+      projectHelper.getProject = async () => ({ directProjectId: '33541' })
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: 'sub', userId: 'testuser' },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN
+        )
+        id2 = result.id
+        should.equal(_.get(result, 'legacy.directProjectId'), 33541)
+      } finally {
+        projectHelper.getProject = originalGetProject
+      }
     })
 
     it('create challenge - type not found', async () => {
@@ -395,6 +422,123 @@ describe('challenge service unit tests', () => {
       should.equal(result.numOfSubmissions, 0)
       should.equal(result.numOfRegistrants, 0)
     })
+
+    it('search challenges sorts status alphabetically for member and non-member searches', async () => {
+      const statusChallenges = [
+        {
+          id: uuid(),
+          name: `Status Sort Cancelled ${Date.now()}`,
+          status: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST
+        },
+        {
+          id: uuid(),
+          name: `Status Sort New ${Date.now()}`,
+          status: ChallengeStatusEnum.NEW
+        },
+        {
+          id: uuid(),
+          name: `Status Sort Active ${Date.now()}`,
+          status: ChallengeStatusEnum.ACTIVE
+        },
+        {
+          id: uuid(),
+          name: `Status Sort Completed ${Date.now()}`,
+          status: ChallengeStatusEnum.COMPLETED
+        }
+      ]
+      const statusChallengeIds = statusChallenges.map(challengeRow => challengeRow.id)
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany
+
+      try {
+        await Promise.all(statusChallenges.map(challengeRow => prisma.challenge.create({
+          data: {
+            id: challengeRow.id,
+            name: challengeRow.name,
+            description: 'status-sort',
+            privateDescription: 'status-sort',
+            challengeSource: 'Topcoder',
+            descriptionFormat: 'html',
+            timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+            type: { connect: { id: data.challenge.typeId } },
+            track: { connect: { id: data.challenge.trackId } },
+            tags: [],
+            groups: [],
+            status: challengeRow.status,
+            createdBy: 'testuser',
+            updatedBy: 'testuser'
+          }
+        })))
+
+        prisma.memberChallengeAccess.findMany = async () =>
+          statusChallenges.map(challengeRow => ({ challengeId: challengeRow.id }))
+
+        const ascRes = await service.searchChallenges({ isMachine: true }, {
+          memberId: 'status-sort-member',
+          sortBy: 'status',
+          sortOrder: 'asc',
+          page: 1,
+          perPage: 10
+        })
+        should.deepEqual(_.map(ascRes.result, 'status'), [
+          ChallengeStatusEnum.ACTIVE,
+          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.NEW
+        ])
+
+        const ascResNoMember = await service.searchChallenges({ isMachine: true }, {
+          ids: statusChallengeIds,
+          sortBy: 'status',
+          sortOrder: 'asc',
+          page: 1,
+          perPage: 10
+        })
+        should.deepEqual(_.map(ascResNoMember.result, 'status'), [
+          ChallengeStatusEnum.ACTIVE,
+          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.NEW
+        ])
+
+        const descRes = await service.searchChallenges({ isMachine: true }, {
+          memberId: 'status-sort-member',
+          sortBy: 'status',
+          sortOrder: 'desc',
+          page: 1,
+          perPage: 10
+        })
+        should.deepEqual(_.map(descRes.result, 'status'), [
+          ChallengeStatusEnum.NEW,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.ACTIVE,
+        ])
+
+        const descResNoMember = await service.searchChallenges({ isMachine: true }, {
+          ids: statusChallengeIds,
+          sortBy: 'status',
+          sortOrder: 'desc',
+          page: 1,
+          perPage: 10
+        })
+        should.deepEqual(_.map(descResNoMember.result, 'status'), [
+          ChallengeStatusEnum.NEW,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.ACTIVE
+        ])
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany
+        await prisma.challenge.deleteMany({
+          where: {
+            id: {
+              in: statusChallengeIds
+            }
+          }
+        })
+      }
+    })
+
     it('search challenges successfully 1', async () => {
       const res = await service.searchChallenges({ isMachine: true }, {
         page: 1,
@@ -861,6 +1005,7 @@ describe('challenge service unit tests', () => {
       should.equal(result.legacyId, challengeData.legacyId)
       should.equal(result.forumId, challengeData.forumId)
       should.equal(result.status, challengeData.status)
+      should.equal(result.funChallenge, challengeData.funChallenge)
       should.equal(!result.attachments || result.attachments.length === 0, true)
       should.equal(result.createdBy, 'testuser')
       should.equal(result.updatedBy, '22838965')

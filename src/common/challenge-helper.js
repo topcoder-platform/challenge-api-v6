@@ -91,7 +91,6 @@ class ChallengeHelper {
       promises.push(
         (async () => {
           const group = await helper.getGroupById(g);
-          console.log("group", group);
           if (!group) {
             throw new errors.BadRequestError("The groups provided are invalid " + g);
           }

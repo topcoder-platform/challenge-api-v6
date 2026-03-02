@@ -1,0 +1,2 @@
+ALTER TABLE "Challenge"
+ADD COLUMN "funChallenge" BOOLEAN NOT NULL DEFAULT false;
