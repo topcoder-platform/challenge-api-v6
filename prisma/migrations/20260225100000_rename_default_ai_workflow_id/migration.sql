@@ -1,0 +1,1 @@
+ALTER TABLE "DefaultChallengeReviewer" RENAME COLUMN "isAIReviewer" TO "aiConfigTemplateId";
