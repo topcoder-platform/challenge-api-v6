@@ -52,7 +52,11 @@ class ChallengeHelper {
     let token = await getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
     try {
-      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        // projects-api-v6 omits members unless explicitly requested.
+        params: { fields: "members" },
+      });
       if (currentUser.isMachine || hasAdminRole(currentUser)) {
         return res.data;
       }
