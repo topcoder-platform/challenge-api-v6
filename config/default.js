@@ -45,6 +45,7 @@ module.exports = {
     process.env.SUBMISSIONS_API_URL || "https://api.topcoder-dev.com/v5/submissions",
   MEMBERS_API_URL: process.env.MEMBERS_API_URL || "https://api.topcoder-dev.com/v6/members",
   REVIEW_SUMMATIONS_API_URL: process.env.REVIEW_SUMMATIONS_API_URL || "https://api.topcoder-dev.com/v6/reviewSummations",
+  REVIEWS_API_URL: process.env.REVIEWS_API_URL || "https://api.topcoder-dev.com",
   RESOURCES_API_URL: process.env.RESOURCES_API_URL || "http://localhost:4000/v5/resources",
   // TODO: change this to localhost
   RESOURCE_ROLES_API_URL:

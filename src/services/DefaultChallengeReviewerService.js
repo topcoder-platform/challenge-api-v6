@@ -262,8 +262,8 @@ function normalizePayload(data = {}, isPartial = false) {
   } else if (!isPartial && _.isNil(data.opportunityType)) {
     normalized.opportunityType = null;
   }
-  if (shouldAssign(data.aiWorkflowId)) {
-    normalized.aiWorkflowId = data.aiWorkflowId;
+  if (shouldAssign(data.aiConfigTemplateId)) {
+    normalized.aiConfigTemplateId = data.aiConfigTemplateId;
   }
   if (shouldAssign(data.shouldOpenOpportunity)) {
     normalized.shouldOpenOpportunity = data.shouldOpenOpportunity;
@@ -338,7 +338,7 @@ createDefaultChallengeReviewer.schema = {
       baseCoefficient: Joi.number().min(0).max(1).allow(null),
       incrementalCoefficient: Joi.number().min(0).max(1).allow(null),
       opportunityType: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
-      aiWorkflowId: Joi.when("isMemberReview", {
+      aiConfigTemplateId: Joi.when("isMemberReview", {
         is: false,
         then: Joi.string().required(),
         otherwise: Joi.valid(null),
@@ -421,7 +421,7 @@ fullyUpdateDefaultChallengeReviewer.schema = {
       baseCoefficient: Joi.number().min(0).max(1).allow(null),
       incrementalCoefficient: Joi.number().min(0).max(1).allow(null),
       opportunityType: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
-      aiWorkflowId: Joi.when("isMemberReview", {
+      aiConfigTemplateId: Joi.when("isMemberReview", {
         is: false,
         then: Joi.string().required(),
         otherwise: Joi.valid(null),
@@ -524,7 +524,7 @@ partiallyUpdateDefaultChallengeReviewer.schema = {
         .valid(..._.values(ReviewOpportunityTypeEnum))
         .insensitive()
         .allow(null),
-      aiWorkflowId: Joi.string(),
+      aiConfigTemplateId: Joi.string(),
       shouldOpenOpportunity: Joi.boolean(),
     })
     .required(),
