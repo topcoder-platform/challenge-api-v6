@@ -594,9 +594,8 @@ class ChallengeHelper {
     };
 
     // Ensure AI Screening is ordered between submission and review phases in the phases array.
-    const firstReviewIndex = challenge.phases.findIndex(
-      (phase) => phase.name && phase.name.toLowerCase().includes("review")
-    );
+    const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
+    logDebugMessage(`(firstReviewIndex=${firstReviewIndex})`)
     if (firstReviewIndex >= 0) {
       challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
     } else {
