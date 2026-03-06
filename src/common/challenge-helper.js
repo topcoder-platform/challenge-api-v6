@@ -3,7 +3,6 @@ const challengeTrackService = require("../services/ChallengeTrackService");
 const timelineTemplateService = require("../services/TimelineTemplateService");
 const HttpStatus = require("http-status-codes");
 const _ = require("lodash");
-const { v4: uuid } = require('uuid');
 const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
@@ -572,9 +571,15 @@ class ChallengeHelper {
       );
     }
 
+    const reviewPhases = challenge.phases.filter(
+      (phase) =>
+        phase.name &&
+        phase.name.toLowerCase().includes("review") &&
+        phase.predecessor === submissionPhase.phaseId
+    );
+
     // Create the AI Screening challenge phase
     const aiScreeningPhase = {
-      id: uuid(),
       phaseId: aiScreeningPhaseId,
       name: "AI Screening",
       description: aiScreeningPhaseDef.description,
@@ -588,9 +593,24 @@ class ChallengeHelper {
       actualEndDate: undefined,
     };
 
-    // Add the AI screening phase to the phases array
-    challenge.phases.push(aiScreeningPhase);
-    logDebugMessage(`AI screening phase added (phaseId=${aiScreeningPhase.phaseId})`);
+    // Ensure AI Screening is ordered between submission and review phases in the phases array.
+    const firstReviewIndex = challenge.phases.findIndex(
+      (phase) => phase.name && phase.name.toLowerCase().includes("review")
+    );
+    if (firstReviewIndex >= 0) {
+      challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
+    } else {
+      challenge.phases.push(aiScreeningPhase);
+    }
+
+    // Re-link review phase(s) so they start after AI Screening instead of submission.
+    reviewPhases.forEach((phase) => {
+      phase.predecessor = aiScreeningPhase.phaseId;
+    });
+
+    logDebugMessage(
+      `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
+    );
   }
 
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {
