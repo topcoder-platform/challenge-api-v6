@@ -3,6 +3,7 @@ const challengeTrackService = require("../services/ChallengeTrackService");
 const timelineTemplateService = require("../services/TimelineTemplateService");
 const HttpStatus = require("http-status-codes");
 const _ = require("lodash");
+const moment = require("moment");
 const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
@@ -606,6 +607,36 @@ class ChallengeHelper {
     reviewPhases.forEach((phase) => {
       phase.predecessor = aiScreeningPhase.phaseId;
     });
+
+    // Recalculate phase dates to keep timeline in sync
+    if (submissionPhase.scheduledEndDate) {
+      aiScreeningPhase.scheduledStartDate = submissionPhase.scheduledEndDate;
+      aiScreeningPhase.scheduledEndDate = moment(aiScreeningPhase.scheduledStartDate)
+        .add(aiScreeningPhase.duration, "seconds")
+        .toDate()
+        .toISOString();
+      
+      logDebugMessage(
+        `AI screening phase dates calculated (start=${aiScreeningPhase.scheduledStartDate}, end=${aiScreeningPhase.scheduledEndDate})`
+      );
+
+      // Update dates for review phases that now depend on AI Screening
+      reviewPhases.forEach((phase) => {
+        if (_.isNil(phase.actualStartDate)) {
+          phase.scheduledStartDate = aiScreeningPhase.scheduledEndDate;
+          if (phase.duration) {
+            phase.scheduledEndDate = moment(phase.scheduledStartDate)
+              .add(phase.duration, "seconds")
+              .toDate()
+              .toISOString();
+            
+            logDebugMessage(
+              `Updated ${phase.name} phase dates (start=${phase.scheduledStartDate}, end=${phase.scheduledEndDate})`
+            );
+          }
+        }
+      });
+    }
 
     logDebugMessage(
       `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
