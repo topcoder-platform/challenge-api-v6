@@ -501,7 +501,7 @@ class ChallengeHelper {
       });
       return response.data;
     } catch (err) {
-      if (_.get(err, "response.status") === HttpStatus.StatusCodes.NOT_FOUND) {
+      if (_.get(err, "response.status") === HttpStatus.NOT_FOUND) {
         throw new errors.BadRequestError(
           `AI review template with id: ${templateId} doesn't exist`
         );
