@@ -1793,6 +1793,26 @@ async function createChallenge(currentUser, challenge, userToken) {
     debugLog,
   ) : [];
 
+  // Add AI screening phase if AI reviewers are assigned
+  logger.debug(
+    `createChallenge: checking if AI screening phase needs to be added ${buildLogContext()}`
+  );
+  await challengeHelper.addAIScreeningPhaseForChallengeCreation(
+    challenge,
+    prisma,
+    debugLog,
+  );
+  
+  // Recalculate end date after potentially adding AI screening phase
+  if (challenge.phases && challenge.phases.length > 0) {
+    challenge.endDate = helper.calculateChallengeEndDate(challenge);
+    logger.debug(
+      `createChallenge: recalculated endDate after phase adjustment (endDate=${
+        challenge.endDate
+      }) ${buildLogContext()}`
+    );
+  }
+
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   logger.info(
     `createChallenge: creating challenge record via prisma ${buildLogContext()} phaseCount=${_.get(

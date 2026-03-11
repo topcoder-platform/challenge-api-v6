@@ -92,6 +92,7 @@ workflows:
                 - develop
                 - security
                 - PM-3351
+                - PM-3926_ai-screening-phase
 
       - "build-qa":
           context: org-global

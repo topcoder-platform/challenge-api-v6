@@ -3,9 +3,11 @@ const challengeTrackService = require("../services/ChallengeTrackService");
 const timelineTemplateService = require("../services/TimelineTemplateService");
 const HttpStatus = require("http-status-codes");
 const _ = require("lodash");
+const moment = require("moment");
 const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
+const phaseHelper = require("./phase-helper");
 const axios = require("axios");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
@@ -507,6 +509,138 @@ class ChallengeHelper {
 
       throw err;
     }
+  }
+
+  /**
+   * Add AI Screening phase for challenges with AI reviewers.
+   * The AI screening phase is positioned after submission and allocated 4 hours by default.
+   * 
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   * @param {Function} logDebugMessage optional logging function
+   */
+  async addAIScreeningPhaseForChallengeCreation(challenge, prisma, logDebugMessage = () => {}) {
+    if (!challenge || !challenge.phases || !Array.isArray(challenge.reviewers)) {
+      return;
+    }
+
+    // Check if there are any AI reviewers
+    const hasAIReviewers = challenge.reviewers.some((reviewer) => !reviewer.isMemberReview && reviewer.aiWorkflowId);
+    
+    if (!hasAIReviewers) {
+      logDebugMessage("no AI reviewers found, skipping AI screening phase creation");
+      return;
+    }
+
+    // Check if AI Screening phase already exists
+    const aiScreeningPhaseExists = challenge.phases.some((phase) => phase.name === "AI Screening");
+    if (aiScreeningPhaseExists) {
+      logDebugMessage("AI screening phase already exists, skipping creation");
+      return;
+    }
+
+    // Find the submission phase
+    const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
+      challenge.phases.some((phase) => phase.name === name)
+    );
+
+    if (!submissionPhaseName) {
+      throw new errors.BadRequestError(
+        `Cannot add AI screening phase: no submission phase found in challenge`
+      );
+    }
+
+    // Get the AI Screening phase definition from the database
+    const { phaseDefinitionMap } = await phaseHelper.getPhaseDefinitionsAndMap();
+    const aiScreeningPhaseDefEntry = Array.from(phaseDefinitionMap.entries()).find(
+      ([_, phase]) => phase.name === "AI Screening"
+    );
+
+    if (!aiScreeningPhaseDefEntry) {
+      throw new errors.BadRequestError(
+        `AI Screening phase definition not found in the system`
+      );
+    }
+
+    const [aiScreeningPhaseId, aiScreeningPhaseDef] = aiScreeningPhaseDefEntry;
+
+    // Find the submission phase in the challenge phases
+    const submissionPhase = challenge.phases.find((phase) => phase.name === submissionPhaseName);
+    if (!submissionPhase) {
+      throw new errors.BadRequestError(
+        `Cannot add AI screening phase: submission phase not found in challenge phases`
+      );
+    }
+
+    const reviewPhases = challenge.phases.filter(
+      (phase) =>
+        phase.name &&
+        phase.name.toLowerCase().includes("review") &&
+        phase.predecessor === submissionPhase.phaseId
+    );
+
+    // Create the AI Screening challenge phase
+    const aiScreeningPhase = {
+      phaseId: aiScreeningPhaseId,
+      name: "AI Screening",
+      description: aiScreeningPhaseDef.description,
+      duration: 14400, // 4 hours in seconds
+      isOpen: false,
+      predecessor: submissionPhase.phaseId, // predecessor is the submission phase's phaseId
+      constraints: [],
+      scheduledStartDate: undefined,
+      scheduledEndDate: undefined,
+      actualStartDate: undefined,
+      actualEndDate: undefined,
+    };
+
+    // Ensure AI Screening is ordered between submission and review phases in the phases array.
+    const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
+    logDebugMessage(`(firstReviewIndex=${firstReviewIndex})`)
+    if (firstReviewIndex >= 0) {
+      challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
+    } else {
+      challenge.phases.push(aiScreeningPhase);
+    }
+
+    // Re-link review phase(s) so they start after AI Screening instead of submission.
+    reviewPhases.forEach((phase) => {
+      phase.predecessor = aiScreeningPhase.phaseId;
+    });
+
+    // Recalculate phase dates to keep timeline in sync
+    if (submissionPhase.scheduledEndDate) {
+      aiScreeningPhase.scheduledStartDate = submissionPhase.scheduledEndDate;
+      aiScreeningPhase.scheduledEndDate = moment(aiScreeningPhase.scheduledStartDate)
+        .add(aiScreeningPhase.duration, "seconds")
+        .toDate()
+        .toISOString();
+      
+      logDebugMessage(
+        `AI screening phase dates calculated (start=${aiScreeningPhase.scheduledStartDate}, end=${aiScreeningPhase.scheduledEndDate})`
+      );
+
+      // Update dates for review phases that now depend on AI Screening
+      reviewPhases.forEach((phase) => {
+        if (_.isNil(phase.actualStartDate)) {
+          phase.scheduledStartDate = aiScreeningPhase.scheduledEndDate;
+          if (phase.duration) {
+            phase.scheduledEndDate = moment(phase.scheduledStartDate)
+              .add(phase.duration, "seconds")
+              .toDate()
+              .toISOString();
+            
+            logDebugMessage(
+              `Updated ${phase.name} phase dates (start=${phase.scheduledStartDate}, end=${phase.scheduledEndDate})`
+            );
+          }
+        }
+      });
+    }
+
+    logDebugMessage(
+      `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
+    );
   }
 
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {
