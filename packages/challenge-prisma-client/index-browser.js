@@ -138,6 +138,7 @@ exports.Prisma.ChallengeScalarFieldEnum = {
   numOfCheckpointSubmissions: 'numOfCheckpointSubmissions',
   currentPhaseNames: 'currentPhaseNames',
   wiproAllowed: 'wiproAllowed',
+  funChallenge: 'funChallenge',
   tags: 'tags',
   groups: 'groups',
   taskIsTask: 'taskIsTask',
@@ -446,7 +447,7 @@ exports.Prisma.DefaultChallengeReviewerScalarFieldEnum = {
   baseCoefficient: 'baseCoefficient',
   incrementalCoefficient: 'incrementalCoefficient',
   opportunityType: 'opportunityType',
-  aiWorkflowId: 'aiWorkflowId',
+  aiConfigTemplateId: 'aiConfigTemplateId',
   shouldOpenOpportunity: 'shouldOpenOpportunity',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
@@ -714,7 +715,7 @@ exports.Prisma.DefaultChallengeReviewerOrderByRelevanceFieldEnum = {
   scorecardId: 'scorecardId',
   phaseName: 'phaseName',
   phaseId: 'phaseId',
-  aiWorkflowId: 'aiWorkflowId',
+  aiConfigTemplateId: 'aiConfigTemplateId',
   createdBy: 'createdBy',
   updatedBy: 'updatedBy'
 };

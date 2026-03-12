@@ -10,7 +10,8 @@ const logger = require("./logger");
 
 class ProjectHelper {
   /**
-   * Get Project Details
+   * Get Project Details.
+   * Requests project members explicitly so caller membership can be validated.
    * @param {String} projectId the project id
    * @param {String} currentUser the user
    *
@@ -23,6 +24,8 @@ class ProjectHelper {
     try {
       const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` },
+        // projects-api-v6 omits members unless explicitly requested.
+        params: { fields: "members" },
       });
       logger.debug(
         `projectHelper.getProject: response status ${res.status} for project ${projectId}`

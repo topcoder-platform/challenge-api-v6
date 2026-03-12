@@ -3667,6 +3667,7 @@ export namespace Prisma {
     numOfSubmissions: number | null
     numOfCheckpointSubmissions: number | null
     wiproAllowed: boolean | null
+    funChallenge: boolean | null
     taskIsTask: boolean | null
     taskIsAssigned: boolean | null
     taskMemberId: string | null
@@ -3700,6 +3701,7 @@ export namespace Prisma {
     numOfSubmissions: number | null
     numOfCheckpointSubmissions: number | null
     wiproAllowed: boolean | null
+    funChallenge: boolean | null
     taskIsTask: boolean | null
     taskIsAssigned: boolean | null
     taskMemberId: string | null
@@ -3734,6 +3736,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions: number
     currentPhaseNames: number
     wiproAllowed: number
+    funChallenge: number
     tags: number
     groups: number
     taskIsTask: number
@@ -3789,6 +3792,7 @@ export namespace Prisma {
     numOfSubmissions?: true
     numOfCheckpointSubmissions?: true
     wiproAllowed?: true
+    funChallenge?: true
     taskIsTask?: true
     taskIsAssigned?: true
     taskMemberId?: true
@@ -3822,6 +3826,7 @@ export namespace Prisma {
     numOfSubmissions?: true
     numOfCheckpointSubmissions?: true
     wiproAllowed?: true
+    funChallenge?: true
     taskIsTask?: true
     taskIsAssigned?: true
     taskMemberId?: true
@@ -3856,6 +3861,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: true
     currentPhaseNames?: true
     wiproAllowed?: true
+    funChallenge?: true
     tags?: true
     groups?: true
     taskIsTask?: true
@@ -3979,6 +3985,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions: number
     currentPhaseNames: string[]
     wiproAllowed: boolean
+    funChallenge: boolean
     tags: string[]
     groups: string[]
     taskIsTask: boolean
@@ -4034,6 +4041,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: boolean
     currentPhaseNames?: boolean
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: boolean
     groups?: boolean
     taskIsTask?: boolean
@@ -4089,6 +4097,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: boolean
     currentPhaseNames?: boolean
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: boolean
     groups?: boolean
     taskIsTask?: boolean
@@ -4128,6 +4137,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: boolean
     currentPhaseNames?: boolean
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: boolean
     groups?: boolean
     taskIsTask?: boolean
@@ -4167,6 +4177,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: boolean
     currentPhaseNames?: boolean
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: boolean
     groups?: boolean
     taskIsTask?: boolean
@@ -4186,7 +4197,7 @@ export namespace Prisma {
     updatedBy?: boolean
   }
 
-  export type ChallengeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "privateDescription" | "challengeSource" | "descriptionFormat" | "projectId" | "typeId" | "trackId" | "timelineTemplateId" | "overviewTotalPrizes" | "numOfRegistrants" | "numOfSubmissions" | "numOfCheckpointSubmissions" | "currentPhaseNames" | "wiproAllowed" | "tags" | "groups" | "taskIsTask" | "taskIsAssigned" | "taskMemberId" | "submissionStartDate" | "submissionEndDate" | "registrationStartDate" | "registrationEndDate" | "startDate" | "endDate" | "legacyId" | "status" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challenge"]>
+  export type ChallengeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "privateDescription" | "challengeSource" | "descriptionFormat" | "projectId" | "typeId" | "trackId" | "timelineTemplateId" | "overviewTotalPrizes" | "numOfRegistrants" | "numOfSubmissions" | "numOfCheckpointSubmissions" | "currentPhaseNames" | "wiproAllowed" | "funChallenge" | "tags" | "groups" | "taskIsTask" | "taskIsAssigned" | "taskMemberId" | "submissionStartDate" | "submissionEndDate" | "registrationStartDate" | "registrationEndDate" | "startDate" | "endDate" | "legacyId" | "status" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challenge"]>
   export type ChallengeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     billingRecord?: boolean | Challenge$billingRecordArgs<ExtArgs>
     legacyRecord?: boolean | Challenge$legacyRecordArgs<ExtArgs>
@@ -4258,6 +4269,7 @@ export namespace Prisma {
       numOfCheckpointSubmissions: number
       currentPhaseNames: string[]
       wiproAllowed: boolean
+      funChallenge: boolean
       tags: string[]
       groups: string[]
       taskIsTask: boolean
@@ -4732,6 +4744,7 @@ export namespace Prisma {
     readonly numOfCheckpointSubmissions: FieldRef<"Challenge", 'Int'>
     readonly currentPhaseNames: FieldRef<"Challenge", 'String[]'>
     readonly wiproAllowed: FieldRef<"Challenge", 'Boolean'>
+    readonly funChallenge: FieldRef<"Challenge", 'Boolean'>
     readonly tags: FieldRef<"Challenge", 'String[]'>
     readonly groups: FieldRef<"Challenge", 'String[]'>
     readonly taskIsTask: FieldRef<"Challenge", 'Boolean'>
@@ -29926,7 +29939,7 @@ export namespace Prisma {
     baseCoefficient: number | null
     incrementalCoefficient: number | null
     opportunityType: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId: string | null
+    aiConfigTemplateId: string | null
     shouldOpenOpportunity: boolean | null
     createdAt: Date | null
     createdBy: string | null
@@ -29948,7 +29961,7 @@ export namespace Prisma {
     baseCoefficient: number | null
     incrementalCoefficient: number | null
     opportunityType: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId: string | null
+    aiConfigTemplateId: string | null
     shouldOpenOpportunity: boolean | null
     createdAt: Date | null
     createdBy: string | null
@@ -29970,7 +29983,7 @@ export namespace Prisma {
     baseCoefficient: number
     incrementalCoefficient: number
     opportunityType: number
-    aiWorkflowId: number
+    aiConfigTemplateId: number
     shouldOpenOpportunity: number
     createdAt: number
     createdBy: number
@@ -30008,7 +30021,7 @@ export namespace Prisma {
     baseCoefficient?: true
     incrementalCoefficient?: true
     opportunityType?: true
-    aiWorkflowId?: true
+    aiConfigTemplateId?: true
     shouldOpenOpportunity?: true
     createdAt?: true
     createdBy?: true
@@ -30030,7 +30043,7 @@ export namespace Prisma {
     baseCoefficient?: true
     incrementalCoefficient?: true
     opportunityType?: true
-    aiWorkflowId?: true
+    aiConfigTemplateId?: true
     shouldOpenOpportunity?: true
     createdAt?: true
     createdBy?: true
@@ -30052,7 +30065,7 @@ export namespace Prisma {
     baseCoefficient?: true
     incrementalCoefficient?: true
     opportunityType?: true
-    aiWorkflowId?: true
+    aiConfigTemplateId?: true
     shouldOpenOpportunity?: true
     createdAt?: true
     createdBy?: true
@@ -30161,7 +30174,7 @@ export namespace Prisma {
     baseCoefficient: number | null
     incrementalCoefficient: number | null
     opportunityType: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId: string | null
+    aiConfigTemplateId: string | null
     shouldOpenOpportunity: boolean
     createdAt: Date
     createdBy: string
@@ -30202,7 +30215,7 @@ export namespace Prisma {
     baseCoefficient?: boolean
     incrementalCoefficient?: boolean
     opportunityType?: boolean
-    aiWorkflowId?: boolean
+    aiConfigTemplateId?: boolean
     shouldOpenOpportunity?: boolean
     createdAt?: boolean
     createdBy?: boolean
@@ -30228,7 +30241,7 @@ export namespace Prisma {
     baseCoefficient?: boolean
     incrementalCoefficient?: boolean
     opportunityType?: boolean
-    aiWorkflowId?: boolean
+    aiConfigTemplateId?: boolean
     shouldOpenOpportunity?: boolean
     createdAt?: boolean
     createdBy?: boolean
@@ -30254,7 +30267,7 @@ export namespace Prisma {
     baseCoefficient?: boolean
     incrementalCoefficient?: boolean
     opportunityType?: boolean
-    aiWorkflowId?: boolean
+    aiConfigTemplateId?: boolean
     shouldOpenOpportunity?: boolean
     createdAt?: boolean
     createdBy?: boolean
@@ -30280,7 +30293,7 @@ export namespace Prisma {
     baseCoefficient?: boolean
     incrementalCoefficient?: boolean
     opportunityType?: boolean
-    aiWorkflowId?: boolean
+    aiConfigTemplateId?: boolean
     shouldOpenOpportunity?: boolean
     createdAt?: boolean
     createdBy?: boolean
@@ -30288,7 +30301,7 @@ export namespace Prisma {
     updatedBy?: boolean
   }
 
-  export type DefaultChallengeReviewerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "typeId" | "trackId" | "timelineTemplateId" | "scorecardId" | "isMemberReview" | "memberReviewerCount" | "phaseName" | "phaseId" | "fixedAmount" | "baseCoefficient" | "incrementalCoefficient" | "opportunityType" | "aiWorkflowId" | "shouldOpenOpportunity" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["defaultChallengeReviewer"]>
+  export type DefaultChallengeReviewerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "typeId" | "trackId" | "timelineTemplateId" | "scorecardId" | "isMemberReview" | "memberReviewerCount" | "phaseName" | "phaseId" | "fixedAmount" | "baseCoefficient" | "incrementalCoefficient" | "opportunityType" | "aiConfigTemplateId" | "shouldOpenOpportunity" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["defaultChallengeReviewer"]>
   export type DefaultChallengeReviewerInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     challengeType?: boolean | ChallengeTypeDefaultArgs<ExtArgs>
     challengeTrack?: boolean | ChallengeTrackDefaultArgs<ExtArgs>
@@ -30330,7 +30343,7 @@ export namespace Prisma {
       baseCoefficient: number | null
       incrementalCoefficient: number | null
       opportunityType: $Enums.ReviewOpportunityTypeEnum | null
-      aiWorkflowId: string | null
+      aiConfigTemplateId: string | null
       shouldOpenOpportunity: boolean
       createdAt: Date
       createdBy: string
@@ -30776,7 +30789,7 @@ export namespace Prisma {
     readonly baseCoefficient: FieldRef<"DefaultChallengeReviewer", 'Float'>
     readonly incrementalCoefficient: FieldRef<"DefaultChallengeReviewer", 'Float'>
     readonly opportunityType: FieldRef<"DefaultChallengeReviewer", 'ReviewOpportunityTypeEnum'>
-    readonly aiWorkflowId: FieldRef<"DefaultChallengeReviewer", 'String'>
+    readonly aiConfigTemplateId: FieldRef<"DefaultChallengeReviewer", 'String'>
     readonly shouldOpenOpportunity: FieldRef<"DefaultChallengeReviewer", 'Boolean'>
     readonly createdAt: FieldRef<"DefaultChallengeReviewer", 'DateTime'>
     readonly createdBy: FieldRef<"DefaultChallengeReviewer", 'String'>
@@ -34161,6 +34174,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions: 'numOfCheckpointSubmissions',
     currentPhaseNames: 'currentPhaseNames',
     wiproAllowed: 'wiproAllowed',
+    funChallenge: 'funChallenge',
     tags: 'tags',
     groups: 'groups',
     taskIsTask: 'taskIsTask',
@@ -34535,7 +34549,7 @@ export namespace Prisma {
     baseCoefficient: 'baseCoefficient',
     incrementalCoefficient: 'incrementalCoefficient',
     opportunityType: 'opportunityType',
-    aiWorkflowId: 'aiWorkflowId',
+    aiConfigTemplateId: 'aiConfigTemplateId',
     shouldOpenOpportunity: 'shouldOpenOpportunity',
     createdAt: 'createdAt',
     createdBy: 'createdBy',
@@ -34890,7 +34904,7 @@ export namespace Prisma {
     scorecardId: 'scorecardId',
     phaseName: 'phaseName',
     phaseId: 'phaseId',
-    aiWorkflowId: 'aiWorkflowId',
+    aiConfigTemplateId: 'aiConfigTemplateId',
     createdBy: 'createdBy',
     updatedBy: 'updatedBy'
   };
@@ -35104,6 +35118,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFilter<"Challenge"> | number
     currentPhaseNames?: StringNullableListFilter<"Challenge">
     wiproAllowed?: BoolFilter<"Challenge"> | boolean
+    funChallenge?: BoolFilter<"Challenge"> | boolean
     tags?: StringNullableListFilter<"Challenge">
     groups?: StringNullableListFilter<"Challenge">
     taskIsTask?: BoolFilter<"Challenge"> | boolean
@@ -35158,6 +35173,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: SortOrder
     currentPhaseNames?: SortOrder
     wiproAllowed?: SortOrder
+    funChallenge?: SortOrder
     tags?: SortOrder
     groups?: SortOrder
     taskIsTask?: SortOrder
@@ -35216,6 +35232,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFilter<"Challenge"> | number
     currentPhaseNames?: StringNullableListFilter<"Challenge">
     wiproAllowed?: BoolFilter<"Challenge"> | boolean
+    funChallenge?: BoolFilter<"Challenge"> | boolean
     tags?: StringNullableListFilter<"Challenge">
     groups?: StringNullableListFilter<"Challenge">
     taskIsTask?: BoolFilter<"Challenge"> | boolean
@@ -35270,6 +35287,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: SortOrder
     currentPhaseNames?: SortOrder
     wiproAllowed?: SortOrder
+    funChallenge?: SortOrder
     tags?: SortOrder
     groups?: SortOrder
     taskIsTask?: SortOrder
@@ -35314,6 +35332,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntWithAggregatesFilter<"Challenge"> | number
     currentPhaseNames?: StringNullableListFilter<"Challenge">
     wiproAllowed?: BoolWithAggregatesFilter<"Challenge"> | boolean
+    funChallenge?: BoolWithAggregatesFilter<"Challenge"> | boolean
     tags?: StringNullableListFilter<"Challenge">
     groups?: StringNullableListFilter<"Challenge">
     taskIsTask?: BoolWithAggregatesFilter<"Challenge"> | boolean
@@ -37122,7 +37141,7 @@ export namespace Prisma {
     baseCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     incrementalCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     opportunityType?: EnumReviewOpportunityTypeEnumNullableFilter<"DefaultChallengeReviewer"> | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
+    aiConfigTemplateId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
     shouldOpenOpportunity?: BoolFilter<"DefaultChallengeReviewer"> | boolean
     createdAt?: DateTimeFilter<"DefaultChallengeReviewer"> | Date | string
     createdBy?: StringFilter<"DefaultChallengeReviewer"> | string
@@ -37148,7 +37167,7 @@ export namespace Prisma {
     baseCoefficient?: SortOrderInput | SortOrder
     incrementalCoefficient?: SortOrderInput | SortOrder
     opportunityType?: SortOrderInput | SortOrder
-    aiWorkflowId?: SortOrderInput | SortOrder
+    aiConfigTemplateId?: SortOrderInput | SortOrder
     shouldOpenOpportunity?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
@@ -37178,7 +37197,7 @@ export namespace Prisma {
     baseCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     incrementalCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     opportunityType?: EnumReviewOpportunityTypeEnumNullableFilter<"DefaultChallengeReviewer"> | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
+    aiConfigTemplateId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
     shouldOpenOpportunity?: BoolFilter<"DefaultChallengeReviewer"> | boolean
     createdAt?: DateTimeFilter<"DefaultChallengeReviewer"> | Date | string
     createdBy?: StringFilter<"DefaultChallengeReviewer"> | string
@@ -37204,7 +37223,7 @@ export namespace Prisma {
     baseCoefficient?: SortOrderInput | SortOrder
     incrementalCoefficient?: SortOrderInput | SortOrder
     opportunityType?: SortOrderInput | SortOrder
-    aiWorkflowId?: SortOrderInput | SortOrder
+    aiConfigTemplateId?: SortOrderInput | SortOrder
     shouldOpenOpportunity?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
@@ -37234,7 +37253,7 @@ export namespace Prisma {
     baseCoefficient?: FloatNullableWithAggregatesFilter<"DefaultChallengeReviewer"> | number | null
     incrementalCoefficient?: FloatNullableWithAggregatesFilter<"DefaultChallengeReviewer"> | number | null
     opportunityType?: EnumReviewOpportunityTypeEnumNullableWithAggregatesFilter<"DefaultChallengeReviewer"> | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: StringNullableWithAggregatesFilter<"DefaultChallengeReviewer"> | string | null
+    aiConfigTemplateId?: StringNullableWithAggregatesFilter<"DefaultChallengeReviewer"> | string | null
     shouldOpenOpportunity?: BoolWithAggregatesFilter<"DefaultChallengeReviewer"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"DefaultChallengeReviewer"> | Date | string
     createdBy?: StringWithAggregatesFilter<"DefaultChallengeReviewer"> | string
@@ -37446,6 +37465,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -37500,6 +37520,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -37548,6 +37569,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -37602,6 +37624,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -37653,6 +37676,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -37686,6 +37710,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -37722,6 +37747,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -39702,7 +39728,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -39728,7 +39754,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -39746,7 +39772,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -39772,7 +39798,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -39794,7 +39820,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -39812,7 +39838,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -39834,7 +39860,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -40303,6 +40329,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: SortOrder
     currentPhaseNames?: SortOrder
     wiproAllowed?: SortOrder
+    funChallenge?: SortOrder
     tags?: SortOrder
     groups?: SortOrder
     taskIsTask?: SortOrder
@@ -40347,6 +40374,7 @@ export namespace Prisma {
     numOfSubmissions?: SortOrder
     numOfCheckpointSubmissions?: SortOrder
     wiproAllowed?: SortOrder
+    funChallenge?: SortOrder
     taskIsTask?: SortOrder
     taskIsAssigned?: SortOrder
     taskMemberId?: SortOrder
@@ -40380,6 +40408,7 @@ export namespace Prisma {
     numOfSubmissions?: SortOrder
     numOfCheckpointSubmissions?: SortOrder
     wiproAllowed?: SortOrder
+    funChallenge?: SortOrder
     taskIsTask?: SortOrder
     taskIsAssigned?: SortOrder
     taskMemberId?: SortOrder
@@ -41838,7 +41867,7 @@ export namespace Prisma {
     baseCoefficient?: SortOrder
     incrementalCoefficient?: SortOrder
     opportunityType?: SortOrder
-    aiWorkflowId?: SortOrder
+    aiConfigTemplateId?: SortOrder
     shouldOpenOpportunity?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
@@ -41867,7 +41896,7 @@ export namespace Prisma {
     baseCoefficient?: SortOrder
     incrementalCoefficient?: SortOrder
     opportunityType?: SortOrder
-    aiWorkflowId?: SortOrder
+    aiConfigTemplateId?: SortOrder
     shouldOpenOpportunity?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
@@ -41889,7 +41918,7 @@ export namespace Prisma {
     baseCoefficient?: SortOrder
     incrementalCoefficient?: SortOrder
     opportunityType?: SortOrder
-    aiWorkflowId?: SortOrder
+    aiConfigTemplateId?: SortOrder
     shouldOpenOpportunity?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
@@ -45402,6 +45431,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -45454,6 +45484,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -45540,7 +45571,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -45564,7 +45595,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -45618,6 +45649,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFilter<"Challenge"> | number
     currentPhaseNames?: StringNullableListFilter<"Challenge">
     wiproAllowed?: BoolFilter<"Challenge"> | boolean
+    funChallenge?: BoolFilter<"Challenge"> | boolean
     tags?: StringNullableListFilter<"Challenge">
     groups?: StringNullableListFilter<"Challenge">
     taskIsTask?: BoolFilter<"Challenge"> | boolean
@@ -45701,7 +45733,7 @@ export namespace Prisma {
     baseCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     incrementalCoefficient?: FloatNullableFilter<"DefaultChallengeReviewer"> | number | null
     opportunityType?: EnumReviewOpportunityTypeEnumNullableFilter<"DefaultChallengeReviewer"> | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
+    aiConfigTemplateId?: StringNullableFilter<"DefaultChallengeReviewer"> | string | null
     shouldOpenOpportunity?: BoolFilter<"DefaultChallengeReviewer"> | boolean
     createdAt?: DateTimeFilter<"DefaultChallengeReviewer"> | Date | string
     createdBy?: StringFilter<"DefaultChallengeReviewer"> | string
@@ -45723,6 +45755,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -45775,6 +45808,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -45861,7 +45895,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -45885,7 +45919,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -46193,6 +46227,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46246,6 +46281,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46309,6 +46345,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46362,6 +46399,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46409,6 +46447,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46462,6 +46501,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46525,6 +46565,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46578,6 +46619,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46625,6 +46667,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46678,6 +46721,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46741,6 +46785,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46794,6 +46839,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -46901,6 +46947,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -46954,6 +47001,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47017,6 +47065,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47070,6 +47119,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47117,6 +47167,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47170,6 +47221,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47233,6 +47285,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47286,6 +47339,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47333,6 +47387,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47386,6 +47441,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47449,6 +47505,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47502,6 +47559,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47549,6 +47607,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47602,6 +47661,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47665,6 +47725,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47718,6 +47779,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47765,6 +47827,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47818,6 +47881,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -47881,6 +47945,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47934,6 +47999,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -47981,6 +48047,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48034,6 +48101,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48097,6 +48165,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48150,6 +48219,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48197,6 +48267,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48250,6 +48321,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48343,6 +48415,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48396,6 +48469,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48545,6 +48619,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48598,6 +48673,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -48661,6 +48737,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48714,6 +48791,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -48851,7 +48929,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -48875,7 +48953,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -48985,6 +49063,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49038,6 +49117,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49164,6 +49244,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -49217,6 +49298,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -49427,6 +49509,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49480,6 +49563,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49574,6 +49658,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -49627,6 +49712,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -49674,6 +49760,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49727,6 +49814,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -49823,6 +49911,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -49876,6 +49965,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -50326,6 +50416,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -50378,6 +50469,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -50432,7 +50524,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -50456,7 +50548,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -51195,6 +51287,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -51238,7 +51331,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -51260,6 +51353,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51312,6 +51406,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51362,6 +51457,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51424,7 +51520,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51448,7 +51544,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51469,7 +51565,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51493,6 +51589,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -51536,7 +51633,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -51558,6 +51655,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51610,6 +51708,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51660,6 +51759,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -51722,7 +51822,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51746,7 +51846,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51767,7 +51867,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -51864,7 +51964,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -51992,7 +52092,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -52016,7 +52116,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -52037,7 +52137,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -52167,6 +52267,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: number
     currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
     wiproAllowed?: boolean
+    funChallenge?: boolean
     tags?: ChallengeCreatetagsInput | string[]
     groups?: ChallengeCreategroupsInput | string[]
     taskIsTask?: boolean
@@ -52199,7 +52300,7 @@ export namespace Prisma {
     baseCoefficient?: number | null
     incrementalCoefficient?: number | null
     opportunityType?: $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: string | null
+    aiConfigTemplateId?: string | null
     shouldOpenOpportunity?: boolean
     createdAt?: Date | string
     createdBy: string
@@ -52287,6 +52388,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -52339,6 +52441,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -52389,6 +52492,7 @@ export namespace Prisma {
     numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
     currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
     wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
     tags?: ChallengeUpdatetagsInput | string[]
     groups?: ChallengeUpdategroupsInput | string[]
     taskIsTask?: BoolFieldUpdateOperationsInput | boolean
@@ -52418,7 +52522,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -52442,7 +52546,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
@@ -52463,7 +52567,7 @@ export namespace Prisma {
     baseCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     incrementalCoefficient?: NullableFloatFieldUpdateOperationsInput | number | null
     opportunityType?: NullableEnumReviewOpportunityTypeEnumFieldUpdateOperationsInput | $Enums.ReviewOpportunityTypeEnum | null
-    aiWorkflowId?: NullableStringFieldUpdateOperationsInput | string | null
+    aiConfigTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
     shouldOpenOpportunity?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
