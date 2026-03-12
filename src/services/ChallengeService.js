@@ -1793,25 +1793,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     debugLog,
   ) : [];
 
-  // Add AI screening phase if AI reviewers are assigned
-  logger.debug(
-    `createChallenge: checking if AI screening phase needs to be added ${buildLogContext()}`
-  );
-  await challengeHelper.addAIScreeningPhaseForChallengeCreation(
-    challenge,
-    prisma,
-    debugLog,
-  );
-  
-  // Recalculate end date after potentially adding AI screening phase
-  if (challenge.phases && challenge.phases.length > 0) {
-    challenge.endDate = helper.calculateChallengeEndDate(challenge);
-    logger.debug(
-      `createChallenge: recalculated endDate after phase adjustment (endDate=${
-        challenge.endDate
-      }) ${buildLogContext()}`
-    );
-  }
+  // AI screening phase will be added when challenge is launched (status changed to ACTIVE)
 
   const prismaModel = prismaHelper.convertChallengeSchemaToPrisma(currentUser, challenge);
   logger.info(
@@ -2739,7 +2721,23 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     phasesUpdated = true;
     phasesForUpdate = _.cloneDeep(data.phases);
   }
-  const phasesForDates = phasesUpdated ? data.phases : challenge.phases;
+  // Add AI screening phase if AI reviewers are assigned and challenge is being activated
+  if (isStatusChangingToActive) {
+    logger.debug(`updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`);
+    const tempChallenge = { phases: phasesForUpdate || challenge.phases, reviewers: data.reviewers || challenge.reviewers };
+    const debugLogForAI = (message) => logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
+    await challengeHelper.addAIScreeningPhaseForChallengeCreation(
+      tempChallenge,
+      prisma,
+      debugLogForAI,
+    );
+    // Update phasesForUpdate with the updated phases after AI screening addition
+    phasesForUpdate = tempChallenge.phases;
+    phasesUpdated = true;
+    data.phases = phasesForUpdate;
+  }
+
+  let phasesForDates = phasesUpdated ? data.phases : challenge.phases;
 
   if (phasesUpdated || data.startDate) {
     const startSource =
