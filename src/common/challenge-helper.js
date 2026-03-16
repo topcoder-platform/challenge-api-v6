@@ -15,6 +15,7 @@ const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
+const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
 
 class ChallengeHelper {
   /**
@@ -513,13 +514,13 @@ class ChallengeHelper {
 
   /**
    * Add AI Screening phase for challenges with AI reviewers.
-   * The AI screening phase is positioned after submission and allocated 4 hours by default.
+    * AI screening phases are positioned after submission/checkpoint submission and allocated 4 hours by default.
    * 
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    * @param {Function} logDebugMessage optional logging function
    */
-  async addAIScreeningPhaseForChallengeCreation(challenge, prisma, logDebugMessage = () => {}) {
+  async addAIScreeningPhaseForChallenge(challenge, prisma, logDebugMessage = () => {}) {
     if (!challenge || !challenge.phases || !Array.isArray(challenge.reviewers)) {
       return;
     }
@@ -532,21 +533,24 @@ class ChallengeHelper {
       return;
     }
 
-    // Check if AI Screening phase already exists
-    const aiScreeningPhaseExists = challenge.phases.some((phase) => phase.name === "AI Screening");
-    if (aiScreeningPhaseExists) {
-      logDebugMessage("AI screening phase already exists, skipping creation");
-      return;
-    }
-
-    // Find the submission phase
+    // Find the regular submission phase
     const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
       challenge.phases.some((phase) => phase.name === name)
     );
 
-    if (!submissionPhaseName) {
+    const submissionPhase = submissionPhaseName
+      ? challenge.phases.find((phase) => phase.name === submissionPhaseName)
+      : null;
+
+    // Find the checkpoint submission phase (if present)
+    const checkpointSubmissionPhase = challenge.phases.find(
+      (phase) => phase.name === CHECKPOINT_SUBMISSION_PHASE_NAME
+    );
+
+    const sourceSubmissionPhases = _.compact([checkpointSubmissionPhase, submissionPhase]);
+    if (sourceSubmissionPhases.length === 0) {
       throw new errors.BadRequestError(
-        `Cannot add AI screening phase: no submission phase found in challenge`
+        `Cannot add AI screening phase: no submission/checkpoint submission phase found in challenge`
       );
     }
 
@@ -564,83 +568,88 @@ class ChallengeHelper {
 
     const [aiScreeningPhaseId, aiScreeningPhaseDef] = aiScreeningPhaseDefEntry;
 
-    // Find the submission phase in the challenge phases
-    const submissionPhase = challenge.phases.find((phase) => phase.name === submissionPhaseName);
-    if (!submissionPhase) {
-      throw new errors.BadRequestError(
-        `Cannot add AI screening phase: submission phase not found in challenge phases`
-      );
-    }
-
-    const reviewPhases = challenge.phases.filter(
-      (phase) =>
-        phase.name &&
-        phase.name.toLowerCase().includes("review") &&
-        phase.predecessor === submissionPhase.phaseId
-    );
-
-    // Create the AI Screening challenge phase
-    const aiScreeningPhase = {
-      phaseId: aiScreeningPhaseId,
-      name: "AI Screening",
-      description: aiScreeningPhaseDef.description,
-      duration: 14400, // 4 hours in seconds
-      isOpen: false,
-      predecessor: submissionPhase.phaseId, // predecessor is the submission phase's phaseId
-      constraints: [],
-      scheduledStartDate: undefined,
-      scheduledEndDate: undefined,
-      actualStartDate: undefined,
-      actualEndDate: undefined,
-    };
-
-    // Ensure AI Screening is ordered between submission and review phases in the phases array.
-    const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
-    logDebugMessage(`(firstReviewIndex=${firstReviewIndex})`)
-    if (firstReviewIndex >= 0) {
-      challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
-    } else {
-      challenge.phases.push(aiScreeningPhase);
-    }
-
-    // Re-link review phase(s) so they start after AI Screening instead of submission.
-    reviewPhases.forEach((phase) => {
-      phase.predecessor = aiScreeningPhase.phaseId;
-    });
-
-    // Recalculate phase dates to keep timeline in sync
-    if (submissionPhase.scheduledEndDate) {
-      aiScreeningPhase.scheduledStartDate = submissionPhase.scheduledEndDate;
-      aiScreeningPhase.scheduledEndDate = moment(aiScreeningPhase.scheduledStartDate)
-        .add(aiScreeningPhase.duration, "seconds")
-        .toDate()
-        .toISOString();
-      
-      logDebugMessage(
-        `AI screening phase dates calculated (start=${aiScreeningPhase.scheduledStartDate}, end=${aiScreeningPhase.scheduledEndDate})`
+    sourceSubmissionPhases.forEach((sourcePhase) => {
+      const aiScreeningPhaseExistsForSource = challenge.phases.some(
+        (phase) => phase.name === "AI Screening" && phase.predecessor === sourcePhase.phaseId
       );
 
-      // Update dates for review phases that now depend on AI Screening
+      if (aiScreeningPhaseExistsForSource) {
+        logDebugMessage(
+          `AI screening phase already exists for predecessor=${sourcePhase.phaseId}, skipping creation`
+        );
+        return;
+      }
+
+      const reviewPhases = challenge.phases.filter(
+        (phase) =>
+          phase.name &&
+          phase.name.toLowerCase().includes("review") &&
+          phase.predecessor === sourcePhase.phaseId
+      );
+
+      const aiScreeningPhase = {
+        phaseId: aiScreeningPhaseId,
+        name: "AI Screening",
+        description: aiScreeningPhaseDef.description,
+        duration: 14400, // 4 hours in seconds
+        isOpen: false,
+        predecessor: sourcePhase.phaseId,
+        constraints: [],
+        scheduledStartDate: undefined,
+        scheduledEndDate: undefined,
+        actualStartDate: undefined,
+        actualEndDate: undefined,
+      };
+
+      // Ensure AI Screening is ordered between source submission and review phases.
+      const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
+      const sourcePhaseIndex = challenge.phases.indexOf(sourcePhase);
+      if (firstReviewIndex >= 0) {
+        challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
+      } else if (sourcePhaseIndex >= 0) {
+        challenge.phases.splice(sourcePhaseIndex + 1, 0, aiScreeningPhase);
+      } else {
+        challenge.phases.push(aiScreeningPhase);
+      }
+
+      // Re-link review phase(s) so they start after AI Screening instead of source submission.
       reviewPhases.forEach((phase) => {
-        if (_.isNil(phase.actualStartDate)) {
-          phase.scheduledStartDate = aiScreeningPhase.scheduledEndDate;
-          if (phase.duration) {
-            phase.scheduledEndDate = moment(phase.scheduledStartDate)
-              .add(phase.duration, "seconds")
-              .toDate()
-              .toISOString();
-            
-            logDebugMessage(
-              `Updated ${phase.name} phase dates (start=${phase.scheduledStartDate}, end=${phase.scheduledEndDate})`
-            );
-          }
-        }
+        phase.predecessor = aiScreeningPhase.phaseId;
       });
-    }
 
-    logDebugMessage(
-      `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
-    );
+      // Recalculate phase dates to keep timeline in sync
+      if (sourcePhase.scheduledEndDate) {
+        aiScreeningPhase.scheduledStartDate = sourcePhase.scheduledEndDate;
+        aiScreeningPhase.scheduledEndDate = moment(aiScreeningPhase.scheduledStartDate)
+          .add(aiScreeningPhase.duration, "seconds")
+          .toDate()
+          .toISOString();
+
+        logDebugMessage(
+          `AI screening phase dates calculated (predecessor=${sourcePhase.phaseId}, start=${aiScreeningPhase.scheduledStartDate}, end=${aiScreeningPhase.scheduledEndDate})`
+        );
+
+        reviewPhases.forEach((phase) => {
+          if (_.isNil(phase.actualStartDate)) {
+            phase.scheduledStartDate = aiScreeningPhase.scheduledEndDate;
+            if (phase.duration) {
+              phase.scheduledEndDate = moment(phase.scheduledStartDate)
+                .add(phase.duration, "seconds")
+                .toDate()
+                .toISOString();
+
+              logDebugMessage(
+                `Updated ${phase.name} phase dates (start=${phase.scheduledStartDate}, end=${phase.scheduledEndDate})`
+              );
+            }
+          }
+        });
+      }
+
+      logDebugMessage(
+        `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}, predecessor=${sourcePhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
+      );
+    });
   }
 
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {

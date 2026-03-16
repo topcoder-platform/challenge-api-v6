@@ -2726,7 +2726,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.debug(`updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`);
     const tempChallenge = { phases: phasesForUpdate || challenge.phases, reviewers: data.reviewers || challenge.reviewers };
     const debugLogForAI = (message) => logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
-    await challengeHelper.addAIScreeningPhaseForChallengeCreation(
+    await challengeHelper.addAIScreeningPhaseForChallenge(
       tempChallenge,
       prisma,
       debugLogForAI,
