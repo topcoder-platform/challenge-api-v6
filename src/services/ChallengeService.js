@@ -105,6 +105,70 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
+const AI_SCREENING_PHASE_NAME = "ai screening";
+
+function normalizePhaseNameForComparison(phaseName) {
+  return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+function extractSubmissionId(submission) {
+  const candidate =
+    _.get(submission, "id") ||
+    _.get(submission, "submissionId") ||
+    _.get(submission, "legacySubmissionId");
+  if (_.isNil(candidate)) {
+    return null;
+  }
+  const normalized = _.toString(candidate).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function ensureAIScreeningCanBeClosed(challenge) {
+  const hasAIReviewers = Array.isArray(challenge.reviewers)
+    ? challenge.reviewers.some((reviewer) => !reviewer.isMemberReview && reviewer.aiWorkflowId)
+    : false;
+
+  if (!hasAIReviewers) {
+    return;
+  }
+
+  const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challenge.id);
+  if (!aiReviewConfig || !aiReviewConfig.id) {
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI review configuration could not be fetched"
+    );
+  }
+
+  const [submissions, decisions] = await Promise.all([
+    helper.getChallengeSubmissions(challenge.id),
+    helper.getAIReviewDecisionsByConfigId(aiReviewConfig.id),
+  ]);
+
+  const submissionIds = _.uniq(
+    (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id)
+  );
+  if (submissionIds.length === 0) {
+    return;
+  }
+
+  const finalizedDecisionSubmissionIds = new Set(
+    (decisions || [])
+      .filter((decision) => decision && decision.isFinal === true)
+      .map((decision) => extractSubmissionId(decision))
+      .filter((id) => !!id)
+  );
+
+  const hasPendingDecision = (decisions || []).some((decision) => decision && decision.isFinal !== true);
+  const missingFinalizedSubmissions = submissionIds.filter(
+    (submissionId) => !finalizedDecisionSubmissionIds.has(submissionId)
+  );
+
+  if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI reviews are not complete"
+    );
+  }
+}
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -3986,6 +4050,13 @@ async function advancePhase(currentUser, challengeId, data) {
   }
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
+  }
+
+  const isClosingAIScreening =
+    data.operation === "close" &&
+    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
+  if (isClosingAIScreening) {
+    await ensureAIScreeningCanBeClosed(challenge);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
