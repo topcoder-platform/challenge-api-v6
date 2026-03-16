@@ -583,7 +583,7 @@ class ChallengeHelper {
       const reviewPhases = challenge.phases.filter(
         (phase) =>
           phase.name &&
-          phase.name.toLowerCase().includes("review") &&
+          (phase.name.toLowerCase().includes("review") || phase.name.toLowerCase().includes("screening")) &&
           phase.predecessor === sourcePhase.phaseId
       );
 
@@ -601,7 +601,7 @@ class ChallengeHelper {
         actualEndDate: undefined,
       };
 
-      // Ensure AI Screening is ordered between source submission and review phases.
+      // Ensure AI Screening is ordered between source submission and review (or screening) phases.
       const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
       const sourcePhaseIndex = challenge.phases.indexOf(sourcePhase);
       if (firstReviewIndex >= 0) {
