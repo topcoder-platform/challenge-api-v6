@@ -3998,7 +3998,7 @@ async function advancePhase(currentUser, challengeId, data) {
     data.operation === "close" &&
     normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
   if (isClosingAIScreening) {
-    await ensureAIScreeningCanBeClosed(challenge);
+    await ensureAIScreeningCanBeClosed(challenge.id);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(

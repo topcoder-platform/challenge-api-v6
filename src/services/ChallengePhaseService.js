@@ -681,7 +681,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     }
 
     if (String(closingPhaseName || "").toLowerCase() === "ai screening") {
-      await ensureAIScreeningCanBeClosed(challenge);
+      await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
     }
 
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
