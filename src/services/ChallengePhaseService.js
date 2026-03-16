@@ -353,6 +353,73 @@ async function hasPendingAppealResponsesForChallenge(challengeId) {
   return Number(count) > 0;
 }
 
+function extractSubmissionId(submission) {
+  const candidate =
+    _.get(submission, "id") ||
+    _.get(submission, "submissionId") ||
+    _.get(submission, "legacySubmissionId");
+  if (_.isNil(candidate)) {
+    return null;
+  }
+  const normalized = _.toString(candidate).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function ensureChallengeHasAiReviewers(challengeId) {
+  const reviewers = await prisma.challengeReviewer.findMany({
+    where: { challengeId, isMemberReview: false, aiWorkflowId: { not: null } },
+  });
+
+  const hasAIReviewers = Array.isArray(reviewers) && reviewers.length > 0;
+
+  if (!hasAIReviewers) {
+    throw new errors.BadRequestError(
+      `Challenge does not have any AI reviewers assigned`
+    );
+  }
+}
+
+async function ensureAIScreeningCanBeClosed(challengeId) {
+  await ensureChallengeHasAiReviewers(challengeId);
+
+  const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+  if (!aiReviewConfig || !aiReviewConfig.id) {
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI review configuration could not be fetched"
+    );
+  }
+
+  const [submissions, decisions] = await Promise.all([
+    helper.getChallengeSubmissions(challengeId),
+    helper.getAIReviewDecisionsByConfigId(aiReviewConfig.id),
+  ]);
+
+  const submissionIds = _.uniq(
+    (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id)
+  );
+  if (submissionIds.length === 0) {
+    return;
+  }
+
+  const finalizedDecisionSubmissionIds = new Set(
+    (decisions || [])
+      .filter((decision) => decision && decision.isFinal === true)
+      .map((decision) => extractSubmissionId(decision))
+      .filter((id) => !!id)
+  );
+
+  const hasPendingDecision = (decisions || []).some((decision) => decision && decision.isFinal !== true);
+  const missingFinalizedSubmissions = submissionIds.filter(
+    (submissionId) => !finalizedDecisionSubmissionIds.has(submissionId)
+  );
+
+  if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI reviews are not complete"
+    );
+  }
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
@@ -612,6 +679,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         "Appeals Response phase can't be closed because there are still appeals that haven't been responded to"
       );
     }
+
+    if (String(closingPhaseName || "").toLowerCase() === "ai screening") {
+      await ensureAIScreeningCanBeClosed(challenge);
+    }
+
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
       data.actualEndDate = new Date();
     }
