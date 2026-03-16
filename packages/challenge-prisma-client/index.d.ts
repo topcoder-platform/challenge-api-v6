@@ -5545,8 +5545,18 @@ export namespace Prisma {
 
   export type AggregateChallengeType = {
     _count: ChallengeTypeCountAggregateOutputType | null
+    _avg: ChallengeTypeAvgAggregateOutputType | null
+    _sum: ChallengeTypeSumAggregateOutputType | null
     _min: ChallengeTypeMinAggregateOutputType | null
     _max: ChallengeTypeMaxAggregateOutputType | null
+  }
+
+  export type ChallengeTypeAvgAggregateOutputType = {
+    legacyId: number | null
+  }
+
+  export type ChallengeTypeSumAggregateOutputType = {
+    legacyId: number | null
   }
 
   export type ChallengeTypeMinAggregateOutputType = {
@@ -5556,6 +5566,8 @@ export namespace Prisma {
     isActive: boolean | null
     isTask: boolean | null
     abbreviation: string | null
+    legacyId: number | null
+    isLegacy: boolean | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -5569,6 +5581,8 @@ export namespace Prisma {
     isActive: boolean | null
     isTask: boolean | null
     abbreviation: string | null
+    legacyId: number | null
+    isLegacy: boolean | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -5582,6 +5596,8 @@ export namespace Prisma {
     isActive: number
     isTask: number
     abbreviation: number
+    legacyId: number
+    isLegacy: number
     createdAt: number
     createdBy: number
     updatedAt: number
@@ -5590,6 +5606,14 @@ export namespace Prisma {
   }
 
 
+  export type ChallengeTypeAvgAggregateInputType = {
+    legacyId?: true
+  }
+
+  export type ChallengeTypeSumAggregateInputType = {
+    legacyId?: true
+  }
+
   export type ChallengeTypeMinAggregateInputType = {
     id?: true
     name?: true
@@ -5597,6 +5621,8 @@ export namespace Prisma {
     isActive?: true
     isTask?: true
     abbreviation?: true
+    legacyId?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -5610,6 +5636,8 @@ export namespace Prisma {
     isActive?: true
     isTask?: true
     abbreviation?: true
+    legacyId?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -5623,6 +5651,8 @@ export namespace Prisma {
     isActive?: true
     isTask?: true
     abbreviation?: true
+    legacyId?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -5668,6 +5698,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: ChallengeTypeAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: ChallengeTypeSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: ChallengeTypeMinAggregateInputType
@@ -5698,6 +5740,8 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: ChallengeTypeCountAggregateInputType | true
+    _avg?: ChallengeTypeAvgAggregateInputType
+    _sum?: ChallengeTypeSumAggregateInputType
     _min?: ChallengeTypeMinAggregateInputType
     _max?: ChallengeTypeMaxAggregateInputType
   }
@@ -5709,11 +5753,15 @@ export namespace Prisma {
     isActive: boolean
     isTask: boolean
     abbreviation: string
+    legacyId: number | null
+    isLegacy: boolean
     createdAt: Date
     createdBy: string
     updatedAt: Date
     updatedBy: string
     _count: ChallengeTypeCountAggregateOutputType | null
+    _avg: ChallengeTypeAvgAggregateOutputType | null
+    _sum: ChallengeTypeSumAggregateOutputType | null
     _min: ChallengeTypeMinAggregateOutputType | null
     _max: ChallengeTypeMaxAggregateOutputType | null
   }
@@ -5739,6 +5787,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation?: boolean
+    legacyId?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -5756,6 +5806,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation?: boolean
+    legacyId?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -5769,6 +5821,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation?: boolean
+    legacyId?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -5782,13 +5836,15 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation?: boolean
+    legacyId?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
     updatedBy?: boolean
   }
 
-  export type ChallengeTypeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "isActive" | "isTask" | "abbreviation" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challengeType"]>
+  export type ChallengeTypeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "isActive" | "isTask" | "abbreviation" | "legacyId" | "isLegacy" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challengeType"]>
   export type ChallengeTypeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     challenges?: boolean | ChallengeType$challengesArgs<ExtArgs>
     timelineTemplates?: boolean | ChallengeType$timelineTemplatesArgs<ExtArgs>
@@ -5812,6 +5868,8 @@ export namespace Prisma {
       isActive: boolean
       isTask: boolean
       abbreviation: string
+      legacyId: number | null
+      isLegacy: boolean
       createdAt: Date
       createdBy: string
       updatedAt: Date
@@ -6248,6 +6306,8 @@ export namespace Prisma {
     readonly isActive: FieldRef<"ChallengeType", 'Boolean'>
     readonly isTask: FieldRef<"ChallengeType", 'Boolean'>
     readonly abbreviation: FieldRef<"ChallengeType", 'String'>
+    readonly legacyId: FieldRef<"ChallengeType", 'Int'>
+    readonly isLegacy: FieldRef<"ChallengeType", 'Boolean'>
     readonly createdAt: FieldRef<"ChallengeType", 'DateTime'>
     readonly createdBy: FieldRef<"ChallengeType", 'String'>
     readonly updatedAt: FieldRef<"ChallengeType", 'DateTime'>
@@ -6758,6 +6818,7 @@ export namespace Prisma {
     abbreviation: string | null
     legacyId: number | null
     track: $Enums.ChallengeTrackEnum | null
+    isLegacy: boolean | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -6772,6 +6833,7 @@ export namespace Prisma {
     abbreviation: string | null
     legacyId: number | null
     track: $Enums.ChallengeTrackEnum | null
+    isLegacy: boolean | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -6786,6 +6848,7 @@ export namespace Prisma {
     abbreviation: number
     legacyId: number
     track: number
+    isLegacy: number
     createdAt: number
     createdBy: number
     updatedAt: number
@@ -6810,6 +6873,7 @@ export namespace Prisma {
     abbreviation?: true
     legacyId?: true
     track?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -6824,6 +6888,7 @@ export namespace Prisma {
     abbreviation?: true
     legacyId?: true
     track?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -6838,6 +6903,7 @@ export namespace Prisma {
     abbreviation?: true
     legacyId?: true
     track?: true
+    isLegacy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -6939,6 +7005,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId: number | null
     track: $Enums.ChallengeTrackEnum | null
+    isLegacy: boolean
     createdAt: Date
     createdBy: string
     updatedAt: Date
@@ -6972,6 +7039,7 @@ export namespace Prisma {
     abbreviation?: boolean
     legacyId?: boolean
     track?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -6990,6 +7058,7 @@ export namespace Prisma {
     abbreviation?: boolean
     legacyId?: boolean
     track?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -7004,6 +7073,7 @@ export namespace Prisma {
     abbreviation?: boolean
     legacyId?: boolean
     track?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -7018,13 +7088,14 @@ export namespace Prisma {
     abbreviation?: boolean
     legacyId?: boolean
     track?: boolean
+    isLegacy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
     updatedBy?: boolean
   }
 
-  export type ChallengeTrackOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "isActive" | "abbreviation" | "legacyId" | "track" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challengeTrack"]>
+  export type ChallengeTrackOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "isActive" | "abbreviation" | "legacyId" | "track" | "isLegacy" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challengeTrack"]>
   export type ChallengeTrackInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     challenges?: boolean | ChallengeTrack$challengesArgs<ExtArgs>
     timelineTemplates?: boolean | ChallengeTrack$timelineTemplatesArgs<ExtArgs>
@@ -7049,6 +7120,7 @@ export namespace Prisma {
       abbreviation: string
       legacyId: number | null
       track: $Enums.ChallengeTrackEnum | null
+      isLegacy: boolean
       createdAt: Date
       createdBy: string
       updatedAt: Date
@@ -7486,6 +7558,7 @@ export namespace Prisma {
     readonly abbreviation: FieldRef<"ChallengeTrack", 'String'>
     readonly legacyId: FieldRef<"ChallengeTrack", 'Int'>
     readonly track: FieldRef<"ChallengeTrack", 'ChallengeTrackEnum'>
+    readonly isLegacy: FieldRef<"ChallengeTrack", 'Boolean'>
     readonly createdAt: FieldRef<"ChallengeTrack", 'DateTime'>
     readonly createdBy: FieldRef<"ChallengeTrack", 'String'>
     readonly updatedAt: FieldRef<"ChallengeTrack", 'DateTime'>
@@ -34204,6 +34277,8 @@ export namespace Prisma {
     isActive: 'isActive',
     isTask: 'isTask',
     abbreviation: 'abbreviation',
+    legacyId: 'legacyId',
+    isLegacy: 'isLegacy',
     createdAt: 'createdAt',
     createdBy: 'createdBy',
     updatedAt: 'updatedAt',
@@ -34221,6 +34296,7 @@ export namespace Prisma {
     abbreviation: 'abbreviation',
     legacyId: 'legacyId',
     track: 'track',
+    isLegacy: 'isLegacy',
     createdAt: 'createdAt',
     createdBy: 'createdBy',
     updatedAt: 'updatedAt',
@@ -35362,6 +35438,8 @@ export namespace Prisma {
     isActive?: BoolFilter<"ChallengeType"> | boolean
     isTask?: BoolFilter<"ChallengeType"> | boolean
     abbreviation?: StringFilter<"ChallengeType"> | string
+    legacyId?: IntNullableFilter<"ChallengeType"> | number | null
+    isLegacy?: BoolFilter<"ChallengeType"> | boolean
     createdAt?: DateTimeFilter<"ChallengeType"> | Date | string
     createdBy?: StringFilter<"ChallengeType"> | string
     updatedAt?: DateTimeFilter<"ChallengeType"> | Date | string
@@ -35378,6 +35456,8 @@ export namespace Prisma {
     isActive?: SortOrder
     isTask?: SortOrder
     abbreviation?: SortOrder
+    legacyId?: SortOrderInput | SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -35398,6 +35478,8 @@ export namespace Prisma {
     isActive?: BoolFilter<"ChallengeType"> | boolean
     isTask?: BoolFilter<"ChallengeType"> | boolean
     abbreviation?: StringFilter<"ChallengeType"> | string
+    legacyId?: IntNullableFilter<"ChallengeType"> | number | null
+    isLegacy?: BoolFilter<"ChallengeType"> | boolean
     createdAt?: DateTimeFilter<"ChallengeType"> | Date | string
     createdBy?: StringFilter<"ChallengeType"> | string
     updatedAt?: DateTimeFilter<"ChallengeType"> | Date | string
@@ -35414,13 +35496,17 @@ export namespace Prisma {
     isActive?: SortOrder
     isTask?: SortOrder
     abbreviation?: SortOrder
+    legacyId?: SortOrderInput | SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
     updatedBy?: SortOrder
     _count?: ChallengeTypeCountOrderByAggregateInput
+    _avg?: ChallengeTypeAvgOrderByAggregateInput
     _max?: ChallengeTypeMaxOrderByAggregateInput
     _min?: ChallengeTypeMinOrderByAggregateInput
+    _sum?: ChallengeTypeSumOrderByAggregateInput
   }
 
   export type ChallengeTypeScalarWhereWithAggregatesInput = {
@@ -35433,6 +35519,8 @@ export namespace Prisma {
     isActive?: BoolWithAggregatesFilter<"ChallengeType"> | boolean
     isTask?: BoolWithAggregatesFilter<"ChallengeType"> | boolean
     abbreviation?: StringWithAggregatesFilter<"ChallengeType"> | string
+    legacyId?: IntNullableWithAggregatesFilter<"ChallengeType"> | number | null
+    isLegacy?: BoolWithAggregatesFilter<"ChallengeType"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"ChallengeType"> | Date | string
     createdBy?: StringWithAggregatesFilter<"ChallengeType"> | string
     updatedAt?: DateTimeWithAggregatesFilter<"ChallengeType"> | Date | string
@@ -35450,6 +35538,7 @@ export namespace Prisma {
     abbreviation?: StringFilter<"ChallengeTrack"> | string
     legacyId?: IntNullableFilter<"ChallengeTrack"> | number | null
     track?: EnumChallengeTrackEnumNullableFilter<"ChallengeTrack"> | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFilter<"ChallengeTrack"> | boolean
     createdAt?: DateTimeFilter<"ChallengeTrack"> | Date | string
     createdBy?: StringFilter<"ChallengeTrack"> | string
     updatedAt?: DateTimeFilter<"ChallengeTrack"> | Date | string
@@ -35467,6 +35556,7 @@ export namespace Prisma {
     abbreviation?: SortOrder
     legacyId?: SortOrderInput | SortOrder
     track?: SortOrderInput | SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -35488,6 +35578,7 @@ export namespace Prisma {
     abbreviation?: StringFilter<"ChallengeTrack"> | string
     legacyId?: IntNullableFilter<"ChallengeTrack"> | number | null
     track?: EnumChallengeTrackEnumNullableFilter<"ChallengeTrack"> | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFilter<"ChallengeTrack"> | boolean
     createdAt?: DateTimeFilter<"ChallengeTrack"> | Date | string
     createdBy?: StringFilter<"ChallengeTrack"> | string
     updatedAt?: DateTimeFilter<"ChallengeTrack"> | Date | string
@@ -35505,6 +35596,7 @@ export namespace Prisma {
     abbreviation?: SortOrder
     legacyId?: SortOrderInput | SortOrder
     track?: SortOrderInput | SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -35527,6 +35619,7 @@ export namespace Prisma {
     abbreviation?: StringWithAggregatesFilter<"ChallengeTrack"> | string
     legacyId?: IntNullableWithAggregatesFilter<"ChallengeTrack"> | number | null
     track?: EnumChallengeTrackEnumNullableWithAggregatesFilter<"ChallengeTrack"> | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolWithAggregatesFilter<"ChallengeTrack"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"ChallengeTrack"> | Date | string
     createdBy?: StringWithAggregatesFilter<"ChallengeTrack"> | string
     updatedAt?: DateTimeWithAggregatesFilter<"ChallengeTrack"> | Date | string
@@ -37774,6 +37867,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37790,6 +37885,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37806,6 +37903,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37822,6 +37921,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37838,6 +37939,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37851,6 +37954,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37864,6 +37969,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37878,6 +37985,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37895,6 +38003,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37912,6 +38021,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37929,6 +38039,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37946,6 +38057,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -37960,6 +38072,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -37974,6 +38087,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40610,10 +40724,16 @@ export namespace Prisma {
     isActive?: SortOrder
     isTask?: SortOrder
     abbreviation?: SortOrder
+    legacyId?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
     updatedBy?: SortOrder
+  }
+
+  export type ChallengeTypeAvgOrderByAggregateInput = {
+    legacyId?: SortOrder
   }
 
   export type ChallengeTypeMaxOrderByAggregateInput = {
@@ -40623,6 +40743,8 @@ export namespace Prisma {
     isActive?: SortOrder
     isTask?: SortOrder
     abbreviation?: SortOrder
+    legacyId?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -40636,10 +40758,16 @@ export namespace Prisma {
     isActive?: SortOrder
     isTask?: SortOrder
     abbreviation?: SortOrder
+    legacyId?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
     updatedBy?: SortOrder
+  }
+
+  export type ChallengeTypeSumOrderByAggregateInput = {
+    legacyId?: SortOrder
   }
 
   export type EnumChallengeTrackEnumNullableFilter<$PrismaModel = never> = {
@@ -40663,6 +40791,7 @@ export namespace Prisma {
     abbreviation?: SortOrder
     legacyId?: SortOrder
     track?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -40681,6 +40810,7 @@ export namespace Prisma {
     abbreviation?: SortOrder
     legacyId?: SortOrder
     track?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -40695,6 +40825,7 @@ export namespace Prisma {
     abbreviation?: SortOrder
     legacyId?: SortOrder
     track?: SortOrder
+    isLegacy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -44706,6 +44837,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -44721,6 +44854,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -44742,6 +44877,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -44758,6 +44894,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -45312,6 +45449,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -45327,6 +45466,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -45354,6 +45495,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -45370,6 +45512,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46026,6 +46169,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -46042,6 +46186,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -46062,6 +46207,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -46077,6 +46224,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -46148,6 +46297,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46164,6 +46314,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46190,6 +46341,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -46205,6 +46358,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50045,6 +50200,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50060,6 +50217,8 @@ export namespace Prisma {
     isActive?: boolean
     isTask?: boolean
     abbreviation: string
+    legacyId?: number | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50081,6 +50240,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50097,6 +50257,7 @@ export namespace Prisma {
     abbreviation: string
     legacyId?: number | null
     track?: $Enums.ChallengeTrackEnum | null
+    isLegacy?: boolean
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50194,6 +50355,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50209,6 +50372,8 @@ export namespace Prisma {
     isActive?: BoolFieldUpdateOperationsInput | boolean
     isTask?: BoolFieldUpdateOperationsInput | boolean
     abbreviation?: StringFieldUpdateOperationsInput | string
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50236,6 +50401,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50252,6 +50418,7 @@ export namespace Prisma {
     abbreviation?: StringFieldUpdateOperationsInput | string
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     track?: NullableEnumChallengeTrackEnumFieldUpdateOperationsInput | $Enums.ChallengeTrackEnum | null
+    isLegacy?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string

@@ -77,7 +77,7 @@ function getSearchFilter(criteria) {
   if (!_.isEmpty(criteria.abbreviation)) {
     ret.abbreviation = { equals: criteria.abbreviation };
   }
-  if (_.isUndefined(criteria.isActive)) {
+  if (!_.isUndefined(criteria.isActive)) {
     ret.isActive = { equals: criteria.isActive };
   }
   if (criteria.legacyId) {
@@ -86,6 +86,7 @@ function getSearchFilter(criteria) {
   if (!_.isEmpty(criteria.track)) {
     ret.track = { equals: normalizeTrackValue(criteria.track) };
   }
+  ret.isLegacy = { equals: _.isUndefined(criteria.isLegacy) ? false : criteria.isLegacy };
   return ret;
 }
 
@@ -98,7 +99,10 @@ searchChallengeTracks.schema = {
     isActive: Joi.boolean(),
     abbreviation: Joi.string(),
     legacyId: Joi.number().integer().positive(),
-    track: Joi.string().uppercase().valid(...supportedTrackValues),
+    track: Joi.string()
+      .uppercase()
+      .valid(...supportedTrackValues),
+    isLegacy: Joi.boolean(),
   }),
 };
 
@@ -127,7 +131,7 @@ async function checkTrackAbrv(abbreviation) {
   });
   if (existingByAbbr.length > 0) {
     throw new errors.ConflictError(
-      `ChallengeTrack with abbreviation ${abbreviation} already exists`
+      `ChallengeTrack with abbreviation ${abbreviation} already exists`,
     );
   }
 }
@@ -144,6 +148,7 @@ async function createChallengeTrack(authUser, type) {
   const normalizedTrack = normalizeTrackValue(type.track);
   let ret = await prisma.challengeTrack.create({
     data: {
+      isLegacy: false,
       ...type,
       track: normalizedTrack,
       createdBy: authUser.userId,
@@ -166,7 +171,10 @@ createChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().uppercase().valid(...supportedTrackValues),
+      track: Joi.string()
+        .uppercase()
+        .valid(...supportedTrackValues),
+      isLegacy: Joi.boolean().default(false),
     })
     .required(),
 };
@@ -215,6 +223,9 @@ async function fullyUpdateChallengeTrack(authUser, id, data) {
   } else {
     data.track = normalizeTrackValue(data.track);
   }
+  if (_.isUndefined(data.isLegacy)) {
+    data.isLegacy = false;
+  }
   data.updatedBy = authUser.userId;
   let ret = await prisma.challengeTrack.update({
     where: { id },
@@ -237,7 +248,10 @@ fullyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean().required(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().uppercase().valid(...supportedTrackValues),
+      track: Joi.string()
+        .uppercase()
+        .valid(...supportedTrackValues),
+      isLegacy: Joi.boolean(),
     })
     .required(),
 };
@@ -282,7 +296,10 @@ partiallyUpdateChallengeTrack.schema = {
       isActive: Joi.boolean(),
       abbreviation: Joi.string(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string().uppercase().valid(...supportedTrackValues),
+      track: Joi.string()
+        .uppercase()
+        .valid(...supportedTrackValues),
+      isLegacy: Joi.boolean(),
     })
     .required(),
 };

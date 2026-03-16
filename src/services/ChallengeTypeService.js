@@ -1,5 +1,5 @@
 /**
- * This service provides operations of challenge tracks.
+ * This service provides operations of challenge types.
  */
 const _ = require("lodash");
 const Joi = require("joi");
@@ -59,6 +59,10 @@ function getSearchFilter(criteria) {
   if (!_.isUndefined(criteria.isTask)) {
     ret.isTask = { equals: criteria.isTask };
   }
+  if (!_.isUndefined(criteria.legacyId)) {
+    ret.legacyId = { equals: criteria.legacyId };
+  }
+  ret.isLegacy = { equals: _.isUndefined(criteria.isLegacy) ? false : criteria.isLegacy };
   return ret;
 }
 
@@ -71,6 +75,8 @@ searchChallengeTypes.schema = {
     isActive: Joi.boolean(),
     isTask: Joi.boolean(),
     abbreviation: Joi.string(),
+    legacyId: Joi.number().integer().positive(),
+    isLegacy: Joi.boolean(),
   }),
 };
 
@@ -99,8 +105,30 @@ async function checkTypeAbrv(abbreviation) {
   });
   if (existingByAbbr && existingByAbbr.length > 0) {
     throw new errors.ConflictError(
-      `ChallengeType with abbreviation: ${abbreviation} already exist`
+      `ChallengeType with abbreviation: ${abbreviation} already exist`,
     );
+  }
+}
+
+/**
+ * Check challenge type exists by same legacyId.
+ * @param {Number} legacyId challenge type legacy id
+ * @param {String} [excludeId] optional type id to exclude from the lookup
+ * @throws conflict error if same legacy id exists
+ */
+async function checkTypeLegacyId(legacyId, excludeId) {
+  if (_.isNil(legacyId)) {
+    return;
+  }
+
+  const existingByLegacyId = await prisma.challengeType.findMany({
+    where: {
+      legacyId,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+  });
+  if (existingByLegacyId && existingByLegacyId.length > 0) {
+    throw new errors.ConflictError(`ChallengeType with legacyId: ${legacyId} already exist`);
   }
 }
 
@@ -113,8 +141,10 @@ async function checkTypeAbrv(abbreviation) {
 async function createChallengeType(authUser, type) {
   await checkTypeName(type.name);
   await checkTypeAbrv(type.abbreviation);
+  await checkTypeLegacyId(type.legacyId);
   let ret = await prisma.challengeType.create({
     data: {
+      isLegacy: false,
       ...type,
       createdBy: authUser.userId,
       updatedBy: authUser.userId,
@@ -136,6 +166,8 @@ createChallengeType.schema = {
       isActive: Joi.boolean().required(),
       isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
+      legacyId: Joi.number().integer().positive(),
+      isLegacy: Joi.boolean().default(false),
     })
     .required(),
 };
@@ -175,8 +207,17 @@ async function fullyUpdateChallengeType(authUser, id, data) {
   if (type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
     await checkTypeAbrv(data.abbreviation);
   }
+  if (type.legacyId !== data.legacyId) {
+    await checkTypeLegacyId(data.legacyId, id);
+  }
   if (_.isUndefined(data.description)) {
     data.description = null;
+  }
+  if (_.isUndefined(data.legacyId)) {
+    data.legacyId = null;
+  }
+  if (_.isUndefined(data.isLegacy)) {
+    data.isLegacy = false;
   }
   let ret = await prisma.challengeType.update({
     data: {
@@ -201,6 +242,8 @@ fullyUpdateChallengeType.schema = {
       isActive: Joi.boolean().required(),
       isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
+      legacyId: Joi.number().integer().positive(),
+      isLegacy: Joi.boolean(),
     })
     .required(),
 };
@@ -219,6 +262,9 @@ async function partiallyUpdateChallengeType(authUser, id, data) {
   }
   if (data.abbreviation && type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
     await checkTypeAbrv(data.abbreviation);
+  }
+  if (!_.isUndefined(data.legacyId) && type.legacyId !== data.legacyId) {
+    await checkTypeLegacyId(data.legacyId, id);
   }
   data.updatedBy = authUser.userId;
   let ret = await prisma.challengeType.update({
@@ -242,6 +288,8 @@ partiallyUpdateChallengeType.schema = {
       isActive: Joi.boolean(),
       isTask: Joi.boolean().default(false),
       abbreviation: Joi.string(),
+      legacyId: Joi.number().integer().positive(),
+      isLegacy: Joi.boolean(),
     })
     .required(),
 };
