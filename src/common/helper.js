@@ -1518,7 +1518,7 @@ async function getAIReviewConfigByChallengeId(challengeId) {
   );
 
   try {
-    const result = await axios.get(`${reviewsApiBaseUrl}/ai-review/configs/${challengeId}`, {
+    const result = await axios.get(`${reviewsApiBaseUrl}/v6/ai-review/configs/${challengeId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return result.data || null;
@@ -1545,7 +1545,7 @@ async function getAIReviewDecisionsByConfigId(configId) {
   const allDecisions = [];
   let page = 1;
   while (true) {
-    const result = await axios.get(`${reviewsApiBaseUrl}/ai-review/decisions`, {
+    const result = await axios.get(`${reviewsApiBaseUrl}/v6/ai-review/decisions`, {
       headers: { Authorization: `Bearer ${token}` },
       params: {
         configId,
