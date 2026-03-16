@@ -380,24 +380,41 @@ async function ensureChallengeHasAiReviewers(challengeId) {
 }
 
 async function ensureAIScreeningCanBeClosed(challengeId) {
+  logger.debug(`Validating AI Screening closure for challenge ${challengeId}`);
   await ensureChallengeHasAiReviewers(challengeId);
 
   const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
   if (!aiReviewConfig || !aiReviewConfig.id) {
+    logger.debug(
+      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`
+    );
     throw new errors.BadRequestError(
       "Cannot close AI Screening phase because AI review configuration could not be fetched"
     );
   }
+
+  logger.debug(
+    `Found AI review configuration ${aiReviewConfig.id} for challenge ${challengeId}`
+  );
 
   const [submissions, decisions] = await Promise.all([
     helper.getChallengeSubmissions(challengeId),
     helper.getAIReviewDecisionsByConfigId(aiReviewConfig.id),
   ]);
 
+  logger.debug(
+    `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
+      (decisions || []).length
+    }`
+  );
+
   const submissionIds = _.uniq(
     (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id)
   );
   if (submissionIds.length === 0) {
+    logger.debug(
+      `AI Screening closure allowed for challenge ${challengeId}: no submissions found`
+    );
     return;
   }
 
@@ -414,10 +431,15 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
   );
 
   if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
+    logger.debug(
+      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`
+    );
     throw new errors.BadRequestError(
       "Cannot close AI Screening phase because AI reviews are not complete"
     );
   }
+
+  logger.debug(`AI Screening closure allowed for challenge ${challengeId}: all reviews finalized`);
 }
 
 async function checkChallengeExists(challengeId) {
