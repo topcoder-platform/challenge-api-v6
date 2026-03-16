@@ -3104,6 +3104,20 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     await indexChallengeAndPostToKafka(committed, track, type);
   }
 
+  // Trigger AI challenge-context workflow when challenge has AI Review Config and either
+  // is being activated (PATCH/PUT with status ACTIVE) or is updated while not in DRAFT.
+  if (challengeHelper.hasAIReviewConfig(updatedChallenge)) {
+    if (isStatusChangingToActive || challenge.status !== ChallengeStatusEnum.DRAFT) {
+      challengeHelper
+        .triggerChallengeContextWorkflow(challengeId)
+        .catch((err) =>
+          logger.error(
+            `AI challenge-context trigger failed for challenge ${challengeId}: ${err.message}`
+          )
+        );
+    }
+  }
+
   // Convert to response shape before any business-logic checks that expect it
   prismaHelper.convertModelToResponse(updatedChallenge);
   await enrichSkillsData(updatedChallenge);

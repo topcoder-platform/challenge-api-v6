@@ -9,6 +9,7 @@ const config = require("config");
 const helper = require("./helper");
 const phaseHelper = require("./phase-helper");
 const axios = require("axios");
+const logger = require("./logger");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
@@ -508,6 +509,48 @@ class ChallengeHelper {
       }
 
       throw err;
+    }
+  }
+
+  /**
+   * Returns true if the challenge has at least one AI reviewer (review config)
+   * i.e. a reviewer with isMemberReview false and aiWorkflowId or aiConfigTemplateId set.
+   * @param {Object} challengeOrReviewers challenge object with reviewers array, or { reviewers: Array }
+   * @returns {boolean}
+   */
+  hasAIReviewConfig(challengeOrReviewers) {
+    const reviewers = _.get(challengeOrReviewers, "reviewers") || [];
+    return Array.isArray(reviewers) && reviewers.some(
+      (r) => r && !r.isMemberReview && (r.aiWorkflowId || r.aiConfigTemplateId)
+    );
+  }
+
+  /**
+   * Triggers the TC AI API challenge-context workflow for the given challenge (fire-and-forget).
+   * Used when a challenge with AI Review Config is activated or updated while not in DRAFT.
+   * Does not await the workflow; errors are logged only.
+   * @param {string} challengeId challenge UUID
+   * @returns {Promise<void>}
+   */
+  async triggerChallengeContextWorkflow(challengeId) {
+    if (!challengeId) return;
+    const baseUrl = _.trimEnd(config.TC_AI_API_URL || "https://api.topcoder-dev.com", "/");
+    const url = `${baseUrl}/v6/ai/workflows/challenge-context/start`;
+    try {
+      const token = await getM2MToken();
+      await axios.post(
+        url,
+        { input: { challengeId } },
+        {
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          timeout: 10000,
+        }
+      );
+      logger.debug(`Triggered challenge-context workflow for challenge ${challengeId}`);
+    } catch (err) {
+      logger.error(
+        `Failed to trigger challenge-context workflow for challenge ${challengeId}: ${_.get(err, "message", err)}`
+      );
     }
   }
 
