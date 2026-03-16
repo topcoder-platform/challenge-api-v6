@@ -14,7 +14,7 @@ class TCAIM2MHelper {
    * Get TC AI M2M token.
    * @returns {Promise<String>} the TC AI M2M token
    */
-  getM2MToken() {
+  getTCAIM2MToken() {
     return TCAIM2MHelper.m2m.getMachineToken(config.TC_AI_M2M_AUTH0_CLIENT_ID, config.TC_AI_M2M_AUTH0_CLIENT_SECRET);
   }
 }
