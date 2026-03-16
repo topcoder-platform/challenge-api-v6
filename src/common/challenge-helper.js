@@ -11,7 +11,6 @@ const phaseHelper = require("./phase-helper");
 const axios = require("axios");
 const logger = require("./logger");
 const { getM2MToken } = require("./m2m-helper");
-const { v4: uuid } = require("uuid");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
@@ -528,25 +527,37 @@ class ChallengeHelper {
 
   /**
    * Triggers the TC AI API challenge-context workflow for the given challenge (fire-and-forget).
-   * Used when a challenge with AI Review Config is activated or updated while not in DRAFT.
-   * Does not await the workflow; errors are logged only.
+   * Creates a run via create-run, then starts it with the returned runId so the server finds the run.
    * @param {string} challengeId challenge UUID
    * @returns {Promise<void>}
    */
   async triggerChallengeContextWorkflow(challengeId) {
     if (!challengeId) return;
     const baseUrl = _.trimEnd(config.TC_AI_API_URL || "https://api.topcoder-dev.com", "/");
-    const runId = uuid();
-    const url = `${baseUrl}/v6/ai/workflows/challenge-context/start?runId=${encodeURIComponent(runId)}`;
+    const workflowPath = "/v6/ai/workflows/challenge-context";
+    const createRunUrl = `${baseUrl}${workflowPath}/create-run`;
+    const startUrl = `${baseUrl}${workflowPath}/start`;
+    const headers = { "Content-Type": "application/json" };
+    const timeout = 10000;
+
     try {
       const token = await getM2MToken();
+      headers.Authorization = `Bearer ${token}`;
+
+      const createRunRes = await axios.post(createRunUrl, {}, { headers, timeout });
+      const data = createRunRes.data || {};
+      const runId = data.runId ?? data.id ?? _.get(data, "run.id");
+      if (!runId || typeof runId !== "string") {
+        logger.warn(
+          `Challenge-context create-run for challenge ${challengeId} did not return runId (response keys: ${Object.keys(data).join(", ")})`
+        );
+        return;
+      }
+
       await axios.post(
-        url,
+        `${startUrl}?runId=${encodeURIComponent(runId)}`,
         { input: { challengeId } },
-        {
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          timeout: 10000,
-        }
+        { headers, timeout }
       );
       logger.debug(`Triggered challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
     } catch (err) {
