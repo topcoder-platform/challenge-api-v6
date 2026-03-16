@@ -397,10 +397,38 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     `Found AI review configuration ${aiReviewConfig.id} for challenge ${challengeId}`
   );
 
-  const [submissions, decisions] = await Promise.all([
-    helper.getChallengeSubmissions(challengeId),
-    helper.getAIReviewDecisionsByConfigId(aiReviewConfig.id),
-  ]);
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+  const aiReviewDecisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+
+  let submissions;
+  let decisions;
+  try {
+    [submissions, decisions] = await Promise.all([
+      reviewPrisma.$queryRaw(
+        Prisma.sql`
+          SELECT "id", "legacySubmissionId"
+          FROM ${submissionTable}
+          WHERE "challengeId" = ${challengeId}
+            AND "status"::text <> 'DELETED'
+        `
+      ),
+      reviewPrisma.$queryRaw(
+        Prisma.sql`
+          SELECT "submissionId", "isFinal"
+          FROM ${aiReviewDecisionTable}
+          WHERE "configId" = ${aiReviewConfig.id}
+        `
+      ),
+    ]);
+  } catch (err) {
+    logger.error(
+      `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
 
   logger.debug(
     `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
