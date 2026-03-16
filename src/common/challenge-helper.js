@@ -450,7 +450,7 @@ class ChallengeHelper {
       "/"
     );
     
-    const url = `${reviewsApiBaseUrl}/ai-review/configs`;
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/configs`;
 
     for (const aiReviewConfig of aiReviewConfigs) {
       const payload = {
@@ -492,10 +492,10 @@ class ChallengeHelper {
   async getAIReviewTemplateById(templateId) {
     const token = await getM2MToken();
     const reviewsApiBaseUrl = _.trimEnd(
-      config.REVIEWS_API_URL || "http://localhost:3002",
+      config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
       "/"
     );
-    const url = `${reviewsApiBaseUrl}/ai-review/templates/${templateId}`;
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/templates/${templateId}`;
 
     try {
       const response = await axios.get(url, {
