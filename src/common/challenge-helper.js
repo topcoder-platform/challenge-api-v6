@@ -11,6 +11,7 @@ const phaseHelper = require("./phase-helper");
 const axios = require("axios");
 const logger = require("./logger");
 const { getM2MToken } = require("./m2m-helper");
+const { v4: uuid } = require("uuid");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
@@ -535,7 +536,8 @@ class ChallengeHelper {
   async triggerChallengeContextWorkflow(challengeId) {
     if (!challengeId) return;
     const baseUrl = _.trimEnd(config.TC_AI_API_URL || "https://api.topcoder-dev.com", "/");
-    const url = `${baseUrl}/v6/ai/workflows/challenge-context/start`;
+    const runId = uuid();
+    const url = `${baseUrl}/v6/ai/workflows/challenge-context/start?runId=${encodeURIComponent(runId)}`;
     try {
       const token = await getM2MToken();
       await axios.post(
@@ -546,7 +548,7 @@ class ChallengeHelper {
           timeout: 10000,
         }
       );
-      logger.debug(`Triggered challenge-context workflow for challenge ${challengeId}`);
+      logger.debug(`Triggered challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
     } catch (err) {
       logger.error(
         `Failed to trigger challenge-context workflow for challenge ${challengeId}: ${_.get(err, "message", err)}`
