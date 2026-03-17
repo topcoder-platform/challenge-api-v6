@@ -3107,7 +3107,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   // Trigger AI challenge-context workflow when challenge has AI Review Config and either
   // is being activated (PATCH/PUT with status ACTIVE) or is updated while not in DRAFT.
   if (challengeHelper.hasAIReviewConfig(updatedChallenge)) {
+    logger.debug(`Triggering AI challenge-context workflow for challenge ${challengeId}`);
     if (isStatusChangingToActive || challenge.status !== ChallengeStatusEnum.DRAFT) {
+      logger.debug(`Triggering AI challenge-context workflow for challenge ${challengeId} (isStatusChangingToActive=${isStatusChangingToActive}, challenge.status=${challenge.status})`);
       challengeHelper
         .triggerChallengeContextWorkflow(challengeId)
         .catch((err) =>
