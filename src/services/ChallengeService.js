@@ -34,6 +34,7 @@ const {
   PrizeSetTypeEnum,
   ReviewOpportunityTypeEnum,
 } = require("../common/prisma");
+const { ensureAIScreeningCanBeClosed } = require("./ChallengePhaseService");
 const prisma = getClient();
 
 // Provide aliases for friendlier sortBy query params
@@ -105,6 +106,11 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
+const AI_SCREENING_PHASE_NAME = "ai screening";
+
+function normalizePhaseNameForComparison(phaseName) {
+  return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -2726,7 +2732,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.debug(`updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`);
     const tempChallenge = { phases: phasesForUpdate || challenge.phases, reviewers: data.reviewers || challenge.reviewers };
     const debugLogForAI = (message) => logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
-    await challengeHelper.addAIScreeningPhaseForChallengeCreation(
+    await challengeHelper.addAIScreeningPhaseForChallenge(
       tempChallenge,
       prisma,
       debugLogForAI,
@@ -3986,6 +3992,13 @@ async function advancePhase(currentUser, challengeId, data) {
   }
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
+  }
+
+  const isClosingAIScreening =
+    data.operation === "close" &&
+    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
+  if (isClosingAIScreening) {
+    await ensureAIScreeningCanBeClosed(challenge.id);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(

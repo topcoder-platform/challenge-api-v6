@@ -1506,6 +1506,31 @@ async function getChallengeSubmissions(challengeId) {
 }
 
 /**
+ * Get AI review config for challenge.
+ * @param {String} challengeId the challenge id
+ * @returns {Promise<Object|null>} AI review config or null when not found
+ */
+async function getAIReviewConfigByChallengeId(challengeId) {
+  const token = await m2mHelper.getM2MToken();
+  const reviewsApiBaseUrl = _.trimEnd(
+    config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+    "/"
+  );
+
+  try {
+    const result = await axios.get(`${reviewsApiBaseUrl}/v6/ai-review/configs/${challengeId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return result.data || null;
+  } catch (err) {
+    if (_.get(err, "response.status") === HttpStatus.NOT_FOUND) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
  * Get review summations for a challenge
  * @param {String} challengeId the challenge ID
  * @returns {Promise<Array>}
@@ -1829,6 +1854,7 @@ module.exports = {
   getProjectIdByRoundId,
   getGroupById,
   getChallengeSubmissions,
+  getAIReviewConfigByChallengeId,
   getReviewSummations,
   getMemberById,
   createSelfServiceProject,
