@@ -154,6 +154,84 @@ async function recalculateDependentPhaseDates(tx, challengeId, predecessorPhase,
   }
 }
 
+async function shiftDependentPhaseDates(tx, challengeId, predecessorPhase, deltaMs, currentUserId) {
+  if (!predecessorPhase || !Number.isFinite(deltaMs) || deltaMs === 0) {
+    return;
+  }
+
+  const phases = await tx.challengePhase.findMany({
+    where: { challengeId },
+  });
+
+  const successorsByPredecessor = new Map();
+  for (const phase of phases) {
+    if (_.isNil(phase.predecessor)) {
+      continue;
+    }
+    const key = String(phase.predecessor);
+    if (!successorsByPredecessor.has(key)) {
+      successorsByPredecessor.set(key, []);
+    }
+    successorsByPredecessor.get(key).push(phase);
+  }
+
+  const queue = [predecessorPhase];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const currentPhase = queue.shift();
+    const predecessorKeys = buildPhaseIdentifiers(currentPhase);
+
+    for (const predecessorKey of predecessorKeys) {
+      const successors = successorsByPredecessor.get(predecessorKey) || [];
+      for (const successor of successors) {
+        if (visited.has(successor.id)) {
+          continue;
+        }
+
+        let successorForQueue = successor;
+        if (_.isNil(successor.actualStartDate)) {
+          const scheduledStartTime = successor.scheduledStartDate
+            ? new Date(successor.scheduledStartDate).getTime()
+            : Number.NaN;
+          const scheduledEndTime = successor.scheduledEndDate
+            ? new Date(successor.scheduledEndDate).getTime()
+            : Number.NaN;
+
+          if (Number.isFinite(scheduledStartTime) && Number.isFinite(scheduledEndTime)) {
+            const desiredStartDate = new Date(scheduledStartTime + deltaMs);
+            const desiredEndDate = new Date(scheduledEndTime + deltaMs);
+            const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate);
+            const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate);
+
+            if (startChanged || endChanged) {
+              successorForQueue = await tx.challengePhase.update({
+                data: {
+                  scheduledStartDate: desiredStartDate,
+                  scheduledEndDate: desiredEndDate,
+                  updatedBy: currentUserId,
+                },
+                where: {
+                  id: successor.id,
+                },
+              });
+            } else {
+              successorForQueue = {
+                ...successor,
+                scheduledStartDate: successor.scheduledStartDate,
+                scheduledEndDate: successor.scheduledEndDate,
+              };
+            }
+          }
+        }
+
+        visited.add(successor.id);
+        queue.push(successorForQueue);
+      }
+    }
+  }
+}
+
 async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
@@ -882,6 +960,20 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
       if (scheduleExtended) {
         await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
+      }
+    }
+    if (isClosingPhase && !_.isNil(originalScheduledEndDate) && !_.isNil(updatedPhase.actualEndDate)) {
+      const scheduledEndTime = new Date(originalScheduledEndDate).getTime();
+      const actualEndTime = new Date(updatedPhase.actualEndDate).getTime();
+
+      if (Number.isFinite(scheduledEndTime) && Number.isFinite(actualEndTime)) {
+        await shiftDependentPhaseDates(
+          tx,
+          challengeId,
+          updatedPhase,
+          actualEndTime - scheduledEndTime,
+          currentUserId
+        );
       }
     }
     if (data["constraints"]) {
