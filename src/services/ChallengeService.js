@@ -3104,6 +3104,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     await indexChallengeAndPostToKafka(committed, track, type);
   }
 
+  logger.debug(`hasAIReviewConfig(updatedChallenge)=${challengeHelper.hasAIReviewConfig(updatedChallenge)}`);
+  logger.debug(`isStatusChangingToActive=${isStatusChangingToActive}, challenge.status=${challenge.status}`);
   // Trigger AI challenge-context workflow when challenge has AI Review Config and either
   // is being activated (PATCH/PUT with status ACTIVE) or is updated while not in DRAFT.
   if (challengeHelper.hasAIReviewConfig(updatedChallenge)) {
