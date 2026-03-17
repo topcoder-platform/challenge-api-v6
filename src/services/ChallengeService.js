@@ -3112,7 +3112,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.debug(`Triggering AI challenge-context workflow for challenge ${challengeId}`);
     if (isStatusChangingToActive || challenge.status !== ChallengeStatusEnum.DRAFT) {
       logger.debug(`Triggering AI challenge-context workflow for challenge ${challengeId} (isStatusChangingToActive=${isStatusChangingToActive}, challenge.status=${challenge.status})`);
-      challengeHelper
+      await challengeHelper
         .triggerChallengeContextWorkflow(challengeId)
         .catch((err) =>
           logger.error(
