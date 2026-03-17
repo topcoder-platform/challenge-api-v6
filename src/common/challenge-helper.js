@@ -543,6 +543,7 @@ class ChallengeHelper {
 
     try {
       const token = await getTCAIM2MToken();
+      logger.debug(`TC AI M2M token=${token}`);
       headers.Authorization = `Bearer ${token}`;
 
       const createRunRes = await axios.post(createRunUrl, {}, { headers, timeout });
