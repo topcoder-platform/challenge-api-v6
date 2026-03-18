@@ -431,6 +431,48 @@ async function hasPendingAppealResponsesForChallenge(challengeId) {
   return Number(count) > 0;
 }
 
+async function hasPendingEscalationRequestsForChallenge(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping pending escalation request check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const escalationTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecisionEscalation"`);
+  const decisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT arde."id")::int AS count
+        FROM ${escalationTable} arde
+        INNER JOIN ${decisionTable} ard ON ard."id" = arde."aiReviewDecisionId"
+        WHERE arde."status" = 'PENDING_APPROVAL'
+          AND EXISTS (
+            SELECT 1
+            FROM ${submissionTable} s
+            WHERE s."challengeId" = ${challengeId}
+              AND s."id" = ard."submissionId"
+          )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check pending escalation requests for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
 async function checkChallengeExists(challengeId) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   if (!challenge) {
@@ -637,6 +679,17 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   if (isOpeningPhase) {
     const phaseName = data.name || challengePhase.name;
     await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName);
+
+    // Check if this is the Appeals phase
+    const normalizedPhaseName = normalizePhaseName(phaseName);
+    if (normalizedPhaseName === "appeals") {
+      const hasPendingEscalations = await hasPendingEscalationRequestsForChallenge(challengeId);
+      if (hasPendingEscalations) {
+        throw new errors.BadRequestError(
+          "Cannot open Appeals phase because there are pending escalation requests that need to be resolved first"
+        );
+      }
+    }
   }
 
   if (data["scheduledStartDate"] || data["scheduledEndDate"]) {
@@ -675,6 +728,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     "isOpen" in data && data["isOpen"] === true && !challengePhase.isOpen;
   if (isClosingPhase) {
     const closingPhaseName = data.name || challengePhase.name;
+    const normalizedClosingPhaseName = normalizePhaseName(closingPhaseName);
     const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id);
     if (pendingScorecards) {
       const phaseName = closingPhaseName || "phase";
@@ -683,7 +737,15 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
     }
     if (
-      String(closingPhaseName || "").toLowerCase() === "appeals response" &&
+      normalizedClosingPhaseName === "review" &&
+      (await hasPendingEscalationRequestsForChallenge(challengePhase.challengeId))
+    ) {
+      throw new errors.BadRequestError(
+        "Cannot close Review phase because there are pending escalation requests that need to be resolved first"
+      );
+    }
+    if (
+      normalizedClosingPhaseName === "appeals response" &&
       (await hasPendingAppealResponsesForChallenge(challengePhase.challengeId))
     ) {
       throw new errors.BadRequestError(
@@ -691,7 +753,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
     }
 
-    if (String(closingPhaseName || "").toLowerCase() === "ai screening") {
+    if (normalizedClosingPhaseName === "ai screening") {
       await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
     }
 
