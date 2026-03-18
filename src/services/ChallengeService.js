@@ -4382,6 +4382,7 @@ module.exports = {
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,
+  ensureAIScreeningCanBeClosed,
 };
 
 logger.buildService(module.exports);
