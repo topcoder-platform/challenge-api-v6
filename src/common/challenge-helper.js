@@ -561,7 +561,7 @@ class ChallengeHelper {
       logger.debug(`Starting challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
       await axios.post(
         `${startUrl}?runId=${encodeURIComponent(runId)}`,
-        { input: { challengeId } },
+        { inputData: { challengeId } },
         { headers, timeout }
       );
       logger.debug(`Triggered challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
