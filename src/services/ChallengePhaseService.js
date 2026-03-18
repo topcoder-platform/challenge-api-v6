@@ -898,8 +898,9 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         id: challengePhase.id,
       },
     });
+    let scheduleExtended = false;
     if (shouldAttemptSuccessorRecalc) {
-      const scheduleExtended = dateIsAfter(
+      scheduleExtended = dateIsAfter(
         updatedPhase.scheduledEndDate,
         originalScheduledEndDate
       );
@@ -908,7 +909,11 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       }
     }
     if (isClosingPhase && !_.isNil(originalScheduledEndDate) && !_.isNil(updatedPhase.actualEndDate)) {
-      const scheduledEndTime = new Date(originalScheduledEndDate).getTime();
+      const shiftBaselineScheduledEndDate =
+        scheduleExtended && !_.isNil(updatedPhase.scheduledEndDate)
+          ? updatedPhase.scheduledEndDate
+          : originalScheduledEndDate;
+      const scheduledEndTime = new Date(shiftBaselineScheduledEndDate).getTime();
       const actualEndTime = new Date(updatedPhase.actualEndDate).getTime();
 
       if (Number.isFinite(scheduledEndTime) && Number.isFinite(actualEndTime)) {
