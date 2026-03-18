@@ -542,14 +542,12 @@ class ChallengeHelper {
 
     try {
       const token = await getM2MToken();
-      logger.debug(`TC AI M2M token=${token}`);
       headers.Authorization = `Bearer ${token}`;
 
       const createRunRes = await axios.post(createRunUrl, {}, { headers, timeout });
       const data = createRunRes.data || {};
       const runId = data.runId ?? data.id ?? _.get(data, "run.id");
 
-      logger.debug(`Challenge-context create-run for challenge ${challengeId} returned runId=${runId}`);
       if (!runId || typeof runId !== "string") {
         logger.warn(
           `Challenge-context create-run for challenge ${challengeId} did not return runId (response keys: ${Object.keys(data).join(", ")})`
@@ -557,13 +555,11 @@ class ChallengeHelper {
         return;
       }
 
-      logger.debug(`Starting challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
       await axios.post(
         `${startUrl}?runId=${encodeURIComponent(runId)}`,
         { inputData: { challengeId } },
         { headers, timeout }
       );
-      logger.debug(`Triggered challenge-context workflow for challenge ${challengeId} (runId=${runId})`);
     } catch (err) {
       logger.error(
         `Failed to trigger challenge-context workflow for challenge ${challengeId}: ${_.get(err, "message", err)}`
