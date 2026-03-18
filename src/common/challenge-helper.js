@@ -11,7 +11,6 @@ const phaseHelper = require("./phase-helper");
 const axios = require("axios");
 const logger = require("./logger");
 const { getM2MToken } = require("./m2m-helper");
-const { getTCAIM2MToken } = require("./tc-ai-m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
@@ -542,7 +541,7 @@ class ChallengeHelper {
     const timeout = 10000;
 
     try {
-      const token = await getTCAIM2MToken();
+      const token = await getM2MToken();
       logger.debug(`TC AI M2M token=${token}`);
       headers.Authorization = `Bearer ${token}`;
 
