@@ -227,6 +227,90 @@ describe('challenge phase service unit tests', () => {
       actualEndMs.should.be.at.most(after.getTime())
     })
 
+    it('partially update challenge phase - closing shifts successor schedules to actual end date', async () => {
+      const aiScreeningTemplateId = uuid()
+      const aiScreeningPhaseId = uuid()
+      const submissionStartDate = new Date('2025-03-01T00:00:00.000Z')
+      const submissionScheduledEndDate = new Date('2025-03-03T00:00:00.000Z')
+      const aiScreeningScheduledStartDate = new Date('2025-03-03T00:00:00.000Z')
+      const aiScreeningScheduledEndDate = new Date('2025-03-04T00:00:00.000Z')
+
+      await prisma.phase.create({
+        data: {
+          id: aiScreeningTemplateId,
+          name: `AI Screening ${Date.now()}`,
+          description: 'ai screening test phase',
+          isOpen: true,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase2Id },
+        data: {
+          isOpen: true,
+          actualStartDate: submissionStartDate,
+          actualEndDate: null,
+          scheduledStartDate: submissionStartDate,
+          scheduledEndDate: submissionScheduledEndDate
+        }
+      })
+
+      await prisma.challengePhase.create({
+        data: {
+          id: aiScreeningPhaseId,
+          challengeId: data.challenge.id,
+          phaseId: aiScreeningTemplateId,
+          name: 'AI Screening',
+          duration: 86400,
+          predecessor: data.challengePhase2Id,
+          scheduledStartDate: aiScreeningScheduledStartDate,
+          scheduledEndDate: aiScreeningScheduledEndDate,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      try {
+        const before = new Date()
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          {
+            isOpen: false
+          }
+        )
+        const after = new Date()
+
+        const successorPhase = await prisma.challengePhase.findUnique({
+          where: { id: aiScreeningPhaseId }
+        })
+
+        should.equal(challengePhase.isOpen, false)
+        should.exist(successorPhase)
+
+        const actualEndMs = new Date(challengePhase.actualEndDate).getTime()
+        const successorStartMs = new Date(successorPhase.scheduledStartDate).getTime()
+        const successorEndMs = new Date(successorPhase.scheduledEndDate).getTime()
+        const aiScreeningDurationMs = aiScreeningScheduledEndDate.getTime() - aiScreeningScheduledStartDate.getTime()
+
+        actualEndMs.should.be.at.least(before.getTime())
+        actualEndMs.should.be.at.most(after.getTime())
+        successorStartMs.should.equal(actualEndMs)
+        successorEndMs.should.equal(actualEndMs + aiScreeningDurationMs)
+      } finally {
+        await prisma.challengePhase.delete({
+          where: { id: aiScreeningPhaseId }
+        })
+        await prisma.phase.delete({
+          where: { id: aiScreeningTemplateId }
+        })
+      }
+    })
+
     it('partially update challenge phase - reopening clears actual end date and sets start date', async () => {
       const previousEndDate = new Date()
       await prisma.challengePhase.update({

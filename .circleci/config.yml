@@ -92,7 +92,7 @@ workflows:
                 - develop
                 - security
                 - PM-3351
-                - PM-3926_ai-screening-phase
+                - PM-4318_move-to-next-phase-when-manually-closing
 
       - "build-qa":
           context: org-global

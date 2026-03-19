@@ -105,6 +105,128 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
+const AI_SCREENING_PHASE_NAME = "ai screening";
+
+function normalizePhaseNameForComparison(phaseName) {
+  return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+function extractSubmissionId(submission) {
+  const candidate =
+    _.get(submission, "id") ||
+    _.get(submission, "submissionId") ||
+    _.get(submission, "legacySubmissionId");
+  if (_.isNil(candidate)) {
+    return null;
+  }
+  const normalized = _.toString(candidate).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function ensureChallengeHasAiReviewers(challengeId) {
+  const reviewers = await prisma.challengeReviewer.findMany({
+    where: { challengeId, isMemberReview: false, aiWorkflowId: { not: null } },
+  });
+
+  const hasAIReviewers = Array.isArray(reviewers) && reviewers.length > 0;
+
+  if (!hasAIReviewers) {
+    throw new errors.BadRequestError(
+      `Challenge does not have any AI reviewers assigned`
+    );
+  }
+}
+
+async function ensureAIScreeningCanBeClosed(challengeId) {
+  logger.debug(`Validating AI Screening closure for challenge ${challengeId}`);
+  await ensureChallengeHasAiReviewers(challengeId);
+
+  const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+  if (!aiReviewConfig || !aiReviewConfig.id) {
+    logger.debug(
+      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`
+    );
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI review configuration could not be fetched"
+    );
+  }
+
+  logger.debug(
+    `Found AI review configuration ${aiReviewConfig.id} for challenge ${challengeId}`
+  );
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+  const aiReviewDecisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+
+  let submissions;
+  let decisions;
+  try {
+    [submissions, decisions] = await Promise.all([
+      reviewPrisma.$queryRaw(
+        Prisma.sql`
+          SELECT "id", "legacySubmissionId"
+          FROM ${submissionTable}
+          WHERE "challengeId" = ${challengeId}
+            AND "status"::text <> 'DELETED'
+        `
+      ),
+      reviewPrisma.$queryRaw(
+        Prisma.sql`
+          SELECT "submissionId", "isFinal"
+          FROM ${aiReviewDecisionTable}
+          WHERE "configId" = ${aiReviewConfig.id}
+        `
+      ),
+    ]);
+  } catch (err) {
+    logger.error(
+      `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  logger.debug(
+    `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
+      (decisions || []).length
+    }`
+  );
+
+  const submissionIds = _.uniq(
+    (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id)
+  );
+  if (submissionIds.length === 0) {
+    logger.debug(
+      `AI Screening closure allowed for challenge ${challengeId}: no submissions found`
+    );
+    return;
+  }
+
+  const finalizedDecisionSubmissionIds = new Set(
+    (decisions || [])
+      .filter((decision) => decision && decision.isFinal === true)
+      .map((decision) => extractSubmissionId(decision))
+      .filter((id) => !!id)
+  );
+
+  const hasPendingDecision = (decisions || []).some((decision) => decision && decision.isFinal !== true);
+  const missingFinalizedSubmissions = submissionIds.filter(
+    (submissionId) => !finalizedDecisionSubmissionIds.has(submissionId)
+  );
+
+  if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
+    logger.debug(
+      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`
+    );
+    throw new errors.BadRequestError(
+      "Cannot close AI Screening phase because AI reviews are not complete"
+    );
+  }
+
+  logger.debug(`AI Screening closure allowed for challenge ${challengeId}: all reviews finalized`);
+}
 
 /**
  * Enrich skills data with full details from standardized skills API.
@@ -2726,7 +2848,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.debug(`updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`);
     const tempChallenge = { phases: phasesForUpdate || challenge.phases, reviewers: data.reviewers || challenge.reviewers };
     const debugLogForAI = (message) => logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
-    await challengeHelper.addAIScreeningPhaseForChallengeCreation(
+    await challengeHelper.addAIScreeningPhaseForChallenge(
       tempChallenge,
       prisma,
       debugLogForAI,
@@ -3988,6 +4110,13 @@ async function advancePhase(currentUser, challengeId, data) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
 
+  const isClosingAIScreening =
+    data.operation === "close" &&
+    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
+  if (isClosingAIScreening) {
+    await ensureAIScreeningCanBeClosed(challenge.id);
+  }
+
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
     challenge.id,
     challenge.legacyId,
@@ -4253,6 +4382,7 @@ module.exports = {
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,
+  ensureAIScreeningCanBeClosed,
 };
 
 logger.buildService(module.exports);
