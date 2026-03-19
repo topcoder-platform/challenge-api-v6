@@ -7,6 +7,7 @@ const UserRoles = {
   Admin: "administrator",
   Copilot: "copilot",
   Manager: "Connect Manager",
+  TalentManager: "Talent Manager",
   User: "Topcoder User",
   SelfServiceCustomer: "Self-Service Customer",
 };
