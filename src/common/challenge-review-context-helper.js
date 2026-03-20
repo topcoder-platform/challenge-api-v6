@@ -9,6 +9,7 @@ const axios = require("axios");
 const logger = require("./logger");
 const m2mHelper = require("./m2m-helper");
 const {
+  isGenerationInProgress,
   getRunId,
   markGenerationStarted,
   setRunId,
@@ -40,17 +41,23 @@ function shouldGenerateChallengeReviewContext(challenge) {
  * @param {string} challengeId - The challenge ID
  */
 function triggerChallengeReviewContextGeneration(challengeId) {
-  const existingRunId = getRunId(challengeId);
-
-  if (existingRunId) {
-    logger.info(
-      `[ChallengeReviewContextHelper] Cancelling existing run ${existingRunId} for challenge ${challengeId}`,
-    );
-    cancelWorkflowRun(existingRunId, "Challenge updated, regenerating context").catch((err) => {
-      logger.warn(
-        `[ChallengeReviewContextHelper] Failed to cancel run ${existingRunId}: ${err.message}`,
+  if (isGenerationInProgress(challengeId)) {
+    const existingRunId = getRunId(challengeId);
+    if (existingRunId) {
+      logger.info(
+        `[ChallengeReviewContextHelper] Cancelling existing run ${existingRunId} for challenge ${challengeId}`,
       );
-    });
+      cancelWorkflowRun(existingRunId, "Challenge updated, regenerating context").catch((err) => {
+        logger.warn(
+          `[ChallengeReviewContextHelper] Failed to cancel run ${existingRunId}: ${err.message}`,
+        );
+      });
+    } else {
+      logger.info(
+        `[ChallengeReviewContextHelper] Generation already in progress for challenge ${challengeId}, skipping duplicate trigger`,
+      );
+      return;
+    }
     clearGeneration(challengeId);
   }
 
