@@ -81,7 +81,9 @@ async function cancelWorkflowRun(runId, message) {
   try {
     token = await m2mHelper.getM2MToken();
   } catch (tokenErr) {
-    logger.error(`[ChallengeReviewContextHelper] Failed to get M2M token for cancel: ${tokenErr.message}`);
+    logger.error(
+      `[ChallengeReviewContextHelper] Failed to get M2M token for cancel: ${tokenErr.message}`,
+    );
     return;
   }
 
@@ -249,6 +251,7 @@ async function runReviewContextGenerationAsync(challengeId) {
   try {
     if (existingContext) {
       const contextPutUrl = `${reviewsApiUrl}/v6/ai-review/context/${challengeId}`;
+      delete contextPayload.challengeId; // challengeId is in URL for update, remove from body
       await axios.put(contextPutUrl, contextPayload, {
         headers: { ...authHeader, "Content-Type": "application/json" },
         timeout: 30000,
