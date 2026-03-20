@@ -44,8 +44,10 @@ module.exports = {
   SUBMISSIONS_API_URL:
     process.env.SUBMISSIONS_API_URL || "https://api.topcoder-dev.com/v5/submissions",
   MEMBERS_API_URL: process.env.MEMBERS_API_URL || "https://api.topcoder-dev.com/v6/members",
-  REVIEW_SUMMATIONS_API_URL: process.env.REVIEW_SUMMATIONS_API_URL || "https://api.topcoder-dev.com/v6/reviewSummations",
+  REVIEW_SUMMATIONS_API_URL:
+    process.env.REVIEW_SUMMATIONS_API_URL || "https://api.topcoder-dev.com/v6/reviewSummations",
   REVIEWS_API_URL: process.env.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+  TC_AI_API_URL: process.env.TC_AI_API_URL || "https://api.topcoder-dev.com/v6/ai",
   RESOURCES_API_URL: process.env.RESOURCES_API_URL || "http://localhost:4000/v5/resources",
   // TODO: change this to localhost
   RESOURCE_ROLES_API_URL:
@@ -61,15 +63,14 @@ module.exports = {
   // copilot resource role ids allowed to upload attachment
   COPILOT_RESOURCE_ROLE_IDS: process.env.COPILOT_RESOURCE_ROLE_IDS
     ? process.env.COPILOT_RESOURCE_ROLE_IDS.split(",")
-    : [
-        "10ba038e-48da-487b-96e8-8d3b99b6d18b",
-        "cfe12b3f-2a24-4639-9d8b-ec86726f76bd",
-      ],
+    : ["10ba038e-48da-487b-96e8-8d3b99b6d18b", "cfe12b3f-2a24-4639-9d8b-ec86726f76bd"],
   SUBMITTER_ROLE_ID: process.env.SUBMITTER_ROLE_ID || "732339e7-8e30-49d7-9198-cccf9451e221",
   SUBMITTER_ROLE_NAME: process.env.SUBMITTER_ROLE_NAME || "Submitter",
   // registrant role id (defaults to SUBMITTER_ROLE_ID)
   REGISTRANT_ROLE_ID:
-    process.env.REGISTRANT_ROLE_ID || process.env.SUBMITTER_ROLE_ID || "732339e7-8e30-49d7-9198-cccf9451e221",
+    process.env.REGISTRANT_ROLE_ID ||
+    process.env.SUBMITTER_ROLE_ID ||
+    "732339e7-8e30-49d7-9198-cccf9451e221",
 
   MANAGER_ROLE_ID: process.env.MANAGER_ROLE_ID || "0e9c6879-39e4-4eb6-b8df-92407890faf1",
   OBSERVER_ROLE_ID: process.env.OBSERVER_ROLE_ID || "2a4dc376-a31c-4d00-b173-13934d89e286",
@@ -133,7 +134,9 @@ module.exports = {
   // Database schemas for direct counts (shared DB)
   RESOURCES_DB_SCHEMA: process.env.RESOURCES_DB_SCHEMA || "resources",
   REVIEW_DB_SCHEMA: process.env.REVIEW_DB_SCHEMA || "reviews",
-  CHALLENGE_SERVICE_PRISMA_TIMEOUT: process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT ? parseInt(process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT, 10) : 10000,
-  CHALLENGE_URL: process.env.CHALLENGE_URL || 'https://www.topcoder-dev.com/challenges' ,
+  CHALLENGE_SERVICE_PRISMA_TIMEOUT: process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT
+    ? parseInt(process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT, 10)
+    : 10000,
+  CHALLENGE_URL: process.env.CHALLENGE_URL || "https://www.topcoder-dev.com/challenges",
   PHASE_CHANGE_SENDGRID_TEMPLATE_ID: process.env.PHASE_CHANGE_SENDGRID_TEMPLATE_ID || "",
 };
