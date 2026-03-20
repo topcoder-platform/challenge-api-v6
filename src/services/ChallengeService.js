@@ -4,7 +4,7 @@
 const _ = require("lodash");
 const Joi = require("joi");
 const { Prisma } = require("@prisma/client");
-const { v4: uuid } = require('uuid');
+const { v4: uuid } = require("uuid");
 const config = require("config");
 const xss = require("xss");
 const helper = require("../common/helper");
@@ -25,6 +25,10 @@ const { hasAdminRole } = require("../common/role-helper");
 const { enrichChallengeForResponse, convertToISOString } = require("../common/challenge-helper");
 const deepEqual = require("deep-equal");
 const prismaHelper = require("../common/prisma-helper");
+const {
+  shouldGenerateChallengeReviewContext,
+  triggerChallengeReviewContextGeneration,
+} = require("../common/challenge-review-context-helper");
 
 const {
   getClient,
@@ -131,9 +135,7 @@ async function ensureChallengeHasAiReviewers(challengeId) {
   const hasAIReviewers = Array.isArray(reviewers) && reviewers.length > 0;
 
   if (!hasAIReviewers) {
-    throw new errors.BadRequestError(
-      `Challenge does not have any AI reviewers assigned`
-    );
+    throw new errors.BadRequestError(`Challenge does not have any AI reviewers assigned`);
   }
 }
 
@@ -144,16 +146,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
   const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
   if (!aiReviewConfig || !aiReviewConfig.id) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`
+      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI review configuration could not be fetched"
+      "Cannot close AI Screening phase because AI review configuration could not be fetched",
     );
   }
 
-  logger.debug(
-    `Found AI review configuration ${aiReviewConfig.id} for challenge ${challengeId}`
-  );
+  logger.debug(`Found AI review configuration ${aiReviewConfig.id} for challenge ${challengeId}`);
 
   const reviewPrisma = getReviewClient();
   const reviewSchema = config.REVIEW_DB_SCHEMA;
@@ -170,20 +170,20 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
           FROM ${submissionTable}
           WHERE "challengeId" = ${challengeId}
             AND "status"::text <> 'DELETED'
-        `
+        `,
       ),
       reviewPrisma.$queryRaw(
         Prisma.sql`
           SELECT "submissionId", "isFinal"
           FROM ${aiReviewDecisionTable}
           WHERE "configId" = ${aiReviewConfig.id}
-        `
+        `,
       ),
     ]);
   } catch (err) {
     logger.error(
       `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
-      err
+      err,
     );
     throw err;
   }
@@ -191,16 +191,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
   logger.debug(
     `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
       (decisions || []).length
-    }`
+    }`,
   );
 
   const submissionIds = _.uniq(
-    (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id)
+    (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id),
   );
   if (submissionIds.length === 0) {
-    logger.debug(
-      `AI Screening closure allowed for challenge ${challengeId}: no submissions found`
-    );
+    logger.debug(`AI Screening closure allowed for challenge ${challengeId}: no submissions found`);
     return;
   }
 
@@ -208,20 +206,22 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     (decisions || [])
       .filter((decision) => decision && decision.isFinal === true)
       .map((decision) => extractSubmissionId(decision))
-      .filter((id) => !!id)
+      .filter((id) => !!id),
   );
 
-  const hasPendingDecision = (decisions || []).some((decision) => decision && decision.isFinal !== true);
+  const hasPendingDecision = (decisions || []).some(
+    (decision) => decision && decision.isFinal !== true,
+  );
   const missingFinalizedSubmissions = submissionIds.filter(
-    (submissionId) => !finalizedDecisionSubmissionIds.has(submissionId)
+    (submissionId) => !finalizedDecisionSubmissionIds.has(submissionId),
   );
 
   if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`
+      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI reviews are not complete"
+      "Cannot close AI Screening phase because AI reviews are not complete",
     );
   }
 
@@ -279,30 +279,32 @@ async function enrichSkillsData(challenge, { skillLookup } = {}) {
     return lookup[skillId];
   };
 
-  challenge.skills = _.uniqBy(challenge.skills, (skill) => skill.skillId || skill.id).map((skill) => {
-    const skillId = skill.skillId || skill.id;
-    const found = getFromLookup(skillId);
-    if (found) {
-      const enrichedSkill = {
-        id: skillId,
-        name: found.name,
-      };
-
-      if (found.category) {
-        enrichedSkill.category = {
-          id: found.category.id,
-          name: found.category.name,
+  challenge.skills = _.uniqBy(challenge.skills, (skill) => skill.skillId || skill.id).map(
+    (skill) => {
+      const skillId = skill.skillId || skill.id;
+      const found = getFromLookup(skillId);
+      if (found) {
+        const enrichedSkill = {
+          id: skillId,
+          name: found.name,
         };
+
+        if (found.category) {
+          enrichedSkill.category = {
+            id: found.category.id,
+            name: found.category.name,
+          };
+        }
+
+        return enrichedSkill;
       }
 
-      return enrichedSkill;
-    }
-
-    return {
-      id: skillId,
-      name: skill.name || "",
-    };
-  });
+      return {
+        id: skillId,
+        name: skill.name || "",
+      };
+    },
+  );
 }
 
 /**
@@ -311,7 +313,7 @@ async function enrichSkillsData(challenge, { skillLookup } = {}) {
  */
 async function enrichSkillsDataBulk(challenges) {
   const challengesWithSkills = challenges.filter(
-    (challenge) => Array.isArray(challenge.skills) && challenge.skills.length > 0
+    (challenge) => Array.isArray(challenge.skills) && challenge.skills.length > 0,
   );
 
   if (challengesWithSkills.length === 0) {
@@ -320,7 +322,7 @@ async function enrichSkillsDataBulk(challenges) {
 
   const uniqueSkillIds = _(challengesWithSkills)
     .flatMap((challenge) =>
-      challenge.skills.map((skill) => skill.skillId || skill.id).filter((id) => !_.isNil(id))
+      challenge.skills.map((skill) => skill.skillId || skill.id).filter((id) => !_.isNil(id)),
     )
     .uniq()
     .value();
@@ -345,7 +347,7 @@ async function enrichSkillsDataBulk(challenges) {
   }
 
   await Promise.all(
-    challengesWithSkills.map((challenge) => enrichSkillsData(challenge, { skillLookup: lookup }))
+    challengesWithSkills.map((challenge) => enrichSkillsData(challenge, { skillLookup: lookup })),
   );
 }
 
@@ -371,11 +373,11 @@ const includeReturnFields = {
   },
   events: true,
   prizeSets: {
-    include: { 
+    include: {
       prizes: {
         orderBy: { value: "desc" },
       },
-    } 
+    },
   },
   reviewers: {
     orderBy: { createdAt: "asc" },
@@ -487,7 +489,9 @@ async function setDefaultReviewers(currentUser, data) {
             incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string()
+                .valid(..._.values(ReviewOpportunityTypeEnum))
+                .insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiConfigTemplateId: Joi.when("isMemberReview", {
@@ -495,7 +499,7 @@ async function setDefaultReviewers(currentUser, data) {
               then: Joi.string().required(),
               otherwise: Joi.forbidden(),
             }),
-          })
+          }),
         )
         .default([]),
     })
@@ -519,7 +523,7 @@ async function setDefaultReviewers(currentUser, data) {
     });
     if (!timelineTemplate) {
       throw new errors.NotFoundError(
-        `TimelineTemplate with id: ${value.timelineTemplateId} doesn't exist`
+        `TimelineTemplate with id: ${value.timelineTemplateId} doesn't exist`,
       );
     }
   }
@@ -555,7 +559,7 @@ async function setDefaultReviewers(currentUser, data) {
           timelineTemplateId: _.isNil(value.timelineTemplateId) ? null : value.timelineTemplateId,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,
-          aiConfigTemplateId:_.isNil(r.aiConfigTemplateId) ? null : r.aiConfigTemplateId,
+          aiConfigTemplateId: _.isNil(r.aiConfigTemplateId) ? null : r.aiConfigTemplateId,
           memberReviewerCount: _.isNil(r.memberReviewerCount)
             ? null
             : Number(r.memberReviewerCount),
@@ -824,7 +828,7 @@ async function searchChallenges(currentUser, criteria) {
     }
     const arrayValue = Array.isArray(list) ? list : [list];
     return _.uniq(
-      arrayValue.map((value) => normalizeGroupIdValue(value)).filter((value) => !_.isNil(value))
+      arrayValue.map((value) => normalizeGroupIdValue(value)).filter((value) => !_.isNil(value)),
     );
   };
 
@@ -855,7 +859,7 @@ async function searchChallenges(currentUser, criteria) {
     if (typeIds.length > 0) {
       includedTypeIds = _.concat(
         includedTypeIds,
-        typeIds.map((t) => t.id)
+        typeIds.map((t) => t.id),
       );
     }
   }
@@ -867,7 +871,7 @@ async function searchChallenges(currentUser, criteria) {
     if (trackIds.length > 0) {
       includedTrackIds = _.concat(
         includedTrackIds,
-        trackIds.map((t) => t.id)
+        trackIds.map((t) => t.id),
       );
     }
   }
@@ -1161,29 +1165,22 @@ async function searchChallenges(currentUser, criteria) {
     }
   }
 
-  const requestedMemberId = !_.isNil(criteria.memberId)
-    ? _.toString(criteria.memberId)
-    : null;
+  const requestedMemberId = !_.isNil(criteria.memberId) ? _.toString(criteria.memberId) : null;
   const currentUserMemberId =
-    currentUser && !_hasAdminRole && !_isMachineToken
-      ? _.toString(currentUser.userId)
-      : null;
+    currentUser && !_hasAdminRole && !_isMachineToken ? _.toString(currentUser.userId) : null;
   const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
-  const isSelfMemberSearch =
-    Boolean(requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId);
-  const shouldApplyGroupVisibilityFilter =
-    Boolean(currentUser && !_isMachineToken && !_hasAdminRole && !isSelfMemberSearch);
+  const isSelfMemberSearch = Boolean(
+    requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId,
+  );
+  const shouldApplyGroupVisibilityFilter = Boolean(
+    currentUser && !_isMachineToken && !_hasAdminRole && !isSelfMemberSearch,
+  );
 
   let hasProjectManagerAccessForSearch = false;
-  if (
-    currentUser &&
-    !_hasAdminRole &&
-    !_isMachineToken &&
-    !_.isNil(criteria.projectId)
-  ) {
+  if (currentUser && !_hasAdminRole && !_isMachineToken && !_.isNil(criteria.projectId)) {
     hasProjectManagerAccessForSearch = await helper.userHasProjectManagerAccess(
       criteria.projectId,
-      currentUser
+      currentUser,
     );
   }
 
@@ -1448,9 +1445,7 @@ async function searchChallenges(currentUser, criteria) {
       });
 
       const sortDirection = sortOrderProp === "asc" ? 1 : -1;
-      summaryRecords.sort(
-        (a, b) => compareStatusSortValues(a.status, b.status) * sortDirection
-      );
+      summaryRecords.sort((a, b) => compareStatusSortValues(a.status, b.status) * sortDirection);
 
       total = summaryRecords.length;
       const offset = (page - 1) * perPage;
@@ -1498,7 +1493,7 @@ async function searchChallenges(currentUser, criteria) {
     });
     if (taskSyncTargets.length > 0) {
       await Promise.all(
-        taskSyncTargets.map((challenge) => helper.syncTaskAssignmentFromResources(challenge))
+        taskSyncTargets.map((challenge) => helper.syncTaskAssignmentFromResources(challenge)),
       );
     }
     if (!currentUser) {
@@ -1533,8 +1528,7 @@ async function searchChallenges(currentUser, criteria) {
     if (!currentUser.isMachine && !_hasAdminRole) {
       result.forEach((challenge) => {
         _.unset(challenge, "billing");
-        const hasCurrentUserAccess =
-          _.get(challenge, "memberAccesses.length", 0) > 0;
+        const hasCurrentUserAccess = _.get(challenge, "memberAccesses.length", 0) > 0;
         if (!hasCurrentUserAccess) {
           _.unset(challenge, "privateDescription");
         }
@@ -1575,7 +1569,7 @@ async function searchChallenges(currentUser, criteria) {
       `SearchChallenges timings (page=${page}, perPage=${perPage}): ${JSON.stringify({
         totalElapsedMs: Date.now() - searchTimingStart,
         marks: searchTimingMarks,
-      })}`
+      })}`,
     );
   }
 
@@ -1611,7 +1605,9 @@ searchChallenges.schema = {
       projectId: Joi.number().integer().positive(),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
-      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string()
+        .valid(..._.values(ChallengeStatusEnum))
+        .insensitive(),
       group: Joi.string(),
       startDateStart: Joi.date(),
       startDateEnd: Joi.date(),
@@ -1678,25 +1674,25 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.debug(`createChallenge: request payload validated ${buildLogContext()}`);
   const prizeTypeTmp = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
   logger.debug(
-    `createChallenge: initial prize validation complete (prizeType=${prizeTypeTmp}) ${buildLogContext()}`
+    `createChallenge: initial prize validation complete (prizeType=${prizeTypeTmp}) ${buildLogContext()}`,
   );
   if (challenge.legacy && challenge.legacy.selfService) {
     // if self-service, create a new project (what about if projectId is provided in the payload? confirm with business!)
     if (!challenge.projectId && challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
       const selfServiceProjectName = `Self service - ${currentUser.handle} - ${challenge.name}`;
       logger.info(
-        `createChallenge: creating self-service project (name=${selfServiceProjectName}) ${buildLogContext()}`
+        `createChallenge: creating self-service project (name=${selfServiceProjectName}) ${buildLogContext()}`,
       );
       challenge.projectId = await helper.createSelfServiceProject(
         selfServiceProjectName,
         "N/A",
         config.NEW_SELF_SERVICE_PROJECT_TYPE,
-        userToken
+        userToken,
       );
       logger.info(
         `createChallenge: self-service project created (projectId=${
           challenge.projectId
-        }) ${buildLogContext()}`
+        }) ${buildLogContext()}`,
       );
     }
 
@@ -1727,21 +1723,20 @@ async function createChallenge(currentUser, challenge, userToken) {
       normalizedDirectProjectId = _.toNumber(directProjectId);
       if (!Number.isInteger(normalizedDirectProjectId)) {
         throw new errors.BadRequestError(
-          `Project with id: ${projectId} has invalid directProjectId: ${directProjectId}`
+          `Project with id: ${projectId} has invalid directProjectId: ${directProjectId}`,
         );
       }
     }
     logger.debug(
-      `createChallenge: fetched project details (directProjectId=${normalizedDirectProjectId}) ${buildLogContext()}`
+      `createChallenge: fetched project details (directProjectId=${normalizedDirectProjectId}) ${buildLogContext()}`,
     );
     logger.debug(`createChallenge: fetching billing information ${buildLogContext()}`);
-    const { billingAccountId, markup } = await projectHelper.getProjectBillingInformation(
-      projectId
-    );
+    const { billingAccountId, markup } =
+      await projectHelper.getProjectBillingInformation(projectId);
     logger.debug(
       `createChallenge: billing information retrieved (hasAccount=${
         billingAccountId !== null && billingAccountId !== undefined
-      }, markup=${markup}) ${buildLogContext()}`
+      }, markup=${markup}) ${buildLogContext()}`,
     );
 
     _.set(challenge, "legacy.directProjectId", normalizedDirectProjectId);
@@ -1773,8 +1768,8 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.debug(
     `createChallenge: resolved challenge track/type (trackId=${_.get(track, "id")}, typeId=${_.get(
       type,
-      "id"
-    )}) ${buildLogContext()}`
+      "id",
+    )}) ${buildLogContext()}`,
   );
 
   if (_.get(type, "isTask")) {
@@ -1798,7 +1793,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     logger.debug(
       `createChallenge: validating provided phases (count=${
         challenge.phases.length
-      }) ${buildLogContext()}`
+      }) ${buildLogContext()}`,
     );
     await phaseHelper.validatePhases(challenge.phases);
     logger.debug(`createChallenge: provided phases validated ${buildLogContext()}`);
@@ -1810,7 +1805,7 @@ async function createChallenge(currentUser, challenge, userToken) {
       logger.debug(
         `createChallenge: fetching default timeline template (trackId=${
           challenge.trackId
-        }, typeId=${challenge.typeId}) ${buildLogContext()}`
+        }, typeId=${challenge.typeId}) ${buildLogContext()}`,
       );
       const supportedTemplates =
         await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
@@ -1821,19 +1816,19 @@ async function createChallenge(currentUser, challenge, userToken) {
       logger.debug(
         `createChallenge: retrieved ${
           supportedTemplates.result.length
-        } supported templates ${buildLogContext()}`
+        } supported templates ${buildLogContext()}`,
       );
       const challengeTimelineTemplate = supportedTemplates.result[0];
       if (!challengeTimelineTemplate) {
         throw new errors.BadRequestError(
-          `The selected trackId ${challenge.trackId} and typeId: ${challenge.typeId} does not have a default timeline template. Please provide a timelineTemplateId`
+          `The selected trackId ${challenge.trackId} and typeId: ${challenge.typeId} does not have a default timeline template. Please provide a timelineTemplateId`,
         );
       }
       challenge.timelineTemplateId = challengeTimelineTemplate.timelineTemplateId;
       logger.debug(
         `createChallenge: using timelineTemplateId=${
           challenge.timelineTemplateId
-        } ${buildLogContext()}`
+        } ${buildLogContext()}`,
       );
     } else {
       throw new errors.BadRequestError(`trackId and typeId are required to create a challenge`);
@@ -1842,15 +1837,15 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.debug(
     `createChallenge: populating phases for challenge creation (templateId=${
       challenge.timelineTemplateId
-    }) ${buildLogContext()}`
+    }) ${buildLogContext()}`,
   );
   challenge.phases = await phaseHelper.populatePhasesForChallengeCreation(
     challenge.phases,
     challenge.startDate,
-    challenge.timelineTemplateId
+    challenge.timelineTemplateId,
   );
   logger.debug(
-    `createChallenge: phases populated (count=${challenge.phases.length}) ${buildLogContext()}`
+    `createChallenge: phases populated (count=${challenge.phases.length}) ${buildLogContext()}`,
   );
 
   // populate challenge terms
@@ -1862,8 +1857,8 @@ async function createChallenge(currentUser, challenge, userToken) {
     `createChallenge: validating challenge terms (count=${_.get(
       challenge.terms,
       "length",
-      0
-    )}) ${buildLogContext()}`
+      0,
+    )}) ${buildLogContext()}`,
   );
   challenge.terms = await helper.validateChallengeTerms(challenge.terms || []);
   logger.debug(`createChallenge: challenge terms validated ${buildLogContext()}`);
@@ -1899,7 +1894,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   // The amountInCents field doesn't exist in the database schema
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(challenge.prizeSets);
   logger.debug(
-    `createChallenge: final prize validation complete (prizeType=${prizeType}) ${buildLogContext()}`
+    `createChallenge: final prize validation complete (prizeType=${prizeType}) ${buildLogContext()}`,
   );
 
   // If reviewers are not provided, apply defaults for this challenge.
@@ -1909,11 +1904,9 @@ async function createChallenge(currentUser, challenge, userToken) {
     prisma,
     debugLog,
   );
-  const aiReviewConfigsForCreation = !hasProvidedReviewers ? await challengeHelper.applyDefaultAIConfigForChallengeCreation(
-    challenge,
-    prisma,
-    debugLog,
-  ) : [];
+  const aiReviewConfigsForCreation = !hasProvidedReviewers
+    ? await challengeHelper.applyDefaultAIConfigForChallengeCreation(challenge, prisma, debugLog)
+    : [];
 
   // AI screening phase will be added when challenge is launched (status changed to ACTIVE)
 
@@ -1922,8 +1915,8 @@ async function createChallenge(currentUser, challenge, userToken) {
     `createChallenge: creating challenge record via prisma ${buildLogContext()} phaseCount=${_.get(
       challenge,
       "phases.length",
-      0
-    )} prizeSetCount=${_.get(challenge, "prizeSets.length", 0)}`
+      0,
+    )} prizeSetCount=${_.get(challenge, "prizeSets.length", 0)}`,
   );
   const ret = await prisma.challenge.create({
     data: prismaModel,
@@ -1954,13 +1947,13 @@ async function createChallenge(currentUser, challenge, userToken) {
       logger.debug(
         `createChallenge: assigning CLIENT_MANAGER role to creator (challengeId=${
           ret.id
-        }) ${buildLogContext()}`
+        }) ${buildLogContext()}`,
       );
       await helper.createResource(ret.id, ret.createdBy, config.CLIENT_MANAGER_ROLE_ID);
       logger.debug(
         `createChallenge: CLIENT_MANAGER role assignment complete (challengeId=${
           ret.id
-        }) ${buildLogContext()}`
+        }) ${buildLogContext()}`,
       );
     }
   } else {
@@ -1968,13 +1961,13 @@ async function createChallenge(currentUser, challenge, userToken) {
       logger.debug(
         `createChallenge: assigning MANAGER role to creator (challengeId=${
           ret.id
-        }) ${buildLogContext()}`
+        }) ${buildLogContext()}`,
       );
       await helper.createResource(ret.id, ret.createdBy, config.MANAGER_ROLE_ID);
       logger.debug(
         `createChallenge: MANAGER role assignment complete (challengeId=${
           ret.id
-        }) ${buildLogContext()}`
+        }) ${buildLogContext()}`,
       );
     }
   }
@@ -1983,13 +1976,13 @@ async function createChallenge(currentUser, challenge, userToken) {
   logger.info(
     `createChallenge: posting bus event ${constants.Topics.ChallengeCreated} (challengeId=${
       ret.id
-    }) ${buildLogContext()}`
+    }) ${buildLogContext()}`,
   );
   await helper.postBusEvent(constants.Topics.ChallengeCreated, ret);
   logger.info(
     `createChallenge: bus event posted ${constants.Topics.ChallengeCreated} (challengeId=${
       ret.id
-    }) ${buildLogContext()}`
+    }) ${buildLogContext()}`,
   );
 
   return helper.removeNullProperties(ret);
@@ -2044,7 +2037,7 @@ createChallenge.schema = {
           Joi.object().keys({
             name: Joi.string().required(),
             value: Joi.required(),
-          })
+          }),
         )
         .unique((a, b) => a.name === b.name),
       timelineTemplateId: Joi.string(), // Joi.optionalId(),
@@ -2059,27 +2052,29 @@ createChallenge.schema = {
                   name: Joi.string(),
                   value: Joi.number().integer().min(0),
                 })
-                .optional()
+                .optional(),
             )
             .optional(),
-        })
+        }),
       ),
       events: Joi.array().items(
         Joi.object().keys({
           id: Joi.number().required(),
           name: Joi.string(),
           key: Joi.string(),
-        })
+        }),
       ),
       discussions: Joi.array().items(
         Joi.object().keys({
           id: Joi.optionalId(),
           name: Joi.string().required(),
-          type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
+          type: Joi.string()
+            .required()
+            .valid(..._.values(DiscussionTypeEnum)),
           provider: Joi.string().required(),
           url: Joi.string(),
           options: Joi.array().items(Joi.object()),
-        })
+        }),
       ),
       reviewers: Joi.array().items(
         Joi.object().keys({
@@ -2094,7 +2089,9 @@ createChallenge.schema = {
           phaseId: Joi.id().required(),
           type: Joi.when("isMemberReview", {
             is: true,
-            then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
+            then: Joi.string()
+              .valid(..._.values(ReviewOpportunityTypeEnum))
+              .insensitive(),
             otherwise: Joi.forbidden(),
           }),
           aiWorkflowId: Joi.when("isMemberReview", {
@@ -2105,11 +2102,13 @@ createChallenge.schema = {
           fixedAmount: Joi.number().min(0).optional().allow(null),
           baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
           incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
-        })
+        }),
       ),
       prizeSets: Joi.array().items(
         Joi.object().keys({
-          type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
+          type: Joi.string()
+            .valid(..._.values(PrizeSetTypeEnum))
+            .required(),
           description: Joi.string(),
           prizes: Joi.array()
             .items(
@@ -2117,11 +2116,11 @@ createChallenge.schema = {
                 description: Joi.string(),
                 type: Joi.string().required(),
                 value: Joi.number().min(0).required(),
-              })
+              }),
             )
             .min(1)
             .required(),
-        })
+        }),
       ),
       tags: Joi.array().items(Joi.string()), // tag names
       projectId: Joi.number().integer().positive(),
@@ -2136,7 +2135,7 @@ createChallenge.schema = {
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
         ChallengeStatusEnum.DRAFT,
-        ChallengeStatusEnum.APPROVED
+        ChallengeStatusEnum.APPROVED,
       ),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
@@ -2144,7 +2143,7 @@ createChallenge.schema = {
         Joi.object().keys({
           id: Joi.id(),
           roleId: Joi.id(),
-        })
+        }),
       ),
       skills: Joi.array()
         .items(
@@ -2152,7 +2151,7 @@ createChallenge.schema = {
             .keys({
               id: Joi.id(),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .optional(),
     })
@@ -2189,18 +2188,15 @@ async function getChallenge(currentUser, id, checkIfExists) {
       _.unset(challenge, "billing");
       if (_.isEmpty(challenge.privateDescription)) {
         _.unset(challenge, "privateDescription");
-      } else if (
-        !taskInfo.isTask ||
-        !taskInfo.isAssigned
-      ) {
+      } else if (!taskInfo.isTask || !taskInfo.isAssigned) {
         const hasProjectWriteAccess = await helper.userHasProjectWriteAccess(
           challenge.projectId,
-          currentUser
+          currentUser,
         );
         if (!hasProjectWriteAccess) {
           const memberResources = await helper.listResourcesByMemberAndChallenge(
             currentUser.userId,
-            challenge.id
+            challenge.id,
           );
           if (_.isEmpty(memberResources)) {
             _.unset(challenge, "privateDescription");
@@ -2276,7 +2272,7 @@ async function getChallengeStatistics(currentUser, id) {
       score: _.get(
         _.find(submission.review || [], (r) => r.metadata),
         "score",
-        0
+        0,
       ),
     });
   }
@@ -2309,7 +2305,7 @@ function buildCombinedWinnerPayload(data = {}) {
       ...data.winners.map((winner) => ({
         ...winner,
         type: _.toUpper(winner.type || PrizeSetTypeEnum.PLACEMENT),
-      }))
+      })),
     );
   }
   if (Array.isArray(data.checkpointWinners)) {
@@ -2317,7 +2313,7 @@ function buildCombinedWinnerPayload(data = {}) {
       ...data.checkpointWinners.map((winner) => ({
         ...winner,
         type: _.toUpper(winner.type || PrizeSetTypeEnum.CHECKPOINT),
-      }))
+      })),
     );
   }
   return combined;
@@ -2330,13 +2326,13 @@ async function validateWinners(winners, challengeResources) {
     for (const winner of filteredWinners) {
       if (!_.find(registrants, (r) => _.toString(r.memberId) === _.toString(winner.userId))) {
         throw new errors.BadRequestError(
-          `Member with userId: ${winner.userId} is not registered on the challenge`
+          `Member with userId: ${winner.userId} is not registered on the challenge`,
         );
       }
       const diffWinners = _.differenceWith(filteredWinners, [winner], _.isEqual);
       if (diffWinners.length + 1 !== filteredWinners.length) {
         throw new errors.BadRequestError(
-          `Duplicate member with placement: ${helper.toString(winner)}`
+          `Duplicate member with placement: ${helper.toString(winner)}`,
         );
       }
 
@@ -2349,7 +2345,7 @@ async function validateWinners(winners, challengeResources) {
         (placementExists.userId !== winner.userId || placementExists.handle !== winner.handle)
       ) {
         throw new errors.BadRequestError(
-          `Only one member can have a placement: ${winner.placement}`
+          `Only one member can have a placement: ${winner.placement}`,
         );
       }
 
@@ -2359,7 +2355,7 @@ async function validateWinners(winners, challengeResources) {
       });
       if (memberExists && memberExists.placement !== winner.placement) {
         throw new errors.BadRequestError(
-          `The same member ${winner.userId} cannot have multiple placements`
+          `The same member ${winner.userId} cannot have multiple placements`,
         );
       }
     }
@@ -2401,14 +2397,14 @@ function validateTask(currentUser, challenge, data, challengeResources) {
         challengeResources,
         (r) =>
           r.roleId === config.SUBMITTER_ROLE_ID &&
-          _.toString(r.memberId) === _.toString(currentUser.userId)
+          _.toString(r.memberId) === _.toString(currentUser.userId),
       ).length > 0;
 
     if (assignedToCurrentUser) {
       throw new errors.ForbiddenError(
         `You are not allowed to ${
           data.status === ChallengeStatusEnum.ACTIVE ? "lanuch" : "complete"
-        } task assigned to yourself. Please contact manager to operate.`
+        } task assigned to yourself. Please contact manager to operate.`,
       );
     }
   }
@@ -2426,7 +2422,7 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
 
   const submitters = _.filter(
     challengeResources,
-    (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+    (resource) => resource.roleId === config.SUBMITTER_ROLE_ID,
   );
 
   if (!submitters || submitters.length === 0) {
@@ -2511,13 +2507,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     projectId = _.get(challenge, "projectId");
 
     logger.debug(
-      `updateChallenge(${challengeId}): requesting billing information for project ${projectId}`
+      `updateChallenge(${challengeId}): requesting billing information for project ${projectId}`,
     );
     ({ billingAccountId, markup } = await projectHelper.getProjectBillingInformation(projectId));
     logger.debug(
       `updateChallenge(${challengeId}): billing lookup complete (hasAccount=${
         billingAccountId != null
-      })`
+      })`,
     );
 
     if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
@@ -2558,7 +2554,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
   const challengeResources = await helper.getChallengeResources(challengeId);
   logger.debug(
-    `updateChallenge(${challengeId}): fetched ${challengeResources.length} challenge resources`
+    `updateChallenge(${challengeId}): fetched ${challengeResources.length} challenge resources`,
   );
 
   logger.debug(`updateChallenge(${challengeId}): validating update payload`);
@@ -2566,7 +2562,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     currentUser,
     challenge,
     data,
-    challengeResources
+    challengeResources,
   );
   logger.debug(`updateChallenge(${challengeId}): payload validation complete`);
   validateTask(currentUser, challenge, data, challengeResources);
@@ -2608,16 +2604,16 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         const workItemSummary = _.get(
           _.find(_.get(challenge, "metadata", []), (m) => m.name === "websitePurpose.description"),
           "value",
-          "N/A"
+          "N/A",
         );
         logger.debug(
-          `updateChallenge(${challengeId}): activating self-service project ${projectId}`
+          `updateChallenge(${challengeId}): activating self-service project ${projectId}`,
         );
         await helper.activateProject(
           projectId,
           currentUser,
           selfServiceProjectName,
-          workItemSummary
+          workItemSummary,
         );
 
         sendActivationEmail = data.status === ChallengeStatusEnum.ACTIVE;
@@ -2629,13 +2625,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
             ...data,
             status: ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
             cancelReason: `Failed to activate project. Error: ${e.message}. JSON: ${JSON.stringify(
-              e
+              e,
             )}`,
           },
-          false
+          false,
         );
         throw new errors.BadRequestError(
-          "Failed to activate the challenge! The challenge has been canceled!"
+          "Failed to activate the challenge! The challenge has been canceled!",
         );
       }
     }
@@ -2646,12 +2642,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     ) {
       try {
         logger.debug(
-          `updateChallenge(${challengeId}): updating self-service project info for project ${projectId}`
+          `updateChallenge(${challengeId}): updating self-service project info for project ${projectId}`,
         );
         await helper.updateSelfServiceProjectInfo(
           projectId,
           data.endDate || challenge.endDate,
-          currentUser
+          currentUser,
         );
       } catch (e) {
         logger.debug(`There was an error trying to update the project: ${e.message}`);
@@ -2665,7 +2661,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     ) {
       try {
         logger.debug(
-          `updateChallenge(${challengeId}): cancelling self-service project ${challenge.projectId}`
+          `updateChallenge(${challengeId}): cancelling self-service project ${challenge.projectId}`,
         );
         await helper.cancelProject(challenge.projectId, data.cancelReason, currentUser);
       } catch (e) {
@@ -2688,7 +2684,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
       ) {
         throw new errors.BadRequestError(
-          "Cannot Activate this project, it has no active billing account."
+          "Cannot Activate this project, it has no active billing account.",
         );
       }
     }
@@ -2706,7 +2702,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
           ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
         ],
-        data.status
+        data.status,
       )
     ) {
       isChallengeBeingCancelled = true;
@@ -2737,7 +2733,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         } else if (!currentUser.isMachine) {
           const existingDiscussion = _.find(
             _.get(challenge, "discussions", []),
-            (d) => d.id === data.discussions[i].id
+            (d) => d.id === data.discussions[i].id,
           );
           if (existingDiscussion) {
             _.assign(data.discussions[i], _.pick(existingDiscussion, ["url", "options"]));
@@ -2752,7 +2748,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         data.discussions[i].id = uuid();
         data.discussions[i].name = data.discussions[i].name.substring(
           0,
-          config.FORUM_TITLE_LENGTH_LIMIT
+          config.FORUM_TITLE_LENGTH_LIMIT,
         );
       }
     }
@@ -2773,7 +2769,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       finalTimelineTemplateId !== challenge.timelineTemplateId
     ) {
       throw new errors.BadRequestError(
-        `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`
+        `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`,
       );
     }
   } else if (finalTimelineTemplateId !== challenge.timelineTemplateId) {
@@ -2790,7 +2786,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       // Allow only M2M to update prizeSets for completed challenges
       if (!currentUser.isMachine || (challenge.task != null && challenge.task.isTask !== true)) {
         throw new errors.BadRequestError(
-          `Cannot update prizeSets for challenges with status: ${finalStatus}!`
+          `Cannot update prizeSets for challenges with status: ${finalStatus}!`,
         );
       }
     }
@@ -2815,7 +2811,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       challenge.status.indexOf(ChallengeStatusEnum.CANCELLED) > -1
     ) {
       throw new BadRequestError(
-        `Challenge phase/start date can not be modified for COMPLETED or CANCELLED challenges.`
+        `Challenge phase/start date can not be modified for COMPLETED or CANCELLED challenges.`,
       );
     }
     const newStartDate = data.startDate || challenge.startDate;
@@ -2824,14 +2820,14 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       newPhases = await phaseHelper.populatePhasesForChallengeCreation(
         data.phases,
         newStartDate,
-        finalTimelineTemplateId
+        finalTimelineTemplateId,
       );
     } else {
       newPhases = await phaseHelper.populatePhasesForChallengeUpdate(
         challenge.phases,
         data.phases,
         challenge.timelineTemplateId,
-        isChallengeBeingActivated
+        isChallengeBeingActivated,
       );
     }
     phasesUpdated = true;
@@ -2845,14 +2841,16 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   }
   // Add AI screening phase if AI reviewers are assigned and challenge is being activated
   if (isStatusChangingToActive) {
-    logger.debug(`updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`);
-    const tempChallenge = { phases: phasesForUpdate || challenge.phases, reviewers: data.reviewers || challenge.reviewers };
-    const debugLogForAI = (message) => logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
-    await challengeHelper.addAIScreeningPhaseForChallenge(
-      tempChallenge,
-      prisma,
-      debugLogForAI,
+    logger.debug(
+      `updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`,
     );
+    const tempChallenge = {
+      phases: phasesForUpdate || challenge.phases,
+      reviewers: data.reviewers || challenge.reviewers,
+    };
+    const debugLogForAI = (message) =>
+      logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
+    await challengeHelper.addAIScreeningPhaseForChallenge(tempChallenge, prisma, debugLogForAI);
     // Update phasesForUpdate with the updated phases after AI screening addition
     phasesForUpdate = tempChallenge.phases;
     phasesUpdated = true;
@@ -2918,13 +2916,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       logger.info(
         `User ${
           currentUser.handle || currentUser.sub
-        } is not allowed to modify the task information on challenge ${challengeId}`
+        } is not allowed to modify the task information on challenge ${challengeId}`,
       );
       data.task = challenge.task;
       logger.info(
         `Task information on challenge ${challengeId} is reset to ${JSON.stringify(
-          challenge.task
-        )}. Original data: ${JSON.stringify(data.task)}`
+          challenge.task,
+        )}. Original data: ${JSON.stringify(data.task)}`,
       );
     } else {
       delete data.task;
@@ -2939,8 +2937,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     logger.info(
       `Setting task.memberId to ${winnerMemberId} for challenge ${challengeId}. Task ${_.get(
         data,
-        "task"
-      )} - ${_.get(challenge, "task")}`
+        "task",
+      )} - ${_.get(challenge, "task")}`,
     );
 
     if (winnerMemberId != null && _.get(data, "task.memberId") !== winnerMemberId) {
@@ -2951,7 +2949,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         memberId: winnerMemberId,
       };
       logger.warn(
-        `task.memberId mismatched with winner memberId. task.memberId is updated to ${winnerMemberId}`
+        `task.memberId mismatched with winner memberId. task.memberId is updated to ${winnerMemberId}`,
       );
     } else {
       logger.info(`task ${challengeId} has no winner set yet.`);
@@ -2976,19 +2974,19 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (!_.isEmpty(_.get(data, "task.memberId"))) {
       const registrants = _.filter(
         challengeResources,
-        (r) => r.roleId === config.SUBMITTER_ROLE_ID
+        (r) => r.roleId === config.SUBMITTER_ROLE_ID,
       );
       if (
         !_.find(
           registrants,
-          (r) => _.toString(r.memberId) === _.toString(_.get(data, "task.memberId"))
+          (r) => _.toString(r.memberId) === _.toString(_.get(data, "task.memberId")),
         )
       ) {
         throw new errors.BadRequestError(
           `Member ${_.get(
             data,
-            "task.memberId"
-          )} is not a submitter resource of challenge ${challengeId}`
+            "task.memberId",
+          )} is not a submitter resource of challenge ${challengeId}`,
         );
       }
     }
@@ -3031,7 +3029,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
       // Validate all referenced Phase ids exist
       const uniquePhaseIds = _.uniq(
-        data.reviewers.filter((r) => r && r.phaseId).map((r) => r.phaseId)
+        data.reviewers.filter((r) => r && r.phaseId).map((r) => r.phaseId),
       );
       if (uniquePhaseIds.length > 0) {
         const foundPhases = await prisma.phase.findMany({ where: { id: { in: uniquePhaseIds } } });
@@ -3039,7 +3037,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         const missing = uniquePhaseIds.filter((id) => !foundIds.has(id));
         if (missing.length > 0) {
           throw new errors.BadRequestError(
-            `Invalid reviewer.phaseId value(s); Phase not found: ${missing.join(", ")}`
+            `Invalid reviewer.phaseId value(s); Phase not found: ${missing.join(", ")}`,
           );
         }
       }
@@ -3069,8 +3067,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     const effectiveReviewers = Array.isArray(data.reviewers)
       ? data.reviewers
       : Array.isArray(challenge.reviewers)
-      ? challenge.reviewers
-      : [];
+        ? challenge.reviewers
+        : [];
 
     const reviewersMissingFields = [];
     effectiveReviewers.forEach((reviewer, index) => {
@@ -3090,24 +3088,27 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (reviewersMissingFields.length > 0) {
       throw new errors.BadRequestError(
         `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
-          "; "
-        )}`
+          "; ",
+        )}`,
       );
     }
 
     const reviewerPhaseIds = new Set(
       effectiveReviewers
         .filter((reviewer) => reviewer && reviewer.phaseId)
-        .map((reviewer) => String(reviewer.phaseId))
+        .map((reviewer) => String(reviewer.phaseId)),
     );
 
     if (reviewerPhaseIds.size === 0) {
       throw new errors.BadRequestError(
-        "Cannot activate a challenge without at least one reviewer configured"
+        "Cannot activate a challenge without at least one reviewer configured",
       );
     }
 
-    const normalizePhaseName = (name) => String(name || "").trim().toLowerCase();
+    const normalizePhaseName = (name) =>
+      String(name || "")
+        .trim()
+        .toLowerCase();
     const effectivePhases =
       (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
         ? phasesForUpdate
@@ -3131,8 +3132,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (missingPhaseNames.size > 0) {
       throw new errors.BadRequestError(
         `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
-          missingPhaseNames
-        ).join(", ")}`
+          missingPhaseNames,
+        ).join(", ")}`,
       );
     }
   }
@@ -3140,7 +3141,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   // convert data to prisma models
   const updateData = prismaHelper.convertChallengeSchemaToPrisma(
     currentUser,
-    _.omit(data, ["cancelReason"])
+    _.omit(data, ["cancelReason"]),
   );
   updateData.updatedBy = _.toString(currentUser.userId);
   // reset createdBy
@@ -3156,7 +3157,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         challengeId,
         phasesForUpdate,
         auditUserId,
-        originalChallengePhases
+        originalChallengePhases,
       );
     }
     // drop nested data if updated
@@ -3211,9 +3212,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         logger.warn(`Failed to generate payments for Task challenge ${challengeId}`);
       }
     } catch (err) {
-      logger.error(
-        `Error generating payments for Task challenge ${challengeId}: ${err.message}`
-      );
+      logger.error(`Error generating payments for Task challenge ${challengeId}: ${err.message}`);
     }
   }
   // Re-fetch the challenge outside the transaction to ensure we publish
@@ -3240,7 +3239,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         {
           handle: creator.handle,
           workItemName: updatedChallenge.name,
-        }
+        },
       );
     }
     if (sendActivationEmail) {
@@ -3251,7 +3250,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
           handle: creator.handle,
           workItemName: updatedChallenge.name,
           workItemUrl: `${config.SELF_SERVICE_APP_URL}/work-items/${updatedChallenge.id}`,
-        }
+        },
       );
     }
     if (sendCompletedEmail) {
@@ -3262,7 +3261,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
           handle: creator.handle,
           workItemName: updatedChallenge.name,
           workItemUrl: `${config.SELF_SERVICE_APP_URL}/work-items/${updatedChallenge.id}?tab=solutions`,
-        }
+        },
       );
     }
     if (sendRejectedEmail || data.cancelReason) {
@@ -3273,8 +3272,27 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         {
           handle: creator.handle,
           workItemName: updatedChallenge.name,
-        }
+        },
       );
+    }
+  }
+
+  // Trigger challenge review context generation for AI review if applicable
+  const currentStatus = updatedChallenge.status;
+  const isActive = currentStatus === ChallengeStatusEnum.ACTIVE;
+  if (shouldGenerateChallengeReviewContext(updatedChallenge)) {
+    if (isStatusChangingToActive) {
+      // Trigger 1: Challenge is being activated
+      logger.info(
+        `updateChallenge(${challengeId}): triggering review context generation on activation`,
+      );
+      triggerChallengeReviewContextGeneration(challengeId);
+    } else if (isActive && !isStatusChangingToActive) {
+      // Trigger 2: Challenge updated while in ACTIVE (and not just activated)
+      logger.info(
+        `updateChallenge(${challengeId}): triggering review context generation on update (status: ${currentStatus})`,
+      );
+      triggerChallengeReviewContextGeneration(challengeId);
     }
   }
 
@@ -3341,7 +3359,7 @@ updateChallenge.schema = {
               name: Joi.string().required(),
               value: Joi.required(),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .unique((a, b) => a.name === b.name),
       timelineTemplateId: Joi.string().optional(), // changing this to update migrated challenges
@@ -3361,11 +3379,11 @@ updateChallenge.schema = {
                       name: Joi.string(),
                       value: Joi.number().integer().min(0),
                     })
-                    .optional()
+                    .optional(),
                 )
                 .optional(),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .min(1)
         .optional(),
@@ -3377,18 +3395,20 @@ updateChallenge.schema = {
             key: Joi.string(),
           })
           .unknown(true)
-          .optional()
+          .optional(),
       ),
       discussions: Joi.array()
         .items(
           Joi.object().keys({
             id: Joi.optionalId(),
             name: Joi.string().required(),
-            type: Joi.string().required().valid(..._.values(DiscussionTypeEnum)),
+            type: Joi.string()
+              .required()
+              .valid(..._.values(DiscussionTypeEnum)),
             provider: Joi.string().required(),
             url: Joi.string(),
             options: Joi.array().items(Joi.object()),
-          })
+          }),
         )
         .optional(),
       reviewers: Joi.array()
@@ -3405,7 +3425,9 @@ updateChallenge.schema = {
             phaseId: Joi.id().required(),
             type: Joi.when("isMemberReview", {
               is: true,
-              then: Joi.string().valid(..._.values(ReviewOpportunityTypeEnum)).insensitive(),
+              then: Joi.string()
+                .valid(..._.values(ReviewOpportunityTypeEnum))
+                .insensitive(),
               otherwise: Joi.forbidden(),
             }),
             aiWorkflowId: Joi.when("isMemberReview", {
@@ -3416,7 +3438,7 @@ updateChallenge.schema = {
             fixedAmount: Joi.number().min(0).optional().allow(null),
             baseCoefficient: Joi.number().min(0).max(1).optional().allow(null),
             incrementalCoefficient: Joi.number().min(0).max(1).optional().allow(null),
-          })
+          }),
         )
         .optional(),
       startDate: Joi.date().iso(),
@@ -3424,7 +3446,9 @@ updateChallenge.schema = {
         .items(
           Joi.object()
             .keys({
-              type: Joi.string().valid(..._.values(PrizeSetTypeEnum)).required(),
+              type: Joi.string()
+                .valid(..._.values(PrizeSetTypeEnum))
+                .required(),
               description: Joi.string(),
               prizes: Joi.array()
                 .items(
@@ -3432,12 +3456,12 @@ updateChallenge.schema = {
                     description: Joi.string(),
                     type: Joi.string().required(),
                     value: Joi.number().min(0).required(),
-                  })
+                  }),
                 )
                 .min(1)
                 .required(),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .min(1),
       tags: Joi.array().items(Joi.string()), // tag names
@@ -3448,7 +3472,9 @@ updateChallenge.schema = {
           allowedRegistrants: Joi.array().items(Joi.string().trim().lowercase()).optional(),
         })
         .optional(),
-      status: Joi.string().valid(..._.values(ChallengeStatusEnum)).insensitive(),
+      status: Joi.string()
+        .valid(..._.values(ChallengeStatusEnum))
+        .insensitive(),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -3457,7 +3483,7 @@ updateChallenge.schema = {
           url: Joi.string().uri().required(),
           fileSize: Joi.fileSize(),
           description: Joi.string(),
-        })
+        }),
       ),
       groups: Joi.array().items(Joi.optionalId()).unique(),
       // gitRepoURLs: Joi.array().items(Joi.string().uri()),
@@ -3470,7 +3496,7 @@ updateChallenge.schema = {
               placement: Joi.number().integer().positive().required(),
               type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .optional(),
       checkpointWinners: Joi.array()
@@ -3482,14 +3508,14 @@ updateChallenge.schema = {
               placement: Joi.number().integer().positive().required(),
               type: Joi.string().valid(..._.values(PrizeSetTypeEnum)),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .optional(),
       terms: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
           roleId: Joi.id(),
-        })
+        }),
       ),
       skills: Joi.array()
         .items(
@@ -3497,7 +3523,7 @@ updateChallenge.schema = {
             .keys({
               id: Joi.id(),
             })
-            .unknown(true)
+            .unknown(true),
         )
         .optional(),
       overview: Joi.any().forbidden(),
@@ -3522,7 +3548,7 @@ async function sendNotifications(currentUser, challengeId) {
         handle: creator.handle,
         workItemName: challenge.name,
         workItemUrl: `${config.SELF_SERVICE_APP_URL}/work-items/${challenge.id}?tab=solutions`,
-      }
+      },
     );
     return { type: constants.SelfServiceNotificationTypes.WORK_COMPLETED };
   }
@@ -3581,8 +3607,8 @@ async function ensureScorecardChangeDoesNotConflict({
       new Set(
         originalList
           .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
-          .filter((scorecardId) => !_.isNil(scorecardId))
-      )
+          .filter((scorecardId) => !_.isNil(scorecardId)),
+      ),
     );
 
     if (originalScorecards.length === 0) {
@@ -3593,12 +3619,12 @@ async function ensureScorecardChangeDoesNotConflict({
       new Set(
         updatedList
           .map((r) => (!_.isNil(r) && !_.isNil(r.scorecardId) ? String(r.scorecardId) : null))
-          .filter((scorecardId) => !_.isNil(scorecardId))
-      )
+          .filter((scorecardId) => !_.isNil(scorecardId)),
+      ),
     );
 
     const removedScorecards = originalScorecards.filter(
-      (scorecardId) => !updatedScorecards.includes(scorecardId)
+      (scorecardId) => !updatedScorecards.includes(scorecardId),
     );
 
     if (removedScorecards.length > 0) {
@@ -3624,7 +3650,7 @@ async function ensureScorecardChangeDoesNotConflict({
 
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+      `Skipping scorecard change guard for challenge ${challengeId} because REVIEW_DB_URL is not configured`,
     );
     return;
   }
@@ -3634,19 +3660,17 @@ async function ensureScorecardChangeDoesNotConflict({
     reviewClient = getReviewClient();
   } catch (error) {
     logger.warn(
-      `Unable to initialize review Prisma client for challenge ${challengeId}: ${error.message}`
+      `Unable to initialize review Prisma client for challenge ${challengeId}: ${error.message}`,
     );
     throw new errors.ServiceUnavailableError(
-      "Cannot change the scorecard because review status could not be verified. Please try again later."
+      "Cannot change the scorecard because review status could not be verified. Please try again later.",
     );
   }
 
   if (!reviewClient || typeof reviewClient.$queryRaw !== "function") {
-    logger.warn(
-      `Prisma review client does not support raw queries for challenge ${challengeId}`
-    );
+    logger.warn(`Prisma review client does not support raw queries for challenge ${challengeId}`);
     throw new errors.ServiceUnavailableError(
-      "Cannot change the scorecard because review status could not be verified. Please try again later."
+      "Cannot change the scorecard because review status could not be verified. Please try again later.",
     );
   }
 
@@ -3671,7 +3695,7 @@ async function ensureScorecardChangeDoesNotConflict({
   }
 
   const reviewPhaseKeysToCheck = Array.from(removedScorecardsByPhase.keys()).filter((phaseKey) =>
-    openReviewPhaseNameByKey.has(phaseKey)
+    openReviewPhaseNameByKey.has(phaseKey),
   );
 
   const reviewPhaseKeysSet = new Set(removedScorecardsByPhase.keys());
@@ -3695,9 +3719,7 @@ async function ensureScorecardChangeDoesNotConflict({
   if (challengePhaseIdList.length > 0) {
     const reviewSchema = String(config.REVIEW_DB_SCHEMA || "").trim();
     const reviewTableIdentifier = Prisma.raw(
-      reviewSchema
-        ? `"${reviewSchema.replace(/"/g, '""')}"."review"`
-        : '"review"'
+      reviewSchema ? `"${reviewSchema.replace(/"/g, '""')}"."review"` : '"review"',
     );
 
     let blockingReviewRows = [];
@@ -3711,10 +3733,10 @@ async function ensureScorecardChangeDoesNotConflict({
       `;
     } catch (error) {
       logger.warn(
-        `Failed to query the review database for challenge ${challengeId}: ${error.message}`
+        `Failed to query the review database for challenge ${challengeId}: ${error.message}`,
       );
       throw new errors.ServiceUnavailableError(
-        "Cannot change the scorecard because review status could not be verified. Please try again later."
+        "Cannot change the scorecard because review status could not be verified. Please try again later.",
       );
     }
 
@@ -3735,7 +3757,7 @@ async function ensureScorecardChangeDoesNotConflict({
         const scorecardKey = `${phaseId}|${scorecardId}`;
         blockingCountByPhaseAndScorecard.set(
           scorecardKey,
-          (blockingCountByPhaseAndScorecard.get(scorecardKey) || 0) + countValue
+          (blockingCountByPhaseAndScorecard.get(scorecardKey) || 0) + countValue,
         );
       }
     }
@@ -3746,7 +3768,7 @@ async function ensureScorecardChangeDoesNotConflict({
       const challengePhaseIds = Array.from(phaseIdToChallengePhaseIds.get(phaseKey) || []);
       if (challengePhaseIds.length === 0) {
         logger.debug(
-          `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`
+          `Skipping active phase scorecard guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`,
         );
         continue;
       }
@@ -3759,7 +3781,7 @@ async function ensureScorecardChangeDoesNotConflict({
       if (activePhaseReviewCount > 0) {
         const phaseName = openReviewPhaseNameByKey.get(phaseKey) || "phase";
         throw new BadRequestError(
-          `Cannot change the scorecard for phase '${phaseName}' because reviews are already in progress or completed`
+          `Cannot change the scorecard for phase '${phaseName}' because reviews are already in progress or completed`,
         );
       }
     }
@@ -3770,7 +3792,7 @@ async function ensureScorecardChangeDoesNotConflict({
 
     if (challengePhaseIds.length === 0) {
       logger.debug(
-        `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`
+        `Skipping scorecard change guard for challenge ${challengeId} phase ${phaseKey} because no matching challenge phases were found`,
       );
       continue;
     }
@@ -3789,7 +3811,7 @@ async function ensureScorecardChangeDoesNotConflict({
 
       if (conflictingReviews > 0) {
         throw new BadRequestError(
-          "Can't change the scorecard at this time because at least one review has already started with the old scorecard"
+          "Can't change the scorecard at this time because at least one review has already started with the old scorecard",
         );
       }
     }
@@ -3862,7 +3884,7 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.phases) {
     sanitized.phases = _.map(challenge.phases, (phase) =>
-      _.pick(phase, ["phaseId", "duration", "scheduledStartDate", "constraints"])
+      _.pick(phase, ["phaseId", "duration", "scheduledStartDate", "constraints"]),
     );
   }
   if (challenge.prizeSets) {
@@ -3884,7 +3906,7 @@ function sanitizeChallenge(challenge) {
         "shouldOpenOpportunity",
         "type",
         "aiWorkflowId",
-      ])
+      ]),
     );
   }
   if (challenge.events) {
@@ -3892,12 +3914,12 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.winners) {
     sanitized.winners = _.map(challenge.winners, (winner) =>
-      _.pick(winner, ["userId", "handle", "placement", "type"])
+      _.pick(winner, ["userId", "handle", "placement", "type"]),
     );
   }
   if (challenge.checkpointWinners) {
     sanitized.checkpointWinners = _.map(challenge.checkpointWinners, (winner) =>
-      _.pick(winner, ["userId", "handle", "placement", "type"])
+      _.pick(winner, ["userId", "handle", "placement", "type"]),
     );
   }
   if (challenge.discussions) {
@@ -3912,14 +3934,20 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.attachments) {
     sanitized.attachments = _.map(challenge.attachments, (attachment) =>
-      _.pick(attachment, ["id", "name", "url", "fileSize", "description", "challengeId"])
+      _.pick(attachment, ["id", "name", "url", "fileSize", "description", "challengeId"]),
     );
   }
 
   return sanitized;
 }
 
-async function syncChallengePhases(tx, challengeId, updatedPhases, auditUserId, originalPhases = []) {
+async function syncChallengePhases(
+  tx,
+  challengeId,
+  updatedPhases,
+  auditUserId,
+  originalPhases = [],
+) {
   if (!Array.isArray(updatedPhases)) {
     return;
   }
@@ -4070,7 +4098,7 @@ async function deleteChallenge(currentUser, challengeId) {
   });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(
-      `Challenge with id: ${challengeId} doesn't exist or is not in New status`
+      `Challenge with id: ${challengeId} doesn't exist or is not in New status`,
     );
   }
   // ensure user can modify challenge
@@ -4095,7 +4123,7 @@ async function advancePhase(currentUser, challengeId, data) {
   const machineOrAdmin = currentUser && (currentUser.isMachine || hasAdminRole(currentUser));
   if (!machineOrAdmin) {
     throw new errors.ForbiddenError(
-      `Admin role or an M2M token is required to advance the challenge phase.`
+      `Admin role or an M2M token is required to advance the challenge phase.`,
     );
   }
   const challenge = await prisma.challenge.findUnique({
@@ -4122,7 +4150,7 @@ async function advancePhase(currentUser, challengeId, data) {
     challenge.legacyId,
     challenge.phases,
     data.operation,
-    data.phase
+    data.phase,
   );
 
   const auditFields = {
@@ -4138,7 +4166,7 @@ async function advancePhase(currentUser, challengeId, data) {
   prismaHelper.convertChallengePhaseSchema(
     { phases: phaseAdvancerResult.updatedPhases },
     challengeData,
-    auditFields
+    auditFields,
   );
   // Persist phases based on the raw updated phases array from PhaseAdvancer
   const newPhases = phaseAdvancerResult.updatedPhases;
@@ -4208,7 +4236,7 @@ async function advancePhase(currentUser, challengeId, data) {
         }
       } catch (e) {
         logger.error(
-          `Failed to upsert phase ${p.name} (${p.phaseId}) for ${challengeId}: ${e.message}`
+          `Failed to upsert phase ${p.name} (${p.phaseId}) for ${challengeId}: ${e.message}`,
         );
         throw e;
       }
@@ -4233,7 +4261,7 @@ async function closeMarathonMatch(currentUser, challengeId) {
   const machineOrAdmin = currentUser && (currentUser.isMachine || hasAdminRole(currentUser));
   if (!machineOrAdmin) {
     throw new errors.ForbiddenError(
-      `Admin role or an M2M token is required to close the marathon match.`
+      `Admin role or an M2M token is required to close the marathon match.`,
     );
   }
 
@@ -4248,24 +4276,26 @@ async function closeMarathonMatch(currentUser, challengeId) {
 
   if (!challenge.type || challenge.type.name !== "Marathon Match") {
     throw new errors.BadRequestError(
-      `Challenge with id: ${challengeId} is not a Marathon Match challenge.`
+      `Challenge with id: ${challengeId} is not a Marathon Match challenge.`,
     );
   }
 
   const reviewSummations = await helper.getReviewSummations(challengeId);
-  const finalSummations = (reviewSummations || []).filter((summation) => summation.isFinal === true);
+  const finalSummations = (reviewSummations || []).filter(
+    (summation) => summation.isFinal === true,
+  );
 
   const orderedSummations = _.orderBy(
     finalSummations,
     ["aggregateScore", "createdAt"],
-    ["desc", "asc"]
+    ["desc", "asc"],
   );
 
   const winners = orderedSummations.map((summation, index) => {
     const parsedUserId = Number(summation.submitterId);
     if (!Number.isFinite(parsedUserId) || !Number.isInteger(parsedUserId)) {
       throw new errors.BadRequestError(
-        `Invalid submitterId ${summation.submitterId} for review summation winner`
+        `Invalid submitterId ${summation.submitterId} for review summation winner`,
       );
     }
 
@@ -4280,19 +4310,19 @@ async function closeMarathonMatch(currentUser, challengeId) {
   if (winners.length > 0) {
     const challengeResources = await helper.getChallengeResources(challengeId);
     const submitterResources = challengeResources.filter(
-      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID,
     );
     const missingResources = winners.filter(
       (winner) =>
         !submitterResources.some(
-          (resource) => _.toString(resource.memberId) === _.toString(winner.userId)
-        )
+          (resource) => _.toString(resource.memberId) === _.toString(winner.userId),
+        ),
     );
     if (missingResources.length > 0) {
       throw new errors.BadRequestError(
         `Submitter resources are required to close Marathon Match challenge ${challengeId}. Missing submitter resources for userIds: ${missingResources
           .map((winner) => winner.userId)
-          .join(", ")}`
+          .join(", ")}`,
       );
     }
   }
@@ -4312,7 +4342,7 @@ async function closeMarathonMatch(currentUser, challengeId) {
       phases: updatedPhases,
       status: ChallengeStatusEnum.COMPLETED,
     },
-    { emitEvent: true }
+    { emitEvent: true },
   );
 
   return updatedChallenge;
@@ -4354,7 +4384,7 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
 
   // post bus event
   logger.debug(
-    `Post Bus Event: ${constants.Topics.ChallengeUpdated} ${JSON.stringify(updatedChallenge)}`
+    `Post Bus Event: ${constants.Topics.ChallengeUpdated} ${JSON.stringify(updatedChallenge)}`,
   );
 
   prismaHelper.convertModelToResponse(updatedChallenge);

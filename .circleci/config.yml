@@ -90,9 +90,8 @@ workflows:
             branches:
               only:
                 - develop
-                - security
-                - PM-3351
                 - PM-4318_move-to-next-phase-when-manually-closing
+                - review-context
 
       - "build-qa":
           context: org-global
