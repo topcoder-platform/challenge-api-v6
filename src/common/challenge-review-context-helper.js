@@ -18,6 +18,11 @@ const {
 
 const WORKFLOW_POLL_INTERVAL_MS = 10000;
 const WORKFLOW_POLL_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes max wait
+const REVIEW_CONTEXT_STATUS = {
+  AI_GENERATED: "AI_GENERATED",
+  HUMAN_APPROVED: "HUMAN_APPROVED",
+  HUMAN_REJECTED: "HUMAN_REJECTED",
+};
 
 /**
  * Check if a challenge has AI Review Config that requires context generation.
@@ -253,6 +258,7 @@ async function runReviewContextGenerationAsync(challengeId) {
   const contextPayload = {
     challengeId,
     context: workflowResult,
+    status: REVIEW_CONTEXT_STATUS.AI_GENERATED,
   };
 
   try {
