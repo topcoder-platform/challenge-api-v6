@@ -274,7 +274,7 @@ async function runReviewContextGenerationAsync(challengeId) {
     }
   } catch (saveErr) {
     logger.error(
-      `[ChallengeReviewContextHelper] Failed to save context for challenge ${challengeId}: ${saveErr.message}`,
+      `[ChallengeReviewContextHelper] Failed to save context for challenge ${challengeId}: ${JSON.stringify(saveErr, null, 2)}`,
     );
     clearGeneration(challengeId);
     return;
