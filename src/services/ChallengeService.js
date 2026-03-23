@@ -25,10 +25,6 @@ const { hasAdminRole } = require("../common/role-helper");
 const { enrichChallengeForResponse, convertToISOString } = require("../common/challenge-helper");
 const deepEqual = require("deep-equal");
 const prismaHelper = require("../common/prisma-helper");
-const {
-  shouldGenerateChallengeReviewContext,
-  triggerChallengeReviewContextGeneration,
-} = require("../common/challenge-review-context-helper");
 
 const {
   getClient,
@@ -3274,25 +3270,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
           workItemName: updatedChallenge.name,
         },
       );
-    }
-  }
-
-  // Trigger challenge review context generation for AI review if applicable
-  const currentStatus = updatedChallenge.status;
-  const isActive = currentStatus === ChallengeStatusEnum.ACTIVE;
-  if (shouldGenerateChallengeReviewContext(updatedChallenge)) {
-    if (isStatusChangingToActive) {
-      // Trigger 1: Challenge is being activated
-      logger.info(
-        `updateChallenge(${challengeId}): triggering review context generation on activation`,
-      );
-      triggerChallengeReviewContextGeneration(challengeId);
-    } else if (isActive && !isStatusChangingToActive) {
-      // Trigger 2: Challenge updated while in ACTIVE (and not just activated)
-      logger.info(
-        `updateChallenge(${challengeId}): triggering review context generation on update (status: ${currentStatus})`,
-      );
-      triggerChallengeReviewContextGeneration(challengeId);
     }
   }
 
