@@ -2874,8 +2874,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       `updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`,
     );
     const tempChallenge = {
-      phases: phasesForUpdate || challenge.phases,
-      reviewers: data.reviewers || challenge.reviewers,
+      phases: _.cloneDeep(phasesForUpdate || challenge.phases),
+      reviewers: _.cloneDeep(data.reviewers || challenge.reviewers),
     };
     logger.debug(
       `updateChallenge: tempChallenge preview reviewers=${JSON.stringify(
