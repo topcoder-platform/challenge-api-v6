@@ -2849,11 +2849,23 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const hasAIReviewersAfterUpdate = hasAIReviewers(
     !_.isNil(data.reviewers) ? data.reviewers : challenge.reviewers,
   );
+  logger.debug(
+    `updateChallenge: AI reviewers - before=${hadAIReviewersBeforeUpdate}, after=${hasAIReviewersAfterUpdate}`,
+  );
+  logger.debug(
+    `updateChallenge: reviewersPayloadPreview=${JSON.stringify(
+      (!_.isNil(data.reviewers) ? data.reviewers : challenge.reviewers) || [],
+    ).slice(0, 200)}`,
+  );
   const isActiveWithNewAIReviewers =
     challenge.status === ChallengeStatusEnum.ACTIVE &&
     !hadAIReviewersBeforeUpdate &&
     hasAIReviewersAfterUpdate;
+  logger.debug(`updateChallenge: isActiveWithNewAIReviewers=${isActiveWithNewAIReviewers}`);
   const shouldEnsureAIScreeningPhase = isStatusChangingToActive || isActiveWithNewAIReviewers;
+  logger.debug(
+    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive}`,
+  );
 
   // Add AI screening phase when activating a challenge, or when AI reviewers are newly added
   // to an already ACTIVE challenge.
@@ -2862,12 +2874,22 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       `updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`,
     );
     const tempChallenge = {
-      phases: phasesForUpdate || challenge.phases,
-      reviewers: data.reviewers || challenge.reviewers,
+      phases: _.cloneDeep(phasesForUpdate || challenge.phases),
+      reviewers: _.cloneDeep(data.reviewers || challenge.reviewers),
     };
+    logger.debug(
+      `updateChallenge: tempChallenge preview reviewers=${JSON.stringify(
+        tempChallenge.reviewers || [],
+      ).slice(0, 200)} phasesCount=${(tempChallenge.phases || []).length}`,
+    );
     const debugLogForAI = (message) =>
       logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
     await challengeHelper.addAIScreeningPhaseForChallenge(tempChallenge, prisma, debugLogForAI);
+    logger.info(
+      `updateChallenge: AI screening phase ensured (challengeId=${challengeId}) resultingPhases=${(
+        tempChallenge.phases || []
+      ).length}`,
+    );
     // Update phasesForUpdate with the updated phases after AI screening addition
     phasesForUpdate = tempChallenge.phases;
     phasesUpdated = true;
