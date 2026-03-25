@@ -2835,8 +2835,29 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     phasesUpdated = true;
     phasesForUpdate = _.cloneDeep(data.phases);
   }
-  // Add AI screening phase if AI reviewers are assigned and challenge is being activated
-  if (isStatusChangingToActive) {
+  const hasAIReviewers = (reviewers) =>
+    Array.isArray(reviewers) &&
+    reviewers.some(
+      (reviewer) =>
+        reviewer &&
+        reviewer.isMemberReview === false &&
+        !_.isNil(reviewer.aiWorkflowId) &&
+        _.toString(reviewer.aiWorkflowId).trim() !== "",
+    );
+
+  const hadAIReviewersBeforeUpdate = hasAIReviewers(challenge.reviewers);
+  const hasAIReviewersAfterUpdate = hasAIReviewers(
+    !_.isNil(data.reviewers) ? data.reviewers : challenge.reviewers,
+  );
+  const isActiveWithNewAIReviewers =
+    challenge.status === ChallengeStatusEnum.ACTIVE &&
+    !hadAIReviewersBeforeUpdate &&
+    hasAIReviewersAfterUpdate;
+  const shouldEnsureAIScreeningPhase = isStatusChangingToActive || isActiveWithNewAIReviewers;
+
+  // Add AI screening phase when activating a challenge, or when AI reviewers are newly added
+  // to an already ACTIVE challenge.
+  if (shouldEnsureAIScreeningPhase) {
     logger.debug(
       `updateChallenge: checking if AI screening phase needs to be added (challengeId=${challengeId})`,
     );
