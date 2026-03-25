@@ -90,7 +90,7 @@ workflows:
             branches:
               only:
                 - develop
-                - PM-4318_move-to-next-phase-when-manually-closing
+                - PM-4478_add-ai-screening-phase-when-editing-after-launch
                 - review-context
 
       - "build-qa":
