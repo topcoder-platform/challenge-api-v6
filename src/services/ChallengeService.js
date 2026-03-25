@@ -1751,7 +1751,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     } else {
       _.set(challenge, "billing.billingAccountId", null);
     }
-    _.set(challenge, "billing.markup", markup || 0);
+    _.set(challenge, "billing.markup", _.isNil(markup) ? 0 : markup);
   }
 
   if (!_.isUndefined(_.get(challenge, "legacy.reviewType"))) {
@@ -2527,7 +2527,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       } else {
         _.set(data, "billing.billingAccountId", null);
       }
-      _.set(data, "billing.markup", markup || 0);
+      _.set(data, "billing.markup", _.isNil(markup) ? 0 : markup);
     }
 
     // Make sure the user cannot change the direct project ID

@@ -145,6 +145,20 @@
     "updatedBy": "topcoder user"
   },
   {
+    "id": "f9570d73-4f26-4d3a-b804-7f6f2f4b85e9",
+    "name": "BUG_HUNT",
+    "description": "Legacy develop subtype retained for historical stats references.",
+    "isActive": true,
+    "isTask": false,
+    "abbreviation": "LBGH",
+    "legacyId": 120,
+    "isLegacy": true,
+    "createdAt": "2025-03-10T13:08:02.378Z",
+    "createdBy": "topcoder user",
+    "updatedAt": "2025-03-10T13:08:02.378Z",
+    "updatedBy": "topcoder user"
+  },
+  {
     "id": "78253687-cc08-4aa8-b897-7a4f0c0b362d",
     "name": "ASSEMBLY_COMPETITION",
     "description": "Legacy develop subtype retained for historical stats references.",
@@ -179,6 +193,20 @@
     "isTask": false,
     "abbreviation": "LCON",
     "legacyId": 134,
+    "isLegacy": true,
+    "createdAt": "2025-03-10T13:08:02.378Z",
+    "createdBy": "topcoder user",
+    "updatedAt": "2025-03-10T13:08:02.378Z",
+    "updatedBy": "topcoder user"
+  },
+  {
+    "id": "65d2d4d4-a0e2-4f5d-94df-570f0b084439",
+    "name": "CONTENT_CREATION",
+    "description": "Legacy develop subtype retained for historical stats references.",
+    "isActive": true,
+    "isTask": false,
+    "abbreviation": "LCTC",
+    "legacyId": 146,
     "isLegacy": true,
     "createdAt": "2025-03-10T13:08:02.378Z",
     "createdBy": "topcoder user",

@@ -8,6 +8,31 @@ const { hasAdminRole } = require("./role-helper");
 const errors = require("./errors");
 const logger = require("./logger");
 
+/**
+ * Normalizes billing-account markup to the decimal format persisted on
+ * challenges.
+ *
+ * Legacy project-service responses can return whole percentage points (for
+ * example `50` for 50%), while newer billing-account records use decimal
+ * fractions (for example `0.58` for 58%). This helper preserves modern values
+ * and converts only legacy percentages.
+ *
+ * @param {unknown} rawMarkup Markup value returned by Projects API.
+ * @returns {number|null} Decimal markup or `null` when the input is empty or invalid.
+ */
+function normalizeBillingMarkup(rawMarkup) {
+  if (_.isNil(rawMarkup) || rawMarkup === "") {
+    return null;
+  }
+
+  const markup = _.toNumber(rawMarkup);
+  if (!Number.isFinite(markup)) {
+    return null;
+  }
+
+  return markup > 1 ? markup / 100 : markup;
+}
+
 class ProjectHelper {
   /**
    * Get Project Details.
@@ -81,16 +106,9 @@ class ProjectHelper {
         `projectHelper.getProjectBillingInformation: response status ${res.status} for project ${projectId}`
       );
 
-      let markup = _.get(res, "data.markup", null)
-        ? _.toNumber(_.get(res, "data.markup", null))
-        : null;
-
-      if (markup && markup > 0) {
-        markup = (markup * 100) / 10000;
-      }
       return {
         billingAccountId: _.get(res, "data.tcBillingAccountId", null),
-        markup,
+        markup: normalizeBillingMarkup(_.get(res, "data.markup", null)),
       };
     } catch (err) {
       const responseCode = _.get(err, "response.status");
