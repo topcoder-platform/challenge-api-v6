@@ -756,6 +756,16 @@ paths:
           description: Filter by abbreviation. Partial matches are allowed.
           required: false
           type: string
+        - name: legacyId
+          in: query
+          description: Filter by numeric legacy id.
+          required: false
+          type: integer
+        - name: isLegacy
+          in: query
+          description: Filter by legacy visibility flag. Defaults to false when omitted.
+          required: false
+          type: boolean
       responses:
         "200":
           description: OK
@@ -1031,6 +1041,21 @@ paths:
           description: Filter by abbreviation. Partial matches are allowed.
           required: false
           type: string
+        - name: legacyId
+          in: query
+          description: Filter by numeric legacy id.
+          required: false
+          type: integer
+        - name: track
+          in: query
+          description: Filter by canonical track enum.
+          required: false
+          type: string
+        - name: isLegacy
+          in: query
+          description: Filter by legacy visibility flag. Defaults to false when omitted.
+          required: false
+          type: boolean
       responses:
         "200":
           description: OK
@@ -2965,7 +2990,7 @@ definitions:
           selfServiceCopilot:
             type: string
       cancelReason:
-            type: string
+        type: string
       billing:
         type: object
         properties:
@@ -3495,6 +3520,11 @@ definitions:
         default: false
       abbreviation:
         type: string
+      legacyId:
+        type: integer
+      isLegacy:
+        type: boolean
+        default: false
     required:
       - name
       - isActive
@@ -3514,6 +3544,10 @@ definitions:
         default: false
       abbreviation:
         type: string
+      legacyId:
+        type: integer
+      isLegacy:
+        type: boolean
   ChallengeTrack:
     type: object
     allOf:
@@ -3537,6 +3571,13 @@ definitions:
         type: boolean
       abbreviation:
         type: string
+      legacyId:
+        type: integer
+      track:
+        type: string
+      isLegacy:
+        type: boolean
+        default: false
     required:
       - name
       - isActive
@@ -3552,6 +3593,12 @@ definitions:
         type: boolean
       abbreviation:
         type: string
+      legacyId:
+        type: integer
+      track:
+        type: string
+      isLegacy:
+        type: boolean
   Phase:
     type: object
     allOf:

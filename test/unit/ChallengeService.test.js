@@ -14,6 +14,7 @@ const chai = require('chai')
 const constants = require('../../app-constants')
 const service = require('../../src/services/ChallengeService')
 const helper = require('../../src/common/helper')
+const challengeHelper = require('../../src/common/challenge-helper')
 const projectHelper = require('../../src/common/project-helper')
 const testHelper = require('../testHelper')
 const { getClient, ChallengeStatusEnum, PrizeSetTypeEnum }  = require('../../src/common/prisma')
@@ -225,7 +226,7 @@ describe('challenge service unit tests', () => {
         const result = await service.createChallenge(
           { isMachine: true, sub: 'sub', userId: 'testuser' },
           challengeData,
-          config.M2M_FULL_ACCESS_TOKEN
+          config.M2M_FULL_ACCESS_TOKEN || 'test-token'
         )
         id2 = result.id
         should.equal(_.get(result, 'legacy.directProjectId'), 33541)
@@ -233,6 +234,115 @@ describe('challenge service unit tests', () => {
         projectHelper.getProject = originalGetProject
       }
     })
+
+    it('create challenge applies default ai configs when reviewers are not provided', async () => {
+      const challengeData = _.cloneDeep(testChallengeData)
+      challengeData.discussions[0].type = 'CHALLENGE'
+      challengeData.prizeSets[0].type = 'PLACEMENT'
+      challengeData.status = 'NEW'
+      const originalGetProject = projectHelper.getProject
+      const originalApplyDefaultMemberReviewers = challengeHelper.applyDefaultMemberReviewersForChallengeCreation
+      const originalApplyDefaultAIConfig = challengeHelper.applyDefaultAIConfigForChallengeCreation
+      const originalCreateAIReviewConfigs = challengeHelper.createAIReviewConfigsForChallengeCreation
+      const aiReviewConfigs = [{
+        templateId: 'template-1',
+        minPassingThreshold: 80,
+        mode: 'aggregated',
+        autoFinalize: false,
+        formula: {},
+        workflows: [{ workflowId: 'wf-1', weightPercent: 100, isGating: true }]
+      }]
+
+      let applyDefaultAICallCount = 0
+      let createAIConfigCallCount = 0
+      let createdChallengeId
+      let createdConfigs
+      let tempChallengeId
+
+      projectHelper.getProject = async () => ({ directProjectId: '33541' })
+      challengeHelper.applyDefaultMemberReviewersForChallengeCreation = async () => {}
+      challengeHelper.applyDefaultAIConfigForChallengeCreation = async () => {
+        applyDefaultAICallCount += 1
+        return aiReviewConfigs
+      }
+      challengeHelper.createAIReviewConfigsForChallengeCreation = async (challengeIdArg, aiConfigsArg) => {
+        createAIConfigCallCount += 1
+        createdChallengeId = challengeIdArg
+        createdConfigs = aiConfigsArg
+      }
+
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: 'sub', userId: 'testuser' },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN || 'test-token'
+        )
+        tempChallengeId = result.id
+
+        should.equal(applyDefaultAICallCount, 1)
+        should.equal(createAIConfigCallCount, 1)
+        should.equal(createdChallengeId, result.id)
+        createdConfigs.should.deep.equal(aiReviewConfigs)
+      } finally {
+        projectHelper.getProject = originalGetProject
+        challengeHelper.applyDefaultMemberReviewersForChallengeCreation = originalApplyDefaultMemberReviewers
+        challengeHelper.applyDefaultAIConfigForChallengeCreation = originalApplyDefaultAIConfig
+        challengeHelper.createAIReviewConfigsForChallengeCreation = originalCreateAIReviewConfigs
+
+        if (tempChallengeId) {
+          await prisma.challenge.delete({ where: { id: tempChallengeId } })
+        }
+      }
+    }).timeout(10000)
+
+    it('create challenge skips default ai configs when reviewers are provided', async () => {
+      const challengeData = _.cloneDeep(testChallengeData)
+      challengeData.discussions[0].type = 'CHALLENGE'
+      challengeData.prizeSets[0].type = 'PLACEMENT'
+      challengeData.status = 'NEW'
+      const originalGetProject = projectHelper.getProject
+      challengeData.reviewers = [{
+        scorecardId: 'provided-scorecard',
+        isMemberReview: false,
+        phaseId: data.phase.id,
+        aiWorkflowId: 'wf-provided'
+      }]
+
+      const originalApplyDefaultAIConfig = challengeHelper.applyDefaultAIConfigForChallengeCreation
+      const originalCreateAIReviewConfigs = challengeHelper.createAIReviewConfigsForChallengeCreation
+      let applyDefaultAICalled = false
+      let createAIConfigCalled = false
+      let tempChallengeId
+
+      projectHelper.getProject = async () => ({ directProjectId: '33541' })
+      challengeHelper.applyDefaultAIConfigForChallengeCreation = async () => {
+        applyDefaultAICalled = true
+        return []
+      }
+      challengeHelper.createAIReviewConfigsForChallengeCreation = async () => {
+        createAIConfigCalled = true
+      }
+
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: 'sub', userId: 'testuser' },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN || 'test-token'
+        )
+        tempChallengeId = result.id
+
+        should.equal(applyDefaultAICalled, false)
+        should.equal(createAIConfigCalled, false)
+      } finally {
+        projectHelper.getProject = originalGetProject
+        challengeHelper.applyDefaultAIConfigForChallengeCreation = originalApplyDefaultAIConfig
+        challengeHelper.createAIReviewConfigsForChallengeCreation = originalCreateAIReviewConfigs
+
+        if (tempChallengeId) {
+          await prisma.challenge.delete({ where: { id: tempChallengeId } })
+        }
+      }
+    }).timeout(10000)
 
     it('create challenge - type not found', async () => {
       const challengeData = _.clone(testChallengeData)

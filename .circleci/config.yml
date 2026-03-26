@@ -90,8 +90,8 @@ workflows:
             branches:
               only:
                 - develop
-                - security
-                - PM-3351
+                - PM-4478_add-ai-screening-phase-when-editing-after-launch
+                - review-context
 
       - "build-qa":
           context: org-global

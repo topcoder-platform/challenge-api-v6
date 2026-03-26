@@ -3,9 +3,11 @@ const challengeTrackService = require("../services/ChallengeTrackService");
 const timelineTemplateService = require("../services/TimelineTemplateService");
 const HttpStatus = require("http-status-codes");
 const _ = require("lodash");
+const moment = require("moment");
 const errors = require("./errors");
 const config = require("config");
 const helper = require("./helper");
+const phaseHelper = require("./phase-helper");
 const axios = require("axios");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
@@ -13,6 +15,7 @@ const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
+const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
 
 class ChallengeHelper {
   /**
@@ -52,7 +55,11 @@ class ChallengeHelper {
     let token = await getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
     try {
-      const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        // projects-api-v6 omits members unless explicitly requested.
+        params: { fields: "members" },
+      });
       if (currentUser.isMachine || hasAdminRole(currentUser)) {
         return res.data;
       }
@@ -210,6 +217,440 @@ class ChallengeHelper {
     if (challenge.constraints) {
       await ChallengeHelper.validateChallengeConstraints(challenge.constraints);
     }
+  }
+
+  /**
+   * If challenge reviewers are not provided, apply default reviewers for
+   * the challenge type/track (timeline-template specific first, then generic fallback).
+   *
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   */
+  async applyDefaultMemberReviewersForChallengeCreation(
+    challenge,
+    prisma,
+    logDebugMessage,
+  ) {
+    if (!challenge || !prisma) {
+      return;
+    }
+
+    if (Array.isArray(challenge.reviewers) && challenge.reviewers.length > 0) {
+      return;
+    }
+
+    if (Array.isArray(challenge.reviewers) && challenge.reviewers.length > 0) {
+      return;
+    }
+
+    if (!challenge.typeId || !challenge.trackId) {
+      return;
+    }
+
+    logDebugMessage(`loading default member reviewers (trackId=${challenge.trackId}, typeId=${challenge.typeId})`);
+    const defaultReviewerWhere = {
+      typeId: challenge.typeId,
+      trackId: challenge.trackId,
+    };
+
+    let defaultReviewers = [];
+    if (challenge.timelineTemplateId) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: true,
+          timelineTemplateId: challenge.timelineTemplateId,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (_.isEmpty(defaultReviewers)) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: true,
+          timelineTemplateId: null,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+    logDebugMessage(`loaded ${defaultReviewers.length} default member reviewers`);
+
+    if (!defaultReviewers || defaultReviewers.length === 0) {
+      return;
+    }
+
+    const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
+    const phaseMap = new Map((challenge.phases || []).map((p) => [p.name, p.phaseId]));
+
+    const missing = phaseNames.filter((name) => !phaseMap.has(name));
+    if (missing.length > 0) {
+      throw new errors.BadRequestError(
+        `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
+      );
+    }
+
+    challenge.reviewers = defaultReviewers.map((reviewer) => ({
+      scorecardId: reviewer.scorecardId,
+      isMemberReview: reviewer.isMemberReview,
+      memberReviewerCount: reviewer.memberReviewerCount,
+      phaseId: phaseMap.get(reviewer.phaseName),
+      fixedAmount: reviewer.fixedAmount,
+      baseCoefficient: reviewer.baseCoefficient,
+      incrementalCoefficient: reviewer.incrementalCoefficient,
+      type: reviewer.opportunityType,
+      shouldOpenOpportunity: _.isBoolean(reviewer.shouldOpenOpportunity)
+        ? reviewer.shouldOpenOpportunity
+        : true,
+    }));
+  }
+
+  /**
+   * If challenge reviewers are not provided, apply default reviewers for
+   * the challenge type/track (timeline-template specific first, then generic fallback).
+   *
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   */
+  async applyDefaultAIConfigForChallengeCreation(challenge, prisma, logDebugMessage) {
+    if (!challenge || !prisma) {
+      return;
+    }
+
+    if (!challenge.typeId || !challenge.trackId) {
+      return;
+    }
+
+    logDebugMessage(`loading default ai configs (trackId=${challenge.trackId}, typeId=${challenge.typeId})`);
+    const defaultReviewerWhere = {
+      typeId: challenge.typeId,
+      trackId: challenge.trackId,
+    };
+
+    let defaultReviewers = [];
+    if (challenge.timelineTemplateId) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: false,
+          timelineTemplateId: challenge.timelineTemplateId,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
+    if (_.isEmpty(defaultReviewers)) {
+      defaultReviewers = await prisma.defaultChallengeReviewer.findMany({
+        where: {
+          ...defaultReviewerWhere,
+          isMemberReview: false,
+          timelineTemplateId: null,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+    logDebugMessage(`loaded ${defaultReviewers.length} default ai configs`);
+
+    if (!defaultReviewers || defaultReviewers.length === 0) {
+      return;
+    }
+
+    const phaseNames = _.uniq(defaultReviewers.map((r) => r.phaseName));
+    const phaseMap = new Map((challenge.phases || []).map((p) => [p.name, p.phaseId]));
+
+    const missing = phaseNames.filter((name) => !phaseMap.has(name));
+    if (missing.length > 0) {
+      throw new errors.BadRequestError(
+        `Default reviewers reference unknown phaseName(s): ${missing.join(", ")}`
+      );
+    }
+
+    const aiTemplates = new Map();
+    const aiConfigsByTemplateId = new Map();
+    const aiReviewers = [];
+
+    for (const reviewer of defaultReviewers) {
+      if (!reviewer.aiConfigTemplateId) {
+        throw new errors.BadRequestError(
+          `Default AI reviewer is missing aiConfigTemplateId for phaseName: ${reviewer.phaseName}`
+        );
+      }
+
+      if (!aiTemplates.has(reviewer.aiConfigTemplateId)) {
+        aiTemplates.set(
+          reviewer.aiConfigTemplateId,
+          await this.getAIReviewTemplateById(reviewer.aiConfigTemplateId)
+        );
+      }
+
+      const template = aiTemplates.get(reviewer.aiConfigTemplateId);
+      const workflows = _.get(template, "workflows", []);
+      if (!Array.isArray(workflows) || workflows.length === 0) {
+        throw new errors.BadRequestError(
+          `AI review template '${reviewer.aiConfigTemplateId}' has no workflows`
+        );
+      }
+
+      const workflowIds = _.uniq(
+        workflows.map((workflow) => workflow.workflowId).filter((workflowId) => !!workflowId)
+      );
+      if (workflowIds.length === 0) {
+        throw new errors.BadRequestError(
+          `AI review template '${reviewer.aiConfigTemplateId}' has no valid workflowId values`
+        );
+      }
+
+      for (const workflowId of workflowIds) {
+        aiReviewers.push({
+          scorecardId: reviewer.scorecardId,
+          isMemberReview: false,
+          memberReviewerCount: null,
+          phaseId: phaseMap.get(reviewer.phaseName),
+          fixedAmount: reviewer.fixedAmount,
+          baseCoefficient: reviewer.baseCoefficient,
+          incrementalCoefficient: reviewer.incrementalCoefficient,
+          aiWorkflowId: workflowId,
+          shouldOpenOpportunity: _.isBoolean(reviewer.shouldOpenOpportunity)
+            ? reviewer.shouldOpenOpportunity
+            : true,
+        });
+      }
+
+      if (!aiConfigsByTemplateId.has(reviewer.aiConfigTemplateId)) {
+        aiConfigsByTemplateId.set(reviewer.aiConfigTemplateId, {
+          templateId: reviewer.aiConfigTemplateId,
+          minPassingThreshold: template.minPassingThreshold,
+          mode: template.mode,
+          autoFinalize: template.autoFinalize,
+          formula: _.isNil(template.formula) ? {} : template.formula,
+          workflows: workflows
+            .filter((workflow) => !!workflow.workflowId)
+            .map((workflow) => ({
+              workflowId: workflow.workflowId,
+              weightPercent: workflow.weightPercent,
+              isGating: !!workflow.isGating,
+            })),
+        });
+      }
+    }
+
+    challenge.reviewers = [...(challenge.reviewers || []), ...aiReviewers];
+    return Array.from(aiConfigsByTemplateId.values());
+  }
+
+  async createAIReviewConfigsForChallengeCreation(challengeId, aiReviewConfigs, logDebugMessage) {
+    if (!challengeId || !Array.isArray(aiReviewConfigs) || aiReviewConfigs.length === 0) {
+      return;
+    }
+
+    const token = await getM2MToken();
+    const reviewsApiBaseUrl = _.trimEnd(
+      config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+      "/"
+    );
+    
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/configs`;
+
+    for (const aiReviewConfig of aiReviewConfigs) {
+      const payload = {
+        challengeId,
+        minPassingThreshold: aiReviewConfig.minPassingThreshold,
+        mode: aiReviewConfig.mode,
+        autoFinalize: aiReviewConfig.autoFinalize,
+        formula: _.isNil(aiReviewConfig.formula) ? {} : aiReviewConfig.formula,
+        templateId: aiReviewConfig.templateId,
+        workflows: aiReviewConfig.workflows,
+      };
+
+      logDebugMessage(
+        `creating ai review config (challengeId=${challengeId}, templateId=${aiReviewConfig.templateId}, workflowCount=${_.get(
+          aiReviewConfig,
+          "workflows.length",
+          0
+        )})`
+      );
+
+      try {
+        await axios.post(url, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch (err) {
+        if (
+          _.get(err, "response.status") === HttpStatus.NOT_FOUND ||
+          _.get(err, "response.status") === HttpStatus.BAD_REQUEST
+        ) {
+          throw new errors.BadRequestError(
+            `Failed to create AI review config for templateId '${aiReviewConfig.templateId}'`
+          );
+        }
+        throw err;
+      }
+    }
+  }
+
+  async getAIReviewTemplateById(templateId) {
+    const token = await getM2MToken();
+    const reviewsApiBaseUrl = _.trimEnd(
+      config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
+      "/"
+    );
+    const url = `${reviewsApiBaseUrl}/v6/ai-review/templates/${templateId}`;
+
+    try {
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.data;
+    } catch (err) {
+      if (_.get(err, "response.status") === HttpStatus.NOT_FOUND) {
+        throw new errors.BadRequestError(
+          `AI review template with id: ${templateId} doesn't exist`
+        );
+      }
+
+      throw err;
+    }
+  }
+
+  /**
+   * Add AI Screening phase for challenges with AI reviewers.
+    * AI screening phases are positioned after submission/checkpoint submission and allocated 4 hours by default.
+   * 
+   * @param {Object} challenge challenge payload (mutated in-place)
+   * @param {Object} prisma Prisma client
+   * @param {Function} logDebugMessage optional logging function
+   */
+  async addAIScreeningPhaseForChallenge(challenge, prisma, logDebugMessage = () => {}) {
+    if (!challenge || !challenge.phases || !Array.isArray(challenge.reviewers)) {
+      return;
+    }
+
+    // Check if there are any AI reviewers
+    const hasAIReviewers = challenge.reviewers.some((reviewer) => !reviewer.isMemberReview && reviewer.aiWorkflowId);
+    
+    if (!hasAIReviewers) {
+      logDebugMessage("no AI reviewers found, skipping AI screening phase creation");
+      return;
+    }
+
+    // Find the regular submission phase
+    const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
+      challenge.phases.some((phase) => phase.name === name)
+    );
+
+    const submissionPhase = submissionPhaseName
+      ? challenge.phases.find((phase) => phase.name === submissionPhaseName)
+      : null;
+
+    // Find the checkpoint submission phase (if present)
+    const checkpointSubmissionPhase = challenge.phases.find(
+      (phase) => phase.name === CHECKPOINT_SUBMISSION_PHASE_NAME
+    );
+
+    const sourceSubmissionPhases = _.compact([checkpointSubmissionPhase, submissionPhase]);
+    if (sourceSubmissionPhases.length === 0) {
+      throw new errors.BadRequestError(
+        `Cannot add AI screening phase: no submission/checkpoint submission phase found in challenge`
+      );
+    }
+
+    // Get the AI Screening phase definition from the database
+    const { phaseDefinitionMap } = await phaseHelper.getPhaseDefinitionsAndMap();
+    const aiScreeningPhaseDefEntry = Array.from(phaseDefinitionMap.entries()).find(
+      ([_, phase]) => phase.name === "AI Screening"
+    );
+
+    if (!aiScreeningPhaseDefEntry) {
+      throw new errors.BadRequestError(
+        `AI Screening phase definition not found in the system`
+      );
+    }
+
+    const [aiScreeningPhaseId, aiScreeningPhaseDef] = aiScreeningPhaseDefEntry;
+
+    sourceSubmissionPhases.forEach((sourcePhase) => {
+      const aiScreeningPhaseExistsForSource = challenge.phases.some(
+        (phase) => phase.name === "AI Screening" && phase.predecessor === sourcePhase.phaseId
+      );
+
+      if (aiScreeningPhaseExistsForSource) {
+        logDebugMessage(
+          `AI screening phase already exists for predecessor=${sourcePhase.phaseId}, skipping creation`
+        );
+        return;
+      }
+
+      const reviewPhases = challenge.phases.filter(
+        (phase) =>
+          phase.name &&
+          (phase.name.toLowerCase().includes("review") || phase.name.toLowerCase().includes("screening")) &&
+          phase.predecessor === sourcePhase.phaseId
+      );
+
+      const aiScreeningPhase = {
+        phaseId: aiScreeningPhaseId,
+        name: "AI Screening",
+        description: aiScreeningPhaseDef.description,
+        duration: 14400, // 4 hours in seconds
+        isOpen: false,
+        predecessor: sourcePhase.phaseId,
+        constraints: [],
+        scheduledStartDate: undefined,
+        scheduledEndDate: undefined,
+        actualStartDate: undefined,
+        actualEndDate: undefined,
+      };
+
+      // Ensure AI Screening is ordered between source submission and review (or screening) phases.
+      const firstReviewIndex = challenge.phases.indexOf(reviewPhases[0]);
+      const sourcePhaseIndex = challenge.phases.indexOf(sourcePhase);
+      if (firstReviewIndex >= 0) {
+        challenge.phases.splice(firstReviewIndex, 0, aiScreeningPhase);
+      } else if (sourcePhaseIndex >= 0) {
+        challenge.phases.splice(sourcePhaseIndex + 1, 0, aiScreeningPhase);
+      } else {
+        challenge.phases.push(aiScreeningPhase);
+      }
+
+      // Re-link review phase(s) so they start after AI Screening instead of source submission.
+      reviewPhases.forEach((phase) => {
+        phase.predecessor = aiScreeningPhase.phaseId;
+      });
+
+      // Recalculate phase dates to keep timeline in sync
+      if (sourcePhase.scheduledEndDate) {
+        aiScreeningPhase.scheduledStartDate = sourcePhase.scheduledEndDate;
+        aiScreeningPhase.scheduledEndDate = moment(aiScreeningPhase.scheduledStartDate)
+          .add(aiScreeningPhase.duration, "seconds")
+          .toDate()
+          .toISOString();
+
+        logDebugMessage(
+          `AI screening phase dates calculated (predecessor=${sourcePhase.phaseId}, start=${aiScreeningPhase.scheduledStartDate}, end=${aiScreeningPhase.scheduledEndDate})`
+        );
+
+        reviewPhases.forEach((phase) => {
+          if (_.isNil(phase.actualStartDate)) {
+            phase.scheduledStartDate = aiScreeningPhase.scheduledEndDate;
+            if (phase.duration) {
+              phase.scheduledEndDate = moment(phase.scheduledStartDate)
+                .add(phase.duration, "seconds")
+                .toDate()
+                .toISOString();
+
+              logDebugMessage(
+                `Updated ${phase.name} phase dates (start=${phase.scheduledStartDate}, end=${phase.scheduledEndDate})`
+              );
+            }
+          }
+        });
+      }
+
+      logDebugMessage(
+        `AI screening phase added (phaseId=${aiScreeningPhase.phaseId}, predecessor=${sourcePhase.phaseId}), updated ${reviewPhases.length} review predecessor(s)`
+      );
+    });
   }
 
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {

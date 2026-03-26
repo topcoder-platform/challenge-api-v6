@@ -11,7 +11,7 @@ const logger = require("../common/logger");
 const errors = require("../common/errors");
 const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
-const { indexChallengeAndPostToKafka } = require("./ChallengeService");
+const { indexChallengeAndPostToKafka, ensureAIScreeningCanBeClosed } = require("./ChallengeService");
 
 const { getClient } = require("../common/prisma");
 const prisma = getClient();
@@ -144,6 +144,84 @@ async function recalculateDependentPhaseDates(tx, challengeId, predecessorPhase,
               scheduledStartDate: successor.scheduledStartDate,
               scheduledEndDate: successor.scheduledEndDate,
             };
+          }
+        }
+
+        visited.add(successor.id);
+        queue.push(successorForQueue);
+      }
+    }
+  }
+}
+
+async function shiftDependentPhaseDates(tx, challengeId, predecessorPhase, deltaMs, currentUserId) {
+  if (!predecessorPhase || !Number.isFinite(deltaMs) || deltaMs === 0) {
+    return;
+  }
+
+  const phases = await tx.challengePhase.findMany({
+    where: { challengeId },
+  });
+
+  const successorsByPredecessor = new Map();
+  for (const phase of phases) {
+    if (_.isNil(phase.predecessor)) {
+      continue;
+    }
+    const key = String(phase.predecessor);
+    if (!successorsByPredecessor.has(key)) {
+      successorsByPredecessor.set(key, []);
+    }
+    successorsByPredecessor.get(key).push(phase);
+  }
+
+  const queue = [predecessorPhase];
+  const visited = new Set();
+
+  while (queue.length > 0) {
+    const currentPhase = queue.shift();
+    const predecessorKeys = buildPhaseIdentifiers(currentPhase);
+
+    for (const predecessorKey of predecessorKeys) {
+      const successors = successorsByPredecessor.get(predecessorKey) || [];
+      for (const successor of successors) {
+        if (visited.has(successor.id)) {
+          continue;
+        }
+
+        let successorForQueue = successor;
+        if (_.isNil(successor.actualStartDate)) {
+          const scheduledStartTime = successor.scheduledStartDate
+            ? new Date(successor.scheduledStartDate).getTime()
+            : Number.NaN;
+          const scheduledEndTime = successor.scheduledEndDate
+            ? new Date(successor.scheduledEndDate).getTime()
+            : Number.NaN;
+
+          if (Number.isFinite(scheduledStartTime) && Number.isFinite(scheduledEndTime)) {
+            const desiredStartDate = new Date(scheduledStartTime + deltaMs);
+            const desiredEndDate = new Date(scheduledEndTime + deltaMs);
+            const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate);
+            const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate);
+
+            if (startChanged || endChanged) {
+              successorForQueue = await tx.challengePhase.update({
+                data: {
+                  scheduledStartDate: desiredStartDate,
+                  scheduledEndDate: desiredEndDate,
+                  updatedBy: currentUserId,
+                },
+                where: {
+                  id: successor.id,
+                },
+              });
+            } else {
+              successorForQueue = {
+                ...successor,
+                scheduledStartDate: successor.scheduledStartDate,
+                scheduledEndDate: successor.scheduledEndDate,
+              };
+            }
           }
         }
 
@@ -344,6 +422,48 @@ async function hasPendingAppealResponsesForChallenge(challengeId) {
   } catch (err) {
     logger.error(
       `Failed to check pending appeal responses for challenge ${challengeId}: ${err.message}`,
+      err
+    );
+    throw err;
+  }
+
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
+}
+
+async function hasPendingEscalationRequestsForChallenge(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    logger.debug(
+      `Skipping pending escalation request check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
+    );
+    return false;
+  }
+
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const escalationTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecisionEscalation"`);
+  const decisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+  let rows;
+  try {
+    rows = await reviewPrisma.$queryRaw(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT arde."id")::int AS count
+        FROM ${escalationTable} arde
+        INNER JOIN ${decisionTable} ard ON ard."id" = arde."aiReviewDecisionId"
+        WHERE arde."status" = 'PENDING_APPROVAL'
+          AND EXISTS (
+            SELECT 1
+            FROM ${submissionTable} s
+            WHERE s."challengeId" = ${challengeId}
+              AND s."id" = ard."submissionId"
+          )
+      `
+    );
+  } catch (err) {
+    logger.error(
+      `Failed to check pending escalation requests for challenge ${challengeId}: ${err.message}`,
       err
     );
     throw err;
@@ -559,6 +679,17 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   if (isOpeningPhase) {
     const phaseName = data.name || challengePhase.name;
     await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName);
+
+    // Check if this is the Appeals phase
+    const normalizedPhaseName = normalizePhaseName(phaseName);
+    if (normalizedPhaseName === "appeals") {
+      const hasPendingEscalations = await hasPendingEscalationRequestsForChallenge(challengeId);
+      if (hasPendingEscalations) {
+        throw new errors.BadRequestError(
+          "Cannot open Appeals phase because there are pending escalation requests that need to be resolved first"
+        );
+      }
+    }
   }
 
   if (data["scheduledStartDate"] || data["scheduledEndDate"]) {
@@ -597,6 +728,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
     "isOpen" in data && data["isOpen"] === true && !challengePhase.isOpen;
   if (isClosingPhase) {
     const closingPhaseName = data.name || challengePhase.name;
+    const normalizedClosingPhaseName = normalizePhaseName(closingPhaseName);
     const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id);
     if (pendingScorecards) {
       const phaseName = closingPhaseName || "phase";
@@ -605,13 +737,26 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
     }
     if (
-      String(closingPhaseName || "").toLowerCase() === "appeals response" &&
+      normalizedClosingPhaseName === "review" &&
+      (await hasPendingEscalationRequestsForChallenge(challengePhase.challengeId))
+    ) {
+      throw new errors.BadRequestError(
+        "Cannot close Review phase because there are pending escalation requests that need to be resolved first"
+      );
+    }
+    if (
+      normalizedClosingPhaseName === "appeals response" &&
       (await hasPendingAppealResponsesForChallenge(challengePhase.challengeId))
     ) {
       throw new errors.BadRequestError(
         "Appeals Response phase can't be closed because there are still appeals that haven't been responded to"
       );
     }
+
+    if (normalizedClosingPhaseName === "ai screening") {
+      await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
+    }
+
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
       data.actualEndDate = new Date();
     }
@@ -753,13 +898,32 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         id: challengePhase.id,
       },
     });
+    let scheduleExtended = false;
     if (shouldAttemptSuccessorRecalc) {
-      const scheduleExtended = dateIsAfter(
+      scheduleExtended = dateIsAfter(
         updatedPhase.scheduledEndDate,
         originalScheduledEndDate
       );
       if (scheduleExtended) {
         await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
+      }
+    }
+    if (isClosingPhase && !_.isNil(originalScheduledEndDate) && !_.isNil(updatedPhase.actualEndDate)) {
+      const shiftBaselineScheduledEndDate =
+        scheduleExtended && !_.isNil(updatedPhase.scheduledEndDate)
+          ? updatedPhase.scheduledEndDate
+          : originalScheduledEndDate;
+      const scheduledEndTime = new Date(shiftBaselineScheduledEndDate).getTime();
+      const actualEndTime = new Date(updatedPhase.actualEndDate).getTime();
+
+      if (Number.isFinite(scheduledEndTime) && Number.isFinite(actualEndTime)) {
+        await shiftDependentPhaseDates(
+          tx,
+          challengeId,
+          updatedPhase,
+          actualEndTime - scheduledEndTime,
+          currentUserId
+        );
       }
     }
     if (data["constraints"]) {

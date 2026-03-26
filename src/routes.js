@@ -7,6 +7,21 @@ const {
   SCOPES: { READ, CREATE, UPDATE, DELETE, ALL },
 } = require("config");
 
+const CHALLENGE_EDITOR_ACCESS_ROLES = [
+  constants.UserRoles.Admin,
+  constants.UserRoles.Copilot,
+  constants.UserRoles.Manager,
+  constants.UserRoles.TalentManager,
+];
+
+const CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE = [
+  constants.UserRoles.Admin,
+  constants.UserRoles.SelfServiceCustomer,
+  constants.UserRoles.Copilot,
+  constants.UserRoles.Manager,
+  constants.UserRoles.TalentManager,
+];
+
 module.exports = {
   "/challenges": {
     get: {
@@ -25,12 +40,7 @@ module.exports = {
       controller: "ChallengeController",
       method: "createChallenge",
       auth: "jwt",
-      access: [
-        constants.UserRoles.Admin,
-        constants.UserRoles.SelfServiceCustomer,
-        constants.UserRoles.Copilot,
-        constants.UserRoles.Manager,
-      ],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [CREATE, ALL],
     },
   },
@@ -78,36 +88,21 @@ module.exports = {
       controller: "ChallengeController",
       method: "updateChallenge",
       auth: "jwt",
-      access: [
-        constants.UserRoles.Admin,
-        constants.UserRoles.SelfServiceCustomer,
-        constants.UserRoles.Copilot,
-        constants.UserRoles.Manager,
-      ],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [UPDATE, ALL],
     },
     patch: {
       controller: "ChallengeController",
       method: "updateChallenge",
       auth: "jwt",
-      access: [
-        constants.UserRoles.Admin,
-        constants.UserRoles.SelfServiceCustomer,
-        constants.UserRoles.Copilot,
-        constants.UserRoles.Manager,
-      ],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [UPDATE, ALL],
     },
     delete: {
       controller: "ChallengeController",
       method: "deleteChallenge",
       auth: "jwt",
-      access: [
-        constants.UserRoles.Admin,
-        constants.UserRoles.Copilot,
-        constants.UserRoles.SelfServiceCustomer,
-        constants.UserRoles.Manager,
-      ],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [DELETE, ALL],
     },
   },
@@ -411,7 +406,7 @@ module.exports = {
       controller: "AttachmentController",
       method: "createAttachment",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES,
       scopes: [CREATE, ALL],
     },
   },
@@ -426,21 +421,21 @@ module.exports = {
       controller: "AttachmentController",
       method: "updateAttachment",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES,
       scopes: [UPDATE, ALL],
     },
     patch: {
       controller: "AttachmentController",
       method: "partiallyUpdateAttachment",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES,
       scopes: [UPDATE, ALL],
     },
     delete: {
       controller: "AttachmentController",
       method: "deleteAttachment",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES,
       scopes: [DELETE, ALL],
     },
   },
@@ -469,14 +464,14 @@ module.exports = {
       controller: "ChallengePhaseController",
       method: "partiallyUpdateChallengePhase",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.SelfServiceCustomer, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [UPDATE, ALL],
     },
     delete: {
       controller: "ChallengePhaseController",
       method: "deleteChallengePhase",
       auth: "jwt",
-      access: [constants.UserRoles.Admin, constants.UserRoles.SelfServiceCustomer, constants.UserRoles.Copilot, constants.UserRoles.Manager],
+      access: CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE,
       scopes: [DELETE, ALL],
     },
   },

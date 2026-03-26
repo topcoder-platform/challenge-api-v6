@@ -207,5 +207,16 @@
       "createdBy": "topcoder user",
       "updatedAt": "2025-03-10T13:08:02.378Z",
       "updatedBy": "topcoder user"
+  },
+  {
+      "id": "9f4e3b2a-7c1d-4e9f-b8a6-5d3c1a9f2b4e",
+      "name": "AI Screening",
+      "description": "AI Screening Phase",
+      "isOpen": true,
+      "duration": 14400,
+      "createdAt": "2025-03-10T13:08:02.378Z",
+      "createdBy": "topcoder user",
+      "updatedAt": "2025-03-10T13:08:02.378Z",
+      "updatedBy": "topcoder user"
   }
 ]

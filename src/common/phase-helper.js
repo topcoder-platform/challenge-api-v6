@@ -8,6 +8,8 @@ const errors = require("./errors");
 const timelineTemplateService = require("../services/TimelineTemplateService");
 const prisma = require("../common/prisma").getClient();
 
+const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
+
 class ChallengePhaseHelper {
   phaseDefinitionMap = {};
   timelineTemplateMap = {};
@@ -98,9 +100,27 @@ class ChallengePhaseHelper {
     // to incorrectly push earlier phases forward. Sorting by template order prevents that.
     const orderIndex = new Map();
     _.each(timelineTempate, (tplPhase, idx) => orderIndex.set(tplPhase.phaseId, idx));
+    const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
+      _.some(challengePhases, (phase) => phase.name === name)
+    );
+    const submissionPhase = submissionPhaseName
+      ? _.find(challengePhases, (phase) => phase.name === submissionPhaseName)
+      : null;
+    const submissionOrderIndex = _.isNil(submissionPhase)
+      ? null
+      : orderIndex.get(submissionPhase.phaseId);
     const challengePhasesOrdered = _.sortBy(
       challengePhases,
-      (p) => orderIndex.get(p.phaseId) ?? Number.MAX_SAFE_INTEGER
+      (p) => {
+        const templateOrder = orderIndex.get(p.phaseId);
+        if (!_.isNil(templateOrder)) {
+          return templateOrder;
+        }
+        if (p.name === "AI Screening" && !_.isNil(submissionOrderIndex)) {
+          return submissionOrderIndex + 0.5;
+        }
+        return Number.MAX_SAFE_INTEGER;
+      }
     );
 
     let fixedStartDate = undefined;
@@ -159,6 +179,27 @@ class ChallengePhaseHelper {
       }
       return updatedPhase;
     });
+
+    const aiScreeningPhase = _.find(updatedPhases, (phase) => phase.name === "AI Screening");
+    const updateSubmissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
+      _.some(updatedPhases, (phase) => phase.name === name)
+    );
+    const updateSubmissionPhase = updateSubmissionPhaseName
+      ? _.find(updatedPhases, (phase) => phase.name === updateSubmissionPhaseName)
+      : null;
+    if (!_.isNil(aiScreeningPhase) && !_.isNil(updateSubmissionPhase)) {
+      aiScreeningPhase.predecessor = updateSubmissionPhase.phaseId;
+      _.each(updatedPhases, (phase) => {
+        if (
+          phase.name &&
+          phase.name.toLowerCase().includes("review") &&
+          phase.predecessor === updateSubmissionPhase.phaseId
+        ) {
+          phase.predecessor = aiScreeningPhase.phaseId;
+        }
+      });
+    }
+
     let iterativeReviewSet = false;
     for (let phase of updatedPhases) {
       if (_.isNil(phase.predecessor)) {

@@ -195,6 +195,8 @@ model ChallengeType {
   isActive     Boolean @default(true)
   isTask       Boolean @default(false)
   abbreviation String
+  legacyId     Int?
+  isLegacy     Boolean @default(false)
 
   challenges        Challenge[]
   timelineTemplates ChallengeTimelineTemplate[]
@@ -207,6 +209,8 @@ model ChallengeType {
   updatedBy String
 
   @@index([abbreviation])
+  @@index([legacyId])
+  @@index([isLegacy])
 }
 
 //////////////////////////////////////////
@@ -221,6 +225,7 @@ model ChallengeTrack {
   abbreviation      String
   legacyId          Int? // numeric legacy system id (if provided)
   track             ChallengeTrackEnum? // enum value from ChallengeTrackEnum
+  isLegacy          Boolean                     @default(false)
   challenges        Challenge[]
   // Opposite relation for ChallengeTimelineTemplate
   timelineTemplates ChallengeTimelineTemplate[]
@@ -233,6 +238,7 @@ model ChallengeTrack {
   updatedBy String
 
   @@index([legacyId])
+  @@index([isLegacy])
 }
 
 //////////////////////////////////////////
@@ -670,7 +676,7 @@ model DefaultChallengeReviewer {
   baseCoefficient           Float?
   incrementalCoefficient    Float?
   opportunityType       ReviewOpportunityTypeEnum?
-  aiWorkflowId          String?                    @db.VarChar(14)
+  aiConfigTemplateId          String?                    @db.VarChar(14)
   shouldOpenOpportunity Boolean                    @default(true)
 
   // Relations
