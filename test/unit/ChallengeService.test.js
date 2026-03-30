@@ -1224,6 +1224,57 @@ describe('challenge service unit tests', () => {
       should.exist(result.updated)
     })
 
+    it('update challenge - triggers payments for task challenges stored without legacy.pureV5Task', async () => {
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGenerateChallengePayments = helper.generateChallengePayments
+      let generatedPaymentsChallengeId
+
+      helper.getChallengeResources = async (challengeId) => {
+        if (challengeId === data.taskChallenge.id) {
+          return [{
+            roleId: config.SUBMITTER_ROLE_ID,
+            memberId: 12345678,
+            memberHandle: 'thomaskranitsas'
+          }]
+        }
+
+        return originalGetChallengeResources(challengeId)
+      }
+      helper.generateChallengePayments = async (challengeId) => {
+        generatedPaymentsChallengeId = challengeId
+        return true
+      }
+
+      try {
+        await prisma.challenge.update({
+          where: { id: data.taskChallenge.id },
+          data: {
+            status: ChallengeStatusEnum.ACTIVE,
+            updatedBy: 'admin'
+          }
+        })
+
+        const result = await service.updateChallenge(
+          { isMachine: true, sub: 'sub-task', userId: 22838965 },
+          data.taskChallenge.id,
+          {
+            status: ChallengeStatusEnum.COMPLETED,
+            winners: [{
+              userId: 12345678,
+              handle: 'thomaskranitsas',
+              placement: 1
+            }]
+          }
+        )
+
+        should.equal(result.status, ChallengeStatusEnum.COMPLETED)
+        should.equal(generatedPaymentsChallengeId, data.taskChallenge.id)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.generateChallengePayments = originalGenerateChallengePayments
+      }
+    })
+
     describe('reviewer scorecard changes', () => {
       const originalScorecardId = 'sc-original'
       const newScorecardId = 'sc-updated'

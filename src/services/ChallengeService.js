@@ -2367,7 +2367,9 @@ async function validateWinners(winners, challengeResources) {
  * @param {Array} challengeResources the challenge resources
  */
 function validateTask(currentUser, challenge, data, challengeResources) {
-  if (!_.get(challenge, "legacy.pureV5Task")) {
+  const isTask = helper.getTaskInfo(challenge).isTask || _.get(challenge, "legacy.pureV5Task");
+
+  if (!isTask) {
     // Not a Task
     return;
   }
@@ -2407,7 +2409,7 @@ function validateTask(currentUser, challenge, data, challengeResources) {
 }
 
 function prepareTaskCompletionData(challenge, challengeResources, data) {
-  const isTask = _.get(challenge, "legacy.pureV5Task");
+  const isTask = helper.getTaskInfo(challenge).isTask || _.get(challenge, "legacy.pureV5Task");
   const isCompleteTask =
     data.status === ChallengeStatusEnum.COMPLETED &&
     challenge.status !== ChallengeStatusEnum.COMPLETED;
@@ -2943,7 +2945,10 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     await validateWinners(combinedWinnerPayload, challengeResources);
   }
 
-  if (_.get(challenge, "legacy.pureV5Task", false) && !_.isUndefined(data.winners)) {
+  const isTaskChallenge =
+    helper.getTaskInfo(challenge).isTask || _.get(challenge, "legacy.pureV5Task");
+
+  if (isTaskChallenge && !_.isUndefined(data.winners)) {
     _.each(data.winners, (w) => {
       w.type = PrizeSetTypeEnum.PLACEMENT;
     });
@@ -2971,7 +2976,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   // task.memberId goes out of sync due to another processor setting "task.memberId" but subsequent immediate update to the task
   // will not have the memberId set. So we need to set it using winners to ensure it is always in sync. The proper fix is to correct
   // the sync issue in the processor. However this is quick fix that works since winner.userId is task.memberId.
-  if (_.get(challenge, "legacy.pureV5Task") && !_.isUndefined(data.winners)) {
+  if (isTaskChallenge && !_.isUndefined(data.winners)) {
     const winnerMemberId = _.get(data.winners, "[0].userId");
     logger.info(
       `Setting task.memberId to ${winnerMemberId} for challenge ${challengeId}. Task ${_.get(
@@ -2994,7 +2999,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       logger.info(`task ${challengeId} has no winner set yet.`);
     }
   } else {
-    logger.info(`${challengeId} is not a pureV5 challenge or has no winners set yet.`);
+    logger.info(`${challengeId} is not a task challenge or has no winners set yet.`);
   }
 
   const finalTypeId = data.typeId || challenge.typeId;
