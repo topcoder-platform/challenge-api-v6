@@ -2893,9 +2893,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       logger.debug(`updateChallenge(AI screening): ${message} (challengeId=${challengeId})`);
     await challengeHelper.addAIScreeningPhaseForChallenge(tempChallenge, prisma, debugLogForAI);
     logger.info(
-      `updateChallenge: AI screening phase ensured (challengeId=${challengeId}) resultingPhases=${(
-        tempChallenge.phases || []
-      ).length}`,
+      `updateChallenge: AI screening phase ensured (challengeId=${challengeId}) resultingPhases=${
+        (tempChallenge.phases || []).length
+      }`,
     );
     // Update phasesForUpdate with the updated phases after AI screening addition
     phasesForUpdate = tempChallenge.phases;
@@ -3236,9 +3236,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
     if (!_.isNil(updateData.winners)) {
       await tx.challengeWinner.deleteMany({ where: { challengeId } });
-    }
-    if (_.isNil(updateData.attachment)) {
-      await tx.attachment.deleteMany({ where: { challengeId } });
     }
     if (shouldReplaceTerms) {
       await tx.challengeTerm.deleteMany({ where: { challengeId } });
