@@ -16,6 +16,11 @@ const createEmptyCounters = () => ({
   exampleSubmissions: 0,
   nonExampleSubmitterCoderIds: new Set(),
   finalCandidateCoderIds: new Set(),
+  registrationStartMs: null,
+  registrationEndMs: null,
+  earliestSubmissionOpenMs: null,
+  earliestNonExampleSubmitMs: null,
+  latestNonExampleSubmitMs: null,
 });
 
 const sortIds = (values) =>
@@ -34,6 +39,50 @@ const parseNonNegativeInteger = (value) => {
     return 0;
   }
   return parsed;
+};
+
+const parseLegacySqlTimestamp = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized || normalized.toLowerCase() === "null") {
+    return null;
+  }
+  const isoLike = normalized.includes("T")
+    ? normalized
+    : normalized.replace(" ", "T");
+  const withZone = /([+-]\d{2}:?\d{2}|Z)$/i.test(isoLike) ? isoLike : `${isoLike}Z`;
+  const parsed = Date.parse(withZone);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+};
+
+const parseEpochMs = (value) => {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const minMs = (left, right) => {
+  if (!Number.isFinite(left)) {
+    return Number.isFinite(right) ? right : null;
+  }
+  if (!Number.isFinite(right)) {
+    return left;
+  }
+  return Math.min(left, right);
+};
+
+const maxMs = (left, right) => {
+  if (!Number.isFinite(left)) {
+    return Number.isFinite(right) ? right : null;
+  }
+  if (!Number.isFinite(right)) {
+    return left;
+  }
+  return Math.max(left, right);
 };
 
 const hasAnyFinalSignal = (finalResultRow) => {
@@ -341,7 +390,12 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
         if (!coderId) {
           return;
         }
-        roundDataById.get(roundId).eligibleRegistrants.add(coderId);
+        const counters = roundDataById.get(roundId);
+        counters.eligibleRegistrants.add(coderId);
+
+        const registrationMs = parseLegacySqlTimestamp(row.timestamp);
+        counters.registrationStartMs = minMs(counters.registrationStartMs, registrationMs);
+        counters.registrationEndMs = maxMs(counters.registrationEndMs, registrationMs);
       })
     )
   );
@@ -379,12 +433,20 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
           return;
         }
 
+        const submissionOpenMs = parseEpochMs(row && row.open_time);
+        counters.earliestSubmissionOpenMs = minMs(counters.earliestSubmissionOpenMs, submissionOpenMs);
+
         const isExample = String(row && row.example ? row.example : "").trim() === "1";
         if (isExample) {
           counters.exampleSubmissions += 1;
           return;
         }
         counters.nonExampleSubmissions += 1;
+
+        const submitMs = parseEpochMs(row && row.submit_time);
+        counters.earliestNonExampleSubmitMs = minMs(counters.earliestNonExampleSubmitMs, submitMs);
+        counters.latestNonExampleSubmitMs = maxMs(counters.latestNonExampleSubmitMs, submitMs);
+
         if (stateInfo.coderId) {
           counters.nonExampleSubmitterCoderIds.add(stateInfo.coderId);
         }
@@ -421,7 +483,7 @@ const buildDryRunPlan = async (options, existingStateByRoundId) => {
     evaluateRoundPlan(roundId, roundDataById.get(roundId), existingStateByRoundId.get(roundId))
   );
   const summary = summarizePlan(records, selectedRoundIds);
-  return { records, summary };
+  return { records, summary, roundDataById };
 };
 
 module.exports = {

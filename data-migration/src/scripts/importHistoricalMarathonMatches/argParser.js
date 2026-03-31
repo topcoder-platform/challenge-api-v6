@@ -177,7 +177,7 @@ Input options:
   --long-comp-result-pattern <re>    Regex for long_comp_result files (default: ^long_comp_result_\\d+\\.json$)
 
 Apply mode:
-  --apply                            Reserved for later milestones (not available yet)
+  --apply                            Apply reconciliation writes (challenge + phase create path)
 
 Other:
   --help, -h                         Show this help
