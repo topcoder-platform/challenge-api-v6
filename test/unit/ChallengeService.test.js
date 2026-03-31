@@ -460,6 +460,43 @@ describe('challenge service unit tests', () => {
       should.equal(result.numOfRegistrants, 0)
     })
 
+    it('get challenge preserves billing for project write users', async () => {
+      const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess
+
+      helper.userHasProjectWriteAccess = async () => true
+
+      try {
+        const result = await service.getChallenge(
+          { handle: 'writer', userId: 'testuser' },
+          createdChallengeData.id
+        )
+
+        should.deepEqual(result.billing, createdChallengeData.billing)
+      } finally {
+        helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess
+      }
+    })
+
+    it('get challenge hides billing for users without project write access', async () => {
+      const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess
+      const originalListResourcesByMemberAndChallenge = helper.listResourcesByMemberAndChallenge
+
+      helper.userHasProjectWriteAccess = async () => false
+      helper.listResourcesByMemberAndChallenge = async () => []
+
+      try {
+        const result = await service.getChallenge(
+          { handle: 'viewer', userId: 'testuser' },
+          createdChallengeData.id
+        )
+
+        should.equal(_.isUndefined(result.billing), true)
+      } finally {
+        helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess
+        helper.listResourcesByMemberAndChallenge = originalListResourcesByMemberAndChallenge
+      }
+    })
+
     it('get challenge - not found', async () => {
       try {
         await service.getChallenge({ isMachine: true }, notFoundId)

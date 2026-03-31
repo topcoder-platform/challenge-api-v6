@@ -2160,7 +2160,8 @@ createChallenge.schema = {
  * @param {Object} currentUser the user who perform operation
  * @param {String} id the challenge id
  * @param {Boolean} checkIfExists flag to check if challenge exists
- * @returns {Object} the challenge with given id
+ * @returns {Object} the challenge with given id. Interactive callers keep
+ * billing details only when they already have project write access.
  */
 async function getChallenge(currentUser, id, checkIfExists) {
   // Log the ID of the challenge being requested
@@ -2181,14 +2182,18 @@ async function getChallenge(currentUser, id, checkIfExists) {
   // Remove privateDescription for unregistered users
   if (currentUser) {
     if (!currentUser.isMachine && !hasAdminRole(currentUser)) {
-      _.unset(challenge, "billing");
+      const hasProjectWriteAccess = await helper.userHasProjectWriteAccess(
+        challenge.projectId,
+        currentUser,
+      );
+
+      if (!hasProjectWriteAccess) {
+        _.unset(challenge, "billing");
+      }
+
       if (_.isEmpty(challenge.privateDescription)) {
         _.unset(challenge, "privateDescription");
       } else if (!taskInfo.isTask || !taskInfo.isAssigned) {
-        const hasProjectWriteAccess = await helper.userHasProjectWriteAccess(
-          challenge.projectId,
-          currentUser,
-        );
         if (!hasProjectWriteAccess) {
           const memberResources = await helper.listResourcesByMemberAndChallenge(
             currentUser.userId,
