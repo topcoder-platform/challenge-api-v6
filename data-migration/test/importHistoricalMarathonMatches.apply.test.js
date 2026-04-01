@@ -246,6 +246,105 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
   });
 
+  test("apply-mode reruns converge create decisions by backfilling missing standard phases", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+        ]),
+        createMany: jest.fn(),
+      },
+    };
+
+    const phaseRows = [
+      { id: "phase-registration", name: "Registration" },
+      { id: "phase-submission", name: "Submission" },
+      { id: "phase-review", name: "Review" },
+    ];
+
+    const prisma = {
+      challengeType: {
+        findMany: jest.fn().mockResolvedValue([{ id: "type-mm" }]),
+      },
+      challengeTrack: {
+        findMany: jest.fn().mockResolvedValue([{ id: "track-ds" }]),
+      },
+      phase: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce(phaseRows)
+          .mockResolvedValueOnce(phaseRows),
+      },
+      challengeTimelineTemplate: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            timelineTemplateId: "timeline-mm",
+            isDefault: true,
+            timelineTemplate: {
+              phases: [
+                { phaseId: "phase-registration" },
+                { phaseId: "phase-submission" },
+                { phaseId: "phase-review" },
+              ],
+            },
+          },
+        ]),
+      },
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const result = await runApplyMode({
+      prisma,
+      options: { roundIds: ["9892"] },
+      plan: {
+        records: [
+          {
+            legacyRoundId: "9892",
+            decision: "create",
+            reason: "no-matching-v6-challenge-found",
+          },
+        ],
+        roundDataById: new Map([
+          [
+            "9892",
+            {
+              round: { round_id: "9892", round_type_id: "13" },
+              registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+              registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+              earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+              earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+              latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+              eligibleRegistrants: new Set(["1", "2"]),
+              nonExampleSubmissions: 3,
+            },
+          ],
+        ]),
+      },
+      actor: "importer",
+    });
+
+    expect(result.records).toEqual([
+      {
+        recordType: "apply-record",
+        legacyRoundId: "9892",
+        status: "existing",
+        challengeId: "existing-challenge-1",
+      },
+    ]);
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(tx.challengePhase.createMany).toHaveBeenCalledTimes(1);
+    expect(tx.challengePhase.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ name: "Review", challengeId: "existing-challenge-1" })],
+    });
+  });
+
   test("reuse path rejects non-MM/DS challenge shape", async () => {
     const tx = {
       challenge: {

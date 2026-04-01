@@ -6,6 +6,10 @@ const {
   resolveFilePath,
   streamJsonArray,
 } = require("./legacyDataReader");
+const {
+  STANDARD_PHASE_NAMES,
+  derivePhaseWindows,
+} = require("./apply");
 
 const createEmptyCounters = () => ({
   round: null,
@@ -146,7 +150,37 @@ const buildUnresolvedRecord = ({ roundId, reason, counters, traceability, matche
     finalistsWithoutAttachableSubmission: 0,
   }),
   entityDeltas: buildZeroEntityDeltas(),
+  createPathChallengeShape: null,
+  createPathPhasePlan: null,
 });
+
+const formatIsoDate = (value) => {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return null;
+  }
+  return value.toISOString();
+};
+
+const buildCreatePathChallengeShape = () => ({
+  type: "Marathon Match",
+  track: "Data Science",
+  status: "COMPLETED",
+  phaseNames: [...STANDARD_PHASE_NAMES],
+});
+
+const buildCreatePathPhasePlan = (roundId, counters) => {
+  const windows = derivePhaseWindows(roundId, counters);
+  return STANDARD_PHASE_NAMES.reduce((acc, phaseName) => {
+    const key = phaseName.toLowerCase();
+    const window = windows[key];
+    acc[phaseName] = {
+      isOpen: false,
+      startDate: formatIsoDate(window && window.startDate),
+      endDate: formatIsoDate(window && window.endDate),
+    };
+    return acc;
+  }, {});
+};
 
 const isMarathonRoundType = (round) => String(round && round.round_type_id ? round.round_type_id : "").trim() === "13";
 
@@ -168,6 +202,8 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
         counters: createEmptyCounters(),
       }),
       entityDeltas: buildZeroEntityDeltas(),
+      createPathChallengeShape: null,
+      createPathPhasePlan: null,
     };
   }
 
@@ -244,6 +280,22 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
   };
 
   const hasMatchedChallenge = matchStatus === "safe" && Boolean(existingStateEntry.challengeId);
+  let createPathChallengeShape = null;
+  let createPathPhasePlan = null;
+  if (!hasMatchedChallenge) {
+    try {
+      createPathChallengeShape = buildCreatePathChallengeShape();
+      createPathPhasePlan = buildCreatePathPhasePlan(roundId, counters);
+    } catch {
+      return buildUnresolvedRecord({
+        roundId,
+        reason: "create-phase-plan-derivation-failed",
+        counters,
+        traceability,
+      });
+    }
+  }
+
   const decision = hasMatchedChallenge ? "reuse/backfill-only" : "create";
   const reason = hasMatchedChallenge
     ? "existing-v6-challenge-found"
@@ -273,6 +325,8 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
       finalistsWithoutAttachableSubmission,
     }),
     entityDeltas,
+    createPathChallengeShape,
+    createPathPhasePlan,
   };
 };
 
