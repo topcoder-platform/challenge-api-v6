@@ -8,6 +8,7 @@ const {
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
+const TEMPORARY_RESOURCE_WRITE_STATUS = "ACTIVE";
 
 const parseRoundLegacyId = (roundId) => {
   const parsed = Number.parseInt(String(roundId || "").trim(), 10);
@@ -396,6 +397,57 @@ const resolveCanonicalTimelineTemplateId = async (prisma, marathonTypeId, dataSc
   );
 };
 
+const normalizeChallengeStatus = (value) => String(value || "").trim().toUpperCase();
+
+const createPrismaChallengeStatusController = ({ prisma, actor }) => {
+  if (
+    !prisma ||
+    !prisma.challenge ||
+    typeof prisma.challenge.findUnique !== "function" ||
+    typeof prisma.challenge.update !== "function"
+  ) {
+    return null;
+  }
+
+  return {
+    getChallengeStatus: async (challengeId) => {
+      const challenge = await prisma.challenge.findUnique({
+        where: { id: challengeId },
+        select: { status: true },
+      });
+      if (!challenge || !challenge.status) {
+        throw new Error(`Unable to read challenge status for ${challengeId}.`);
+      }
+      return normalizeChallengeStatus(challenge.status);
+    },
+    updateChallengeStatus: async (challengeId, status) =>
+      prisma.challenge.update({
+        where: { id: challengeId },
+        data: {
+          status,
+          updatedBy: actor,
+        },
+        select: { id: true, status: true },
+      }),
+  };
+};
+
+const isCompletedChallengeResourceConstraintError = (error) => {
+  if (!error) {
+    return false;
+  }
+  const message = String(error.message || "").toLowerCase();
+  const responseBody = String(error.responseBody || "").toLowerCase();
+  const searchable = `${message} ${responseBody}`;
+  const hasCompletedSignal = searchable.includes("completed");
+  const hasChallengeSignal = searchable.includes("challenge");
+  const hasConstraintStatus =
+    error.httpStatus === undefined ||
+    error.httpStatus === null ||
+    [400, 403, 422].includes(Number.parseInt(error.httpStatus, 10));
+  return hasCompletedSignal && hasChallengeSignal && hasConstraintStatus;
+};
+
 const runApplyMode = async ({
   prisma,
   options,
@@ -422,6 +474,9 @@ const runApplyMode = async ({
   if (actionableRoundIds.length > 0 && !resourceClient) {
     throw new Error("Resource API client is required for apply mode participant reconciliation.");
   }
+  const challengeStatusController =
+    options.challengeStatusController ||
+    createPrismaChallengeStatusController({ prisma, actor });
 
   let normalizedIdentityByCoderId =
     options.normalizedIdentityByCoderId instanceof Map
@@ -512,6 +567,7 @@ const runApplyMode = async ({
         normalizedIdentityByCoderId,
         resourceClient,
         submitterRoleId,
+        challengeStatusController,
       });
       applyRecords.push({
         recordType: "apply-record",
@@ -566,6 +622,7 @@ const reconcileSubmitterResourcesForRound = async ({
   normalizedIdentityByCoderId,
   resourceClient,
   submitterRoleId,
+  challengeStatusController,
 }) => {
   const eligibleMemberIdentities = buildEligibleMemberIdentities({
     eligibleCoderIds: counters && counters.eligibleRegistrants ? counters.eligibleRegistrants : new Set(),
@@ -602,25 +659,109 @@ const reconcileSubmitterResourcesForRound = async ({
   });
 
   let createdSubmitterResources = 0;
-  for (const identity of eligibleMemberIdentities) {
-    if (existingEligibleMemberIds.has(identity.memberId)) {
-      continue;
+  let usedTemporaryStatusTransition = false;
+  let originalChallengeStatus = null;
+
+  const transitionChallengeToTemporaryWritableStatus = async () => {
+    if (!challengeStatusController) {
+      return false;
     }
-    await resourceClient.createSubmitterResource({
+    if (usedTemporaryStatusTransition) {
+      return true;
+    }
+    if (
+      typeof challengeStatusController.getChallengeStatus !== "function" ||
+      typeof challengeStatusController.updateChallengeStatus !== "function"
+    ) {
+      return false;
+    }
+
+    const currentStatus = normalizeChallengeStatus(
+      await challengeStatusController.getChallengeStatus(challengeId)
+    );
+    if (currentStatus !== "COMPLETED") {
+      return false;
+    }
+
+    await challengeStatusController.updateChallengeStatus(
       challengeId,
-      memberId: String(identity.memberId),
-      roleId: submitterRoleId,
-    });
-    existingEligibleMemberIds.add(identity.memberId);
-    createdSubmitterResources += 1;
+      TEMPORARY_RESOURCE_WRITE_STATUS
+    );
+    usedTemporaryStatusTransition = true;
+    originalChallengeStatus = currentStatus;
+    return true;
+  };
+
+  let operationError = null;
+  let restorationError = null;
+  try {
+    for (const identity of eligibleMemberIdentities) {
+      if (existingEligibleMemberIds.has(identity.memberId)) {
+        continue;
+      }
+
+      const createPayload = {
+        challengeId,
+        memberId: String(identity.memberId),
+        roleId: submitterRoleId,
+      };
+
+      try {
+        await resourceClient.createSubmitterResource(createPayload);
+      } catch (error) {
+        const shouldAttemptStatusTransition =
+          isCompletedChallengeResourceConstraintError(error) &&
+          (await transitionChallengeToTemporaryWritableStatus());
+        if (!shouldAttemptStatusTransition) {
+          throw error;
+        }
+        await resourceClient.createSubmitterResource(createPayload);
+      }
+
+      existingEligibleMemberIds.add(identity.memberId);
+      createdSubmitterResources += 1;
+    }
+  } catch (error) {
+    operationError = error;
+  } finally {
+    if (usedTemporaryStatusTransition && originalChallengeStatus) {
+      try {
+        await challengeStatusController.updateChallengeStatus(
+          challengeId,
+          originalChallengeStatus
+        );
+      } catch (restoreError) {
+        restorationError = restoreError;
+      }
+    }
   }
 
-  return {
+  if (restorationError && operationError) {
+    throw new Error(
+      `${operationError.message} Failed to restore challenge ${challengeId} status to ${originalChallengeStatus}: ${restorationError.message}`
+    );
+  }
+  if (restorationError) {
+    throw new Error(
+      `Failed to restore challenge ${challengeId} status to ${originalChallengeStatus}: ${restorationError.message}`
+    );
+  }
+  if (operationError) {
+    throw operationError;
+  }
+
+  const result = {
     targetEligibleRegistrants,
     existingSubmitterResources: targetEligibleRegistrants - createdSubmitterResources,
     createdSubmitterResources,
     unchangedSubmitterResources: targetEligibleRegistrants - createdSubmitterResources,
   };
+  if (usedTemporaryStatusTransition) {
+    result.usedTemporaryStatusTransition = true;
+    result.originalChallengeStatus = originalChallengeStatus;
+    result.temporaryChallengeStatus = TEMPORARY_RESOURCE_WRITE_STATUS;
+  }
+  return result;
 };
 
 module.exports = {

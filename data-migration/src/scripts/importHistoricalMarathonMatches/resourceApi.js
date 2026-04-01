@@ -167,9 +167,12 @@ const createResourceApiClient = ({
     }
     const responseBodyText = await response.text();
     if (!response.ok) {
-      throw new Error(
+      const error = new Error(
         `Failed to create submitter resource for challenge ${challengeId} member ${memberId} (${response.status} ${response.statusText})${responseBodyText ? `: ${responseBodyText}` : ""}.`
       );
+      error.httpStatus = response.status;
+      error.responseBody = responseBodyText;
+      throw error;
     }
     if (!responseBodyText) {
       return null;

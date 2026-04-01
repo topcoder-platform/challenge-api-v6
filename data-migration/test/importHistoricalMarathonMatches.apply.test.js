@@ -2,6 +2,7 @@ const {
   derivePhaseWindows,
   buildChallengePhaseRows,
   applyCreateRound,
+  reconcileSubmitterResourcesForRound,
   runApplyMode,
 } = require("../src/scripts/importHistoricalMarathonMatches/apply");
 
@@ -727,5 +728,107 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         },
       },
     ]);
+  });
+
+  test("resource reconciliation temporarily transitions COMPLETED challenges and restores status on retry success", async () => {
+    const completedRestrictionError = new Error(
+      "Failed to create submitter resource for challenge challenge-1 member 2 (400 Bad Request): challenge is completed."
+    );
+    completedRestrictionError.httpStatus = 400;
+
+    const resourceClient = {
+      listSubmitterResources: jest.fn().mockResolvedValue([]),
+      createSubmitterResource: jest
+        .fn()
+        .mockRejectedValueOnce(completedRestrictionError)
+        .mockResolvedValueOnce({}),
+    };
+
+    const challengeStatusController = {
+      getChallengeStatus: jest.fn().mockResolvedValue("COMPLETED"),
+      updateChallengeStatus: jest.fn().mockResolvedValue({}),
+    };
+
+    const result = await reconcileSubmitterResourcesForRound({
+      challengeId: "challenge-1",
+      counters: {
+        eligibleRegistrants: new Set(["2"]),
+      },
+      normalizedIdentityByCoderId: new Map([
+        ["2", { coderId: "2", memberId: 2, memberHandle: "bravo" }],
+      ]),
+      resourceClient,
+      submitterRoleId: "submitter-role",
+      challengeStatusController,
+    });
+
+    expect(challengeStatusController.getChallengeStatus).toHaveBeenCalledWith("challenge-1");
+    expect(challengeStatusController.updateChallengeStatus).toHaveBeenNthCalledWith(
+      1,
+      "challenge-1",
+      "ACTIVE"
+    );
+    expect(challengeStatusController.updateChallengeStatus).toHaveBeenNthCalledWith(
+      2,
+      "challenge-1",
+      "COMPLETED"
+    );
+    expect(resourceClient.createSubmitterResource).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({
+      targetEligibleRegistrants: 1,
+      existingSubmitterResources: 0,
+      createdSubmitterResources: 1,
+      unchangedSubmitterResources: 0,
+      usedTemporaryStatusTransition: true,
+      originalChallengeStatus: "COMPLETED",
+      temporaryChallengeStatus: "ACTIVE",
+    });
+  });
+
+  test("resource reconciliation restores original COMPLETED status when retry still fails", async () => {
+    const completedRestrictionError = new Error(
+      "Failed to create submitter resource for challenge challenge-1 member 2 (400 Bad Request): challenge is completed."
+    );
+    completedRestrictionError.httpStatus = 400;
+    const secondFailure = new Error("Still rejected after temporary transition.");
+
+    const resourceClient = {
+      listSubmitterResources: jest.fn().mockResolvedValue([]),
+      createSubmitterResource: jest
+        .fn()
+        .mockRejectedValueOnce(completedRestrictionError)
+        .mockRejectedValueOnce(secondFailure),
+    };
+
+    const challengeStatusController = {
+      getChallengeStatus: jest.fn().mockResolvedValue("COMPLETED"),
+      updateChallengeStatus: jest.fn().mockResolvedValue({}),
+    };
+
+    await expect(
+      reconcileSubmitterResourcesForRound({
+        challengeId: "challenge-1",
+        counters: {
+          eligibleRegistrants: new Set(["2"]),
+        },
+        normalizedIdentityByCoderId: new Map([
+          ["2", { coderId: "2", memberId: 2, memberHandle: "bravo" }],
+        ]),
+        resourceClient,
+        submitterRoleId: "submitter-role",
+        challengeStatusController,
+      })
+    ).rejects.toThrow("Still rejected after temporary transition.");
+
+    expect(challengeStatusController.updateChallengeStatus).toHaveBeenNthCalledWith(
+      1,
+      "challenge-1",
+      "ACTIVE"
+    );
+    expect(challengeStatusController.updateChallengeStatus).toHaveBeenNthCalledWith(
+      2,
+      "challenge-1",
+      "COMPLETED"
+    );
   });
 });
