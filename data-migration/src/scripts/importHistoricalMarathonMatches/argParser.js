@@ -8,6 +8,7 @@ const DEFAULT_OPTIONS = {
   problemFile: "problem_1.json",
   longComponentStateFile: "long_component_state_1.json",
   roundRegistrationPattern: "^round_registration_\\d+\\.json$",
+  userPattern: "^user_\\d+\\.json$",
   longSubmissionPattern: "^long_submission_\\d+\\.json$",
   longCompResultPattern: "^long_comp_result_\\d+\\.json$",
   existingStateFile: null,
@@ -106,6 +107,11 @@ const parseArgs = (argv) => {
       index += 1;
       continue;
     }
+    if (arg === "--user-pattern") {
+      options.userPattern = requireNextValue(argv, index, "--user-pattern");
+      index += 1;
+      continue;
+    }
     if (arg === "--long-submission-pattern") {
       options.longSubmissionPattern = requireNextValue(argv, index, "--long-submission-pattern");
       index += 1;
@@ -173,6 +179,7 @@ Input options:
   --problem-file <file>              Legacy problem file (default: problem_1.json)
   --long-component-state-file <file> Legacy long_component_state file (default: long_component_state_1.json)
   --round-registration-pattern <re>  Regex for round_registration files (default: ^round_registration_\\d+\\.json$)
+  --user-pattern <re>                Regex for user files (default: ^user_\\d+\\.json$)
   --long-submission-pattern <re>     Regex for long_submission files (default: ^long_submission_\\d+\\.json$)
   --long-comp-result-pattern <re>    Regex for long_comp_result files (default: ^long_comp_result_\\d+\\.json$)
 

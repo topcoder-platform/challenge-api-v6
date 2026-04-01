@@ -8,6 +8,7 @@ const { parseArgs, usage } = require("./importHistoricalMarathonMatches/argParse
 const { buildDryRunPlan } = require("./importHistoricalMarathonMatches/planning");
 const {
   runApplyMode,
+  DEFAULT_SUBMITTER_ROLE_ID,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
   resolveCanonicalTimelineTemplateId,
@@ -17,6 +18,10 @@ const {
   loadExistingState,
   buildExistingStateByRoundId,
 } = require("./importHistoricalMarathonMatches/existingState");
+const {
+  createAuth0TokenProvider,
+  createResourceApiClient,
+} = require("./importHistoricalMarathonMatches/resourceApi");
 
 const appRoot = path.resolve(__dirname, "..", "..", "..");
 const requireFromRoot = createRequire(path.join(appRoot, "package.json"));
@@ -41,6 +46,19 @@ const deriveCanonicalTimelineReason = (error) => {
     return CANONICAL_TIMELINE_AMBIGUOUS_REASON;
   }
   return CANONICAL_TIMELINE_UNRESOLVED_REASON;
+};
+
+const createDefaultResourceClient = () => {
+  const getAccessToken = createAuth0TokenProvider({
+    auth0Url: process.env.AUTH0_URL,
+    auth0Audience: process.env.AUTH0_AUDIENCE,
+    auth0ClientId: process.env.AUTH0_CLIENT_ID,
+    auth0ClientSecret: process.env.AUTH0_CLIENT_SECRET,
+  });
+  return createResourceApiClient({
+    baseUrl: process.env.RESOURCES_API_URL,
+    getAccessToken,
+  });
 };
 
 const run = async () => {
@@ -130,9 +148,24 @@ const run = async () => {
       return;
     }
 
+    if (!String(process.env.RESOURCES_API_URL || "").trim()) {
+      throw new Error("RESOURCES_API_URL must be set for apply mode participant reconciliation.");
+    }
+
+    const submitterRoleId = String(
+      process.env.SUBMITTER_ROLE_ID || DEFAULT_SUBMITTER_ROLE_ID
+    ).trim();
+    if (!submitterRoleId) {
+      throw new Error("SUBMITTER_ROLE_ID must be set for apply mode participant reconciliation.");
+    }
+
     const applyResult = await runApplyMode({
       prisma,
-      options,
+      options: {
+        ...options,
+        submitterRoleId,
+        resourceClient: createDefaultResourceClient(),
+      },
       plan,
       actor: DEFAULT_ACTOR,
     });

@@ -1,6 +1,13 @@
 "use strict";
 
+const {
+  DEFAULT_USER_PATTERN,
+  loadNormalizedIdentityByCoderId,
+  buildEligibleMemberIdentities,
+} = require("./participants");
+
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
+const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
 
 const parseRoundLegacyId = (roundId) => {
   const parsed = Number.parseInt(String(roundId || "").trim(), 10);
@@ -389,7 +396,13 @@ const resolveCanonicalTimelineTemplateId = async (prisma, marathonTypeId, dataSc
   );
 };
 
-const runApplyMode = async ({ prisma, options, plan, actor }) => {
+const runApplyMode = async ({
+  prisma,
+  options,
+  plan,
+  actor,
+  normalizedIdentityByCoderId: providedNormalizedIdentityByCoderId,
+}) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const actionableRoundIds = options.roundIds.filter((roundId) => {
     const counters = plan.roundDataById.get(roundId);
@@ -403,6 +416,40 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
     const decision = planRecordByRoundId.get(roundId) && planRecordByRoundId.get(roundId).decision;
     return decision === "create";
   });
+  const submitterRoleId = String(options.submitterRoleId || DEFAULT_SUBMITTER_ROLE_ID).trim();
+
+  const resourceClient = options.resourceClient;
+  if (actionableRoundIds.length > 0 && !resourceClient) {
+    throw new Error("Resource API client is required for apply mode participant reconciliation.");
+  }
+
+  let normalizedIdentityByCoderId =
+    options.normalizedIdentityByCoderId instanceof Map
+      ? options.normalizedIdentityByCoderId
+      : providedNormalizedIdentityByCoderId instanceof Map
+      ? providedNormalizedIdentityByCoderId
+      : null;
+  if (!normalizedIdentityByCoderId) {
+    const eligibleCoderIds = new Set();
+    actionableRoundIds.forEach((roundId) => {
+      const counters = plan.roundDataById.get(roundId);
+      if (!counters || !(counters.eligibleRegistrants instanceof Set)) {
+        return;
+      }
+      counters.eligibleRegistrants.forEach((coderId) => {
+        const normalizedCoderId = String(coderId || "").trim();
+        if (normalizedCoderId) {
+          eligibleCoderIds.add(normalizedCoderId);
+        }
+      });
+    });
+
+    normalizedIdentityByCoderId = await loadNormalizedIdentityByCoderId({
+      dataDir: options.dataDir,
+      userPattern: options.userPattern || DEFAULT_USER_PATTERN,
+      coderIds: eligibleCoderIds,
+    });
+  }
 
   let marathonTypeId = null;
   let dataScienceTrackId = null;
@@ -459,11 +506,19 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
         timelineTemplateId,
         phaseIdsByName,
       });
+      const resourceReconciliation = await reconcileSubmitterResourcesForRound({
+        challengeId: result.challengeId,
+        counters,
+        normalizedIdentityByCoderId,
+        resourceClient,
+        submitterRoleId,
+      });
       applyRecords.push({
         recordType: "apply-record",
         legacyRoundId: roundId,
         status: result.status,
         challengeId: result.challengeId,
+        resourceReconciliation,
       });
     } catch (error) {
       applyRecords.push({
@@ -497,13 +552,86 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
   return { records: applyRecords, summary };
 };
 
+const parseMemberId = (value) => {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const reconcileSubmitterResourcesForRound = async ({
+  challengeId,
+  counters,
+  normalizedIdentityByCoderId,
+  resourceClient,
+  submitterRoleId,
+}) => {
+  const eligibleMemberIdentities = buildEligibleMemberIdentities({
+    eligibleCoderIds: counters && counters.eligibleRegistrants ? counters.eligibleRegistrants : new Set(),
+    normalizedIdentityByCoderId,
+  });
+  const targetEligibleRegistrants = eligibleMemberIdentities.length;
+  if (targetEligibleRegistrants === 0) {
+    return {
+      targetEligibleRegistrants: 0,
+      existingSubmitterResources: 0,
+      createdSubmitterResources: 0,
+      unchangedSubmitterResources: 0,
+    };
+  }
+
+  const existingResources = await resourceClient.listSubmitterResources(challengeId, submitterRoleId);
+  const eligibleMemberIds = new Set(eligibleMemberIdentities.map((identity) => identity.memberId));
+  const existingEligibleMemberIds = new Set();
+
+  (existingResources || []).forEach((resource) => {
+    if (!resource || typeof resource !== "object") {
+      return;
+    }
+    const resourceRoleId = String(resource.roleId || "").trim();
+    if (resourceRoleId && resourceRoleId !== submitterRoleId) {
+      return;
+    }
+
+    const memberId = parseMemberId(resource.memberId);
+    if (!memberId || !eligibleMemberIds.has(memberId)) {
+      return;
+    }
+    existingEligibleMemberIds.add(memberId);
+  });
+
+  let createdSubmitterResources = 0;
+  for (const identity of eligibleMemberIdentities) {
+    if (existingEligibleMemberIds.has(identity.memberId)) {
+      continue;
+    }
+    await resourceClient.createSubmitterResource({
+      challengeId,
+      memberId: String(identity.memberId),
+      roleId: submitterRoleId,
+    });
+    existingEligibleMemberIds.add(identity.memberId);
+    createdSubmitterResources += 1;
+  }
+
+  return {
+    targetEligibleRegistrants,
+    existingSubmitterResources: targetEligibleRegistrants - createdSubmitterResources,
+    createdSubmitterResources,
+    unchangedSubmitterResources: targetEligibleRegistrants - createdSubmitterResources,
+  };
+};
+
 module.exports = {
   STANDARD_PHASE_NAMES,
+  DEFAULT_SUBMITTER_ROLE_ID,
   derivePhaseWindows,
   buildChallengePhaseRows,
   applyCreateRound,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
   resolveCanonicalTimelineTemplateId,
+  reconcileSubmitterResourcesForRound,
   runApplyMode,
 };
