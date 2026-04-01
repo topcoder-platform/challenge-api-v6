@@ -26,6 +26,13 @@ Optional / useful values:
 - `DATA_DIRECTORY=/mnt/Informix`
 - importer-scoped attribution values such as `CREATED_BY` / `UPDATED_BY`
 
+## Canonical API Endpoints For Validation
+
+- Challenge API base URL: `https://api.topcoder-dev.com/v6/challenges`
+- Resource API base URL: read from `RESOURCES_API_URL` in `.env.importer.local`
+
+Workers and validators should use these canonical endpoints rather than probing localhost guesses when validating against the populated dev environment.
+
 ## Runtime Boundaries
 
 - `/mnt/Informix` is a read-only legacy data source.

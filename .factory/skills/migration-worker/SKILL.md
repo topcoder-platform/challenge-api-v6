@@ -29,32 +29,35 @@ None.
 3. Switch to the correct Node version in the same shell command before running anything:
    - repo root: `nvm use`
    - `data-migration/`: `nvm use 18.19.0`
-4. Write tests first (red) for the behavior you are adding. Prefer `data-migration/test/**` for unit/integration tests that exercise:
+4. If you are resuming an interrupted feature and the relevant implementation/tests are already on `HEAD`, verify that existing work against the contract first instead of restarting the red/green loop from scratch. Record in the handoff that this was a resume-validation case and cite the commit or files you validated.
+5. Otherwise, write tests first (red) for the behavior you are adding. Prefer `data-migration/test/**` for unit/integration tests that exercise:
    - round planning and filtering
    - deterministic `legacySubmissionId`
    - create vs reuse/backfill-only reconciliation
    - score derivation and attachment
    - idempotent reruns
-5. Run the new tests and confirm they fail before implementing. Record the exact failing command and observation in the handoff.
-6. Implement the minimal code needed to satisfy the feature. Keep write paths aligned with architecture boundaries:
+6. Run the new tests and confirm they fail before implementing. Record the exact failing command and observation in the handoff.
+7. Implement the minimal code needed to satisfy the feature. Keep write paths aligned with architecture boundaries:
    - challenge / phase writes in the challenge DB
    - resource writes through the Resource API
    - submission / review-summation writes in the review DB
-7. Preserve mission invariants while implementing:
+8. Preserve mission invariants while implementing:
    - existing v6 marathon challenges are challenge-level source of truth
    - already-present standard phase rows on reused challenges are preserved
    - example submissions and example review summations are never imported
    - imported submissions expose stable `legacySubmissionId`
    - reruns must not create duplicates or rewrite preserved records
-8. After implementation, run targeted validators from `.factory/services.yaml`:
+9. After implementation or resume-validation, run targeted validators from `.factory/services.yaml`:
    - `commands.test`
    - `commands.lint`
    - if you touched repo-root code outside `data-migration/`, also run `commands.root_smoke_test` and any targeted repo-root checks needed for the changed files
-9. Manually verify the feature at the CLI/API surface when possible:
-   - use dry-run for planning features
-   - use apply-mode only when the env file and target round selection are ready
-   - verify the exact API-visible data that corresponds to the feature's `fulfills` assertions
-10. End with a precise handoff. Be explicit about what was implemented, which assertions became testable, what commands ran, what manual checks were performed, and any tech debt or unresolved ambiguity.
+10. Manually verify the feature at the CLI/API surface when possible:
+
+- use dry-run for planning features
+- use apply-mode only when the env file and target round selection are ready
+- verify the exact API-visible data that corresponds to the feature's `fulfills` assertions
+
+11. End with a precise handoff. Be explicit about what was implemented, which assertions became testable, what commands ran, what manual checks were performed, whether this was a resume-validation case, and any tech debt or unresolved ambiguity.
 
 ## Example Handoff
 
@@ -66,7 +69,7 @@ None.
   "verification": {
     "commandsRun": [
       {
-        "command": "source \\\"$HOME/.config/nvm/nvm.sh\\\" && cd /home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration && nvm use 18.19.0 >/dev/null && pnpm test -- --maxWorkers=16 --runInBand plan-reporting.test.js",
+        "command": "source \\\"$HOME/.config/nvm/nvm.sh\\\" && cd /home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration && nvm use 18.19.0 >/dev/null && pnpm test --maxWorkers=16 --runInBand plan-reporting.test.js",
         "exitCode": 0,
         "observation": "New planning tests passed after implementation; they failed before the code change because the CLI report omitted matched challenge ids and delta fields."
       },
@@ -78,7 +81,7 @@ None.
     ],
     "interactiveChecks": [
       {
-        "action": "Ran importer dry-run for round 9892 with missing env writes disabled and inspected the labeled per-round record.",
+        "action": "Ran importer dry-run for round 10815 with missing env writes disabled and inspected the labeled per-round record.",
         "observed": "CLI reported decision=create with separate resource/submission/final/provisional deltas, traceability identifiers, and no stdin prompt."
       }
     ]

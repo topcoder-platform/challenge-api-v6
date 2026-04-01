@@ -39,6 +39,13 @@ Use this legacy relationship when deriving participant/submission/final-score da
 - example submissions are excluded from imported submissions and imported score history
 - imported `Submission.legacySubmissionId` must be deterministic and stable across reruns
 
+### Named participant fixture
+
+- round `10815`, member `22664170` (`Marinov_Martin`):
+  - `27` non-example submissions
+  - `55` example runs
+  - latest non-example submit timestamp: `1180539064719`
+
 ## Score Rules
 
 ### Provisional
@@ -57,7 +64,53 @@ Use this legacy relationship when deriving participant/submission/final-score da
 
 ## Fixture Rounds
 
-- `9892`: `1108` eligible registrations, `3217` non-example submissions, `2381` example submissions, `354` submitters with non-example history
-- `10089`: clean final-score round with `115` non-null `system_point_total` finalists
-- `14272`: second multi-round blast-radius fixture with `3326` non-example submissions
-- `10722`: useful edge-case round for finalists without attachable non-example submissions and duplicate placements
+- `10815`: `836` eligible registrations, `1445` non-example submissions, `2424` example submissions, `267` submitters with non-example history, and `16` unattachable finalists; use as the primary missing-historical create-path fixture
+- a score-rich Marathon Match round should be selected during score-feature work; do not assume `10089` remains a valid Marathon Match fixture in the current validation environment without reconfirmation
+- `14272`: second selected-round filter fixture; current validation guidance treats it as an unresolved/non-Marathon-Match round rather than an importable Marathon Match target
+- an edge-case Marathon Match round with unattachable finalists should be selected during score-feature work; do not assume `10722` remains valid in the current validation environment without reconfirmation
+
+## Existing-State Snapshot File (`--existing-state-file`)
+
+- Purpose: optional offline count hints for reporting only
+- Authoritative source of truth: direct challenge-state discovery through the challenge DB / challenge-api schema
+- Non-authoritative rule: this file must never override create vs reuse/backfill classification
+
+### How validators can create one
+
+There is no committed generator script. When a validator explicitly needs to exercise the supplemental snapshot path, create a small hand-authored JSON file from prior read-only API or DB observations, for example:
+
+```bash
+cat > /tmp/existing-state.json <<'JSON'
+{
+  "rounds": {
+    "10815": {
+      "challengeId": "5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+      "existing": {
+        "phases": 3,
+        "resources": 57,
+        "submissions": 0,
+        "finalScores": 0,
+        "provisionalScores": 0
+      }
+    }
+  }
+}
+JSON
+```
+
+### Accepted schema
+
+- top-level object
+- either:
+  - `{"rounds": [{"legacyRoundId": "...", "challengeId": "...", "existing": {...}}]}`
+  - `{"rounds": {"10815": {"challengeId": "...", "existing": {...}}}}`
+  - or a plain object keyed by legacy round id
+- each entry may contain:
+  - `challengeId`
+  - `existing.phases`
+  - `existing.resources`
+  - `existing.submissions`
+  - `existing.finalScores`
+  - `existing.provisionalScores`
+
+Invalid or mismatched counts should affect only supplemental reporting, never authoritative reuse matching.

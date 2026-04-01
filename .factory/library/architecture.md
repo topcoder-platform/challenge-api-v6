@@ -36,6 +36,8 @@ The importer accepts an explicit round filter and builds a per-round plan. Each 
 
 Planning is required to surface traceability, counts, and entity-level deltas before writes occur.
 
+`--existing-state-file` is supplemental only. It may enrich counts for reporting, but it is not authoritative reuse evidence and must never override direct challenge-state discovery.
+
 ### Existing-challenge match rule
 
 Safe reuse is authoritative, not fuzzy:
@@ -46,6 +48,8 @@ Safe reuse is authoritative, not fuzzy:
 4. if the round still is not matched unambiguously, or if the matched challenge fails those shape checks, emit `unresolved` and require an explicit override rather than auto-reusing a challenge
 
 This keeps backfill-only behavior deterministic and avoids silent challenge-level rewrites.
+
+If authoritative challenge-state discovery is unavailable, planning must fail closed as `unresolved` instead of silently falling back to create-path planning.
 
 ### 2. Challenge reconciliation
 
@@ -77,9 +81,11 @@ When creating a historical challenge:
 
 If required timestamps are missing or contradictory enough that a coherent closed timeline cannot be produced, the round should remain `unresolved` instead of being half-created.
 
+Planning must perform this same canonical MM/Data Science timeline-mapping resolution before returning `decision=create`; dry-run must not promise creates that apply would later reject.
+
 ### 4. Participant materialization
 
-Submitter resources come from legacy registrations, not just from members with submissions. The importer must create or reuse exactly one submitter-role resource per eligible registrant.
+Submitter resources come from legacy registrations, not just from members with submissions. The importer must create or reuse exactly one submitter-role resource per eligible registrant that resolves in the target environment.
 
 **Eligible registrant rule:** every distinct `round_registration.coder_id` for the selected round where `eligible == '1'`.
 
@@ -87,9 +93,32 @@ Submitter resources come from legacy registrations, not just from members with s
 
 **Stable resource dedup key:** `(challengeId, memberId, roleId=submitter)`.
 
+### Missing-member skip policy
+
+If the target dev environment does not contain a legacy member, classify that member as `missing-member` for the current run and:
+
+- skip resource creation for that member
+- skip that member's non-example submissions
+- skip that member's final and provisional review materialization
+- continue importing other members for the round
+- write a deterministic skipped-file artifact for later manual processing
+
+The skipped artifact should be stable enough for rerun comparison and manual recovery, including at least the legacy round id, member id, skip reason, and affected surfaces.
+
+### Approved completed-challenge resource workflow
+
+If the Resource API refuses submitter creation on a completed historical challenge, the user has approved a temporary status-transition workflow solely for submitter-resource backfill:
+
+- capture the original challenge status first
+- transition only as much as needed to satisfy the Resource API write constraint
+- create the missing submitter resources through the Resource API
+- restore the challenge to its original completed state before the importer finishes
+
+This workflow is a narrow exception for historical resource backfill only; it does not authorize general challenge-level rewrites.
+
 ### 5. Submission materialization
 
-Only non-example legacy submissions are imported. The importer must preserve the full non-example history per member.
+Only non-example legacy submissions are imported. The importer must preserve the full non-example history for members that resolve in the target environment, and explicitly skip/report missing-member rows instead of creating partial participant footprints.
 
 **Stable submission identity invariant:** imported `Submission.legacySubmissionId` must be a deterministic composite derived from legacy submission identity so round-wide and rerun validation can compare exact sets. The contract assumes `legacySubmissionId` is the stable external identity for imported submissions.
 
@@ -98,7 +127,7 @@ Only non-example legacy submissions are imported. The importer must preserve the
 Two score streams are imported:
 
 - **provisional history** — one provisional review summation per imported non-example submission, using `long_submission.submission_points`
-- **final result** — one final review summation per member, attached to the member's latest imported non-example submission
+- **final result** — one final review summation per imported member, attached to that member's latest imported non-example submission
 
 Final-score derivation uses legacy final-result fields with the agreed precedence:
 
@@ -106,7 +135,7 @@ Final-score derivation uses legacy final-result fields with the agreed precedenc
 2. `long_comp_result.point_total`
 3. the ranking score from legacy state data used for final ordering
 
-If a legacy finalist has no imported non-example submission to attach to, the importer must skip that final score explicitly rather than create an orphan final review summation.
+If a legacy finalist has no imported non-example submission to attach to, the importer must skip that final score explicitly rather than create an orphan final review summation. Missing-member skips should be reported distinctly from other skip reasons.
 
 **Stable review-summation dedup keys:**
 
@@ -133,6 +162,8 @@ Cross-service writes are not a single distributed transaction. The importer ther
 - never assume a round is absent just because a previous apply stopped mid-flight
 
 The observable result of rerunning a partially imported round should be reconciliation to the same steady state, not duplication or destructive rewrite.
+
+If a temporary status-transition workflow is used during participant backfill, reruns must still converge to the same final completed state.
 
 ## Data Ownership Invariants
 
@@ -162,8 +193,9 @@ Owns:
 
 The validation contract relies on these high-level invariants being preserved:
 
-- round `9892` is the primary missing-historical create-path fixture
-- round `10089` is the score-rich final-ranking fixture
+- round `10815` is the primary missing-historical create-path fixture
+- a score-rich Marathon Match fixture is selected during score-feature work for final-ranking validation
 - round `14272` is the second selected round for multi-round blast-radius checks
 - imported submission identity is externally testable via `legacySubmissionId`
 - reused-round verification depends on comparing both identity sets and externally visible field snapshots
+- for member-owned surfaces, validation now reconciles `imported subset + skipped missing-member subset = legacy total`
