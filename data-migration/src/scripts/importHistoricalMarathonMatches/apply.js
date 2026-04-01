@@ -137,6 +137,29 @@ const buildChallengeCreateData = ({
   };
 };
 
+const countStandardPhaseRows = (phaseRows) => {
+  const counts = {};
+  STANDARD_PHASE_NAMES.forEach((phaseName) => {
+    counts[phaseName] = 0;
+  });
+  phaseRows.forEach((phaseRow) => {
+    if (counts[phaseRow.name] !== undefined) {
+      counts[phaseRow.name] += 1;
+    }
+  });
+  return counts;
+};
+
+const findMissingStandardPhaseNames = (phaseRows) => {
+  const counts = countStandardPhaseRows(phaseRows);
+  STANDARD_PHASE_NAMES.forEach((phaseName) => {
+    if (counts[phaseName] > 1) {
+      throw new Error(`Matched challenge has duplicate "${phaseName}" phase rows.`);
+    }
+  });
+  return STANDARD_PHASE_NAMES.filter((phaseName) => counts[phaseName] === 0);
+};
+
 const applyCreateRound = async ({
   prisma,
   roundId,
@@ -153,13 +176,59 @@ const applyCreateRound = async ({
   return prisma.$transaction(async (tx) => {
     const existing = await tx.challenge.findMany({
       where: { legacyId },
-      select: { id: true },
-      take: 2,
+      select: { id: true, typeId: true, trackId: true },
+      take: 3,
     });
-    if (existing.length > 0) {
+    if (existing.length > 1) {
+      throw new Error(
+        `Round ${roundId} matched multiple existing v6 challenges by legacyId ${legacyId}; refusing unsafe reuse.`
+      );
+    }
+    if (existing.length === 1) {
+      const existingChallenge = existing[0];
+      if (
+        existingChallenge.typeId !== marathonTypeId ||
+        existingChallenge.trackId !== dataScienceTrackId
+      ) {
+        throw new Error(
+          `Round ${roundId} matched challenge ${existingChallenge.id} but it cannot be reused because it is not Marathon Match / Data Science.`
+        );
+      }
+
+      const existingStandardPhases = await tx.challengePhase.findMany({
+        where: {
+          challengeId: existingChallenge.id,
+          name: { in: STANDARD_PHASE_NAMES },
+        },
+        select: {
+          id: true,
+          name: true,
+          isOpen: true,
+          scheduledStartDate: true,
+          scheduledEndDate: true,
+          actualStartDate: true,
+          actualEndDate: true,
+        },
+      });
+      const missingPhaseNames = findMissingStandardPhaseNames(existingStandardPhases);
+
+      if (missingPhaseNames.length > 0) {
+        const windows = derivePhaseWindows(roundId, counters);
+        const newPhaseRows = buildChallengePhaseRows({
+          challengeId: existingChallenge.id,
+          phaseIdsByName,
+          windows,
+          actor,
+        }).filter((phaseRow) => missingPhaseNames.includes(phaseRow.name));
+
+        if (newPhaseRows.length > 0) {
+          await tx.challengePhase.createMany({ data: newPhaseRows });
+        }
+      }
+
       return {
         status: "existing",
-        challengeId: existing[0].id,
+        challengeId: existingChallenge.id,
         legacyRoundId: roundId,
       };
     }

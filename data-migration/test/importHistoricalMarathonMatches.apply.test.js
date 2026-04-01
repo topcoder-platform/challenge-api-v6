@@ -134,12 +134,77 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   });
 
   test("apply create-path is idempotent when challenge already exists", async () => {
+    const calls = { createdPhases: null };
     const tx = {
       challenge: {
-        findMany: jest.fn().mockResolvedValue([{ id: "existing-challenge-1" }]),
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
         create: jest.fn(),
       },
       challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+        ]),
+        createMany: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdPhases = data;
+          return { count: data.length };
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const result = await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(result).toEqual({
+      status: "existing",
+      challengeId: "existing-challenge-1",
+      legacyRoundId: "9892",
+    });
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(calls.createdPhases).toHaveLength(1);
+    expect(calls.createdPhases[0].name).toBe("Review");
+  });
+
+  test("reuse path is idempotent when all standard phases already exist", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+          { id: "cp-3", name: "Review", isOpen: false },
+        ]),
         createMany: jest.fn(),
       },
     };
@@ -176,6 +241,149 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       challengeId: "existing-challenge-1",
       legacyRoundId: "9892",
     });
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("reuse path rejects non-MM/DS challenge shape", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-dev", trackId: "track-dev" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    await expect(
+      applyCreateRound({
+        prisma,
+        roundId: "9892",
+        round: { round_id: "9892" },
+        counters: {
+          registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+          registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+          earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+          earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+          latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+          eligibleRegistrants: new Set(["1", "2"]),
+          nonExampleSubmissions: 3,
+        },
+        actor: "importer",
+        marathonTypeId: "type-mm",
+        dataScienceTrackId: "track-ds",
+        timelineTemplateId: "timeline-mm",
+        phaseIdsByName: {
+          Registration: "phase-registration",
+          Submission: "phase-submission",
+          Review: "phase-review",
+        },
+      })
+    ).rejects.toThrow("cannot be reused because it is not Marathon Match / Data Science");
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("reuse path rejects ambiguous duplicate legacy challenge matches", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+          { id: "existing-challenge-2", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    await expect(
+      applyCreateRound({
+        prisma,
+        roundId: "9892",
+        round: { round_id: "9892" },
+        counters: {
+          registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+          registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+          earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+          earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+          latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+          eligibleRegistrants: new Set(["1", "2"]),
+          nonExampleSubmissions: 3,
+        },
+        actor: "importer",
+        marathonTypeId: "type-mm",
+        dataScienceTrackId: "track-ds",
+        timelineTemplateId: "timeline-mm",
+        phaseIdsByName: {
+          Registration: "phase-registration",
+          Submission: "phase-submission",
+          Review: "phase-review",
+        },
+      })
+    ).rejects.toThrow("multiple existing v6 challenges");
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("reuse path rejects duplicate standard phase rows", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+          { id: "cp-3", name: "Submission", isOpen: false },
+        ]),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    await expect(
+      applyCreateRound({
+        prisma,
+        roundId: "9892",
+        round: { round_id: "9892" },
+        counters: {
+          registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+          registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+          earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+          earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+          latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+          eligibleRegistrants: new Set(["1", "2"]),
+          nonExampleSubmissions: 3,
+        },
+        actor: "importer",
+        marathonTypeId: "type-mm",
+        dataScienceTrackId: "track-ds",
+        timelineTemplateId: "timeline-mm",
+        phaseIdsByName: {
+          Registration: "phase-registration",
+          Submission: "phase-submission",
+          Review: "phase-review",
+        },
+      })
+    ).rejects.toThrow('duplicate "Submission" phase rows');
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
   });
