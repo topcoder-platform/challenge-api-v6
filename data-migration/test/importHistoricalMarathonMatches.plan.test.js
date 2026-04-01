@@ -174,54 +174,30 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(records.map((entry) => entry.legacyRoundId)).toEqual(["9892", "9999"]);
 
     const matched = records.find((entry) => entry.legacyRoundId === "9892");
-    expect(matched.decision).toBe("create");
+    expect(matched.decision).toBe("unresolved");
+    expect(matched.reason).toBe("authoritative-existing-v6-discovery-unavailable");
     expect(matched.summaryCounts).toEqual({
       eligibleRegistrants: 2,
       nonExampleSubmissions: 3,
       exampleSubmissionsFiltered: 1,
-      plannedFinalScores: 2,
-      plannedProvisionalScores: 3,
-      finalistsWithoutAttachableSubmission: 1,
+      plannedFinalScores: 0,
+      plannedProvisionalScores: 0,
+      finalistsWithoutAttachableSubmission: 0,
     });
     expect(matched.traceability).toEqual({
       legacyRoundId: "9892",
       legacyComponentIds: ["5503", "5504"],
       legacyProblemIds: ["9001", "9002"],
     });
-    expect(matched.createPathChallengeShape).toEqual({
-      type: "Marathon Match",
-      track: "Data Science",
-      status: "COMPLETED",
-      phaseNames: ["Registration", "Submission", "Review"],
-    });
-    expect(matched.createPathPhasePlan).toEqual({
-      Registration: {
-        isOpen: false,
-        startDate: "2020-01-01T00:00:00.000Z",
-        endDate: "2020-01-01T00:02:00.000Z",
-      },
-      Submission: {
-        isOpen: false,
-        startDate: "1970-01-01T00:00:00.100Z",
-        endDate: "1970-01-01T00:00:00.103Z",
-      },
-      Review: {
-        isOpen: false,
-        startDate: "1970-01-01T00:00:00.103Z",
-        endDate: "1970-01-01T00:00:00.103Z",
-      },
-    });
+    expect(matched.createPathChallengeShape).toBe(null);
+    expect(matched.createPathPhasePlan).toBe(null);
 
     const unmatched = records.find((entry) => entry.legacyRoundId === "9999");
     expect(unmatched.decision).toBe("unmatched");
     expect(unmatched.reason).toBe("selected-round-not-found-in-legacy-source");
   });
 
-  test("create-path rounds become unresolved when standard phase plan cannot be derived", () => {
-    writeJson(fixtureDir, "round_registration_1.json", "round_registration", [
-      { round_id: "9892", coder_id: "1", eligible: "0", timestamp: "2020-01-01 00:00:00.0" },
-    ]);
-
+  test("dry-run fails closed with unresolved when authoritative discovery is unavailable", () => {
     const result = runImporter(
       [
         "--data-dir",
@@ -236,9 +212,30 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(result.status).toBe(0);
     const [record] = parseRecords(result.stdout);
     expect(record.decision).toBe("unresolved");
-    expect(record.reason).toBe("create-phase-plan-derivation-failed");
+    expect(record.reason).toBe("authoritative-existing-v6-discovery-unavailable");
     expect(record.createPathChallengeShape).toBe(null);
     expect(record.createPathPhasePlan).toBe(null);
+  });
+
+  test("dry-run with broken DATABASE_URL still emits unresolved instead of create", () => {
+    const result = runImporter(
+      [
+        "--data-dir",
+        fixtureDir,
+        "--dry-run",
+        "--round-id",
+        "9892",
+      ],
+      fixtureDir,
+      {
+        DATABASE_URL: "not-a-real-database-url",
+      }
+    );
+
+    expect(result.status).toBe(0);
+    const [record] = parseRecords(result.stdout);
+    expect(record.decision).toBe("unresolved");
+    expect(record.reason).toBe("authoritative-existing-v6-discovery-unavailable");
   });
 
   test("non-marathon rounds are rejected before planning decisions are emitted", () => {
@@ -276,8 +273,8 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(result.status).toBe(0);
 
     const [record] = parseRecords(result.stdout);
-    expect(record.decision).toBe("create");
-    expect(record.reason).toBe("no-matching-v6-challenge-found");
+    expect(record.decision).toBe("unresolved");
+    expect(record.reason).toBe("authoritative-existing-v6-discovery-unavailable");
     expect(record.matchedChallengeId).toBe(null);
   });
 });

@@ -10,6 +10,7 @@ const {
   runApplyMode,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
+  resolveCanonicalTimelineTemplateId,
 } = require("./importHistoricalMarathonMatches/apply");
 const { emitPlanReport, emitApplyReport } = require("./importHistoricalMarathonMatches/reporting");
 const {
@@ -29,6 +30,18 @@ dotenv.config({ quiet: true });
 
 const DEFAULT_ACTOR =
   process.env.UPDATED_BY || process.env.CREATED_BY || "historical-mm-importer";
+const AUTHORITATIVE_DISCOVERY_UNAVAILABLE_REASON =
+  "authoritative-existing-v6-discovery-unavailable";
+const CANONICAL_TIMELINE_UNRESOLVED_REASON = "canonical-mm-ds-timeline-template-unresolved";
+const CANONICAL_TIMELINE_AMBIGUOUS_REASON = "canonical-mm-ds-timeline-template-ambiguous";
+
+const deriveCanonicalTimelineReason = (error) => {
+  const message = String((error && error.message) || "");
+  if (message.includes("valid candidates")) {
+    return CANONICAL_TIMELINE_AMBIGUOUS_REASON;
+  }
+  return CANONICAL_TIMELINE_UNRESOLVED_REASON;
+};
 
 const run = async () => {
   const options = parseArgs(process.argv.slice(2));
@@ -50,6 +63,18 @@ const run = async () => {
 
   try {
     let existingStateByRoundId = null;
+    const planningPrerequisites = {
+      authoritativeDiscovery: {
+        available: false,
+        reason: AUTHORITATIVE_DISCOVERY_UNAVAILABLE_REASON,
+      },
+      canonicalTimelineTemplate: {
+        resolved: false,
+        reason: CANONICAL_TIMELINE_UNRESOLVED_REASON,
+        timelineTemplateId: null,
+      },
+    };
+
     if (prisma) {
       try {
         const marathonTypeId = await resolveMarathonTypeId(prisma);
@@ -61,12 +86,32 @@ const run = async () => {
           dataScienceTrackId,
           snapshotByRoundId,
         });
+        planningPrerequisites.authoritativeDiscovery = { available: true };
+        try {
+          const timelineTemplateId = await resolveCanonicalTimelineTemplateId(
+            prisma,
+            marathonTypeId,
+            dataScienceTrackId
+          );
+          planningPrerequisites.canonicalTimelineTemplate = {
+            resolved: true,
+            timelineTemplateId,
+          };
+        } catch (error) {
+          planningPrerequisites.canonicalTimelineTemplate = {
+            resolved: false,
+            reason: deriveCanonicalTimelineReason(error),
+          };
+          process.stderr.write(
+            `Warning: unable to resolve canonical Marathon Match/Data Science timeline template (${error.message}); create-path planning will be unresolved.\n`
+          );
+        }
       } catch (error) {
         if (options.apply) {
           throw error;
         }
         process.stderr.write(
-          `Warning: unable to discover existing v6 state directly (${error.message}); continuing dry-run without reuse matching.\n`
+          `Warning: unable to discover existing v6 state directly (${error.message}); create-path planning will be unresolved.\n`
         );
       }
     }
@@ -79,7 +124,7 @@ const run = async () => {
       });
     }
 
-    const plan = await buildDryRunPlan(options, existingStateByRoundId);
+    const plan = await buildDryRunPlan(options, existingStateByRoundId, planningPrerequisites);
     if (!options.apply) {
       emitPlanReport(plan);
       return;

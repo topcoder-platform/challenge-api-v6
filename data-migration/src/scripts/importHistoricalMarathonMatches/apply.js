@@ -399,6 +399,10 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
     const decision = planRecordByRoundId.get(roundId) && planRecordByRoundId.get(roundId).decision;
     return decision === "create" || decision === "reuse/backfill-only";
   });
+  const createRoundIds = actionableRoundIds.filter((roundId) => {
+    const decision = planRecordByRoundId.get(roundId) && planRecordByRoundId.get(roundId).decision;
+    return decision === "create";
+  });
 
   let marathonTypeId = null;
   let dataScienceTrackId = null;
@@ -408,11 +412,13 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
     marathonTypeId = await resolveMarathonTypeId(prisma);
     dataScienceTrackId = await resolveDataScienceTrackId(prisma);
     phaseIdsByName = await resolveStandardPhaseIds(prisma);
-    timelineTemplateId = await resolveCanonicalTimelineTemplateId(
-      prisma,
-      marathonTypeId,
-      dataScienceTrackId
-    );
+    if (createRoundIds.length > 0) {
+      timelineTemplateId = await resolveCanonicalTimelineTemplateId(
+        prisma,
+        marathonTypeId,
+        dataScienceTrackId
+      );
+    }
   }
 
   const applyRecords = [];
@@ -498,5 +504,6 @@ module.exports = {
   applyCreateRound,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
+  resolveCanonicalTimelineTemplateId,
   runApplyMode,
 };

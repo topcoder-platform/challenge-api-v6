@@ -154,6 +154,34 @@ const buildUnresolvedRecord = ({ roundId, reason, counters, traceability, matche
   createPathPhasePlan: null,
 });
 
+const normalizePlanningPrerequisites = (prerequisites = {}) => ({
+  authoritativeDiscovery: {
+    available:
+      prerequisites.authoritativeDiscovery &&
+      prerequisites.authoritativeDiscovery.available === false
+        ? false
+        : true,
+    reason:
+      (prerequisites.authoritativeDiscovery && prerequisites.authoritativeDiscovery.reason) ||
+      "authoritative-existing-v6-discovery-unavailable",
+  },
+  canonicalTimelineTemplate: {
+    resolved:
+      prerequisites.canonicalTimelineTemplate &&
+      prerequisites.canonicalTimelineTemplate.resolved === false
+        ? false
+        : true,
+    timelineTemplateId:
+      (prerequisites.canonicalTimelineTemplate &&
+        prerequisites.canonicalTimelineTemplate.timelineTemplateId) ||
+      null,
+    reason:
+      (prerequisites.canonicalTimelineTemplate &&
+        prerequisites.canonicalTimelineTemplate.reason) ||
+      "canonical-mm-ds-timeline-template-unresolved",
+  },
+});
+
 const formatIsoDate = (value) => {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     return null;
@@ -161,11 +189,12 @@ const formatIsoDate = (value) => {
   return value.toISOString();
 };
 
-const buildCreatePathChallengeShape = () => ({
+const buildCreatePathChallengeShape = (timelineTemplateId) => ({
   type: "Marathon Match",
   track: "Data Science",
   status: "COMPLETED",
   phaseNames: [...STANDARD_PHASE_NAMES],
+  timelineTemplateId,
 });
 
 const buildCreatePathPhasePlan = (roundId, counters) => {
@@ -184,7 +213,7 @@ const buildCreatePathPhasePlan = (roundId, counters) => {
 
 const isMarathonRoundType = (round) => String(round && round.round_type_id ? round.round_type_id : "").trim() === "13";
 
-const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
+const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites) => {
   if (!counters.round) {
     return {
       recordType: "round-plan",
@@ -283,8 +312,26 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
   let createPathChallengeShape = null;
   let createPathPhasePlan = null;
   if (!hasMatchedChallenge) {
+    if (!prerequisites.authoritativeDiscovery.available) {
+      return buildUnresolvedRecord({
+        roundId,
+        reason: prerequisites.authoritativeDiscovery.reason,
+        counters,
+        traceability,
+      });
+    }
+    if (!prerequisites.canonicalTimelineTemplate.resolved) {
+      return buildUnresolvedRecord({
+        roundId,
+        reason: prerequisites.canonicalTimelineTemplate.reason,
+        counters,
+        traceability,
+      });
+    }
     try {
-      createPathChallengeShape = buildCreatePathChallengeShape();
+      createPathChallengeShape = buildCreatePathChallengeShape(
+        prerequisites.canonicalTimelineTemplate.timelineTemplateId
+      );
       createPathPhasePlan = buildCreatePathPhasePlan(roundId, counters);
     } catch {
       return buildUnresolvedRecord({
@@ -558,13 +605,19 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
   );
 };
 
-const buildDryRunPlan = async (options, existingStateByRoundId) => {
+const buildDryRunPlan = async (options, existingStateByRoundId, planningPrerequisites = {}) => {
+  const normalizedPrerequisites = normalizePlanningPrerequisites(planningPrerequisites);
   const selectedRoundIds = [...options.roundIds];
   const roundDataById = buildRoundDataById(selectedRoundIds);
   await readLegacyPlanningInputs(options, roundDataById);
 
   const records = selectedRoundIds.map((roundId) =>
-    evaluateRoundPlan(roundId, roundDataById.get(roundId), existingStateByRoundId.get(roundId))
+    evaluateRoundPlan(
+      roundId,
+      roundDataById.get(roundId),
+      existingStateByRoundId.get(roundId),
+      normalizedPrerequisites
+    )
   );
   const summary = summarizePlan(records, selectedRoundIds);
   return { records, summary, roundDataById };
