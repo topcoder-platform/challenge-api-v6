@@ -109,6 +109,47 @@ const buildEntityDelta = (target, existing) => {
   };
 };
 
+const buildRoundSummaryCounts = ({
+  counters,
+  plannedFinalScores = 0,
+  plannedProvisionalScores = 0,
+  finalistsWithoutAttachableSubmission = 0,
+}) => ({
+  eligibleRegistrants: counters.eligibleRegistrants.size,
+  nonExampleSubmissions: counters.nonExampleSubmissions,
+  exampleSubmissionsFiltered: counters.exampleSubmissions,
+  plannedFinalScores,
+  plannedProvisionalScores,
+  finalistsWithoutAttachableSubmission,
+});
+
+const buildZeroEntityDeltas = () => ({
+  phases: buildEntityDelta(0, 0),
+  resources: buildEntityDelta(0, 0),
+  submissions: buildEntityDelta(0, 0),
+  finalScores: { ...buildEntityDelta(0, 0), skippedUnattachableFinalists: 0 },
+  provisionalScores: buildEntityDelta(0, 0),
+});
+
+const buildUnresolvedRecord = ({ roundId, reason, counters, traceability, matchedChallengeId = null }) => ({
+  recordType: "round-plan",
+  legacyRoundId: roundId,
+  decision: "unresolved",
+  reason,
+  matchedChallengeId,
+  rerunClassification: "unresolved",
+  traceability,
+  summaryCounts: buildRoundSummaryCounts({
+    counters,
+    plannedFinalScores: 0,
+    plannedProvisionalScores: 0,
+    finalistsWithoutAttachableSubmission: 0,
+  }),
+  entityDeltas: buildZeroEntityDeltas(),
+});
+
+const isMarathonRoundType = (round) => String(round && round.round_type_id ? round.round_type_id : "").trim() === "13";
+
 const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
   if (!counters.round) {
     return {
@@ -123,22 +164,26 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
         legacyComponentIds: [],
         legacyProblemIds: [],
       },
-      summaryCounts: {
-        eligibleRegistrants: 0,
-        nonExampleSubmissions: 0,
-        exampleSubmissionsFiltered: 0,
-        plannedFinalScores: 0,
-        plannedProvisionalScores: 0,
-        finalistsWithoutAttachableSubmission: 0,
-      },
-      entityDeltas: {
-        phases: buildEntityDelta(0, 0),
-        resources: buildEntityDelta(0, 0),
-        submissions: buildEntityDelta(0, 0),
-        finalScores: { ...buildEntityDelta(0, 0), skippedUnattachableFinalists: 0 },
-        provisionalScores: buildEntityDelta(0, 0),
-      },
+      summaryCounts: buildRoundSummaryCounts({
+        counters: createEmptyCounters(),
+      }),
+      entityDeltas: buildZeroEntityDeltas(),
     };
+  }
+
+  const traceability = {
+    legacyRoundId: roundId,
+    legacyComponentIds: sortIds(counters.componentIds),
+    legacyProblemIds: sortIds(counters.problemIds),
+  };
+
+  if (!isMarathonRoundType(counters.round)) {
+    return buildUnresolvedRecord({
+      roundId,
+      reason: "selected-round-round-type-is-not-marathon-match",
+      counters,
+      traceability,
+    });
   }
 
   const hasMarathonSignals =
@@ -149,34 +194,12 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
       counters.eligibleRegistrants.size > 0);
 
   if (!hasMarathonSignals) {
-    return {
-      recordType: "round-plan",
-      legacyRoundId: roundId,
-      decision: "unresolved",
+    return buildUnresolvedRecord({
+      roundId,
       reason: "selected-round-lacks-marathon-signal-data",
-      matchedChallengeId: null,
-      rerunClassification: "unresolved",
-      traceability: {
-        legacyRoundId: roundId,
-        legacyComponentIds: sortIds(counters.componentIds),
-        legacyProblemIds: sortIds(counters.problemIds),
-      },
-      summaryCounts: {
-        eligibleRegistrants: counters.eligibleRegistrants.size,
-        nonExampleSubmissions: counters.nonExampleSubmissions,
-        exampleSubmissionsFiltered: counters.exampleSubmissions,
-        plannedFinalScores: 0,
-        plannedProvisionalScores: 0,
-        finalistsWithoutAttachableSubmission: 0,
-      },
-      entityDeltas: {
-        phases: buildEntityDelta(0, 0),
-        resources: buildEntityDelta(0, 0),
-        submissions: buildEntityDelta(0, 0),
-        finalScores: { ...buildEntityDelta(0, 0), skippedUnattachableFinalists: 0 },
-        provisionalScores: buildEntityDelta(0, 0),
-      },
-    };
+      counters,
+      traceability,
+    });
   }
 
   const finalAttachableMemberCount = Array.from(counters.finalCandidateCoderIds).filter((coderId) =>
@@ -195,6 +218,19 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
     provisionalScores: counters.nonExampleSubmissions,
   };
 
+  const matchStatus = existingStateEntry && existingStateEntry.matchStatus
+    ? existingStateEntry.matchStatus
+    : "none";
+  if (matchStatus === "ambiguous" || matchStatus === "unsafe") {
+    return buildUnresolvedRecord({
+      roundId,
+      reason: existingStateEntry.reason,
+      counters,
+      traceability,
+      matchedChallengeId: existingStateEntry.challengeId || null,
+    });
+  }
+
   const existingCounts = existingStateEntry && existingStateEntry.existing ? existingStateEntry.existing : {};
   const entityDeltas = {
     phases: buildEntityDelta(targets.phases, existingCounts.phases),
@@ -207,11 +243,11 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
     provisionalScores: buildEntityDelta(targets.provisionalScores, existingCounts.provisionalScores),
   };
 
-  const hasMatchedChallenge = Boolean(existingStateEntry && existingStateEntry.challengeId);
+  const hasMatchedChallenge = matchStatus === "safe" && Boolean(existingStateEntry.challengeId);
   const decision = hasMatchedChallenge ? "reuse/backfill-only" : "create";
   const reason = hasMatchedChallenge
     ? "existing-v6-challenge-found"
-    : "no-matching-v6-challenge-in-provided-state";
+    : "no-matching-v6-challenge-found";
   const rerunClassification =
     decision === "reuse/backfill-only" &&
     Object.values(entityDeltas)
@@ -229,19 +265,13 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry) => {
     reason,
     matchedChallengeId: hasMatchedChallenge ? existingStateEntry.challengeId : null,
     rerunClassification,
-    traceability: {
-      legacyRoundId: roundId,
-      legacyComponentIds: sortIds(counters.componentIds),
-      legacyProblemIds: sortIds(counters.problemIds),
-    },
-    summaryCounts: {
-      eligibleRegistrants: counters.eligibleRegistrants.size,
-      nonExampleSubmissions: counters.nonExampleSubmissions,
-      exampleSubmissionsFiltered: counters.exampleSubmissions,
+    traceability,
+    summaryCounts: buildRoundSummaryCounts({
+      counters,
       plannedFinalScores: finalAttachableMemberCount,
       plannedProvisionalScores: counters.nonExampleSubmissions,
       finalistsWithoutAttachableSubmission,
-    },
+    }),
     entityDeltas,
   };
 };

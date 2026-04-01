@@ -2,6 +2,7 @@ const {
   derivePhaseWindows,
   buildChallengePhaseRows,
   applyCreateRound,
+  runApplyMode,
 } = require("../src/scripts/importHistoricalMarathonMatches/apply");
 
 describe("importHistoricalMarathonMatches apply create-path behavior", () => {
@@ -384,6 +385,105 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         },
       })
     ).rejects.toThrow('duplicate "Submission" phase rows');
+    expect(tx.challenge.create).not.toHaveBeenCalled();
+    expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("apply mode skips unresolved planned rounds instead of creating challenges", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn(),
+      },
+    };
+
+    const phaseRows = [
+      { id: "phase-registration", name: "Registration" },
+      { id: "phase-submission", name: "Submission" },
+      { id: "phase-review", name: "Review" },
+    ];
+
+    const prisma = {
+      challengeType: {
+        findMany: jest.fn().mockResolvedValue([{ id: "type-mm" }]),
+      },
+      challengeTrack: {
+        findMany: jest.fn().mockResolvedValue([{ id: "track-ds" }]),
+      },
+      phase: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce(phaseRows)
+          .mockResolvedValueOnce(phaseRows),
+      },
+      challengeTimelineTemplate: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            timelineTemplateId: "timeline-mm",
+            isDefault: true,
+            timelineTemplate: {
+              phases: [
+                { phaseId: "phase-registration" },
+                { phaseId: "phase-submission" },
+                { phaseId: "phase-review" },
+              ],
+            },
+          },
+        ]),
+      },
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const result = await runApplyMode({
+      prisma,
+      options: { roundIds: ["7000"] },
+      plan: {
+        records: [
+          {
+            legacyRoundId: "7000",
+            decision: "unresolved",
+            reason: "selected-round-round-type-is-not-marathon-match",
+          },
+        ],
+        roundDataById: new Map([
+          [
+            "7000",
+            {
+              round: { round_id: "7000", round_type_id: "1" },
+              registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+              registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+              earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+              earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+              latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+              eligibleRegistrants: new Set(["1", "2"]),
+              nonExampleSubmissions: 3,
+            },
+          ],
+        ]),
+      },
+      actor: "importer",
+    });
+
+    expect(result.records).toEqual([
+      {
+        recordType: "apply-record",
+        legacyRoundId: "7000",
+        status: "unresolved",
+        reason: "selected-round-round-type-is-not-marathon-match",
+      },
+    ]);
+    expect(result.summary).toEqual({
+      recordType: "apply-summary",
+      created: 0,
+      existing: 0,
+      unmatched: 0,
+      unresolved: 1,
+      errors: 0,
+    });
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
   });

@@ -390,24 +390,53 @@ const resolveCanonicalTimelineTemplateId = async (prisma, marathonTypeId, dataSc
 };
 
 const runApplyMode = async ({ prisma, options, plan, actor }) => {
-  const marathonTypeId = await resolveMarathonTypeId(prisma);
-  const dataScienceTrackId = await resolveDataScienceTrackId(prisma);
-  const phaseIdsByName = await resolveStandardPhaseIds(prisma);
-  const timelineTemplateId = await resolveCanonicalTimelineTemplateId(
-    prisma,
-    marathonTypeId,
-    dataScienceTrackId
-  );
+  const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
+  const actionableRoundIds = options.roundIds.filter((roundId) => {
+    const counters = plan.roundDataById.get(roundId);
+    if (!counters || !counters.round) {
+      return false;
+    }
+    const decision = planRecordByRoundId.get(roundId) && planRecordByRoundId.get(roundId).decision;
+    return decision === "create" || decision === "reuse/backfill-only";
+  });
+
+  let marathonTypeId = null;
+  let dataScienceTrackId = null;
+  let phaseIdsByName = null;
+  let timelineTemplateId = null;
+  if (actionableRoundIds.length > 0) {
+    marathonTypeId = await resolveMarathonTypeId(prisma);
+    dataScienceTrackId = await resolveDataScienceTrackId(prisma);
+    phaseIdsByName = await resolveStandardPhaseIds(prisma);
+    timelineTemplateId = await resolveCanonicalTimelineTemplateId(
+      prisma,
+      marathonTypeId,
+      dataScienceTrackId
+    );
+  }
 
   const applyRecords = [];
   for (const roundId of options.roundIds) {
     const counters = plan.roundDataById.get(roundId);
-    if (!counters || !counters.round) {
+    const planRecord = planRecordByRoundId.get(roundId);
+    const decision = planRecord && planRecord.decision;
+    if (!counters || !counters.round || decision === "unmatched") {
       applyRecords.push({
         recordType: "apply-record",
         legacyRoundId: roundId,
         status: "unmatched",
-        reason: "selected-round-not-found-in-legacy-source",
+        reason:
+          (planRecord && planRecord.reason) || "selected-round-not-found-in-legacy-source",
+      });
+      continue;
+    }
+
+    if (decision !== "create" && decision !== "reuse/backfill-only") {
+      applyRecords.push({
+        recordType: "apply-record",
+        legacyRoundId: roundId,
+        status: "unresolved",
+        reason: (planRecord && planRecord.reason) || "round-not-actionable-for-apply",
       });
       continue;
     }
@@ -449,12 +478,14 @@ const runApplyMode = async ({ prisma, options, plan, actor }) => {
         acc.existing += 1;
       } else if (record.status === "unmatched") {
         acc.unmatched += 1;
+      } else if (record.status === "unresolved") {
+        acc.unresolved += 1;
       } else if (record.status === "error") {
         acc.errors += 1;
       }
       return acc;
     },
-    { recordType: "apply-summary", created: 0, existing: 0, unmatched: 0, errors: 0 }
+    { recordType: "apply-summary", created: 0, existing: 0, unmatched: 0, unresolved: 0, errors: 0 }
   );
 
   return { records: applyRecords, summary };
@@ -465,5 +496,7 @@ module.exports = {
   derivePhaseWindows,
   buildChallengePhaseRows,
   applyCreateRound,
+  resolveMarathonTypeId,
+  resolveDataScienceTrackId,
   runApplyMode,
 };

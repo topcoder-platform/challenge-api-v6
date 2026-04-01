@@ -6,9 +6,16 @@ const { createRequire } = require("module");
 const dotenv = require("dotenv");
 const { parseArgs, usage } = require("./importHistoricalMarathonMatches/argParser");
 const { buildDryRunPlan } = require("./importHistoricalMarathonMatches/planning");
-const { runApplyMode } = require("./importHistoricalMarathonMatches/apply");
+const {
+  runApplyMode,
+  resolveMarathonTypeId,
+  resolveDataScienceTrackId,
+} = require("./importHistoricalMarathonMatches/apply");
 const { emitPlanReport, emitApplyReport } = require("./importHistoricalMarathonMatches/reporting");
-const { loadExistingState } = require("./importHistoricalMarathonMatches/existingState");
+const {
+  loadExistingState,
+  buildExistingStateByRoundId,
+} = require("./importHistoricalMarathonMatches/existingState");
 
 const appRoot = path.resolve(__dirname, "..", "..", "..");
 const requireFromRoot = createRequire(path.join(appRoot, "package.json"));
@@ -31,18 +38,53 @@ const run = async () => {
     return;
   }
 
-  const existingStateByRoundId = loadExistingState(options.dataDir, options.existingStateFile);
-  const plan = await buildDryRunPlan(options, existingStateByRoundId);
-  if (!options.apply) {
-    emitPlanReport(plan);
-    return;
+  const snapshotByRoundId = loadExistingState(options.dataDir, options.existingStateFile);
+  const shouldAttemptDatabaseDiscovery =
+    options.apply || Boolean(String(process.env.DATABASE_URL || "").trim());
+  let prisma = null;
+
+  if (shouldAttemptDatabaseDiscovery) {
+    const { PrismaClient } = requireFromRoot("@prisma/client");
+    prisma = new PrismaClient();
   }
 
-  // Lazy load Prisma only when apply mode is requested so --help / dry-run
-  // keep working in environments without generated client artifacts.
-  const { PrismaClient } = requireFromRoot("@prisma/client");
-  const prisma = new PrismaClient();
   try {
+    let existingStateByRoundId = null;
+    if (prisma) {
+      try {
+        const marathonTypeId = await resolveMarathonTypeId(prisma);
+        const dataScienceTrackId = await resolveDataScienceTrackId(prisma);
+        existingStateByRoundId = await buildExistingStateByRoundId({
+          prisma,
+          roundIds: options.roundIds,
+          marathonTypeId,
+          dataScienceTrackId,
+          snapshotByRoundId,
+        });
+      } catch (error) {
+        if (options.apply) {
+          throw error;
+        }
+        process.stderr.write(
+          `Warning: unable to discover existing v6 state directly (${error.message}); continuing dry-run without reuse matching.\n`
+        );
+      }
+    }
+
+    if (!existingStateByRoundId) {
+      existingStateByRoundId = await buildExistingStateByRoundId({
+        prisma: null,
+        roundIds: options.roundIds,
+        snapshotByRoundId,
+      });
+    }
+
+    const plan = await buildDryRunPlan(options, existingStateByRoundId);
+    if (!options.apply) {
+      emitPlanReport(plan);
+      return;
+    }
+
     const applyResult = await runApplyMode({
       prisma,
       options,
@@ -51,7 +93,9 @@ const run = async () => {
     });
     emitApplyReport(applyResult);
   } finally {
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   }
 };
 

@@ -163,7 +163,7 @@ Planning options:
   --round-id <id>                    Select one round id (repeatable)
   --round-ids <id1,id2,...>          Select comma-separated round ids
   --dry-run                          Build a non-mutating deterministic reconciliation plan (default)
-  --existing-state-file <path>       Optional JSON snapshot for matched challenge ids + existing entity counts
+  --existing-state-file <path>       Optional snapshot for offline entity-count hints (not authoritative reuse matching)
 
 Input options:
   --data-dir <path>                  Legacy data directory (default: DATA_DIRECTORY or /mnt/Informix)

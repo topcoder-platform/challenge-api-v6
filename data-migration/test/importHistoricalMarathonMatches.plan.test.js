@@ -21,7 +21,7 @@ const buildFixtureDataDirectory = () => {
 
   writeJson(baseDir, "round_1.json", "round", [
     { round_id: "9892", round_type_id: "13", name: "MM 9892", short_name: "MM 9892" },
-    { round_id: "7000", round_type_id: "13", name: "MM 7000", short_name: "MM 7000" },
+    { round_id: "7000", round_type_id: "1", name: "Algo 7000", short_name: "Algo 7000" },
   ]);
 
   writeJson(baseDir, "round_component_1.json", "round_component", [
@@ -100,7 +100,7 @@ const buildFixtureDataDirectory = () => {
 
 const runImporter = (args, fixtureDir, extraEnv = {}) =>
   spawnSync(process.execPath, [scriptPath, ...args], {
-    env: { ...process.env, ...extraEnv },
+    env: { ...process.env, DATABASE_URL: "", ...extraEnv },
     cwd: fixtureDir,
     encoding: "utf8",
   });
@@ -194,7 +194,25 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(unmatched.reason).toBe("selected-round-not-found-in-legacy-source");
   });
 
-  test("existing challenge snapshots produce reuse/backfill-only deltas and rerun no-op classification", () => {
+  test("non-marathon rounds are rejected before planning decisions are emitted", () => {
+    const result = runImporter(
+      [
+        "--data-dir",
+        fixtureDir,
+        "--dry-run",
+        "--round-id",
+        "7000",
+      ],
+      fixtureDir
+    );
+
+    expect(result.status).toBe(0);
+    const [record] = parseRecords(result.stdout);
+    expect(record.decision).toBe("unresolved");
+    expect(record.reason).toBe("selected-round-round-type-is-not-marathon-match");
+  });
+
+  test("existing state snapshots do not drive reuse classification in dry-run", () => {
     const result = runImporter(
       [
         "--data-dir",
@@ -211,40 +229,8 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(result.status).toBe(0);
 
     const [record] = parseRecords(result.stdout);
-    expect(record.decision).toBe("reuse/backfill-only");
-    expect(record.reason).toBe("existing-v6-challenge-found");
-    expect(record.matchedChallengeId).toBe("e3f97773-2f76-4657-b22d-9cb5a95d310a");
-    expect(record.rerunClassification).toBe("no-op");
-    expect(record.entityDeltas.phases).toEqual({
-      target: 3,
-      existing: 3,
-      toCreate: 0,
-      unchanged: 3,
-    });
-    expect(record.entityDeltas.resources).toEqual({
-      target: 2,
-      existing: 2,
-      toCreate: 0,
-      unchanged: 2,
-    });
-    expect(record.entityDeltas.submissions).toEqual({
-      target: 3,
-      existing: 3,
-      toCreate: 0,
-      unchanged: 3,
-    });
-    expect(record.entityDeltas.finalScores).toEqual({
-      target: 2,
-      existing: 2,
-      toCreate: 0,
-      unchanged: 2,
-      skippedUnattachableFinalists: 1,
-    });
-    expect(record.entityDeltas.provisionalScores).toEqual({
-      target: 3,
-      existing: 3,
-      toCreate: 0,
-      unchanged: 3,
-    });
+    expect(record.decision).toBe("create");
+    expect(record.reason).toBe("no-matching-v6-challenge-found");
+    expect(record.matchedChallengeId).toBe(null);
   });
 });
