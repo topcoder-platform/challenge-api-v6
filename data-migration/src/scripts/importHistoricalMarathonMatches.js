@@ -247,6 +247,7 @@ const run = async () => {
         reviewClient: reviewPrisma,
         reviewSchema: reviewDbSchema,
         importSubmissions: true,
+        importFinalScores: true,
       },
       plan,
       actor: DEFAULT_ACTOR,

@@ -64,10 +64,11 @@ Use this legacy relationship when deriving participant/submission/final-score da
 
 ## Fixture Rounds
 
-- `10815`: `836` eligible registrations, `1445` non-example submissions, `2424` example submissions, `267` submitters with non-example history, and `16` unattachable finalists; use as the primary missing-historical create-path fixture
-- a score-rich Marathon Match round should be selected during score-feature work; do not assume `10089` remains a valid Marathon Match fixture in the current validation environment without reconfirmation
+- `10815`: `836` eligible registrations, `1445` non-example submissions, `2424` example submissions, `267` submitters with non-example history, and fallback-heavy final-score behavior; in the current target-member snapshot this round plans `283` final candidates split into `266` importable finals, `2` missing-member final skips, and `15` explicit `finalist-without-attachable-submission` skips. Treat this as the selected unattachable-finalists fixture for score validation.
+- `17948`: selected score-rich Marathon Match fixture for final-score validation. Current planning/apply evidence for this round yields `81` legacy final candidates with `45` importable finals, `36` `missing-member` final skips, and `0` explicit `finalist-without-attachable-submission` skips. Imported finals on this fixture are `system_point_total`-backed and preserve legacy placement order when sorted by aggregate score descending after excluding missing-member finalists.
+- `13897`: remains a useful large MM backfill fixture, but it is **not** the selected score-rich placement fixture because it currently includes `33` explicit `finalist-without-attachable-submission` skips.
 - `14272`: second selected-round filter fixture; current validation guidance treats it as an unresolved/non-Marathon-Match round rather than an importable Marathon Match target
-- an edge-case Marathon Match round with unattachable finalists should be selected during score-feature work; do not assume `10722` remains valid in the current validation environment without reconfirmation
+- `10089` and `10722` remain non-Marathon in current planning and should not be used as Marathon Match score fixtures.
 
 ## Existing-State Snapshot File (`--existing-state-file`)
 

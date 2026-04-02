@@ -11,6 +11,7 @@ const {
   collectReasonCodes,
   writeSkippedArtifact,
   MISSING_MEMBER_REASON_CODE,
+  FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
 } = require("./skippedArtifact");
 const {
   DEFAULT_REVIEW_SCHEMA,
@@ -18,6 +19,11 @@ const {
   createReviewSubmissionStore,
   reconcileRoundSubmissionHistory,
 } = require("./submissionHistory");
+const {
+  loadLegacyFinalRowsByRoundId,
+  createReviewFinalScoreStore,
+  reconcileRoundFinalScores,
+} = require("./finalScores");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -514,6 +520,43 @@ const collectMissingMemberSkipMemberIdsByRoundId = ({
   return byRoundId;
 };
 
+const collectSkipMemberIdsByRoundId = ({
+  roundIds,
+  planRecordByRoundId,
+  reasonCode,
+  affectedSurface,
+}) => {
+  const byRoundId = new Map();
+  const normalizedReasonCode = String(reasonCode || "").trim();
+
+  roundIds.forEach((roundId) => {
+    const planRecord = planRecordByRoundId.get(roundId);
+    const skipMemberIds = new Set();
+
+    if (planRecord && Array.isArray(planRecord.plannedSkipRecords)) {
+      planRecord.plannedSkipRecords.forEach((record) => {
+        const candidateReasonCode = String(
+          record && record.reasonCode ? record.reasonCode : ""
+        ).trim();
+        if (candidateReasonCode !== normalizedReasonCode) {
+          return;
+        }
+        if (!hasAffectedSurface(record, affectedSurface)) {
+          return;
+        }
+        const memberId = parseMemberId(record && record.memberId);
+        if (memberId) {
+          skipMemberIds.add(memberId);
+        }
+      });
+    }
+
+    byRoundId.set(roundId, skipMemberIds);
+  });
+
+  return byRoundId;
+};
+
 const runApplyMode = async ({
   prisma,
   options,
@@ -540,6 +583,18 @@ const runApplyMode = async ({
       planRecordByRoundId,
       affectedSurface: "submission",
     });
+  const missingMemberFinalSkipMemberIdsByRoundId =
+    collectMissingMemberSkipMemberIdsByRoundId({
+      roundIds: options.roundIds,
+      planRecordByRoundId,
+      affectedSurface: "final-score",
+    });
+  const plannedUnattachableFinalSkipMemberIdsByRoundId = collectSkipMemberIdsByRoundId({
+    roundIds: options.roundIds,
+    planRecordByRoundId,
+    reasonCode: FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
+    affectedSurface: "final-score",
+  });
   let skippedArtifact = writeSkippedArtifact({
     filePath: skippedFilePath,
     selectedRoundIds: options.roundIds,
@@ -560,6 +615,7 @@ const runApplyMode = async ({
   });
   const submitterRoleId = String(options.submitterRoleId || DEFAULT_SUBMITTER_ROLE_ID).trim();
   const submissionImportEnabled = options.importSubmissions === true;
+  const finalScoreImportEnabled = options.importFinalScores === true;
 
   const resourceClient = options.resourceClient;
   if (actionableRoundIds.length > 0 && !resourceClient) {
@@ -568,6 +624,16 @@ const runApplyMode = async ({
   if (actionableRoundIds.length > 0 && submissionImportEnabled && !options.reviewClient && !options.submissionStore) {
     throw new Error(
       "Review DB client is required for apply mode submission-history reconciliation."
+    );
+  }
+  if (
+    actionableRoundIds.length > 0 &&
+    finalScoreImportEnabled &&
+    !options.reviewClient &&
+    !options.finalScoreStore
+  ) {
+    throw new Error(
+      "Review DB client is required for apply mode final-score reconciliation."
     );
   }
   const challengeStatusController =
@@ -619,7 +685,9 @@ const runApplyMode = async ({
   }
 
   let roundSubmissionRowsByRoundId = new Map();
+  let roundFinalRowsByRoundId = new Map();
   let submissionStore = null;
+  let finalScoreStore = null;
   if (submissionImportEnabled && actionableRoundIds.length > 0) {
     roundSubmissionRowsByRoundId = await loadNonExampleLegacySubmissionRowsByRoundId({
       dataDir: options.dataDir,
@@ -630,6 +698,21 @@ const runApplyMode = async ({
     submissionStore =
       options.submissionStore ||
       (await createReviewSubmissionStore({
+        reviewClient: options.reviewClient,
+        reviewSchema: options.reviewSchema || DEFAULT_REVIEW_SCHEMA,
+        actor,
+      }));
+  }
+  if (finalScoreImportEnabled && actionableRoundIds.length > 0) {
+    roundFinalRowsByRoundId = await loadLegacyFinalRowsByRoundId({
+      dataDir: options.dataDir,
+      longComponentStateFile: options.longComponentStateFile,
+      longCompResultPattern: options.longCompResultPattern,
+      roundIds: actionableRoundIds,
+    });
+    finalScoreStore =
+      options.finalScoreStore ||
+      (await createReviewFinalScoreStore({
         reviewClient: options.reviewClient,
         reviewSchema: options.reviewSchema || DEFAULT_REVIEW_SCHEMA,
         actor,
@@ -717,6 +800,23 @@ const runApplyMode = async ({
       if (submissionReconciliation && Array.isArray(submissionReconciliation.skippedSubmissionRecords)) {
         runtimeSkipRecords.push(...submissionReconciliation.skippedSubmissionRecords);
       }
+      const finalScoreReconciliation =
+        finalScoreImportEnabled && finalScoreStore
+          ? await reconcileRoundFinalScores({
+            roundId,
+            challengeId: result.challengeId,
+            finalRowsByRoundId: roundFinalRowsByRoundId,
+            normalizedIdentityByCoderId,
+            missingMemberFinalSkipMemberIds:
+                missingMemberFinalSkipMemberIdsByRoundId.get(roundId) || new Set(),
+            plannedUnattachableFinalSkipMemberIds:
+                plannedUnattachableFinalSkipMemberIdsByRoundId.get(roundId) || new Set(),
+            finalScoreStore,
+          })
+          : null;
+      if (finalScoreReconciliation && Array.isArray(finalScoreReconciliation.runtimeSkipRecords)) {
+        runtimeSkipRecords.push(...finalScoreReconciliation.runtimeSkipRecords);
+      }
       applyRecords.push({
         recordType: "apply-record",
         legacyRoundId: roundId,
@@ -724,6 +824,7 @@ const runApplyMode = async ({
         challengeId: result.challengeId,
         resourceReconciliation,
         ...(submissionReconciliation ? { submissionReconciliation } : {}),
+        ...(finalScoreReconciliation ? { finalScoreReconciliation } : {}),
       });
     } catch (error) {
       applyRecords.push({
