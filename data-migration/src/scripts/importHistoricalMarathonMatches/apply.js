@@ -12,6 +12,12 @@ const {
   writeSkippedArtifact,
   MISSING_MEMBER_REASON_CODE,
 } = require("./skippedArtifact");
+const {
+  DEFAULT_REVIEW_SCHEMA,
+  loadNonExampleLegacySubmissionRowsByRoundId,
+  createReviewSubmissionStore,
+  reconcileRoundSubmissionHistory,
+} = require("./submissionHistory");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -475,7 +481,11 @@ const hasAffectedSurface = (record, surfaceName) =>
     (surface) => String(surface || "").trim().toLowerCase() === String(surfaceName || "").trim().toLowerCase()
   );
 
-const collectMissingMemberResourceSkipMemberIdsByRoundId = (roundIds, planRecordByRoundId) => {
+const collectMissingMemberSkipMemberIdsByRoundId = ({
+  roundIds,
+  planRecordByRoundId,
+  affectedSurface,
+}) => {
   const byRoundId = new Map();
 
   roundIds.forEach((roundId) => {
@@ -488,7 +498,7 @@ const collectMissingMemberResourceSkipMemberIdsByRoundId = (roundIds, planRecord
         if (reasonCode !== MISSING_MEMBER_REASON_CODE) {
           return;
         }
-        if (!hasAffectedSurface(record, "resource")) {
+        if (!hasAffectedSurface(record, affectedSurface)) {
           return;
         }
         const memberId = parseMemberId(record && record.memberId);
@@ -519,8 +529,18 @@ const runApplyMode = async ({
   });
   const plannedSkipRecords = collectPlannedSkipRecords(options.roundIds, planRecordByRoundId);
   const missingMemberResourceSkipMemberIdsByRoundId =
-    collectMissingMemberResourceSkipMemberIdsByRoundId(options.roundIds, planRecordByRoundId);
-  const skippedArtifact = writeSkippedArtifact({
+    collectMissingMemberSkipMemberIdsByRoundId({
+      roundIds: options.roundIds,
+      planRecordByRoundId,
+      affectedSurface: "resource",
+    });
+  const missingMemberSubmissionSkipMemberIdsByRoundId =
+    collectMissingMemberSkipMemberIdsByRoundId({
+      roundIds: options.roundIds,
+      planRecordByRoundId,
+      affectedSurface: "submission",
+    });
+  let skippedArtifact = writeSkippedArtifact({
     filePath: skippedFilePath,
     selectedRoundIds: options.roundIds,
     records: plannedSkipRecords,
@@ -539,10 +559,16 @@ const runApplyMode = async ({
     return decision === "create";
   });
   const submitterRoleId = String(options.submitterRoleId || DEFAULT_SUBMITTER_ROLE_ID).trim();
+  const submissionImportEnabled = options.importSubmissions === true;
 
   const resourceClient = options.resourceClient;
   if (actionableRoundIds.length > 0 && !resourceClient) {
     throw new Error("Resource API client is required for apply mode participant reconciliation.");
+  }
+  if (actionableRoundIds.length > 0 && submissionImportEnabled && !options.reviewClient && !options.submissionStore) {
+    throw new Error(
+      "Review DB client is required for apply mode submission-history reconciliation."
+    );
   }
   const challengeStatusController =
     options.challengeStatusController ||
@@ -555,7 +581,7 @@ const runApplyMode = async ({
       ? providedNormalizedIdentityByCoderId
       : null;
   if (!normalizedIdentityByCoderId) {
-    const eligibleCoderIds = new Set();
+    const relevantCoderIds = new Set();
     actionableRoundIds.forEach((roundId) => {
       const counters = plan.roundDataById.get(roundId);
       if (!counters || !(counters.eligibleRegistrants instanceof Set)) {
@@ -564,16 +590,50 @@ const runApplyMode = async ({
       counters.eligibleRegistrants.forEach((coderId) => {
         const normalizedCoderId = String(coderId || "").trim();
         if (normalizedCoderId) {
-          eligibleCoderIds.add(normalizedCoderId);
+          relevantCoderIds.add(normalizedCoderId);
         }
       });
+      if (counters.nonExampleSubmitterCoderIds instanceof Set) {
+        counters.nonExampleSubmitterCoderIds.forEach((coderId) => {
+          const normalizedCoderId = String(coderId || "").trim();
+          if (normalizedCoderId) {
+            relevantCoderIds.add(normalizedCoderId);
+          }
+        });
+      }
+      if (counters.finalCandidateCoderIds instanceof Set) {
+        counters.finalCandidateCoderIds.forEach((coderId) => {
+          const normalizedCoderId = String(coderId || "").trim();
+          if (normalizedCoderId) {
+            relevantCoderIds.add(normalizedCoderId);
+          }
+        });
+      }
     });
 
     normalizedIdentityByCoderId = await loadNormalizedIdentityByCoderId({
       dataDir: options.dataDir,
       userPattern: options.userPattern || DEFAULT_USER_PATTERN,
-      coderIds: eligibleCoderIds,
+      coderIds: relevantCoderIds,
     });
+  }
+
+  let roundSubmissionRowsByRoundId = new Map();
+  let submissionStore = null;
+  if (submissionImportEnabled && actionableRoundIds.length > 0) {
+    roundSubmissionRowsByRoundId = await loadNonExampleLegacySubmissionRowsByRoundId({
+      dataDir: options.dataDir,
+      longComponentStateFile: options.longComponentStateFile,
+      longSubmissionPattern: options.longSubmissionPattern,
+      roundIds: actionableRoundIds,
+    });
+    submissionStore =
+      options.submissionStore ||
+      (await createReviewSubmissionStore({
+        reviewClient: options.reviewClient,
+        reviewSchema: options.reviewSchema || DEFAULT_REVIEW_SCHEMA,
+        actor,
+      }));
   }
 
   let marathonTypeId = null;
@@ -594,6 +654,7 @@ const runApplyMode = async ({
   }
 
   const applyRecords = [];
+  const runtimeSkipRecords = [];
   for (const roundId of options.roundIds) {
     const counters = plan.roundDataById.get(roundId);
     const planRecord = planRecordByRoundId.get(roundId);
@@ -641,12 +702,28 @@ const runApplyMode = async ({
         missingMemberResourceSkipMemberIds:
           missingMemberResourceSkipMemberIdsByRoundId.get(roundId) || new Set(),
       });
+      const submissionReconciliation =
+        submissionImportEnabled && submissionStore
+          ? await reconcileRoundSubmissionHistory({
+            roundId,
+            challengeId: result.challengeId,
+            rowsByRoundId: roundSubmissionRowsByRoundId,
+            normalizedIdentityByCoderId,
+            missingMemberSubmissionSkipMemberIds:
+                missingMemberSubmissionSkipMemberIdsByRoundId.get(roundId) || new Set(),
+            submissionStore,
+          })
+          : null;
+      if (submissionReconciliation && Array.isArray(submissionReconciliation.skippedSubmissionRecords)) {
+        runtimeSkipRecords.push(...submissionReconciliation.skippedSubmissionRecords);
+      }
       applyRecords.push({
         recordType: "apply-record",
         legacyRoundId: roundId,
         status: result.status,
         challengeId: result.challengeId,
         resourceReconciliation,
+        ...(submissionReconciliation ? { submissionReconciliation } : {}),
       });
     } catch (error) {
       applyRecords.push({
@@ -658,6 +735,16 @@ const runApplyMode = async ({
       throw error;
     }
   }
+
+  const finalSkipRecords = normalizeSkipRecords([
+    ...plannedSkipRecords,
+    ...runtimeSkipRecords,
+  ]);
+  skippedArtifact = writeSkippedArtifact({
+    filePath: skippedFilePath,
+    selectedRoundIds: options.roundIds,
+    records: finalSkipRecords,
+  });
 
   const summary = applyRecords.reduce(
     (acc, record) => {
@@ -678,7 +765,7 @@ const runApplyMode = async ({
   );
   summary.skippedFileArtifact = {
     path: skippedFilePath,
-    reasonCodes: collectReasonCodes(plannedSkipRecords),
+    reasonCodes: collectReasonCodes(finalSkipRecords),
     recordCount: skippedArtifact.records.length,
   };
 

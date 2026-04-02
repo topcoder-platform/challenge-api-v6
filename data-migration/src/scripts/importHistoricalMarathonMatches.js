@@ -77,10 +77,13 @@ const run = async () => {
   const snapshotByRoundId = loadExistingState(options.dataDir, options.existingStateFile);
   const shouldAttemptDatabaseDiscovery =
     options.apply || Boolean(String(process.env.DATABASE_URL || "").trim());
+  const reviewDbUrl = String(process.env.REVIEW_DB_URL || "").trim();
+  const reviewDbSchema = String(process.env.REVIEW_DB_SCHEMA || "reviews").trim();
   const memberDbUrl = String(process.env.MEMBER_DB_URL || process.env.DATABASE_URL || "").trim();
   const memberDbSchema = String(process.env.MEMBER_DB_SCHEMA || DEFAULT_MEMBER_SCHEMA).trim();
   let prisma = null;
   let memberLookupPrisma = null;
+  let reviewPrisma = null;
   let resolveMemberPresence = null;
 
   if (shouldAttemptDatabaseDiscovery) {
@@ -97,6 +100,23 @@ const run = async () => {
           datasources: {
             db: {
               url: memberDbUrl,
+            },
+          },
+        });
+  }
+  if (options.apply) {
+    if (!reviewDbUrl) {
+      throw new Error("REVIEW_DB_URL must be set for apply mode submission import.");
+    }
+    const { PrismaClient } = requireFromRoot("@prisma/client");
+    const databaseUrl = String(process.env.DATABASE_URL || "").trim();
+    reviewPrisma =
+      prisma && databaseUrl && reviewDbUrl === databaseUrl
+        ? prisma
+        : new PrismaClient({
+          datasources: {
+            db: {
+              url: reviewDbUrl,
             },
           },
         });
@@ -224,6 +244,9 @@ const run = async () => {
         cwd: process.cwd(),
         submitterRoleId,
         resourceClient: createDefaultResourceClient(),
+        reviewClient: reviewPrisma,
+        reviewSchema: reviewDbSchema,
+        importSubmissions: true,
       },
       plan,
       actor: DEFAULT_ACTOR,
@@ -232,6 +255,9 @@ const run = async () => {
   } finally {
     if (memberLookupPrisma && memberLookupPrisma !== prisma) {
       await memberLookupPrisma.$disconnect();
+    }
+    if (reviewPrisma && reviewPrisma !== prisma && reviewPrisma !== memberLookupPrisma) {
+      await reviewPrisma.$disconnect();
     }
     if (prisma) {
       await prisma.$disconnect();

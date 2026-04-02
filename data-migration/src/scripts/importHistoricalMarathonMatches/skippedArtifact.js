@@ -55,6 +55,13 @@ const compareSkipRecords = (left, right) => {
     return reasonDelta;
   }
 
+  const leftLegacySubmissionId = String(left.legacySubmissionId || "");
+  const rightLegacySubmissionId = String(right.legacySubmissionId || "");
+  const legacySubmissionDelta = leftLegacySubmissionId.localeCompare(rightLegacySubmissionId);
+  if (legacySubmissionDelta !== 0) {
+    return legacySubmissionDelta;
+  }
+
   const leftSurfaces = normalizeAffectedSurfaces(left.affectedSurfaces).join("|");
   const rightSurfaces = normalizeAffectedSurfaces(right.affectedSurfaces).join("|");
   return leftSurfaces.localeCompare(rightSurfaces);
@@ -74,6 +81,9 @@ const normalizeSkipRecord = (record) => {
     normalized.coderIds = Array.from(
       new Set(record.coderIds.map((coderId) => String(coderId || "").trim()).filter(Boolean))
     ).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+  }
+  if (record && record.legacySubmissionId) {
+    normalized.legacySubmissionId = String(record.legacySubmissionId).trim();
   }
   if (record && record.counts && typeof record.counts === "object") {
     const entries = Object.entries(record.counts)
