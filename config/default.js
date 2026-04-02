@@ -58,6 +58,8 @@ module.exports = {
   CUSTOMER_PAYMENTS_URL:
     process.env.CUSTOMER_PAYMENTS_URL || "https://api.topcoder-dev.com/v5/customer-payments",
   FINANCE_API_URL: process.env.FINANCE_API_URL || "http://localhost:8080",
+  BILLING_ACCOUNTS_API_URL:
+    process.env.BILLING_ACCOUNTS_API_URL || "http://localhost:4000/v6/billing-accounts",
   CHALLENGE_MIGRATION_APP_URL:
     process.env.CHALLENGE_MIGRATION_APP_URL || "https://api.topcoder.com/v5/challenge-migration",
   // copilot resource role ids allowed to upload attachment
