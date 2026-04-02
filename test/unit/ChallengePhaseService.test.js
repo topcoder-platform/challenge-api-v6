@@ -9,9 +9,12 @@ require('../../app-bootstrap')
 const chai = require('chai')
 const config = require('config')
 const { Prisma } = require('@prisma/client')
-const { v4: uuid } = require('uuid');
+const { v4: uuid } = require('uuid')
+const challengeService = require('../../src/services/ChallengeService')
 const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = require('../../src/common/prisma').getClient()
+const originalIndexChallengeAndPostToKafka = challengeService.indexChallengeAndPostToKafka
+challengeService.indexChallengeAndPostToKafka = async () => {}
 const service = require('../../src/services/ChallengePhaseService')
 const helper = require('../../src/common/helper')
 const testHelper = require('../testHelper')
@@ -29,6 +32,67 @@ describe('challenge phase service unit tests', () => {
   const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
   let reviewClient
   const shortId = () => uuid().replace(/-/g, '').slice(0, 14)
+  const resetPrimaryChallengePhases = async () => {
+    await prisma.challengePhaseConstraint.update({
+      where: { id: data.challengePhaseConstrain1Id },
+      data: {
+        name: 'constraint-name-1',
+        value: 100,
+        updatedBy: 'admin'
+      }
+    })
+    await prisma.challengePhaseConstraint.updateMany({
+      where: { challengePhaseId: data.challengePhase2Id },
+      data: {
+        name: 'constraint-name-2',
+        value: 200,
+        updatedBy: 'admin'
+      }
+    })
+    await prisma.challengePhase.update({
+      where: { id: data.challengePhase1Id },
+      data: {
+        phaseId: data.phase.id,
+        name: 'Registration',
+        duration: 1000,
+        predecessor: null,
+        isOpen: false,
+        scheduledStartDate: null,
+        scheduledEndDate: null,
+        actualStartDate: null,
+        actualEndDate: null,
+        updatedBy: 'admin'
+      }
+    })
+    await prisma.challengePhase.update({
+      where: { id: data.challengePhase2Id },
+      data: {
+        phaseId: data.phase2.id,
+        name: 'Submission',
+        duration: 2000,
+        predecessor: data.challengePhase1Id,
+        isOpen: false,
+        scheduledStartDate: null,
+        scheduledEndDate: null,
+        actualStartDate: null,
+        actualEndDate: null,
+        updatedBy: 'admin'
+      }
+    })
+    await prisma.challenge.update({
+      where: { id: data.challenge.id },
+      data: {
+        currentPhaseNames: [],
+        updatedBy: 'admin'
+      }
+    })
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appealResponse"`)
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appeal"`)
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItemComment"`)
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."reviewItem"`)
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."review"`)
+    await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."submission"`)
+  }
   before(async () => {
     await testHelper.createData()
     data = testHelper.getData()
@@ -90,6 +154,8 @@ describe('challenge phase service unit tests', () => {
   })
 
   after(async () => {
+    challengeService.indexChallengeAndPostToKafka = originalIndexChallengeAndPostToKafka
+
     if (reviewClient) {
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appealResponse"`)
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appeal"`)
@@ -152,7 +218,10 @@ describe('challenge phase service unit tests', () => {
       try {
         await service.getChallengePhase(data.taskChallenge.id, data.challengePhase2Id)
       } catch (e) {
-        should.equal(e.message, `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase2Id} doesn't exist`)
+        should.equal(
+          e.message,
+          `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase2Id} doesn't exist`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -180,32 +249,46 @@ describe('challenge phase service unit tests', () => {
   })
 
   describe('partially update challenge phase tests', () => {
+    beforeEach(async () => {
+      await resetPrimaryChallengePhases()
+    })
+
     it('partially update challenge phase successfully', async function () {
       this.timeout(50000)
       const scheduledStartDate = '2025-01-01T00:00:00.000Z'
-      const expectedScheduledEndDate = new Date(new Date(scheduledStartDate).getTime() + 7200 * 1000).toISOString()
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-        name: 'updated-Registration',
-        isOpen: true,
-        duration: 7200,
-        scheduledStartDate,
-        constraints: [
-          {
-            id: data.challengePhaseConstrain1Id,
-            name: 'u1',
-            value: 10
-          },
-          {
-            name: 'i1',
-            value: 20
-          }
-        ]
-      })
+      const expectedScheduledEndDate = new Date(
+        new Date(scheduledStartDate).getTime() + 7200 * 1000
+      ).toISOString()
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        {
+          name: 'updated-Registration',
+          isOpen: true,
+          duration: 7200,
+          scheduledStartDate,
+          constraints: [
+            {
+              id: data.challengePhaseConstrain1Id,
+              name: 'u1',
+              value: 10
+            },
+            {
+              name: 'i1',
+              value: 20
+            }
+          ]
+        }
+      )
       should.equal(challengePhase.name, 'updated-Registration')
       should.equal(challengePhase.duration, 7200)
       should.equal(challengePhase.isOpen, true)
       should.equal(new Date(challengePhase.scheduledStartDate).toISOString(), scheduledStartDate)
-      should.equal(new Date(challengePhase.scheduledEndDate).toISOString(), expectedScheduledEndDate)
+      should.equal(
+        new Date(challengePhase.scheduledEndDate).toISOString(),
+        expectedScheduledEndDate
+      )
     })
 
     it('partially update challenge phase - closing sets actual end date', async () => {
@@ -215,9 +298,14 @@ describe('challenge phase service unit tests', () => {
       })
 
       const before = new Date()
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-        isOpen: false
-      })
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        {
+          isOpen: false
+        }
+      )
       const after = new Date()
 
       should.equal(challengePhase.isOpen, false)
@@ -295,7 +383,8 @@ describe('challenge phase service unit tests', () => {
         const actualEndMs = new Date(challengePhase.actualEndDate).getTime()
         const successorStartMs = new Date(successorPhase.scheduledStartDate).getTime()
         const successorEndMs = new Date(successorPhase.scheduledEndDate).getTime()
-        const aiScreeningDurationMs = aiScreeningScheduledEndDate.getTime() - aiScreeningScheduledStartDate.getTime()
+        const aiScreeningDurationMs =
+          aiScreeningScheduledEndDate.getTime() - aiScreeningScheduledStartDate.getTime()
 
         actualEndMs.should.be.at.least(before.getTime())
         actualEndMs.should.be.at.most(after.getTime())
@@ -319,9 +408,14 @@ describe('challenge phase service unit tests', () => {
       })
 
       const before = new Date()
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-        isOpen: true
-      })
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        {
+          isOpen: true
+        }
+      )
       const after = new Date()
 
       should.equal(challengePhase.isOpen, true)
@@ -352,9 +446,14 @@ describe('challenge phase service unit tests', () => {
         }
       })
 
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-        isOpen: true
-      })
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        {
+          isOpen: true
+        }
+      )
 
       should.equal(challengePhase.isOpen, true)
       should.equal(challengePhase.actualEndDate, null)
@@ -414,9 +513,59 @@ describe('challenge phase service unit tests', () => {
       }
     })
 
-    it('partially update challenge phase - can reopen registration when submission is open', async () => {
+    it('partially update challenge phase - cannot reopen registration when open submission depends on checkpoint review', async () => {
       const startDate = new Date('2025-06-01T00:00:00.000Z')
       const endDate = new Date('2025-06-02T00:00:00.000Z')
+      const checkpointReviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Checkpoint Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 3600,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const checkpointReviewChallengePhaseId = uuid()
+      const checkpointReviewStartDate = new Date('2025-06-02T00:00:00.000Z')
+      const checkpointReviewEndDate = new Date('2025-06-03T00:00:00.000Z')
+      const registrationOriginalData = await prisma.challengePhase.findUnique({
+        where: { id: data.challengePhase1Id },
+        select: {
+          actualEndDate: true,
+          actualStartDate: true,
+          isOpen: true,
+          name: true,
+          predecessor: true
+        }
+      })
+      const submissionOriginalData = await prisma.challengePhase.findUnique({
+        where: { id: data.challengePhase2Id },
+        select: {
+          actualEndDate: true,
+          actualStartDate: true,
+          isOpen: true,
+          name: true,
+          predecessor: true
+        }
+      })
+
+      await prisma.challengePhase.create({
+        data: {
+          id: checkpointReviewChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: checkpointReviewPhase.id,
+          name: 'Checkpoint Review',
+          duration: 1000,
+          isOpen: false,
+          predecessor: data.phase.id,
+          actualStartDate: checkpointReviewStartDate,
+          actualEndDate: checkpointReviewEndDate,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
 
       await prisma.challengePhase.update({
         where: { id: data.challengePhase1Id },
@@ -430,12 +579,14 @@ describe('challenge phase service unit tests', () => {
         where: { id: data.challengePhase2Id },
         data: {
           isOpen: true,
-          predecessor: null
+          actualStartDate: checkpointReviewEndDate,
+          actualEndDate: null,
+          predecessor: checkpointReviewPhase.id
         }
       })
 
       try {
-        const challengePhase = await service.partiallyUpdateChallengePhase(
+        await service.partiallyUpdateChallengePhase(
           authUser,
           data.challenge.id,
           data.challengePhase1Id,
@@ -443,31 +594,30 @@ describe('challenge phase service unit tests', () => {
             isOpen: true
           }
         )
-        should.equal(challengePhase.id, data.challengePhase1Id)
-        should.equal(challengePhase.isOpen, true)
-        should.equal(challengePhase.actualEndDate, null)
+      } catch (e) {
+        should.equal(e.httpStatus || e.statusCode, 403)
+        should.equal(
+          e.message,
+          'Cannot reopen Registration because no currently open phase depends on it'
+        )
+        return
       } finally {
         await prisma.challengePhase.update({
-          where: { id: data.challengePhase1Id },
-          data: {
-            isOpen: false,
-            actualStartDate: startDate,
-            actualEndDate: endDate
-          }
+          where: { id: data.challengePhase2Id },
+          data: submissionOriginalData
         })
         await prisma.challengePhase.update({
-          where: { id: data.challengePhase2Id },
-          data: {
-            isOpen: false,
-            predecessor: data.challengePhase1Id,
-            name: 'Submission'
-          }
+          where: { id: data.challengePhase1Id },
+          data: registrationOriginalData
         })
+        await prisma.challengePhase.delete({ where: { id: checkpointReviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: checkpointReviewPhase.id } })
       }
 
+      throw new Error('should not reach here')
     })
 
-    it('partially update challenge phase - cannot reopen when open phase is not a successor or submission variant', async () => {
+    it('partially update challenge phase - cannot reopen when open phase is not a successor', async () => {
       const startDate = new Date('2025-06-01T00:00:00.000Z')
       const endDate = new Date('2025-06-02T00:00:00.000Z')
 
@@ -489,9 +639,14 @@ describe('challenge phase service unit tests', () => {
       })
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-          isOpen: true
-        })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: true
+          }
+        )
       } catch (e) {
         should.equal(e.httpStatus || e.statusCode, 403)
         should.equal(
@@ -570,9 +725,14 @@ describe('challenge phase service unit tests', () => {
       )
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-          isOpen: true
-        })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: true
+          }
+        )
       } catch (e) {
         should.equal(e.httpStatus || e.statusCode, 400)
         should.equal(
@@ -581,7 +741,9 @@ describe('challenge phase service unit tests', () => {
         )
         return
       } finally {
-        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`)
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`
+        )
         await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
         await prisma.phase.delete({ where: { id: reviewPhase.id } })
         await prisma.challengePhase.update({
@@ -685,11 +847,25 @@ describe('challenge phase service unit tests', () => {
           VALUES (${appealId}, ${reviewItemCommentId})
         `
       )
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => [
+        {
+          roleId: 'reviewer-role-id',
+          resourceRole: { name: 'Reviewer' }
+        }
+      ]
+      helper.getResourceRoles = async () => [{ id: 'reviewer-role-id', name: 'Reviewer' }]
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, {
-          isOpen: true
-        })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          reviewChallengePhaseId,
+          {
+            isOpen: true
+          }
+        )
       } catch (e) {
         should.equal(e.httpStatus || e.statusCode, 403)
         should.equal(
@@ -698,13 +874,23 @@ describe('challenge phase service unit tests', () => {
         )
         return
       } finally {
-        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${appealTable} WHERE "id" = ${appealId}`)
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${appealTable} WHERE "id" = ${appealId}`
+        )
         await reviewClient.$executeRaw(
           Prisma.sql`DELETE FROM ${reviewItemCommentTable} WHERE "id" = ${reviewItemCommentId}`
         )
-        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewItemTable} WHERE "id" = ${reviewItemId}`)
-        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`)
-        await reviewClient.$executeRaw(Prisma.sql`DELETE FROM ${submissionTable} WHERE "id" = ${submissionId}`)
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewItemTable} WHERE "id" = ${reviewItemId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${reviewTable} WHERE "id" = ${reviewId}`
+        )
+        await reviewClient.$executeRaw(
+          Prisma.sql`DELETE FROM ${submissionTable} WHERE "id" = ${submissionId}`
+        )
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
         await prisma.challengePhase.deleteMany({
           where: { id: { in: [appealsChallengePhaseId, reviewChallengePhaseId] } }
         })
@@ -716,9 +902,17 @@ describe('challenge phase service unit tests', () => {
 
     it('partially update challenge phase - not found', async () => {
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.taskChallenge.id, data.challengePhase2Id, { name: 'updated', duration: 7200 })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.taskChallenge.id,
+          data.challengePhase2Id,
+          { name: 'updated', duration: 7200 }
+        )
       } catch (e) {
-        should.equal(e.message, `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase2Id} doesn't exist`)
+        should.equal(
+          e.message,
+          `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase2Id} doesn't exist`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -726,7 +920,12 @@ describe('challenge phase service unit tests', () => {
 
     it('partially update challenge phase - phaseId does not exist', async () => {
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', phaseId: data.challenge.id, isOpen: null })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'updated', phaseId: data.challenge.id, isOpen: null }
+        )
       } catch (e) {
         should.equal(e.message, 'phaseId should be a valid phase')
         return
@@ -736,7 +935,12 @@ describe('challenge phase service unit tests', () => {
 
     it('partially update challenge phase - predecessor does not exist', async () => {
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', predecessor: data.challenge.id })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'updated', predecessor: data.challenge.id }
+        )
       } catch (e) {
         should.equal(
           e.message,
@@ -751,9 +955,17 @@ describe('challenge phase service unit tests', () => {
       const startDate = '2025-04-04T04:38:00.000Z'
       const endDate = '2025-04-03T04:38:00.000Z'
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', scheduledStartDate: startDate, scheduledEndDate: endDate })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'updated', scheduledStartDate: startDate, scheduledEndDate: endDate }
+        )
       } catch (e) {
-        should.equal(e.message, `scheduledStartDate: ${startDate} should not be after scheduledEndDate: ${endDate}`)
+        should.equal(
+          e.message,
+          `scheduledStartDate: ${startDate} should not be after scheduledEndDate: ${endDate}`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -763,9 +975,17 @@ describe('challenge phase service unit tests', () => {
       const startDate = '2025-04-04T04:38:00.000Z'
       const endDate = '2025-04-03T04:38:00.000Z'
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'updated', actualStartDate: startDate, actualEndDate: endDate })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'updated', actualStartDate: startDate, actualEndDate: endDate }
+        )
       } catch (e) {
-        should.equal(e.message, `actualStartDate: ${startDate} should not be after actualEndDate: ${endDate}`)
+        should.equal(
+          e.message,
+          `actualStartDate: ${startDate} should not be after actualEndDate: ${endDate}`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -773,16 +993,26 @@ describe('challenge phase service unit tests', () => {
 
     it('partially update challenge phase - constraint is not exists for the ChallengePhase', async () => {
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-          name: 'updated',
-          constraints: [{
-            id: data.challenge.id,
-            name: 't1',
-            value: 100
-          }]
-        })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            name: 'updated',
+            constraints: [
+              {
+                id: data.challenge.id,
+                name: 't1',
+                value: 100
+              }
+            ]
+          }
+        )
       } catch (e) {
-        should.equal(e.message, `constraint: ${data.challenge.id} is not exists for the ChallengePhase`)
+        should.equal(
+          e.message,
+          `constraint: ${data.challenge.id} is not exists for the ChallengePhase`
+        )
         return
       }
       throw new Error('should not reach here')
@@ -806,9 +1036,14 @@ describe('challenge phase service unit tests', () => {
           `
         )
 
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-          isOpen: false
-        })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: false
+          }
+        )
       } catch (e) {
         caughtError = e
       } finally {
@@ -819,7 +1054,10 @@ describe('challenge phase service unit tests', () => {
 
       should.exist(caughtError)
       should.equal(caughtError.httpStatus || caughtError.statusCode, 403)
-      should.equal(caughtError.message, 'Cannot close Registration because there are still pending scorecards')
+      should.equal(
+        caughtError.message,
+        'Cannot close Registration because there are still pending scorecards'
+      )
     })
 
     it('partially update challenge phase - allows closing when scorecards are completed', async function () {
@@ -839,9 +1077,14 @@ describe('challenge phase service unit tests', () => {
           `
         )
 
-        const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, {
-          isOpen: false
-        })
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: false
+          }
+        )
         should.equal(challengePhase.isOpen, false)
       } finally {
         await reviewClient.$executeRaw(
@@ -910,7 +1153,9 @@ describe('challenge phase service unit tests', () => {
 
       const reviewEndDate = new Date(reviewStartDate.getTime() + reviewDuration * 1000)
       const appealsEndDate = new Date(reviewEndDate.getTime() + appealsDuration * 1000)
-      const appealsResponseEndDate = new Date(appealsEndDate.getTime() + appealsResponseDuration * 1000)
+      const appealsResponseEndDate = new Date(
+        appealsEndDate.getTime() + appealsResponseDuration * 1000
+      )
       const approvalEndDate = new Date(appealsResponseEndDate.getTime() + approvalDuration * 1000)
 
       await prisma.challengePhase.createMany({
@@ -1016,10 +1261,23 @@ describe('challenge phase service unit tests', () => {
         should.equal(new Date(updatedApproval.scheduledEndDate).toISOString(), expectedApprovalEnd)
       } finally {
         await prisma.challengePhase.deleteMany({
-          where: { id: { in: [reviewChallengePhaseId, appealsChallengePhaseId, appealsResponseChallengePhaseId, approvalChallengePhaseId] } }
+          where: {
+            id: {
+              in: [
+                reviewChallengePhaseId,
+                appealsChallengePhaseId,
+                appealsResponseChallengePhaseId,
+                approvalChallengePhaseId
+              ]
+            }
+          }
         })
         await prisma.phase.deleteMany({
-          where: { id: { in: [reviewPhase.id, appealsPhase.id, appealsResponsePhase.id, approvalPhase.id] } }
+          where: {
+            id: {
+              in: [reviewPhase.id, appealsPhase.id, appealsResponsePhase.id, approvalPhase.id]
+            }
+          }
         })
       }
     })
@@ -1146,9 +1404,14 @@ describe('challenge phase service unit tests', () => {
 
     it('partially update challenge phase - unexpected field', async () => {
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { name: 'xx', other: 'xx' })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'xx', other: 'xx' }
+        )
       } catch (e) {
-        should.equal(e.message.indexOf('"other" is not allowed') >= 0, true)
+        should.equal(e.message.indexOf('"data.other" is not allowed') >= 0, true)
         return
       }
       throw new Error('should not reach here')
@@ -1161,7 +1424,12 @@ describe('challenge phase service unit tests', () => {
       })
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          { isOpen: true }
+        )
       } catch (e) {
         should.equal(
           e.message,
@@ -1184,7 +1452,12 @@ describe('challenge phase service unit tests', () => {
       })
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          { isOpen: true }
+        )
       } catch (e) {
         should.equal(
           e.message,
@@ -1207,7 +1480,12 @@ describe('challenge phase service unit tests', () => {
       })
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase2Id,
+          { isOpen: true }
+        )
       } catch (e) {
         should.equal(
           e.message,
@@ -1234,7 +1512,12 @@ describe('challenge phase service unit tests', () => {
         data: { isOpen: false }
       })
 
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase2Id, { isOpen: true })
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase2Id,
+        { isOpen: true }
+      )
       should.equal(challengePhase.isOpen, true)
     })
 
@@ -1248,7 +1531,12 @@ describe('challenge phase service unit tests', () => {
         }
       })
 
-      const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, data.challengePhase1Id, { isOpen: true })
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        { isOpen: true }
+      )
       should.equal(challengePhase.isOpen, true)
     })
 
@@ -1279,15 +1567,16 @@ describe('challenge phase service unit tests', () => {
 
       const originalGetChallengeResources = helper.getChallengeResources
       const originalGetResourceRoles = helper.getResourceRoles
-      helper.getChallengeResources = async () => ([
-        { roleId: 'some-other-role-id' }
-      ])
-      helper.getResourceRoles = async () => ([
-        { id: 'reviewer-role-id', name: 'Reviewer' }
-      ])
+      helper.getChallengeResources = async () => [{ roleId: 'some-other-role-id' }]
+      helper.getResourceRoles = async () => [{ id: 'reviewer-role-id', name: 'Reviewer' }]
 
       try {
-        await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          reviewChallengePhaseId,
+          { isOpen: true }
+        )
       } catch (e) {
         should.equal(e.httpStatus || e.statusCode, 400)
         should.equal(
@@ -1332,18 +1621,21 @@ describe('challenge phase service unit tests', () => {
 
       const originalGetChallengeResources = helper.getChallengeResources
       const originalGetResourceRoles = helper.getResourceRoles
-      helper.getChallengeResources = async () => ([
+      helper.getChallengeResources = async () => [
         {
           roleId: 'reviewer-role-id',
           resourceRole: { name: 'Reviewer' }
         }
-      ])
-      helper.getResourceRoles = async () => ([
-        { id: 'reviewer-role-id', name: 'Reviewer' }
-      ])
+      ]
+      helper.getResourceRoles = async () => [{ id: 'reviewer-role-id', name: 'Reviewer' }]
 
       try {
-        const challengePhase = await service.partiallyUpdateChallengePhase(authUser, data.challenge.id, reviewChallengePhaseId, { isOpen: true })
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          reviewChallengePhaseId,
+          { isOpen: true }
+        )
         should.equal(challengePhase.isOpen, true)
       } finally {
         helper.getChallengeResources = originalGetChallengeResources
@@ -1366,7 +1658,10 @@ describe('challenge phase service unit tests', () => {
       try {
         await service.deleteChallengePhase(authUser, data.taskChallenge.id, data.challengePhase1Id)
       } catch (e) {
-        should.equal(e.message, `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase1Id} doesn't exist`)
+        should.equal(
+          e.message,
+          `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase1Id} doesn't exist`
+        )
         return
       }
       throw new Error('should not reach here')
