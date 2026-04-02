@@ -248,6 +248,7 @@ const run = async () => {
         reviewSchema: reviewDbSchema,
         importSubmissions: true,
         importFinalScores: true,
+        importProvisionalScores: true,
       },
       plan,
       actor: DEFAULT_ACTOR,

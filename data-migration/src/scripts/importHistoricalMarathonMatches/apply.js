@@ -24,6 +24,11 @@ const {
   createReviewFinalScoreStore,
   reconcileRoundFinalScores,
 } = require("./finalScores");
+const {
+  loadLegacyProvisionalRowsByRoundId,
+  createReviewProvisionalScoreStore,
+  reconcileRoundProvisionalScores,
+} = require("./provisionalScores");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -589,6 +594,12 @@ const runApplyMode = async ({
       planRecordByRoundId,
       affectedSurface: "final-score",
     });
+  const missingMemberProvisionalSkipMemberIdsByRoundId =
+    collectMissingMemberSkipMemberIdsByRoundId({
+      roundIds: options.roundIds,
+      planRecordByRoundId,
+      affectedSurface: "provisional-score",
+    });
   const plannedUnattachableFinalSkipMemberIdsByRoundId = collectSkipMemberIdsByRoundId({
     roundIds: options.roundIds,
     planRecordByRoundId,
@@ -616,6 +627,7 @@ const runApplyMode = async ({
   const submitterRoleId = String(options.submitterRoleId || DEFAULT_SUBMITTER_ROLE_ID).trim();
   const submissionImportEnabled = options.importSubmissions === true;
   const finalScoreImportEnabled = options.importFinalScores === true;
+  const provisionalScoreImportEnabled = options.importProvisionalScores === true;
 
   const resourceClient = options.resourceClient;
   if (actionableRoundIds.length > 0 && !resourceClient) {
@@ -634,6 +646,16 @@ const runApplyMode = async ({
   ) {
     throw new Error(
       "Review DB client is required for apply mode final-score reconciliation."
+    );
+  }
+  if (
+    actionableRoundIds.length > 0 &&
+    provisionalScoreImportEnabled &&
+    !options.reviewClient &&
+    !options.provisionalScoreStore
+  ) {
+    throw new Error(
+      "Review DB client is required for apply mode provisional-score reconciliation."
     );
   }
   const challengeStatusController =
@@ -686,8 +708,10 @@ const runApplyMode = async ({
 
   let roundSubmissionRowsByRoundId = new Map();
   let roundFinalRowsByRoundId = new Map();
+  let roundProvisionalRowsByRoundId = new Map();
   let submissionStore = null;
   let finalScoreStore = null;
+  let provisionalScoreStore = null;
   if (submissionImportEnabled && actionableRoundIds.length > 0) {
     roundSubmissionRowsByRoundId = await loadNonExampleLegacySubmissionRowsByRoundId({
       dataDir: options.dataDir,
@@ -713,6 +737,21 @@ const runApplyMode = async ({
     finalScoreStore =
       options.finalScoreStore ||
       (await createReviewFinalScoreStore({
+        reviewClient: options.reviewClient,
+        reviewSchema: options.reviewSchema || DEFAULT_REVIEW_SCHEMA,
+        actor,
+      }));
+  }
+  if (provisionalScoreImportEnabled && actionableRoundIds.length > 0) {
+    roundProvisionalRowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+      dataDir: options.dataDir,
+      longComponentStateFile: options.longComponentStateFile,
+      longSubmissionPattern: options.longSubmissionPattern,
+      roundIds: actionableRoundIds,
+    });
+    provisionalScoreStore =
+      options.provisionalScoreStore ||
+      (await createReviewProvisionalScoreStore({
         reviewClient: options.reviewClient,
         reviewSchema: options.reviewSchema || DEFAULT_REVIEW_SCHEMA,
         actor,
@@ -817,6 +856,24 @@ const runApplyMode = async ({
       if (finalScoreReconciliation && Array.isArray(finalScoreReconciliation.runtimeSkipRecords)) {
         runtimeSkipRecords.push(...finalScoreReconciliation.runtimeSkipRecords);
       }
+      const provisionalScoreReconciliation =
+        provisionalScoreImportEnabled && provisionalScoreStore
+          ? await reconcileRoundProvisionalScores({
+            roundId,
+            challengeId: result.challengeId,
+            provisionalRowsByRoundId: roundProvisionalRowsByRoundId,
+            normalizedIdentityByCoderId,
+            missingMemberProvisionalSkipMemberIds:
+                missingMemberProvisionalSkipMemberIdsByRoundId.get(roundId) || new Set(),
+            provisionalScoreStore,
+          })
+          : null;
+      if (
+        provisionalScoreReconciliation &&
+        Array.isArray(provisionalScoreReconciliation.skippedProvisionalRecords)
+      ) {
+        runtimeSkipRecords.push(...provisionalScoreReconciliation.skippedProvisionalRecords);
+      }
       applyRecords.push({
         recordType: "apply-record",
         legacyRoundId: roundId,
@@ -825,6 +882,7 @@ const runApplyMode = async ({
         resourceReconciliation,
         ...(submissionReconciliation ? { submissionReconciliation } : {}),
         ...(finalScoreReconciliation ? { finalScoreReconciliation } : {}),
+        ...(provisionalScoreReconciliation ? { provisionalScoreReconciliation } : {}),
       });
     } catch (error) {
       applyRecords.push({
