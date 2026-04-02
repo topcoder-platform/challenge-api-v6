@@ -104,6 +104,10 @@ describe("importHistoricalMarathonMatches planning prerequisites", () => {
           resolved: true,
           timelineTemplateId: "timeline-mm",
         },
+        memberResolution: {
+          available: true,
+          resolvedMemberIds: new Set(["1"]),
+        },
       }
     );
 

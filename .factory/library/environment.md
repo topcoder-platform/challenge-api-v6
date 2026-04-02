@@ -14,6 +14,8 @@ The importer must load `challenge-api-v6/.env.importer.local` for local/dev exec
 Required values:
 
 - `DATABASE_URL` — challenge DB used by `challenge-api-v6`
+- `MEMBER_DB_URL` — member lookup DB connection string for target-member resolution during missing-member planning/validation; defaults to `DATABASE_URL` only when that DB can also resolve member data
+- `MEMBER_DB_SCHEMA` — schema used for member lookup tables (default behavior is code-defined; validators should set it explicitly when member data is not reachable through the challenge schema)
 - `REVIEW_DB_URL` — review DB used for submissions and review summations
 - `RESOURCES_API_URL` — base URL for Resource API writes and reads
 - `AUTH0_URL`

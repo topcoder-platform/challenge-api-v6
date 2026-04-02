@@ -10,6 +10,19 @@ const {
   STANDARD_PHASE_NAMES,
   derivePhaseWindows,
 } = require("./apply");
+const {
+  loadNormalizedIdentityByCoderId,
+  buildEligibleMemberIdentities,
+} = require("./participants");
+const {
+  MISSING_MEMBER_REASON_CODE,
+  FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
+  resolveSkippedFilePath,
+  collectReasonCodes,
+} = require("./skippedArtifact");
+const {
+  TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+} = require("./targetMemberResolution");
 
 const createEmptyCounters = () => ({
   round: null,
@@ -19,6 +32,7 @@ const createEmptyCounters = () => ({
   nonExampleSubmissions: 0,
   exampleSubmissions: 0,
   nonExampleSubmitterCoderIds: new Set(),
+  nonExampleSubmissionCountsByCoderId: new Map(),
   finalCandidateCoderIds: new Set(),
   registrationStartMs: null,
   registrationEndMs: null,
@@ -43,6 +57,22 @@ const parseNonNegativeInteger = (value) => {
     return 0;
   }
   return parsed;
+};
+
+const parsePositiveInteger = (value) => {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const normalizeMemberId = (value) => {
+  const parsed = parsePositiveInteger(value);
+  if (!parsed) {
+    return null;
+  }
+  return String(parsed);
 };
 
 const parseLegacySqlTimestamp = (value) => {
@@ -135,7 +165,95 @@ const buildZeroEntityDeltas = () => ({
   provisionalScores: buildEntityDelta(0, 0),
 });
 
-const buildUnresolvedRecord = ({ roundId, reason, counters, traceability, matchedChallengeId = null }) => ({
+const buildZeroPartitions = () => ({
+  resources: {
+    toCreate: 0,
+    alreadyPresent: 0,
+    missingMember: 0,
+    explicitSkips: {
+      total: 0,
+      byReason: {},
+    },
+  },
+  submissions: {
+    legacyNonExample: 0,
+    legacyExampleFiltered: 0,
+    toImport: 0,
+    alreadyPresent: 0,
+    missingMember: 0,
+    explicitSkips: {
+      total: 0,
+      byReason: {},
+    },
+  },
+  finalScores: {
+    legacyFinalCandidates: 0,
+    toImport: 0,
+    alreadyPresent: 0,
+    missingMember: 0,
+    explicitSkips: {
+      total: 0,
+      byReason: {},
+    },
+  },
+  provisionalScores: {
+    legacyNonExample: 0,
+    toImport: 0,
+    alreadyPresent: 0,
+    missingMember: 0,
+    explicitSkips: {
+      total: 0,
+      byReason: {},
+    },
+  },
+});
+
+const addCount = (map, key, value = 1) => {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) {
+    return;
+  }
+  const increment = parseNonNegativeInteger(value);
+  map.set(normalizedKey, (map.get(normalizedKey) || 0) + increment);
+};
+
+const toSortedArray = (valueSet) =>
+  Array.from(valueSet || []).sort((left, right) =>
+    String(left).localeCompare(String(right), undefined, { numeric: true })
+  );
+
+const resolveIdentityForCoderId = (coderId, normalizedIdentityByCoderId = new Map()) => {
+  const normalizedCoderId = String(coderId || "").trim();
+  if (!normalizedCoderId) {
+    return null;
+  }
+  const knownIdentity = normalizedIdentityByCoderId.get(normalizedCoderId);
+  if (knownIdentity && normalizeMemberId(knownIdentity.memberId)) {
+    return {
+      coderId: normalizedCoderId,
+      memberId: normalizeMemberId(knownIdentity.memberId),
+      memberHandle: knownIdentity.memberHandle || null,
+    };
+  }
+  const fallbackMemberId = normalizeMemberId(normalizedCoderId);
+  if (!fallbackMemberId) {
+    return null;
+  }
+  return {
+    coderId: normalizedCoderId,
+    memberId: fallbackMemberId,
+    memberHandle: null,
+  };
+};
+
+const buildUnresolvedRecord = ({
+  roundId,
+  reason,
+  counters,
+  traceability,
+  matchedChallengeId = null,
+  skippedFilePath = null,
+}) => ({
   recordType: "round-plan",
   legacyRoundId: roundId,
   decision: "unresolved",
@@ -150,6 +268,15 @@ const buildUnresolvedRecord = ({ roundId, reason, counters, traceability, matche
     finalistsWithoutAttachableSubmission: 0,
   }),
   entityDeltas: buildZeroEntityDeltas(),
+  partitions: buildZeroPartitions(),
+  plannedSkipRecords: [],
+  skippedFileArtifact: skippedFilePath
+    ? {
+      path: skippedFilePath,
+      reasonCodes: [],
+      recordCount: 0,
+    }
+    : null,
   createPathChallengeShape: null,
   createPathPhasePlan: null,
 });
@@ -179,6 +306,25 @@ const normalizePlanningPrerequisites = (prerequisites = {}) => ({
       (prerequisites.canonicalTimelineTemplate &&
         prerequisites.canonicalTimelineTemplate.reason) ||
       "canonical-mm-ds-timeline-template-unresolved",
+  },
+  memberResolution: {
+    available:
+      prerequisites.memberResolution &&
+      prerequisites.memberResolution.available === false
+        ? false
+        : true,
+    reason:
+      (prerequisites.memberResolution && prerequisites.memberResolution.reason) ||
+      TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+    resolvedMemberIds:
+      prerequisites.memberResolution &&
+      prerequisites.memberResolution.resolvedMemberIds instanceof Set
+        ? new Set(
+          Array.from(prerequisites.memberResolution.resolvedMemberIds)
+            .map((memberId) => normalizeMemberId(memberId))
+            .filter(Boolean)
+        )
+        : null,
   },
 });
 
@@ -211,9 +357,327 @@ const buildCreatePathPhasePlan = (roundId, counters) => {
   }, {});
 };
 
+const normalizeResolvedMemberIds = (resolvedMemberIds) => {
+  if (!resolvedMemberIds) {
+    return new Set();
+  }
+  const values =
+    resolvedMemberIds instanceof Set
+      ? Array.from(resolvedMemberIds)
+      : Array.isArray(resolvedMemberIds)
+      ? resolvedMemberIds
+      : [];
+  return new Set(values.map((memberId) => normalizeMemberId(memberId)).filter(Boolean));
+};
+
+const resolveMemberPlanningPrerequisite = async ({
+  options,
+  normalizedPrerequisites,
+  roundDataById,
+  normalizedIdentityByCoderId,
+}) => {
+  const result = {
+    available: normalizedPrerequisites.memberResolution.available,
+    reason: normalizedPrerequisites.memberResolution.reason,
+    resolvedMemberIds: normalizeResolvedMemberIds(
+      normalizedPrerequisites.memberResolution.resolvedMemberIds
+    ),
+  };
+
+  if (!result.available) {
+    return result;
+  }
+  if (result.resolvedMemberIds.size > 0) {
+    return result;
+  }
+  if (typeof options.resolveMemberPresence !== "function") {
+    return {
+      available: false,
+      reason: normalizedPrerequisites.memberResolution.reason,
+      resolvedMemberIds: new Set(),
+    };
+  }
+
+  const memberIds = new Set();
+  for (const counters of roundDataById.values()) {
+    counters.eligibleRegistrants.forEach((coderId) => {
+      const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+      const normalized = normalizeMemberId(identity && identity.memberId);
+      if (normalized) {
+        memberIds.add(normalized);
+      }
+    });
+    counters.nonExampleSubmitterCoderIds.forEach((coderId) => {
+      const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+      const normalized = normalizeMemberId(identity && identity.memberId);
+      if (normalized) {
+        memberIds.add(normalized);
+      }
+    });
+    counters.finalCandidateCoderIds.forEach((coderId) => {
+      const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+      const normalized = normalizeMemberId(identity && identity.memberId);
+      if (normalized) {
+        memberIds.add(normalized);
+      }
+    });
+  }
+
+  try {
+    const resolved = await options.resolveMemberPresence({
+      memberIds: Array.from(memberIds),
+    });
+    const resolvedSet = normalizeResolvedMemberIds(resolved);
+    return {
+      available: true,
+      reason: normalizedPrerequisites.memberResolution.reason,
+      resolvedMemberIds: resolvedSet,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      reason: normalizedPrerequisites.memberResolution.reason,
+      resolvedMemberIds: new Set(),
+      error,
+    };
+  }
+};
+
+const buildSurfacePartitionsForRound = ({
+  roundId,
+  counters,
+  existingStateEntry,
+  normalizedIdentityByCoderId,
+  resolvedMemberIds,
+}) => {
+  const existingCounts = existingStateEntry && existingStateEntry.existing ? existingStateEntry.existing : {};
+  const partitions = buildZeroPartitions();
+  partitions.submissions.legacyNonExample = counters.nonExampleSubmissions;
+  partitions.submissions.legacyExampleFiltered = counters.exampleSubmissions;
+  partitions.provisionalScores.legacyNonExample = counters.nonExampleSubmissions;
+  partitions.finalScores.legacyFinalCandidates = counters.finalCandidateCoderIds.size;
+
+  const memberStatsByMemberId = new Map();
+  const ensureMemberStats = ({ memberId, memberHandle = null, coderId = null }) => {
+    if (!memberId) {
+      return null;
+    }
+    const normalizedMemberId = normalizeMemberId(memberId);
+    if (!normalizedMemberId) {
+      return null;
+    }
+    if (!memberStatsByMemberId.has(normalizedMemberId)) {
+      memberStatsByMemberId.set(normalizedMemberId, {
+        memberId: normalizedMemberId,
+        memberHandle: memberHandle || null,
+        coderIds: new Set(),
+        eligibleResourceCount: 0,
+        nonExampleSubmissionCount: 0,
+        finalCandidateCount: 0,
+      });
+    }
+    const stats = memberStatsByMemberId.get(normalizedMemberId);
+    if (memberHandle && !stats.memberHandle) {
+      stats.memberHandle = memberHandle;
+    }
+    if (coderId) {
+      stats.coderIds.add(String(coderId));
+    }
+    return stats;
+  };
+
+  const eligibleMemberIdentities = buildEligibleMemberIdentities({
+    eligibleCoderIds: counters.eligibleRegistrants,
+    normalizedIdentityByCoderId,
+  });
+  eligibleMemberIdentities.forEach((identity) => {
+    const stats = ensureMemberStats({
+      memberId: identity.memberId,
+      memberHandle: identity.memberHandle,
+    });
+    if (!stats) {
+      return;
+    }
+    stats.eligibleResourceCount += 1;
+    (identity.coderIds || []).forEach((coderId) => stats.coderIds.add(String(coderId)));
+  });
+
+  counters.nonExampleSubmissionCountsByCoderId.forEach((count, coderId) => {
+    const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+    if (!identity) {
+      return;
+    }
+    const stats = ensureMemberStats(identity);
+    if (!stats) {
+      return;
+    }
+    stats.nonExampleSubmissionCount += parseNonNegativeInteger(count);
+  });
+
+  counters.finalCandidateCoderIds.forEach((coderId) => {
+    const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+    if (!identity) {
+      return;
+    }
+    const stats = ensureMemberStats(identity);
+    if (!stats) {
+      return;
+    }
+    stats.finalCandidateCount += 1;
+  });
+
+  const missingMemberSkipRecords = [];
+  const explicitSkipRecords = [];
+  let materializableResourceCount = 0;
+  let materializableSubmissionCount = 0;
+  let materializableFinalScoreCount = 0;
+  let materializableProvisionalCount = 0;
+
+  memberStatsByMemberId.forEach((stats) => {
+    const isResolved = resolvedMemberIds.has(stats.memberId);
+    const missingResourceCount = isResolved ? 0 : stats.eligibleResourceCount;
+    const missingSubmissionCount = isResolved ? 0 : stats.nonExampleSubmissionCount;
+    const missingProvisionalCount = isResolved ? 0 : stats.nonExampleSubmissionCount;
+    const hasAttachableFinal = stats.nonExampleSubmissionCount > 0;
+    const missingFinalCount = isResolved ? 0 : stats.finalCandidateCount;
+    const explicitFinalSkipCount =
+      isResolved && !hasAttachableFinal
+        ? stats.finalCandidateCount
+        : 0;
+    const importableFinalCount =
+      isResolved && hasAttachableFinal
+        ? stats.finalCandidateCount
+        : 0;
+
+    partitions.resources.missingMember += missingResourceCount;
+    partitions.submissions.missingMember += missingSubmissionCount;
+    partitions.provisionalScores.missingMember += missingProvisionalCount;
+    partitions.finalScores.missingMember += missingFinalCount;
+
+    materializableResourceCount += isResolved ? stats.eligibleResourceCount : 0;
+    materializableSubmissionCount += isResolved ? stats.nonExampleSubmissionCount : 0;
+    materializableProvisionalCount += isResolved ? stats.nonExampleSubmissionCount : 0;
+    materializableFinalScoreCount += importableFinalCount;
+
+    if (!isResolved) {
+      const affectedSurfaces = [];
+      const counts = {};
+      if (missingResourceCount > 0) {
+        affectedSurfaces.push("resource");
+        counts.resource = missingResourceCount;
+      }
+      if (missingSubmissionCount > 0) {
+        affectedSurfaces.push("submission");
+        counts.submission = missingSubmissionCount;
+      }
+      if (missingFinalCount > 0) {
+        affectedSurfaces.push("final-score");
+        counts.finalScore = missingFinalCount;
+      }
+      if (missingProvisionalCount > 0) {
+        affectedSurfaces.push("provisional-score");
+        counts.provisionalScore = missingProvisionalCount;
+      }
+      if (affectedSurfaces.length > 0) {
+        missingMemberSkipRecords.push({
+          legacyRoundId: roundId,
+          memberId: stats.memberId,
+          memberHandle: stats.memberHandle || undefined,
+          coderIds: toSortedArray(stats.coderIds),
+          reasonCode: MISSING_MEMBER_REASON_CODE,
+          affectedSurfaces,
+          counts,
+        });
+      }
+    }
+
+    if (explicitFinalSkipCount > 0) {
+      partitions.finalScores.explicitSkips.total += explicitFinalSkipCount;
+      partitions.finalScores.explicitSkips.byReason[
+        FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE
+      ] = (partitions.finalScores.explicitSkips.byReason[
+        FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE
+      ] || 0) + explicitFinalSkipCount;
+      explicitSkipRecords.push({
+        legacyRoundId: roundId,
+        memberId: stats.memberId,
+        memberHandle: stats.memberHandle || undefined,
+        coderIds: toSortedArray(stats.coderIds),
+        reasonCode: FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
+        affectedSurfaces: ["final-score"],
+        counts: { finalScore: explicitFinalSkipCount },
+      });
+    }
+  });
+
+  partitions.resources.alreadyPresent = Math.min(
+    materializableResourceCount,
+    parseNonNegativeInteger(existingCounts.resources)
+  );
+  partitions.resources.toCreate = Math.max(
+    0,
+    materializableResourceCount - partitions.resources.alreadyPresent
+  );
+
+  partitions.submissions.alreadyPresent = Math.min(
+    materializableSubmissionCount,
+    parseNonNegativeInteger(existingCounts.submissions)
+  );
+  partitions.submissions.toImport = Math.max(
+    0,
+    materializableSubmissionCount - partitions.submissions.alreadyPresent
+  );
+
+  partitions.finalScores.alreadyPresent = Math.min(
+    materializableFinalScoreCount,
+    parseNonNegativeInteger(existingCounts.finalScores)
+  );
+  partitions.finalScores.toImport = Math.max(
+    0,
+    materializableFinalScoreCount - partitions.finalScores.alreadyPresent
+  );
+
+  partitions.provisionalScores.alreadyPresent = Math.min(
+    materializableProvisionalCount,
+    parseNonNegativeInteger(existingCounts.provisionalScores)
+  );
+  partitions.provisionalScores.toImport = Math.max(
+    0,
+    materializableProvisionalCount - partitions.provisionalScores.alreadyPresent
+  );
+
+  const plannedSkipRecords = [...missingMemberSkipRecords, ...explicitSkipRecords].sort((left, right) => {
+    const leftMember = String(left.memberId || "");
+    const rightMember = String(right.memberId || "");
+    if (leftMember !== rightMember) {
+      return leftMember.localeCompare(rightMember, undefined, { numeric: true });
+    }
+    return String(left.reasonCode || "").localeCompare(String(right.reasonCode || ""));
+  });
+
+  return {
+    partitions,
+    plannedSkipRecords,
+    materializable: {
+      resources: materializableResourceCount,
+      submissions: materializableSubmissionCount,
+      finalScores: materializableFinalScoreCount,
+      provisionalScores: materializableProvisionalCount,
+    },
+  };
+};
+
 const isMarathonRoundType = (round) => String(round && round.round_type_id ? round.round_type_id : "").trim() === "13";
 
-const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites) => {
+const evaluateRoundPlan = ({
+  roundId,
+  counters,
+  existingStateEntry,
+  prerequisites,
+  normalizedIdentityByCoderId,
+  resolvedMemberIds,
+  skippedFilePath,
+}) => {
   if (!counters.round) {
     return {
       recordType: "round-plan",
@@ -231,6 +695,15 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
         counters: createEmptyCounters(),
       }),
       entityDeltas: buildZeroEntityDeltas(),
+      partitions: buildZeroPartitions(),
+      plannedSkipRecords: [],
+      skippedFileArtifact: skippedFilePath
+        ? {
+          path: skippedFilePath,
+          reasonCodes: [],
+          recordCount: 0,
+        }
+        : null,
       createPathChallengeShape: null,
       createPathPhasePlan: null,
     };
@@ -248,6 +721,7 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
       reason: "selected-round-round-type-is-not-marathon-match",
       counters,
       traceability,
+      skippedFilePath,
     });
   }
 
@@ -264,24 +738,9 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
       reason: "selected-round-lacks-marathon-signal-data",
       counters,
       traceability,
+      skippedFilePath,
     });
   }
-
-  const finalAttachableMemberCount = Array.from(counters.finalCandidateCoderIds).filter((coderId) =>
-    counters.nonExampleSubmitterCoderIds.has(coderId)
-  ).length;
-  const finalistsWithoutAttachableSubmission = Math.max(
-    0,
-    counters.finalCandidateCoderIds.size - finalAttachableMemberCount
-  );
-
-  const targets = {
-    phases: 3,
-    resources: counters.eligibleRegistrants.size,
-    submissions: counters.nonExampleSubmissions,
-    finalScores: finalAttachableMemberCount,
-    provisionalScores: counters.nonExampleSubmissions,
-  };
 
   const matchStatus = existingStateEntry && existingStateEntry.matchStatus
     ? existingStateEntry.matchStatus
@@ -293,20 +752,9 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
       counters,
       traceability,
       matchedChallengeId: existingStateEntry.challengeId || null,
+      skippedFilePath,
     });
   }
-
-  const existingCounts = existingStateEntry && existingStateEntry.existing ? existingStateEntry.existing : {};
-  const entityDeltas = {
-    phases: buildEntityDelta(targets.phases, existingCounts.phases),
-    resources: buildEntityDelta(targets.resources, existingCounts.resources),
-    submissions: buildEntityDelta(targets.submissions, existingCounts.submissions),
-    finalScores: {
-      ...buildEntityDelta(targets.finalScores, existingCounts.finalScores),
-      skippedUnattachableFinalists: finalistsWithoutAttachableSubmission,
-    },
-    provisionalScores: buildEntityDelta(targets.provisionalScores, existingCounts.provisionalScores),
-  };
 
   const hasMatchedChallenge = matchStatus === "safe" && Boolean(existingStateEntry.challengeId);
   let createPathChallengeShape = null;
@@ -318,6 +766,7 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
         reason: prerequisites.authoritativeDiscovery.reason,
         counters,
         traceability,
+        skippedFilePath,
       });
     }
     if (!prerequisites.canonicalTimelineTemplate.resolved) {
@@ -326,6 +775,7 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
         reason: prerequisites.canonicalTimelineTemplate.reason,
         counters,
         traceability,
+        skippedFilePath,
       });
     }
     try {
@@ -339,9 +789,48 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
         reason: "create-phase-plan-derivation-failed",
         counters,
         traceability,
+        skippedFilePath,
       });
     }
   }
+  if (!prerequisites.memberResolution.available) {
+    return buildUnresolvedRecord({
+      roundId,
+      reason: prerequisites.memberResolution.reason,
+      counters,
+      traceability,
+      matchedChallengeId: hasMatchedChallenge ? existingStateEntry.challengeId : null,
+      skippedFilePath,
+    });
+  }
+
+  const partitioned = buildSurfacePartitionsForRound({
+    roundId,
+    counters,
+    existingStateEntry,
+    normalizedIdentityByCoderId,
+    resolvedMemberIds,
+  });
+  const finalistsWithoutAttachableSubmission = parseNonNegativeInteger(
+    partitioned.partitions.finalScores.explicitSkips.byReason[
+      FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE
+    ]
+  );
+
+  const existingCounts = existingStateEntry && existingStateEntry.existing ? existingStateEntry.existing : {};
+  const entityDeltas = {
+    phases: buildEntityDelta(3, existingCounts.phases),
+    resources: buildEntityDelta(partitioned.materializable.resources, existingCounts.resources),
+    submissions: buildEntityDelta(partitioned.materializable.submissions, existingCounts.submissions),
+    finalScores: {
+      ...buildEntityDelta(partitioned.materializable.finalScores, existingCounts.finalScores),
+      skippedUnattachableFinalists: finalistsWithoutAttachableSubmission,
+    },
+    provisionalScores: buildEntityDelta(
+      partitioned.materializable.provisionalScores,
+      existingCounts.provisionalScores
+    ),
+  };
 
   const decision = hasMatchedChallenge ? "reuse/backfill-only" : "create";
   const reason = hasMatchedChallenge
@@ -367,17 +856,28 @@ const evaluateRoundPlan = (roundId, counters, existingStateEntry, prerequisites)
     traceability,
     summaryCounts: buildRoundSummaryCounts({
       counters,
-      plannedFinalScores: finalAttachableMemberCount,
-      plannedProvisionalScores: counters.nonExampleSubmissions,
+      plannedFinalScores:
+        partitioned.partitions.finalScores.toImport +
+        partitioned.partitions.finalScores.alreadyPresent,
+      plannedProvisionalScores:
+        partitioned.partitions.provisionalScores.toImport +
+        partitioned.partitions.provisionalScores.alreadyPresent,
       finalistsWithoutAttachableSubmission,
     }),
     entityDeltas,
+    partitions: partitioned.partitions,
+    plannedSkipRecords: partitioned.plannedSkipRecords,
+    skippedFileArtifact: {
+      path: skippedFilePath,
+      reasonCodes: collectReasonCodes(partitioned.plannedSkipRecords),
+      recordCount: partitioned.plannedSkipRecords.length,
+    },
     createPathChallengeShape,
     createPathPhasePlan,
   };
 };
 
-const summarizePlan = (records, selectedRoundIds) => {
+const summarizePlan = (records, selectedRoundIds, skippedFilePath) => {
   const countsByDecision = {
     create: 0,
     "reuse/backfill-only": 0,
@@ -399,7 +899,10 @@ const summarizePlan = (records, selectedRoundIds) => {
       finalScores: 0,
       provisionalScores: 0,
     },
+    partitions: buildZeroPartitions(),
   };
+  const reasonCodes = new Set();
+  let plannedSkipRecordCount = 0;
 
   records.forEach((record) => {
     if (countsByDecision[record.decision] !== undefined) {
@@ -417,6 +920,57 @@ const summarizePlan = (records, selectedRoundIds) => {
     totals.toCreate.submissions += record.entityDeltas.submissions.toCreate;
     totals.toCreate.finalScores += record.entityDeltas.finalScores.toCreate;
     totals.toCreate.provisionalScores += record.entityDeltas.provisionalScores.toCreate;
+
+    if (record.partitions) {
+      totals.partitions.resources.toCreate += record.partitions.resources.toCreate;
+      totals.partitions.resources.alreadyPresent += record.partitions.resources.alreadyPresent;
+      totals.partitions.resources.missingMember += record.partitions.resources.missingMember;
+      totals.partitions.resources.explicitSkips.total +=
+        record.partitions.resources.explicitSkips.total;
+
+      totals.partitions.submissions.legacyNonExample +=
+        record.partitions.submissions.legacyNonExample;
+      totals.partitions.submissions.legacyExampleFiltered +=
+        record.partitions.submissions.legacyExampleFiltered;
+      totals.partitions.submissions.toImport += record.partitions.submissions.toImport;
+      totals.partitions.submissions.alreadyPresent +=
+        record.partitions.submissions.alreadyPresent;
+      totals.partitions.submissions.missingMember += record.partitions.submissions.missingMember;
+      totals.partitions.submissions.explicitSkips.total +=
+        record.partitions.submissions.explicitSkips.total;
+
+      totals.partitions.finalScores.legacyFinalCandidates +=
+        record.partitions.finalScores.legacyFinalCandidates;
+      totals.partitions.finalScores.toImport += record.partitions.finalScores.toImport;
+      totals.partitions.finalScores.alreadyPresent +=
+        record.partitions.finalScores.alreadyPresent;
+      totals.partitions.finalScores.missingMember += record.partitions.finalScores.missingMember;
+      totals.partitions.finalScores.explicitSkips.total +=
+        record.partitions.finalScores.explicitSkips.total;
+      Object.entries(record.partitions.finalScores.explicitSkips.byReason || {}).forEach(
+        ([reasonCode, count]) => {
+          totals.partitions.finalScores.explicitSkips.byReason[reasonCode] =
+            (totals.partitions.finalScores.explicitSkips.byReason[reasonCode] || 0) +
+            parseNonNegativeInteger(count);
+        }
+      );
+
+      totals.partitions.provisionalScores.legacyNonExample +=
+        record.partitions.provisionalScores.legacyNonExample;
+      totals.partitions.provisionalScores.toImport +=
+        record.partitions.provisionalScores.toImport;
+      totals.partitions.provisionalScores.alreadyPresent +=
+        record.partitions.provisionalScores.alreadyPresent;
+      totals.partitions.provisionalScores.missingMember +=
+        record.partitions.provisionalScores.missingMember;
+      totals.partitions.provisionalScores.explicitSkips.total +=
+        record.partitions.provisionalScores.explicitSkips.total;
+    }
+
+    (record.plannedSkipRecords || []).forEach((skipRecord) => {
+      reasonCodes.add(skipRecord.reasonCode);
+      plannedSkipRecordCount += 1;
+    });
   });
 
   return {
@@ -425,6 +979,11 @@ const summarizePlan = (records, selectedRoundIds) => {
     roundsRequested: selectedRoundIds.length,
     countsByDecision,
     totals,
+    skippedFileArtifact: {
+      path: skippedFilePath,
+      reasonCodes: Array.from(reasonCodes).sort(),
+      recordCount: plannedSkipRecordCount,
+    },
   };
 };
 
@@ -580,6 +1139,7 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
 
         if (stateInfo.coderId) {
           counters.nonExampleSubmitterCoderIds.add(stateInfo.coderId);
+          addCount(counters.nonExampleSubmissionCountsByCoderId, stateInfo.coderId, 1);
         }
       })
     )
@@ -608,18 +1168,50 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
 const buildDryRunPlan = async (options, existingStateByRoundId, planningPrerequisites = {}) => {
   const normalizedPrerequisites = normalizePlanningPrerequisites(planningPrerequisites);
   const selectedRoundIds = [...options.roundIds];
+  const skippedFilePath = resolveSkippedFilePath({
+    skippedFilePath: options.skippedFilePath,
+    roundIds: selectedRoundIds,
+    cwd: options.cwd || process.cwd(),
+  });
   const roundDataById = buildRoundDataById(selectedRoundIds);
   await readLegacyPlanningInputs(options, roundDataById);
 
+  const allKnownCoderIds = new Set();
+  roundDataById.forEach((counters) => {
+    counters.eligibleRegistrants.forEach((coderId) => allKnownCoderIds.add(String(coderId)));
+    counters.nonExampleSubmitterCoderIds.forEach((coderId) => allKnownCoderIds.add(String(coderId)));
+    counters.finalCandidateCoderIds.forEach((coderId) => allKnownCoderIds.add(String(coderId)));
+  });
+  const normalizedIdentityByCoderId = await loadNormalizedIdentityByCoderId({
+    dataDir: options.dataDir,
+    userPattern: options.userPattern,
+    coderIds: allKnownCoderIds,
+  });
+
+  const memberResolution = await resolveMemberPlanningPrerequisite({
+    options,
+    normalizedPrerequisites,
+    roundDataById,
+    normalizedIdentityByCoderId,
+  });
+  normalizedPrerequisites.memberResolution = {
+    available: memberResolution.available,
+    reason: memberResolution.reason,
+    resolvedMemberIds: memberResolution.resolvedMemberIds,
+  };
+
   const records = selectedRoundIds.map((roundId) =>
-    evaluateRoundPlan(
+    evaluateRoundPlan({
       roundId,
-      roundDataById.get(roundId),
-      existingStateByRoundId.get(roundId),
-      normalizedPrerequisites
-    )
+      counters: roundDataById.get(roundId),
+      existingStateEntry: existingStateByRoundId.get(roundId),
+      prerequisites: normalizedPrerequisites,
+      normalizedIdentityByCoderId,
+      resolvedMemberIds: memberResolution.resolvedMemberIds,
+      skippedFilePath,
+    })
   );
-  const summary = summarizePlan(records, selectedRoundIds);
+  const summary = summarizePlan(records, selectedRoundIds, skippedFilePath);
   return { records, summary, roundDataById };
 };
 

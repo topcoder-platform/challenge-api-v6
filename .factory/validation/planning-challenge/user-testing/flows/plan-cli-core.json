@@ -1,0 +1,98 @@
+{
+  "groupId": "plan-cli-core",
+  "surface": "importer CLI + API verification",
+  "toolsUsed": [
+    "node",
+    "python"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PLAN-001",
+      "status": "pass",
+      "summary": "Help completed with exit code 0 and documented dry-run plus round filters without requiring a valid data directory or database URL.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-001-help.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-001-help.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-001-help.stderr.txt"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-002",
+      "status": "pass",
+      "summary": "Unknown flags, missing values, and malformed --round-ids all failed fast with named errors and emitted no misleading plan output.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-unknown-flag.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-unknown-flag.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-unknown-flag.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-missing-value.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-missing-value.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-missing-value.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-malformed-filter.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-malformed-filter.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-002-invalid-malformed-filter.stderr.txt"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-003",
+      "status": "pass",
+      "summary": "A true planning prerequisite failure (missing legacy data) exited non-zero explicitly, while a dry-run with DATABASE_URL unset still produced a read-only plan for round 14272.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-planning-prereq-missing-data.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-planning-prereq-missing-data.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-planning-prereq-missing-data.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-dry-run-without-db.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-dry-run-without-db.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-003-dry-run-without-db.stderr.txt"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-004",
+      "status": "pass",
+      "summary": "Repeatable --round-id, comma-separated --round-ids, duplicate IDs, whitespace trimming, and unmatched round handling all resolved to the exact sorted set [13897, 14272, 99999999] without widening scope.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-005",
+      "status": "pass",
+      "summary": "Two dry-run executions of the same unresolved round with stdin closed produced identical stdout/stderr and completed without any interactive prompt.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run1.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run1.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run1.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run2.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run2.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-run2.stderr.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-005-determinism-analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-007",
+      "status": "pass",
+      "summary": "The dry-run emitted exactly one parseable PLAN_RECORD per selected round with stable labeled fields for round id, matched challenge id, decision, reason, and summary counts that reconcile to PLAN_SUMMARY.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-013",
+      "status": "pass",
+      "summary": "Each per-round record exposed labeled traceability fields (legacyRoundId, legacyComponentIds, legacyProblemIds) that map decisions back to legacy source identifiers before apply.",
+      "evidence": [
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.meta.json",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-filtering-and-parseability.stdout.txt",
+        "evidence/planning-challenge/plan-cli-core/VAL-PLAN-004-007-013-analysis.json"
+      ]
+    }
+  ],
+  "frictions": [
+    "Dry-run streaming over /mnt/Informix exceeded an initial 120s probe timeout, so evidence capture used 360-480s command timeouts to complete read-only planning runs reliably."
+  ],
+  "blockers": []
+}

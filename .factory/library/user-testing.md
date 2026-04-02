@@ -59,6 +59,7 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - `.env.importer.local` is populated, so live end-to-end apply-mode validation can proceed on the selected dev environment.
 - Pre-existing repo-wide `standard-lint` noise in `challenge-api-v6` should not be mistaken for importer regressions; validators should focus on mission-owned surfaces.
 - The shared dev environment does not necessarily contain every historical legacy member id, so member-owned validation must account for approved `missing-member` skips rather than assuming full one-to-one import coverage.
+- If dry-run/apply returns `target-member-resolution-unavailable`, the validation environment still lacks reachable member lookup configuration. Provide `MEMBER_DB_URL` (or a `DATABASE_URL` that can resolve members) plus a valid `MEMBER_DB_SCHEMA` before expecting populated missing-member partitions or skipped-file records from live runs.
 
 ## Flow Validator Guidance: importer CLI + API verification
 

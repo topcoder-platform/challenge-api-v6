@@ -1,0 +1,28 @@
+{
+  "featureId": "mm-importer-reuse-challenge-safety",
+  "reviewedAt": "2026-04-01T02:59:36Z",
+  "commitId": "29d9b42",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The commit correctly hardens `applyCreateRound()` so reused legacyId matches reject duplicate challenges, reject non-MM/Data Science targets, reject duplicate standard phases, and only backfill missing standard phases. But the feature still falls short of its \"authoritative existing-v6 reuse matching\" requirement because dry-run planning continues to trust snapshot-supplied `challengeId` values instead of discovering and validating the same MM/Data Science reuse target that apply mode uses.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/planning.js",
+        "line": 210,
+        "severity": "blocking",
+        "description": "`evaluateRoundPlan()` treats any `existingStateEntry.challengeId` as a safe reuse target and emits `decision=\"reuse/backfill-only\"` on that basis alone. In the same commit, `importHistoricalMarathonMatches.js:34-35` sources that state only from `loadExistingState(...)`, and `existingState.js:27-35` preserves only `challengeId` plus aggregate counts, with no validation of the architecture's reuse preconditions (exact `challenge.legacyId == round.id`, Marathon Match/Data Science shape, and no duplicate standard phases). Apply mode then re-matches independently by `legacyId` in `apply.js:177-181`, so dry-run can advertise a reused round that apply will instead create anew or reject. That is a direct correctness/safety gap against the feature description's authoritative reuse-matching requirement."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "knowledge",
+      "observation": "The mission's shared-state story around `--existing-state-file` was too weak for this feature: the snapshot format carried `challengeId` and counts, but not the evidence needed to prove authoritative reuse safety. That made it easy for planning code to treat snapshot data as authoritative even though the architecture requires exact legacyId matching plus MM/Data Science and duplicate-phase checks.",
+      "evidence": "The architecture document defines reuse as exact legacyId matching with MM/Data Science and standard-phase safety checks, while historical `data-migration/src/scripts/importHistoricalMarathonMatches/existingState.js` at commit `29d9b42` stored only `challengeId` and aggregate counts from the snapshot."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "I reviewed the mission docs, feature entry, handoff, transcript skeleton, and commit `29d9b42`. Result: fail — apply-path phase preservation was improved, but dry-run/planning still did not use authoritative reuse matching, so dry-run output could disagree with apply behavior for supposedly reusable rounds."
+}

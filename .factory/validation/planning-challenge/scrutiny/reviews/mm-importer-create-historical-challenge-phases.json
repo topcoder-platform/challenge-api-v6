@@ -1,0 +1,28 @@
+{
+  "featureId": "mm-importer-create-historical-challenge-phases",
+  "reviewedAt": "2026-04-01T13:59:04+11:00",
+  "commitId": "13106e58b307b6587a79c1252fe203d01aeada61",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The new create path covers the clean happy path for creating a completed historical Marathon Match challenge with derived Registration/Submission/Review phases, but the apply-mode reuse logic is not safe enough to satisfy the mission invariants. Existing `legacyId` matches are treated as automatic success, so reruns do not reconcile missing standard phases and unsafe/ambiguous challenge matches are silently reused.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/apply.js",
+        "line": 159,
+        "severity": "blocking",
+        "description": "As soon as `challenge.findMany({ where: { legacyId } })` returns any row, `applyCreateRound()` returns `status: \"existing\"` without reading that challenge's phase state or backfilling missing standard phases. That means rerunning apply against an existing challenge that is missing one or more of `Registration` / `Submission` / `Review` will report success but leave the challenge in a state that still violates the feature's expected behavior and VAL-CHALLENGE-003/004/008. The accompanying test at `data-migration/test/importHistoricalMarathonMatches.apply.test.js:136` locks in this behavior by asserting that reruns never call `challengePhase.createMany()`."
+      },
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/apply.js",
+        "line": 154,
+        "severity": "blocking",
+        "description": "The reuse path matches only on `challenge.legacyId`, selects just `id`, and then returns the first row found. It never verifies that there is exactly one match, that the matched challenge is Marathon Match / Data Science, or that the existing phase roster is a safe reuse target. In a database with duplicate `legacyId` rows or a non-MM/DS challenge sharing the same `legacyId`, apply mode will bind to whichever row Prisma returns and falsely report `existing` instead of rejecting the round as ambiguous/unsafe. That breaks the backfill-only safety rule documented in `AGENTS.md` and `.factory/library/architecture.md`."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, shared-state docs, and commit `13106e58b307b6587a79c1252fe203d01aeada61`. Result: fail, with two blocking apply-mode correctness/safety issues—reruns do not converge missing standard phases, and raw `legacyId` reuse can silently bind the importer to an unsafe or ambiguous existing challenge."
+}

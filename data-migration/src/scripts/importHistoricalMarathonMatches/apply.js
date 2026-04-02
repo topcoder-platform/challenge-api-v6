@@ -5,6 +5,12 @@ const {
   loadNormalizedIdentityByCoderId,
   buildEligibleMemberIdentities,
 } = require("./participants");
+const {
+  resolveSkippedFilePath,
+  normalizeSkipRecords,
+  collectReasonCodes,
+  writeSkippedArtifact,
+} = require("./skippedArtifact");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -448,6 +454,20 @@ const isCompletedChallengeResourceConstraintError = (error) => {
   return hasCompletedSignal && hasChallengeSignal && hasConstraintStatus;
 };
 
+const collectPlannedSkipRecords = (roundIds, planRecordByRoundId) => {
+  const records = [];
+  roundIds.forEach((roundId) => {
+    const planRecord = planRecordByRoundId.get(roundId);
+    if (!planRecord || !Array.isArray(planRecord.plannedSkipRecords)) {
+      return;
+    }
+    planRecord.plannedSkipRecords.forEach((record) => {
+      records.push(record);
+    });
+  });
+  return normalizeSkipRecords(records);
+};
+
 const runApplyMode = async ({
   prisma,
   options,
@@ -456,6 +476,18 @@ const runApplyMode = async ({
   normalizedIdentityByCoderId: providedNormalizedIdentityByCoderId,
 }) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
+  const skippedFilePath = resolveSkippedFilePath({
+    skippedFilePath: options.skippedFilePath,
+    roundIds: options.roundIds,
+    cwd: options.cwd || process.cwd(),
+  });
+  const plannedSkipRecords = collectPlannedSkipRecords(options.roundIds, planRecordByRoundId);
+  const skippedArtifact = writeSkippedArtifact({
+    filePath: skippedFilePath,
+    selectedRoundIds: options.roundIds,
+    records: plannedSkipRecords,
+  });
+
   const actionableRoundIds = options.roundIds.filter((roundId) => {
     const counters = plan.roundDataById.get(roundId);
     if (!counters || !counters.round) {
@@ -604,6 +636,11 @@ const runApplyMode = async ({
     },
     { recordType: "apply-summary", created: 0, existing: 0, unmatched: 0, unresolved: 0, errors: 0 }
   );
+  summary.skippedFileArtifact = {
+    path: skippedFilePath,
+    reasonCodes: collectReasonCodes(plannedSkipRecords),
+    recordCount: skippedArtifact.records.length,
+  };
 
   return { records: applyRecords, summary };
 };

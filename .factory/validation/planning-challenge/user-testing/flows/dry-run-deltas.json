@@ -1,0 +1,81 @@
+{
+  "groupId": "dry-run-deltas",
+  "surface": "importer CLI + API verification",
+  "toolsUsed": [
+    "node",
+    "python",
+    "curl"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PLAN-006",
+      "status": "pass",
+      "summary": "Dry-run for round 13897 exited 0 and left both the selected round (challenge a15cbb04-a0d3-4647-85bd-23d8d11e9f3f) and unselected control round 10089 unchanged across challenge, resources, submissions, and reviewSummations snapshots.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.stdout.txt",
+        "planning-challenge/dry-run-deltas/dry-run-13897.exitcode.txt",
+        "planning-challenge/dry-run-deltas/pre-round-13897-snapshot.json",
+        "planning-challenge/dry-run-deltas/post-round-13897-snapshot.json",
+        "planning-challenge/dry-run-deltas/pre-round-10089-snapshot.json",
+        "planning-challenge/dry-run-deltas/post-round-10089-snapshot.json",
+        "planning-challenge/dry-run-deltas/dry-run-non-mutation-diff.json",
+        "planning-challenge/dry-run-deltas/curl-selected-challenge-lookup.json",
+        "planning-challenge/dry-run-deltas/curl-control-challenge-lookup.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-008",
+      "status": "pass",
+      "summary": "PLAN_RECORD classified round 13897 as reuse/backfill-only, named matched challenge a15cbb04-a0d3-4647-85bd-23d8d11e9f3f, and exposed separate deltas for phases, resources, submissions, finalScores, and provisionalScores.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.stdout.txt",
+        "planning-challenge/dry-run-deltas/dry-run-13897.parsed.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-010",
+      "status": "pass",
+      "summary": "Resource planning was separately quantified from submissions: entityDeltas.resources.target=810 while entityDeltas.submissions.target=1980. Legacy data showed 810 eligible registrants, 228 eligible non-example submitters, and 582 eligible registered non-submitters, so the resource target is registration-driven rather than submission-driven.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.parsed.json",
+        "planning-challenge/dry-run-deltas/legacy-round-13897-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-011",
+      "status": "pass",
+      "summary": "Submission planning excluded example runs: PLAN_RECORD reported 1980 nonExampleSubmissions and 3955 exampleSubmissionsFiltered, matching legacy long_component_state submission_number and example_submission_number totals for round 13897.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.parsed.json",
+        "planning-challenge/dry-run-deltas/legacy-round-13897-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-012",
+      "status": "pass",
+      "summary": "The plan distinguished final and provisional score streams with stable fields: plannedFinalScores=229, plannedProvisionalScores=1980, and skippedUnattachableFinalists/finalistsWithoutAttachableSubmission=34.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.parsed.json",
+        "planning-challenge/dry-run-deltas/legacy-round-13897-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-PLAN-014",
+      "status": "blocked",
+      "summary": "The shared fixture is only partially imported, not a fully completed rerun target: the challenge and phases already exist, but pre/post API snapshots still show 0 resources, 0 submissions, and 0 reviewSummations. The observed dry-run therefore reports rerunClassification=partial-backfill and plans creates, so a true post-successful-import no-op rerun cannot be proven in this read-only assignment.",
+      "evidence": [
+        "planning-challenge/dry-run-deltas/dry-run-13897.parsed.json",
+        "planning-challenge/dry-run-deltas/pre-round-13897-snapshot.json",
+        "planning-challenge/dry-run-deltas/post-round-13897-snapshot.json",
+        "planning-challenge/dry-run-deltas/dry-run-non-mutation-diff.json"
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "assertionId": "VAL-PLAN-014",
+      "reason": "Read-only scope plus a partially imported shared fixture prevented verification of the required post-successful-import no-op rerun behavior."
+    }
+  ]
+}

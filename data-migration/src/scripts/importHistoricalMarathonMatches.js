@@ -22,6 +22,11 @@ const {
   createAuth0TokenProvider,
   createResourceApiClient,
 } = require("./importHistoricalMarathonMatches/resourceApi");
+const {
+  TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+  DEFAULT_MEMBER_SCHEMA,
+  createMemberPresenceResolver,
+} = require("./importHistoricalMarathonMatches/targetMemberResolution");
 
 const appRoot = path.resolve(__dirname, "..", "..", "..");
 const requireFromRoot = createRequire(path.join(appRoot, "package.json"));
@@ -72,11 +77,29 @@ const run = async () => {
   const snapshotByRoundId = loadExistingState(options.dataDir, options.existingStateFile);
   const shouldAttemptDatabaseDiscovery =
     options.apply || Boolean(String(process.env.DATABASE_URL || "").trim());
+  const memberDbUrl = String(process.env.MEMBER_DB_URL || process.env.DATABASE_URL || "").trim();
+  const memberDbSchema = String(process.env.MEMBER_DB_SCHEMA || DEFAULT_MEMBER_SCHEMA).trim();
   let prisma = null;
+  let memberLookupPrisma = null;
+  let resolveMemberPresence = null;
 
   if (shouldAttemptDatabaseDiscovery) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
     prisma = new PrismaClient();
+  }
+  if (memberDbUrl) {
+    const { PrismaClient } = requireFromRoot("@prisma/client");
+    const databaseUrl = String(process.env.DATABASE_URL || "").trim();
+    memberLookupPrisma =
+      prisma && databaseUrl && memberDbUrl === databaseUrl
+        ? prisma
+        : new PrismaClient({
+          datasources: {
+            db: {
+              url: memberDbUrl,
+            },
+          },
+        });
   }
 
   try {
@@ -90,6 +113,10 @@ const run = async () => {
         resolved: false,
         reason: CANONICAL_TIMELINE_UNRESOLVED_REASON,
         timelineTemplateId: null,
+      },
+      memberResolution: {
+        available: false,
+        reason: TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
       },
     };
 
@@ -134,6 +161,29 @@ const run = async () => {
       }
     }
 
+    if (memberLookupPrisma) {
+      try {
+        if (memberLookupPrisma !== prisma) {
+          await memberLookupPrisma.$connect();
+        }
+        resolveMemberPresence = createMemberPresenceResolver({
+          prisma: memberLookupPrisma,
+          memberSchema: memberDbSchema,
+        });
+        planningPrerequisites.memberResolution = {
+          available: true,
+        };
+      } catch (error) {
+        planningPrerequisites.memberResolution = {
+          available: false,
+          reason: TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+        };
+        process.stderr.write(
+          `Warning: unable to resolve target-environment members (${error.message}); planning will be unresolved for missing-member classification.\n`
+        );
+      }
+    }
+
     if (!existingStateByRoundId) {
       existingStateByRoundId = await buildExistingStateByRoundId({
         prisma: null,
@@ -142,7 +192,15 @@ const run = async () => {
       });
     }
 
-    const plan = await buildDryRunPlan(options, existingStateByRoundId, planningPrerequisites);
+    const plan = await buildDryRunPlan(
+      {
+        ...options,
+        cwd: process.cwd(),
+        resolveMemberPresence,
+      },
+      existingStateByRoundId,
+      planningPrerequisites
+    );
     if (!options.apply) {
       emitPlanReport(plan);
       return;
@@ -163,6 +221,7 @@ const run = async () => {
       prisma,
       options: {
         ...options,
+        cwd: process.cwd(),
         submitterRoleId,
         resourceClient: createDefaultResourceClient(),
       },
@@ -171,6 +230,9 @@ const run = async () => {
     });
     emitApplyReport(applyResult);
   } finally {
+    if (memberLookupPrisma && memberLookupPrisma !== prisma) {
+      await memberLookupPrisma.$disconnect();
+    }
     if (prisma) {
       await prisma.$disconnect();
     }

@@ -1,3 +1,6 @@
+const os = require("os");
+const path = require("path");
+
 const {
   derivePhaseWindows,
   buildChallengePhaseRows,
@@ -5,6 +8,12 @@ const {
   reconcileSubmitterResourcesForRound,
   runApplyMode,
 } = require("../src/scripts/importHistoricalMarathonMatches/apply");
+
+const buildSkippedFilePath = (suffix) =>
+  path.join(
+    os.tmpdir(),
+    `mm-apply-skipped-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
+  );
 
 describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   test("derives coherent closed MM phase windows from legacy activity", () => {
@@ -305,6 +314,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       prisma,
       options: {
         roundIds: ["9892"],
+        skippedFilePath: buildSkippedFilePath("rerun-convergence"),
         resourceClient: {
           listSubmitterResources: jest.fn().mockResolvedValue([]),
           createSubmitterResource: jest.fn().mockResolvedValue({}),
@@ -556,7 +566,10 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
 
     const result = await runApplyMode({
       prisma,
-      options: { roundIds: ["7000"] },
+      options: {
+        roundIds: ["7000"],
+        skippedFilePath: buildSkippedFilePath("unresolved-round"),
+      },
       plan: {
         records: [
           {
@@ -592,14 +605,21 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         reason: "selected-round-round-type-is-not-marathon-match",
       },
     ]);
-    expect(result.summary).toEqual({
-      recordType: "apply-summary",
-      created: 0,
-      existing: 0,
-      unmatched: 0,
-      unresolved: 1,
-      errors: 0,
-    });
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        recordType: "apply-summary",
+        created: 0,
+        existing: 0,
+        unmatched: 0,
+        unresolved: 1,
+        errors: 0,
+        skippedFileArtifact: {
+          path: expect.stringContaining("mm-apply-skipped-unresolved-round-"),
+          reasonCodes: [],
+          recordCount: 0,
+        },
+      })
+    );
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
   });
@@ -664,6 +684,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       prisma,
       options: {
         roundIds: ["9892"],
+        skippedFilePath: buildSkippedFilePath("resource-reconciliation"),
         resourceClient,
         submitterRoleId: "submitter-role",
       },

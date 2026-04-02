@@ -12,6 +12,7 @@ const DEFAULT_OPTIONS = {
   longSubmissionPattern: "^long_submission_\\d+\\.json$",
   longCompResultPattern: "^long_comp_result_\\d+\\.json$",
   existingStateFile: null,
+  skippedFilePath: null,
   dryRun: true,
   apply: false,
   roundIds: [],
@@ -127,6 +128,11 @@ const parseArgs = (argv) => {
       index += 1;
       continue;
     }
+    if (arg === "--skipped-file") {
+      options.skippedFilePath = requireNextValue(argv, index, "--skipped-file");
+      index += 1;
+      continue;
+    }
     if (arg === "--round-id") {
       const value = requireNextValue(argv, index, "--round-id");
       options.roundIds.push(parseRoundIdValue(value, "--round-id"));
@@ -170,6 +176,7 @@ Planning options:
   --round-ids <id1,id2,...>          Select comma-separated round ids
   --dry-run                          Build a non-mutating deterministic reconciliation plan (default)
   --existing-state-file <path>       Optional snapshot for offline entity-count hints (not authoritative reuse matching)
+  --skipped-file <path>              Optional deterministic skipped-file artifact path (default: ./historical-mm-skipped-<rounds>.json)
 
 Input options:
   --data-dir <path>                  Legacy data directory (default: DATA_DIRECTORY or /mnt/Informix)
