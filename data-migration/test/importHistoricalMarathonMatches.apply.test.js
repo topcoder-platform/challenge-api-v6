@@ -751,6 +751,134 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     ]);
   });
 
+  test("apply mode filters planned missing-member resource skips before Resource API creates", async () => {
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([]),
+        createMany: jest.fn(),
+      },
+    };
+
+    const phaseRows = [
+      { id: "phase-registration", name: "Registration" },
+      { id: "phase-submission", name: "Submission" },
+      { id: "phase-review", name: "Review" },
+    ];
+
+    const prisma = {
+      challengeType: {
+        findMany: jest.fn().mockResolvedValue([{ id: "type-mm" }]),
+      },
+      challengeTrack: {
+        findMany: jest.fn().mockResolvedValue([{ id: "track-ds" }]),
+      },
+      phase: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce(phaseRows)
+          .mockResolvedValueOnce(phaseRows),
+      },
+      challengeTimelineTemplate: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            timelineTemplateId: "timeline-mm",
+            isDefault: true,
+            timelineTemplate: {
+              phases: [
+                { phaseId: "phase-registration" },
+                { phaseId: "phase-submission" },
+                { phaseId: "phase-review" },
+              ],
+            },
+          },
+        ]),
+      },
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const resourceClient = {
+      listSubmitterResources: jest.fn().mockResolvedValue([]),
+      createSubmitterResource: jest.fn().mockImplementation(async ({ memberId }) => {
+        if (memberId === "2") {
+          throw new Error("missing-member should have been filtered before Resource API create");
+        }
+        return {};
+      }),
+    };
+
+    const result = await runApplyMode({
+      prisma,
+      options: {
+        roundIds: ["9892"],
+        skippedFilePath: buildSkippedFilePath("resource-missing-member-filter"),
+        resourceClient,
+        submitterRoleId: "submitter-role",
+      },
+      plan: {
+        records: [
+          {
+            legacyRoundId: "9892",
+            decision: "create",
+            reason: "no-matching-v6-challenge-found",
+            plannedSkipRecords: [
+              {
+                legacyRoundId: "9892",
+                memberId: "2",
+                reasonCode: "missing-member",
+                affectedSurfaces: ["resource", "submission", "final-score", "provisional-score"],
+              },
+            ],
+          },
+        ],
+        roundDataById: new Map([
+          [
+            "9892",
+            {
+              round: { round_id: "9892", round_type_id: "13" },
+              registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+              registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+              earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+              earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+              latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+              eligibleRegistrants: new Set(["1", "2"]),
+              nonExampleSubmissions: 3,
+            },
+          ],
+        ]),
+      },
+      actor: "importer",
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+        ["2", { coderId: "2", memberId: 2, memberHandle: "bravo" }],
+      ]),
+    });
+
+    expect(resourceClient.createSubmitterResource).toHaveBeenCalledTimes(1);
+    expect(resourceClient.createSubmitterResource).toHaveBeenCalledWith({
+      challengeId: "challenge-1",
+      memberId: "1",
+      roleId: "submitter-role",
+    });
+    expect(result.records).toEqual([
+      {
+        recordType: "apply-record",
+        legacyRoundId: "9892",
+        status: "created",
+        challengeId: "challenge-1",
+        resourceReconciliation: {
+          targetEligibleRegistrants: 1,
+          existingSubmitterResources: 0,
+          createdSubmitterResources: 1,
+          unchangedSubmitterResources: 0,
+        },
+      },
+    ]);
+  });
+
   test("resource reconciliation temporarily transitions COMPLETED challenges and restores status on retry success", async () => {
     const completedRestrictionError = new Error(
       "Failed to create submitter resource for challenge challenge-1 member 2 (400 Bad Request): challenge is completed."

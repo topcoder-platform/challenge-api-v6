@@ -10,6 +10,7 @@ const {
   normalizeSkipRecords,
   collectReasonCodes,
   writeSkippedArtifact,
+  MISSING_MEMBER_REASON_CODE,
 } = require("./skippedArtifact");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
@@ -468,6 +469,41 @@ const collectPlannedSkipRecords = (roundIds, planRecordByRoundId) => {
   return normalizeSkipRecords(records);
 };
 
+const hasAffectedSurface = (record, surfaceName) =>
+  Array.isArray(record && record.affectedSurfaces) &&
+  record.affectedSurfaces.some(
+    (surface) => String(surface || "").trim().toLowerCase() === String(surfaceName || "").trim().toLowerCase()
+  );
+
+const collectMissingMemberResourceSkipMemberIdsByRoundId = (roundIds, planRecordByRoundId) => {
+  const byRoundId = new Map();
+
+  roundIds.forEach((roundId) => {
+    const planRecord = planRecordByRoundId.get(roundId);
+    const skipMemberIds = new Set();
+
+    if (planRecord && Array.isArray(planRecord.plannedSkipRecords)) {
+      planRecord.plannedSkipRecords.forEach((record) => {
+        const reasonCode = String(record && record.reasonCode ? record.reasonCode : "").trim();
+        if (reasonCode !== MISSING_MEMBER_REASON_CODE) {
+          return;
+        }
+        if (!hasAffectedSurface(record, "resource")) {
+          return;
+        }
+        const memberId = parseMemberId(record && record.memberId);
+        if (memberId) {
+          skipMemberIds.add(memberId);
+        }
+      });
+    }
+
+    byRoundId.set(roundId, skipMemberIds);
+  });
+
+  return byRoundId;
+};
+
 const runApplyMode = async ({
   prisma,
   options,
@@ -482,6 +518,8 @@ const runApplyMode = async ({
     cwd: options.cwd || process.cwd(),
   });
   const plannedSkipRecords = collectPlannedSkipRecords(options.roundIds, planRecordByRoundId);
+  const missingMemberResourceSkipMemberIdsByRoundId =
+    collectMissingMemberResourceSkipMemberIdsByRoundId(options.roundIds, planRecordByRoundId);
   const skippedArtifact = writeSkippedArtifact({
     filePath: skippedFilePath,
     selectedRoundIds: options.roundIds,
@@ -600,6 +638,8 @@ const runApplyMode = async ({
         resourceClient,
         submitterRoleId,
         challengeStatusController,
+        missingMemberResourceSkipMemberIds:
+          missingMemberResourceSkipMemberIdsByRoundId.get(roundId) || new Set(),
       });
       applyRecords.push({
         recordType: "apply-record",
@@ -660,11 +700,16 @@ const reconcileSubmitterResourcesForRound = async ({
   resourceClient,
   submitterRoleId,
   challengeStatusController,
+  missingMemberResourceSkipMemberIds = new Set(),
 }) => {
+  const plannedMissingMemberSkipIds =
+    missingMemberResourceSkipMemberIds instanceof Set
+      ? missingMemberResourceSkipMemberIds
+      : new Set();
   const eligibleMemberIdentities = buildEligibleMemberIdentities({
     eligibleCoderIds: counters && counters.eligibleRegistrants ? counters.eligibleRegistrants : new Set(),
     normalizedIdentityByCoderId,
-  });
+  }).filter((identity) => !plannedMissingMemberSkipIds.has(identity.memberId));
   const targetEligibleRegistrants = eligibleMemberIdentities.length;
   if (targetEligibleRegistrants === 0) {
     return {
