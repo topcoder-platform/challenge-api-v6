@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-missing-member-planning-and-reporting",
+  "reviewedAt": "2026-04-03T00:51:16Z",
+  "commitId": "0bb291a",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The missing-member planning/reporting implementation now fails closed when member-resolution prerequisites are unavailable, keeps `--existing-state-file` supplemental-only, and emits deterministic planned/apply skip artifacts with stable reason codes and affected surfaces.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and resulting planning/apply code paths for `mm-importer-missing-member-planning-and-reporting` at commit `0bb291a`. Result: pass. The feature cleanly partitions resources/submissions/finals/provisionals into materialized vs. missing-member vs. explicit-skip buckets and preserves deterministic skipped-artifact output."
+}

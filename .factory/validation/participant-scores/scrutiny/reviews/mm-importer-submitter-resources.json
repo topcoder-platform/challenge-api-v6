@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-submitter-resources",
+  "reviewedAt": "2026-04-03T00:51:16Z",
+  "commitId": "682e77eba961e8f05d4569b93a45fb1746d491cc",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Apply-mode resource reconciliation correctly filters members already classified as `missing-member` before Resource API creates, deduplicates against existing submitter tuples, and restores challenge status after the temporary writable transition path.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and current apply/resource API integration for `mm-importer-submitter-resources` at commit `682e77eba961e8f05d4569b93a45fb1746d491cc`. Result: pass. The feature now skips planned missing members during resource creation and keeps the completed-challenge restoration logic bounded to the approved exception path."
+}

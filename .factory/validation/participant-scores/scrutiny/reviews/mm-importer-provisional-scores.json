@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-provisional-scores",
+  "reviewedAt": "2026-04-03T00:51:16Z",
+  "commitId": "f52e93aa7e4bc8a1879072afcf58577b44cfdc2e",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "Provisional-score import mirrors submission identity one-to-one via `legacySubmissionId`, rejects member mismatches against imported submissions, and preserves rerun-stable score identities while propagating missing-member skip records.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and provisional-score reconciliation code for `mm-importer-provisional-scores` at commit `f52e93aa7e4bc8a1879072afcf58577b44cfdc2e`. Result: pass. The feature keeps provisional history aligned with imported non-example submissions and maintains deterministic rerun behavior for score identities and skipped entries."
+}

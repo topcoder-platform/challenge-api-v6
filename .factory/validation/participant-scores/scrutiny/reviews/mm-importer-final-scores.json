@@ -1,0 +1,22 @@
+{
+  "featureId": "mm-importer-final-scores",
+  "reviewedAt": "2026-04-03T00:51:16Z",
+  "commitId": "dde7317",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The final-score feature correctly attaches one final summation to each member's latest imported non-example submission, preserves the agreed fallback precedence, and distinguishes missing-member skips from finalist-without-attachable-submission skips.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/finalScores.js",
+        "line": 182,
+        "severity": "non_blocking",
+        "description": "`const rankingScore = rankingScoreByRoundCoder.get(`${roundId}:${coderId}`) || null;` treats a legitimate fallback ranking score of `0` as missing because `0 || null` returns `null`. If a future round needs the ranking-score fallback for a zero-point finalist, apply mode will throw `missing a numeric score` instead of importing `aggregateScore: 0`. Use nullish handling (`?? null`) so zero remains a valid fallback score."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and final-score reconciliation paths for `mm-importer-final-scores` at commit `dde7317`. Result: pass with one non-blocking edge-case note. The main logic is sound, but the ranking-score fallback currently drops legitimate zero values because it uses `|| null` instead of nullish handling."
+}
