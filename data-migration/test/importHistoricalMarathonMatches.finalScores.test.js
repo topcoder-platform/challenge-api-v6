@@ -98,6 +98,47 @@ describe("importHistoricalMarathonMatches final score import", () => {
     ]);
   });
 
+  test("preserves ranking-score fallback value of zero as a valid final score", async () => {
+    const zeroFallbackFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-zero-fallback-fixture-")
+    );
+    try {
+      writeJson(
+        zeroFallbackFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [{ long_component_state_id: "3001", round_id: "9999", coder_id: "6", points: "0" }]
+      );
+      writeJson(
+        zeroFallbackFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [{ round_id: "9999", coder_id: "6", system_point_total: null, point_total: null, placed: "1" }]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: zeroFallbackFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["9999"],
+      });
+
+      const zeroFallbackRow = (rowsByRoundId.get("9999") || []).find(
+        (row) => row.coderId === "6"
+      );
+      expect(zeroFallbackRow).toEqual(
+        expect.objectContaining({
+          legacyRoundId: "9999",
+          coderId: "6",
+          scoreSource: "ranking_score",
+          aggregateScore: 0,
+        })
+      );
+    } finally {
+      fs.rmSync(zeroFallbackFixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test("attaches one final per member to latest imported non-example submission and tracks skips", async () => {
     const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
       dataDir: fixtureDir,

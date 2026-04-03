@@ -179,7 +179,7 @@ const loadLegacyFinalRowsByRoundId = async ({
 
         const systemPointTotal = parseNumericScore(row && row.system_point_total);
         const pointTotal = parseNumericScore(row && row.point_total);
-        const rankingScore = rankingScoreByRoundCoder.get(`${roundId}:${coderId}`) || null;
+        const rankingScore = rankingScoreByRoundCoder.get(`${roundId}:${coderId}`) ?? null;
         const { aggregateScore, scoreSource } = deriveFinalScore({
           systemPointTotal,
           pointTotal,
