@@ -100,6 +100,75 @@ describe("importHistoricalMarathonMatches existing v6 state discovery", () => {
     });
   });
 
+  test("prefers authoritative linked-record discovery counts over snapshot hints", async () => {
+    const prisma = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "challenge-1",
+            legacyId: 9892,
+            typeId: "type-mm",
+            trackId: "track-ds",
+          },
+        ]),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { challengeId: "challenge-1", name: "Registration" },
+          { challengeId: "challenge-1", name: "Submission" },
+          { challengeId: "challenge-1", name: "Review" },
+        ]),
+      },
+    };
+
+    const existingStateByRoundId = await buildExistingStateByRoundId({
+      prisma,
+      roundIds: ["9892"],
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      snapshotByRoundId: new Map([
+        [
+          "9892",
+          {
+            challengeId: "challenge-1",
+            existing: {
+              resources: 1,
+              submissions: 2,
+              finalScores: 3,
+              provisionalScores: 4,
+            },
+          },
+        ],
+      ]),
+      resolveLinkedCountsByChallengeId: async () =>
+        new Map([
+          [
+            "challenge-1",
+            {
+              resources: 8,
+              submissions: 9,
+              finalScores: 5,
+              provisionalScores: 11,
+            },
+          ],
+        ]),
+    });
+
+    expect(existingStateByRoundId.get("9892")).toEqual({
+      legacyRoundId: "9892",
+      matchStatus: "safe",
+      reason: "existing-v6-challenge-found",
+      challengeId: "challenge-1",
+      existing: {
+        phases: 3,
+        resources: 8,
+        submissions: 9,
+        finalScores: 5,
+        provisionalScores: 11,
+      },
+    });
+  });
+
   test("marks duplicate legacy matches as ambiguous", async () => {
     const prisma = {
       challenge: {

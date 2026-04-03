@@ -19,6 +19,9 @@ const {
   buildExistingStateByRoundId,
 } = require("./importHistoricalMarathonMatches/existingState");
 const {
+  createLinkedRecordCountResolver,
+} = require("./importHistoricalMarathonMatches/linkedCounts");
+const {
   createAuth0TokenProvider,
   createResourceApiClient,
 } = require("./importHistoricalMarathonMatches/resourceApi");
@@ -104,10 +107,10 @@ const run = async () => {
           },
         });
   }
-  if (options.apply) {
-    if (!reviewDbUrl) {
-      throw new Error("REVIEW_DB_URL must be set for apply mode submission import.");
-    }
+  if (options.apply && !reviewDbUrl) {
+    throw new Error("REVIEW_DB_URL must be set for apply mode submission import.");
+  }
+  if (reviewDbUrl) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
     const databaseUrl = String(process.env.DATABASE_URL || "").trim();
     reviewPrisma =
@@ -144,12 +147,40 @@ const run = async () => {
       try {
         const marathonTypeId = await resolveMarathonTypeId(prisma);
         const dataScienceTrackId = await resolveDataScienceTrackId(prisma);
+        let resolveLinkedCountsByChallengeId = null;
+        if (reviewPrisma || String(process.env.RESOURCES_API_URL || "").trim()) {
+          let planningResourceClient = null;
+          if (String(process.env.RESOURCES_API_URL || "").trim()) {
+            try {
+              planningResourceClient = createDefaultResourceClient();
+            } catch (error) {
+              process.stderr.write(
+                `Warning: unable to initialize Resource API discovery client (${error.message}); planning linked counts will fall back to snapshot hints.\n`
+              );
+            }
+          }
+          try {
+            resolveLinkedCountsByChallengeId = await createLinkedRecordCountResolver({
+              resourceClient: planningResourceClient,
+              reviewClient: reviewPrisma,
+              reviewSchema: reviewDbSchema,
+              submitterRoleId: String(
+                process.env.SUBMITTER_ROLE_ID || DEFAULT_SUBMITTER_ROLE_ID
+              ).trim(),
+            });
+          } catch (error) {
+            process.stderr.write(
+              `Warning: unable to initialize authoritative linked-count discovery (${error.message}); planning linked counts will fall back to snapshot hints.\n`
+            );
+          }
+        }
         existingStateByRoundId = await buildExistingStateByRoundId({
           prisma,
           roundIds: options.roundIds,
           marathonTypeId,
           dataScienceTrackId,
           snapshotByRoundId,
+          resolveLinkedCountsByChallengeId,
         });
         planningPrerequisites.authoritativeDiscovery = { available: true };
         try {

@@ -105,6 +105,40 @@ const normalizeSnapshotCountsForChallenge = (snapshotEntry, matchedChallengeId) 
   return normalizeExistingCounts(snapshotEntry.existing);
 };
 
+const normalizeAuthoritativeLinkedCounts = (counts = {}) => ({
+  resources:
+    counts.resources === undefined || counts.resources === null
+      ? null
+      : parseNonNegativeInteger(counts.resources),
+  submissions:
+    counts.submissions === undefined || counts.submissions === null
+      ? null
+      : parseNonNegativeInteger(counts.submissions),
+  finalScores:
+    counts.finalScores === undefined || counts.finalScores === null
+      ? null
+      : parseNonNegativeInteger(counts.finalScores),
+  provisionalScores:
+    counts.provisionalScores === undefined || counts.provisionalScores === null
+      ? null
+      : parseNonNegativeInteger(counts.provisionalScores),
+});
+
+const mergeLinkedCounts = ({ snapshotCounts, authoritativeCounts }) => ({
+  resources: Number.isFinite(authoritativeCounts.resources)
+    ? authoritativeCounts.resources
+    : snapshotCounts.resources,
+  submissions: Number.isFinite(authoritativeCounts.submissions)
+    ? authoritativeCounts.submissions
+    : snapshotCounts.submissions,
+  finalScores: Number.isFinite(authoritativeCounts.finalScores)
+    ? authoritativeCounts.finalScores
+    : snapshotCounts.finalScores,
+  provisionalScores: Number.isFinite(authoritativeCounts.provisionalScores)
+    ? authoritativeCounts.provisionalScores
+    : snapshotCounts.provisionalScores,
+});
+
 const buildDefaultExistingStateEntry = (legacyRoundId) => ({
   legacyRoundId,
   matchStatus: "none",
@@ -119,6 +153,7 @@ const buildExistingStateByRoundId = async ({
   marathonTypeId,
   dataScienceTrackId,
   snapshotByRoundId = new Map(),
+  resolveLinkedCountsByChallengeId = null,
 }) => {
   const byRoundId = new Map();
   roundIds.forEach((roundId) => {
@@ -184,6 +219,8 @@ const buildExistingStateByRoundId = async ({
     phaseRowsByChallengeId.get(row.challengeId).push(row);
   });
 
+  const safeRoundEntries = [];
+
   roundIds.forEach((roundId) => {
     const candidates = challengeRowsByLegacyRoundId.get(roundId) || [];
     if (candidates.length === 0) {
@@ -225,20 +262,51 @@ const buildExistingStateByRoundId = async ({
       });
       return;
     }
+    safeRoundEntries.push({
+      roundId,
+      challengeId: candidate.id,
+      phaseCount: candidatePhaseRows.length,
+      snapshotCounts: normalizeSnapshotCountsForChallenge(
+        snapshotByRoundId.get(roundId),
+        candidate.id
+      ),
+    });
+  });
 
-    const snapshotEntry = snapshotByRoundId.get(roundId);
-    const snapshotCounts = normalizeSnapshotCountsForChallenge(snapshotEntry, candidate.id);
-    byRoundId.set(roundId, {
-      legacyRoundId: roundId,
+  let authoritativeCountsByChallengeId = new Map();
+  if (safeRoundEntries.length > 0 && typeof resolveLinkedCountsByChallengeId === "function") {
+    try {
+      const resolvedCounts = await resolveLinkedCountsByChallengeId({
+        challengeIds: safeRoundEntries.map((entry) => entry.challengeId),
+      });
+      if (resolvedCounts instanceof Map) {
+        authoritativeCountsByChallengeId = resolvedCounts;
+      }
+    } catch {
+      authoritativeCountsByChallengeId = new Map();
+    }
+  }
+
+  safeRoundEntries.forEach((entry) => {
+    const authoritativeCounts = normalizeAuthoritativeLinkedCounts(
+      authoritativeCountsByChallengeId.get(entry.challengeId)
+    );
+    const mergedLinkedCounts = mergeLinkedCounts({
+      snapshotCounts: entry.snapshotCounts,
+      authoritativeCounts,
+    });
+
+    byRoundId.set(entry.roundId, {
+      legacyRoundId: entry.roundId,
       matchStatus: "safe",
       reason: "existing-v6-challenge-found",
-      challengeId: candidate.id,
+      challengeId: entry.challengeId,
       existing: {
-        phases: candidatePhaseRows.length,
-        resources: snapshotCounts.resources,
-        submissions: snapshotCounts.submissions,
-        finalScores: snapshotCounts.finalScores,
-        provisionalScores: snapshotCounts.provisionalScores,
+        phases: entry.phaseCount,
+        resources: mergedLinkedCounts.resources,
+        submissions: mergedLinkedCounts.submissions,
+        finalScores: mergedLinkedCounts.finalScores,
+        provisionalScores: mergedLinkedCounts.provisionalScores,
       },
     });
   });
