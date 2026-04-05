@@ -1,0 +1,315 @@
+{
+  "groupId": "round-10815-scores-cross",
+  "testedAt": "2026-04-04T22:24:03Z",
+  "isolation": {
+    "surface": "importer CLI + API verification",
+    "roundIds": [
+      10815,
+      14272
+    ],
+    "challengeId": "5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+    "environment": "shared existing dev environment",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1"
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-SCORE-002",
+      "title": "Create-path finals match legacy fallback score sources or are explicitly skipped with distinct reasons",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the round-10815 final-score apply reconciliation and API-vs-legacy comparison.",
+          "expected": "Each legacy finalist should either import with the agreed fallback precedence, be marked `missing-member`, or be explicitly skipped as unattachable.",
+          "observed": "For round 10815 the final-score reconciliation reported `imported=266`, `missingMemberSkipped=2`, and `explicitSkipped=15`; the API-vs-legacy checker reported `reconciles=true`, `scoreMatchesLegacy=true`, and `explicitUnattachableFinalSkips=15`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/importer-apply.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Review API results were compared to legacy final-result rows through the archived validation script."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-004",
+      "title": "Whole-round provisional history maps one-to-one to imported non-example submissions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run the provisional-score round-wide reconciliation for 10815.",
+          "expected": "Each imported non-example submission should have exactly one provisional summation and the imported provisional identity set should match imported submission identities one-to-one.",
+          "observed": "The provisional validator reported `checksPassed=true` with 1444 imported submissions and 1444 imported provisional summations; imported plus missing-member skipped provisional identities reconciled exactly to the 1445 legacy non-example rows."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "GET /v6/submissions and GET /v6/reviewSummations snapshots were reconciled against legacy provisional rows."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-005",
+      "title": "Mixed-history members keep the full provisional score sequence and exclude examples",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the Marinov-specific provisional validation in the archived 10815 run.",
+          "expected": "Member 22664170 should retain the full 27-row provisional sequence ordered by legacySubmissionId and exclude example runs.",
+          "observed": "Marinov had 27 imported submissions and 27 provisional summations matching the 27-row legacy non-example sequence by `legacySubmissionId` with exact score parity; example runs remained excluded."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Member-scoped review and submission joins were compared against legacy provisional rows."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-007",
+      "title": "Imported legacy rounds create zero example review summations",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect current API summary and archived review-summation snapshots for imported rounds.",
+          "expected": "No example submissions or review summations should exist after import.",
+          "observed": "Current API summary showed `submissionExampleCount=0` and `reviewExampleCount=0` for 10815, 13897, and 17948; archived final/provisional validation also reported `noExampleFinalSummations=true`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/plan-dry-run/current-api-summary.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "GET /v6/submissions and GET /v6/reviewSummations API summaries were inspected with auth for reviewSummations."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-008",
+      "title": "Finalists without non-example submissions are explicitly skipped with a non-missing-member reason",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect final-score reconciliation and skipped-artifact records for the unattachable-finalists fixture 10815.",
+          "expected": "Unattachable finalists should be recorded with a distinct non-missing-member reason and should not produce orphan finals.",
+          "observed": "Round 10815 recorded 15 `finalist-without-attachable-submission` skips and the score validator reported `noExampleFinalSummations=true` plus correct latest-submission attachment for imported finals."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Skipped artifact and Review API evidence were compared to legacy finalist rows."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-010",
+      "title": "Provisional history reconciles imported submissions and missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect round-10815 provisional reconciliation output and skipped artifact.",
+          "expected": "Imported provisional rows plus missing-member provisional skips should reconcile one-for-one to the legacy non-example submission set.",
+          "observed": "Apply reported `legacyNonExampleProvisionalScores=1445`, `importedProvisionalScores=1444`, and `missingMemberSkippedProvisionalScores=1`; the archived reconciliation confirmed exact identity parity after combining imported and skipped rows."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/importer-apply.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Review API provisional output was reconciled against legacy submission_points rows."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-011",
+      "title": "Missing-member score skips suppress the member's full score footprint",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect missing-member score entries for round 10815 and compare to review surfaces.",
+          "expected": "Missing members should not produce final or provisional review rows.",
+          "observed": "Member 22669623 was recorded in the skipped artifact for `final-score` and `provisional-score` (plus resource/submission) and did not appear as an imported final/provisional participant in the validated API-vs-legacy checks."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Review API and skipped-artifact comparison only."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-001",
+      "title": "Round 10815 reaches the fully reconciled expected footprint modulo missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the archived 10815 reconciliation checker against challenge/resources/submissions/review surfaces and skipped artifact.",
+          "expected": "The visible footprint plus missing-member skips should reconcile to the expected legacy totals and every visible review row should attach to a visible imported submission.",
+          "observed": "The checker reported resources `828+8=836`, submissions `1444+1=1445`, and visible submitters `266+1=267`; all visible reviewSummations referenced visible imported submissions. AGENTS.md documents the shared-fixture challenge status `ACTIVE` as a known pre-existing baseline that should not be treated as an importer regression."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/pre-summary.json",
+          "participant-scores/round-10815-footprint/post-summary.json",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/plan-dry-run/current-api-summary.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Challenge API, Resource API, submissions API, and reviewSummations API were all used in the archived reconciliation."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-003",
+      "title": "Registered non-submitters stay resources-only while missing members stay fully skipped",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the archived participant and score reconciliation for 10815.",
+          "expected": "Registered non-submitters should appear only as resources; missing members should appear only in skipped artifacts and not on imported writable surfaces.",
+          "observed": "The reconciliation reported imported submission/final/provisional member sets plus skipped missing-member entries matching the legacy non-example submitter set; missing members were absent from imported resource/submission/score surfaces and present only in the skipped artifact."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-resources.json",
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Resource, submissions, and review APIs were compared against legacy participant roles."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-004",
+      "title": "Score history stays attached to the correct non-example submission across surfaces",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the archived Marinov cross-surface validation for 10815.",
+          "expected": "The latest imported non-example submission should carry the final score and provisional rows should attach only to imported non-example submissions.",
+          "observed": "Marinov's latest non-example submission timestamp `1180539064719` carried the attached final score, and the 27 provisional rows all joined to imported non-example submissions only."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Member-scoped submission/review joins were used for the archived validation."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-006",
+      "title": "Multi-round filters bound the entire import blast radius including skipped-member subsets",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the archived multi-round apply comparator for 10815 and 14272 with control round 17948.",
+          "expected": "Writes and skipped entries should stay confined to selected round ids and the control round should remain unchanged.",
+          "observed": "The archived apply summary reported `existing=1 (10815)` and `unresolved=1 (14272)`; the skipped artifact referenced only round 10815, and the control round 17948 remained unchanged in pre/post snapshots."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-14272-control.stdout.txt",
+          "participant-scores/plan-dry-run/current-api-summary.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Challenge/resource/submission/review snapshots were compared before and after the multi-round apply run."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-007",
+      "title": "Missing-member skips suppress the member's entire writable footprint across surfaces",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the round-10815 missing-member artifact and the archived cross-surface consistency check.",
+          "expected": "Missing members should have no imported resource, submission, final, or provisional rows for the affected surfaces.",
+          "observed": "The consistency check found zero violations: missing-member entries corresponded to absent linked records on the affected surfaces, while resolvable members imported normally."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-resources.json",
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Resource, submissions, and review APIs were checked against skipped-artifact identities."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-008",
+      "title": "Skipped-file reasons stay consistent with linked-record presence across surfaces",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run the archived skip-reason consistency checker for 10815.",
+          "expected": "Missing-member and non-missing-member reasons should align with the actual presence/absence of linked records on the affected surfaces.",
+          "observed": "The checker returned zero violations: `missing-member` entries mapped to absent linked records on the named surfaces, and `finalist-without-attachable-submission` entries remained distinct from missing-member cases."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-review-summations.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Skipped-artifact and linked-record API comparison only."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The round-10815 shared fixture remains ACTIVE even though the original planning create-path validation created it as COMPLETED.",
+      "resolved": true,
+      "resolution": "Applied the higher-precedence AGENTS.md guidance that this is a shared-fixture baseline issue, then validated the participant/score footprint modulo that known non-regression.",
+      "affectedAssertions": [
+        "VAL-CROSS-001"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Validated 13 score/cross assertions centered on round 10815 and the 10815/14272 multi-round filter: all passed. Evidence confirmed fallback-heavy final-score reconciliation, one-to-one provisional history, zero example score artifacts, explicit unattachable-finalist skips, full imported-plus-skipped cross-surface reconciliation, and exact selected-round confinement."
+}
