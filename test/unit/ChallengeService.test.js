@@ -1225,6 +1225,35 @@ describe("challenge service unit tests", () => {
       });
     };
 
+    const createProjectActivationChallenge = async (status = ChallengeStatusEnum.NEW) => {
+      return prisma.challenge.create({
+        data: {
+          id: uuid(),
+          name: `Project activation check ${Date.now()}`,
+          description: "project activation check",
+          typeId: data.challenge.typeId,
+          trackId: data.challenge.trackId,
+          timelineTemplateId: data.timelineTemplate.id,
+          projectId: 12345,
+          startDate: new Date(),
+          status,
+          tags: [],
+          groups: [],
+          createdBy: "activation-test",
+          updatedBy: "activation-test",
+        },
+      });
+    };
+
+    const buildActivationReviewers = () => [
+      {
+        phaseId: data.phase.id,
+        scorecardId: "activation-scorecard",
+        isMemberReview: false,
+        aiWorkflowId: "workflow-123",
+      },
+    ];
+
     it("update challenge successfully 1", async () => {
       const challengeData = testChallengeData;
       const result = await service.updateChallenge(
@@ -1861,14 +1890,7 @@ describe("challenge service unit tests", () => {
           activationChallenge.id,
           {
             status: ChallengeStatusEnum.ACTIVE,
-            reviewers: [
-              {
-                phaseId: data.phase.id,
-                scorecardId: "activation-scorecard",
-                isMemberReview: false,
-                aiWorkflowId: "workflow-123",
-              },
-            ],
+            reviewers: buildActivationReviewers(),
           },
         );
         should.equal(updated.status, ChallengeStatusEnum.ACTIVE);
@@ -1876,6 +1898,153 @@ describe("challenge service unit tests", () => {
         should.equal(updated.reviewers.length, 1);
         should.equal(updated.reviewers[0].scorecardId, "activation-scorecard");
       } finally {
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+    });
+
+    it("update challenge - prevent activating with an inactive project billing account", async () => {
+      const activationChallenge = await createProjectActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        active: false,
+        billingAccountId: "80001061",
+        endDate: "2099-01-01T00:00:00.000Z",
+        markup: 0.25,
+      });
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: buildActivationReviewers(),
+          },
+        );
+      } catch (e) {
+        should.equal(
+          e.message,
+          "Cannot activate challenge because the project billing account is inactive.",
+        );
+        return;
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+
+      throw new Error("should not reach here");
+    });
+
+    it("update challenge - prevent activating with an expired project billing account", async () => {
+      const activationChallenge = await createProjectActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        active: true,
+        billingAccountId: "80001061",
+        endDate: "2000-01-01T00:00:00.000Z",
+        markup: 0.25,
+      });
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: buildActivationReviewers(),
+          },
+        );
+      } catch (e) {
+        should.equal(
+          e.message,
+          "Cannot activate challenge because the project billing account is expired.",
+        );
+        return;
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+
+      throw new Error("should not reach here");
+    });
+
+    it("update challenge - prevent activating with insufficient project billing funds", async () => {
+      const activationChallenge = await createProjectActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      const originalGetBillingAccountDetails = projectHelper.getBillingAccountDetails;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        active: true,
+        billingAccountId: "80001061",
+        endDate: "2099-01-01T00:00:00.000Z",
+        markup: 0.25,
+      });
+      projectHelper.getBillingAccountDetails = async () => ({
+        active: true,
+        billingAccountId: "80001061",
+        endDate: "2099-01-01T00:00:00.000Z",
+        status: "ACTIVE",
+        totalBudgetRemaining: 0,
+      });
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: buildActivationReviewers(),
+          },
+        );
+      } catch (e) {
+        should.equal(
+          e.message,
+          "Cannot activate challenge because the project billing account has insufficient remaining funds.",
+        );
+        return;
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        projectHelper.getBillingAccountDetails = originalGetBillingAccountDetails;
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+
+      throw new Error("should not reach here");
+    });
+
+    it("update challenge - allow activating with a valid project billing account", async () => {
+      const activationChallenge = await createProjectActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      const originalGetBillingAccountDetails = projectHelper.getBillingAccountDetails;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        active: true,
+        billingAccountId: "80001061",
+        endDate: "2099-01-01T00:00:00.000Z",
+        markup: 0.25,
+      });
+      projectHelper.getBillingAccountDetails = async () => ({
+        active: true,
+        billingAccountId: "80001061",
+        endDate: "2099-01-01T00:00:00.000Z",
+        status: "ACTIVE",
+        totalBudgetRemaining: 150,
+      });
+
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: buildActivationReviewers(),
+          },
+        );
+        should.equal(updated.status, ChallengeStatusEnum.ACTIVE);
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        projectHelper.getBillingAccountDetails = originalGetBillingAccountDetails;
         await prisma.challenge.delete({ where: { id: activationChallenge.id } });
       }
     });

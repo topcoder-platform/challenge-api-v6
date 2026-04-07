@@ -2413,6 +2413,168 @@ function validateTask(currentUser, challenge, data, challengeResources) {
   }
 }
 
+/**
+ * Normalizes optional text values used by launch validation.
+ *
+ * @param {unknown} value Raw upstream value.
+ * @returns {string|undefined} Trimmed string or `undefined` when empty.
+ */
+function normalizeOptionalString(value) {
+  if (_.isNil(value)) {
+    return undefined;
+  }
+
+  const normalizedValue = _.toString(value).trim();
+
+  return normalizedValue || undefined;
+}
+
+/**
+ * Normalizes optional numeric values used by launch validation.
+ *
+ * @param {unknown} value Raw upstream value.
+ * @returns {number|undefined} Parsed number or `undefined` when invalid.
+ */
+function normalizeOptionalNumber(value) {
+  if (_.isNil(value) || value === "") {
+    return undefined;
+  }
+
+  const normalizedValue = _.toNumber(value);
+
+  return Number.isFinite(normalizedValue) ? normalizedValue : undefined;
+}
+
+/**
+ * Resolves billing-account activity from either a boolean field or textual
+ * status returned by upstream services.
+ *
+ * @param {object|undefined|null} billingAccount Billing-account metadata.
+ * @returns {boolean|undefined} Billing-account activity flag when available.
+ */
+function resolveBillingAccountActive(billingAccount) {
+  if (_.isBoolean(_.get(billingAccount, "active"))) {
+    return billingAccount.active;
+  }
+
+  const normalizedStatus = normalizeOptionalString(_.get(billingAccount, "status"));
+
+  if (!normalizedStatus) {
+    return undefined;
+  }
+
+  if (normalizedStatus.toUpperCase() === "ACTIVE") {
+    return true;
+  }
+
+  if (normalizedStatus.toUpperCase() === "INACTIVE") {
+    return false;
+  }
+
+  return undefined;
+}
+
+/**
+ * Determines whether a billing account should be treated as expired.
+ *
+ * @param {boolean|undefined} active Billing-account activity flag.
+ * @param {string|undefined} endDate Billing-account end date.
+ * @returns {boolean} `true` when the billing account has expired.
+ */
+function isBillingAccountExpired(active, endDate) {
+  if (active === false) {
+    return true;
+  }
+
+  if (!endDate) {
+    return false;
+  }
+
+  const endDateTimestamp = Date.parse(endDate);
+
+  if (Number.isNaN(endDateTimestamp)) {
+    return false;
+  }
+
+  return Date.now() >= endDateTimestamp;
+}
+
+/**
+ * Validates the project billing account before activating a challenge.
+ *
+ * @param {object} params Validation inputs.
+ * @param {boolean|undefined|null} params.active Billing-account activity returned by Projects API.
+ * @param {string|number|null|undefined} params.billingAccountId Project billing-account identifier.
+ * @param {object} params.challenge Existing challenge model.
+ * @param {string|undefined|null} params.endDate Billing-account end date returned by Projects API.
+ * @returns {Promise<void>} Resolves when the billing account can be used for launch.
+ * @throws {errors.BadRequestError} When the billing account is missing, inactive, expired, or depleted.
+ */
+async function validateChallengeActivationBillingAccount({
+  active,
+  billingAccountId,
+  challenge,
+  endDate,
+}) {
+  if (!challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
+    return;
+  }
+
+  const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
+
+  if (!normalizedBillingAccountId) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project has no billing account."
+    );
+  }
+
+  const resolvedProjectActive = _.isBoolean(active) ? active : undefined;
+  const resolvedProjectEndDate = normalizeOptionalString(endDate);
+
+  if (resolvedProjectActive === false) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account is inactive."
+    );
+  }
+
+  if (isBillingAccountExpired(resolvedProjectActive, resolvedProjectEndDate)) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account is expired."
+    );
+  }
+
+  const billingAccountDetails = await projectHelper.getBillingAccountDetails(normalizedBillingAccountId);
+  const resolvedActive = resolveBillingAccountActive(billingAccountDetails);
+  const resolvedEndDate =
+    normalizeOptionalString(_.get(billingAccountDetails, "endDate"));
+
+  if (!billingAccountDetails) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account could not be found."
+    );
+  }
+
+  if (resolvedActive === false) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account is inactive."
+    );
+  }
+
+  if (isBillingAccountExpired(resolvedActive, resolvedEndDate)) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account is expired."
+    );
+  }
+
+  const remainingBudget = normalizeOptionalNumber(billingAccountDetails.totalBudgetRemaining);
+
+  if (!_.isNil(remainingBudget) && remainingBudget <= 0) {
+    throw new errors.BadRequestError(
+      "Cannot activate challenge because the project billing account has insufficient remaining funds."
+    );
+  }
+}
+
 function prepareTaskCompletionData(challenge, challengeResources, data) {
   const isTask = helper.getTaskInfo(challenge).isTask || _.get(challenge, "legacy.pureV5Task");
   const isCompleteTask =
@@ -2505,14 +2667,19 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   // No conversion needed - values are already in dollars in the database
 
-  let projectId, billingAccountId, markup;
+  let projectId, billingAccountId, markup, billingAccountActive, billingAccountEndDate;
   if (challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)) {
     projectId = _.get(challenge, "projectId");
 
     logger.debug(
       `updateChallenge(${challengeId}): requesting billing information for project ${projectId}`,
     );
-    ({ billingAccountId, markup } = await projectHelper.getProjectBillingInformation(projectId));
+    ({
+      billingAccountId,
+      markup,
+      active: billingAccountActive,
+      endDate: billingAccountEndDate,
+    } = await projectHelper.getProjectBillingInformation(projectId));
     logger.debug(
       `updateChallenge(${challengeId}): billing lookup complete (hasAccount=${
         billingAccountId != null
@@ -2680,16 +2847,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   let isChallengeBeingCancelled = false;
   if (data.status) {
     if (data.status === ChallengeStatusEnum.ACTIVE) {
-      // if activating a challenge, the challenge must have a billing account id
-      if (
-        (!billingAccountId || billingAccountId === null) &&
-        challenge.status === ChallengeStatusEnum.DRAFT &&
-        challengeHelper.isProjectIdRequired(challenge.timelineTemplateId)
-      ) {
-        throw new errors.BadRequestError(
-          "Cannot Activate this project, it has no active billing account.",
-        );
-      }
+      await validateChallengeActivationBillingAccount({
+        active: billingAccountActive,
+        billingAccountId,
+        challenge,
+        endDate: billingAccountEndDate,
+      });
     }
 
     if (
@@ -4427,6 +4590,9 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
 }
 
 module.exports = {
+  __testables: {
+    validateChallengeActivationBillingAccount,
+  },
   searchChallenges,
   createChallenge,
   getChallenge,
