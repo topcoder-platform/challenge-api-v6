@@ -42,6 +42,8 @@ const buildFixtureDataDirectory = () => {
     { long_component_state_id: "lcs-2", submission_number: "1", example: "0", submit_time: "102", open_time: "90", submission_points: "12.0" },
     { long_component_state_id: "lcs-3", submission_number: "1", example: "0", submit_time: "103", open_time: "90", submission_points: "13.0" },
     { long_component_state_id: "lcs-3", submission_number: "2", example: "0", submit_time: "104", open_time: "90", submission_points: "14.0" },
+    { long_component_state_id: "lcs-4", submission_number: "1", example: "1", submit_time: "105", open_time: "90", submission_points: "15.0" },
+    { long_component_state_id: "lcs-4", submission_number: "2", example: "1", submit_time: "106", open_time: "90", submission_points: "16.0" },
   ]);
   writeJson(baseDir, "long_comp_result_1.json", "long_comp_result", [
     { round_id: "9892", coder_id: "1", system_point_total: "98.1", point_total: null, placed: "1" },
@@ -173,8 +175,9 @@ describe("importHistoricalMarathonMatches missing-member planning/reporting", ()
     });
     expect(record.partitions.submissions).toEqual({
       legacyNonExample: 4,
-      legacyExampleFiltered: 1,
-      toImport: 1,
+      legacyExampleFiltered: 3,
+      legacyExampleOnlyFinalists: 1,
+      toImport: 2,
       alreadyPresent: 1,
       missingMember: 2,
       explicitSkips: {
@@ -184,19 +187,18 @@ describe("importHistoricalMarathonMatches missing-member planning/reporting", ()
     });
     expect(record.partitions.finalScores).toEqual({
       legacyFinalCandidates: 3,
-      toImport: 1,
+      toImport: 2,
       alreadyPresent: 0,
       missingMember: 1,
       explicitSkips: {
-        total: 1,
-        byReason: {
-          "finalist-without-attachable-submission": 1,
-        },
+        total: 0,
+        byReason: {},
       },
     });
     expect(record.partitions.provisionalScores).toEqual({
       legacyNonExample: 4,
-      toImport: 1,
+      legacyExampleOnlyFinalists: 1,
+      toImport: 2,
       alreadyPresent: 1,
       missingMember: 2,
       explicitSkips: {
@@ -212,12 +214,6 @@ describe("importHistoricalMarathonMatches missing-member planning/reporting", ()
           memberId: "3",
           reasonCode: "missing-member",
           affectedSurfaces: ["resource", "submission", "final-score", "provisional-score"],
-        }),
-        expect.objectContaining({
-          legacyRoundId: "9892",
-          memberId: "4",
-          reasonCode: "finalist-without-attachable-submission",
-          affectedSurfaces: ["final-score"],
         }),
       ])
     );

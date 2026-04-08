@@ -42,12 +42,38 @@ const parseRoundLegacyId = (roundId) => {
   return parsed;
 };
 
+const minSubmissionMs = (left, right) => {
+  if (!Number.isFinite(left)) {
+    return Number.isFinite(right) ? right : null;
+  }
+  if (!Number.isFinite(right)) {
+    return left;
+  }
+  return Math.min(left, right);
+};
+
+const maxSubmissionMs = (left, right) => {
+  if (!Number.isFinite(left)) {
+    return Number.isFinite(right) ? right : null;
+  }
+  if (!Number.isFinite(right)) {
+    return left;
+  }
+  return Math.max(left, right);
+};
+
 const derivePhaseWindows = (roundId, counters) => {
   const registrationStartMs = counters && counters.registrationStartMs;
   const registrationEndMs = counters && counters.registrationEndMs;
-  const latestSubmissionMs = counters && counters.latestNonExampleSubmitMs;
+  const latestSubmissionMs = maxSubmissionMs(
+    counters && counters.latestNonExampleSubmitMs,
+    counters && counters.latestExampleOnlyFinalistSubmitMs
+  );
   const earliestSubmissionOpenMs = counters && counters.earliestSubmissionOpenMs;
-  const earliestSubmissionMs = counters && counters.earliestNonExampleSubmitMs;
+  const earliestSubmissionMs = minSubmissionMs(
+    counters && counters.earliestNonExampleSubmitMs,
+    counters && counters.earliestExampleOnlyFinalistSubmitMs
+  );
 
   if (!Number.isFinite(registrationStartMs) || !Number.isFinite(registrationEndMs)) {
     throw new Error(
@@ -56,7 +82,7 @@ const derivePhaseWindows = (roundId, counters) => {
   }
   if (!Number.isFinite(latestSubmissionMs)) {
     throw new Error(
-      `Round ${roundId} is missing non-example submission timestamps needed for phase derivation.`
+      `Round ${roundId} is missing attachable submission timestamps needed for phase derivation.`
     );
   }
 
@@ -68,7 +94,7 @@ const derivePhaseWindows = (roundId, counters) => {
     : earliestSubmissionMs;
   if (!Number.isFinite(rawSubmissionStartMs)) {
     throw new Error(
-      `Round ${roundId} is missing both submission open_time and non-example submission start timestamps.`
+      `Round ${roundId} is missing both submission open_time and attachable submission start timestamps.`
     );
   }
 
@@ -139,9 +165,15 @@ const buildChallengeCreateData = ({
 }) => {
   const legacyId = parseRoundLegacyId(roundId);
   const registrationCount = counters && counters.eligibleRegistrants ? counters.eligibleRegistrants.size : 0;
-  const submissionCount = counters && Number.isFinite(counters.nonExampleSubmissions)
-    ? counters.nonExampleSubmissions
-    : 0;
+  const nonExampleSubmissionCount =
+    counters && Number.isFinite(counters.nonExampleSubmissions)
+      ? counters.nonExampleSubmissions
+      : 0;
+  const exampleOnlyFinalistSubmissionCount =
+    counters && Number.isFinite(counters.exampleOnlyFinalistSubmissions)
+      ? counters.exampleOnlyFinalistSubmissions
+      : 0;
+  const submissionCount = nonExampleSubmissionCount + exampleOnlyFinalistSubmissionCount;
 
   return {
     legacyId,
@@ -718,6 +750,14 @@ const runApplyMode = async ({
       longComponentStateFile: options.longComponentStateFile,
       longSubmissionPattern: options.longSubmissionPattern,
       roundIds: actionableRoundIds,
+      attachableExampleOnlyFinalistCoderIdsByRoundId: new Map(
+        actionableRoundIds.map((roundId) => [
+          roundId,
+          (plan.roundDataById.get(roundId) &&
+            plan.roundDataById.get(roundId).finalCandidateCoderIds) ||
+            new Set(),
+        ])
+      ),
     });
     submissionStore =
       options.submissionStore ||
@@ -748,6 +788,14 @@ const runApplyMode = async ({
       longComponentStateFile: options.longComponentStateFile,
       longSubmissionPattern: options.longSubmissionPattern,
       roundIds: actionableRoundIds,
+      attachableExampleOnlyFinalistCoderIdsByRoundId: new Map(
+        actionableRoundIds.map((roundId) => [
+          roundId,
+          (plan.roundDataById.get(roundId) &&
+            plan.roundDataById.get(roundId).finalCandidateCoderIds) ||
+            new Set(),
+        ])
+      ),
     });
     provisionalScoreStore =
       options.provisionalScoreStore ||

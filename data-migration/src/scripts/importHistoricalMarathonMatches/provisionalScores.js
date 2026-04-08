@@ -108,6 +108,41 @@ const compareProvisionalRows = (left, right) => {
   });
 };
 
+const normalizeCoderIdSetByRoundId = (value) => {
+  const byRoundId = new Map();
+  if (!(value instanceof Map)) {
+    return byRoundId;
+  }
+
+  value.forEach((coderIds, roundId) => {
+    const normalizedRoundId = String(roundId || "").trim();
+    if (!normalizedRoundId) {
+      return;
+    }
+
+    const normalizedCoderIds = new Set(
+      Array.from(coderIds || [])
+        .map((coderId) => String(coderId || "").trim())
+        .filter(Boolean)
+    );
+    if (normalizedCoderIds.size > 0) {
+      byRoundId.set(normalizedRoundId, normalizedCoderIds);
+    }
+  });
+
+  return byRoundId;
+};
+
+const selectLaterProvisionalRow = (currentRow, candidateRow) => {
+  if (!currentRow) {
+    return candidateRow || null;
+  }
+  if (!candidateRow) {
+    return currentRow;
+  }
+  return compareProvisionalRows(currentRow, candidateRow) <= 0 ? candidateRow : currentRow;
+};
+
 const formatImportedCountsByMemberId = (countsByMemberId) =>
   Object.fromEntries(
     Array.from(countsByMemberId.entries()).sort(([left], [right]) =>
@@ -120,6 +155,7 @@ const loadLegacyProvisionalRowsByRoundId = async ({
   longComponentStateFile,
   longSubmissionPattern,
   roundIds,
+  attachableExampleOnlyFinalistCoderIdsByRoundId = new Map(),
 }) => {
   const selectedRoundIds = Array.from(
     new Set((roundIds || []).map((roundId) => String(roundId || "").trim()).filter(Boolean))
@@ -138,6 +174,8 @@ const loadLegacyProvisionalRowsByRoundId = async ({
   );
 
   const selectedRoundIdSet = new Set(selectedRoundIds);
+  const normalizedAttachableExampleOnlyFinalistCoderIdsByRoundId =
+    normalizeCoderIdSetByRoundId(attachableExampleOnlyFinalistCoderIdsByRoundId);
   const stateInfoById = new Map();
   await streamJsonArray(longComponentStatePath, "long_component_state", (row) => {
     const roundId = String(row && row.round_id ? row.round_id : "").trim();
@@ -158,6 +196,9 @@ const loadLegacyProvisionalRowsByRoundId = async ({
   });
 
   const generatedSubmissionOrdinalByStateId = new Map();
+  const generatedExampleSubmissionOrdinalByStateId = new Map();
+  const latestExampleOnlyProvisionalByStateId = new Map();
+  const stateIdsWithNonExampleSubmissions = new Set();
   await Promise.all(
     longSubmissionFiles.map((filePath) =>
       streamJsonArray(filePath, "long_submission", (row) => {
@@ -171,9 +212,37 @@ const loadLegacyProvisionalRowsByRoundId = async ({
 
         const isExample = String(row && row.example ? row.example : "").trim() === "1";
         if (isExample) {
+          const currentExampleOrdinal =
+            generatedExampleSubmissionOrdinalByStateId.get(longComponentStateId) || 0;
+          const fallbackOrdinal = currentExampleOrdinal + 1;
+          generatedExampleSubmissionOrdinalByStateId.set(longComponentStateId, fallbackOrdinal);
+          const submissionNumber =
+            parsePositiveInteger(row && row.submission_number) || fallbackOrdinal;
+          const legacySubmissionId = deriveLegacySubmissionId({
+            longComponentStateId,
+            submissionNumber,
+          });
+
+          latestExampleOnlyProvisionalByStateId.set(
+            longComponentStateId,
+            selectLaterProvisionalRow(
+              latestExampleOnlyProvisionalByStateId.get(longComponentStateId),
+              {
+                legacyRoundId: stateInfo.legacyRoundId,
+                coderId: stateInfo.coderId,
+                longComponentStateId,
+                submissionNumber,
+                legacySubmissionId,
+                submitTimeMs: parseEpochMs(row && row.submit_time),
+                aggregateScore: parseNumericScore(row && row.submission_points),
+                isSyntheticExampleOnlyFinalist: true,
+              }
+            )
+          );
           return;
         }
 
+        stateIdsWithNonExampleSubmissions.add(longComponentStateId);
         const currentOrdinal = generatedSubmissionOrdinalByStateId.get(longComponentStateId) || 0;
         const fallbackOrdinal = currentOrdinal + 1;
         generatedSubmissionOrdinalByStateId.set(longComponentStateId, fallbackOrdinal);
@@ -192,10 +261,30 @@ const loadLegacyProvisionalRowsByRoundId = async ({
           legacySubmissionId,
           submitTimeMs: parseEpochMs(row && row.submit_time),
           aggregateScore: parseNumericScore(row && row.submission_points),
+          isSyntheticExampleOnlyFinalist: false,
         });
       })
     )
   );
+
+  stateInfoById.forEach((stateInfo, longComponentStateId) => {
+    if (stateIdsWithNonExampleSubmissions.has(longComponentStateId)) {
+      return;
+    }
+
+    const attachableCoderIds =
+      normalizedAttachableExampleOnlyFinalistCoderIdsByRoundId.get(stateInfo.legacyRoundId);
+    if (!attachableCoderIds || !attachableCoderIds.has(stateInfo.coderId)) {
+      return;
+    }
+
+    const exampleOnlyProvisional = latestExampleOnlyProvisionalByStateId.get(longComponentStateId);
+    if (!exampleOnlyProvisional) {
+      return;
+    }
+
+    rowsByRoundId.get(stateInfo.legacyRoundId).push(exampleOnlyProvisional);
+  });
 
   rowsByRoundId.forEach((rows, roundId) => {
     rowsByRoundId.set(roundId, [...rows].sort(compareProvisionalRows));
@@ -224,6 +313,11 @@ const reconcileRoundProvisionalScores = async ({
   }
 
   const legacyProvisionalRows = provisionalRowsByRoundId.get(roundId) || [];
+  const legacyNonExampleProvisionalScores = legacyProvisionalRows.filter(
+    (row) => row && row.isSyntheticExampleOnlyFinalist !== true
+  ).length;
+  const legacyExampleOnlyFinalistProvisionalScores =
+    legacyProvisionalRows.length - legacyNonExampleProvisionalScores;
   const importedSubmissionByLegacySubmissionId =
     await provisionalScoreStore.listImportedNonExampleSubmissionsByLegacySubmissionId({
       challengeId,
@@ -339,7 +433,8 @@ const reconcileRoundProvisionalScores = async ({
   }
 
   return {
-    legacyNonExampleProvisionalScores: legacyProvisionalRows.length,
+    legacyNonExampleProvisionalScores,
+    legacyExampleOnlyFinalistProvisionalScores,
     importedProvisionalScores:
       createdProvisionalScores + alreadyPresentProvisionalScores,
     alreadyPresentProvisionalScores,

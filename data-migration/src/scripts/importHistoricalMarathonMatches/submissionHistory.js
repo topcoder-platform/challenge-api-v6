@@ -74,6 +74,41 @@ const compareSubmissionRows = (left, right) => {
   return String(left.legacySubmissionId || "").localeCompare(String(right.legacySubmissionId || ""));
 };
 
+const normalizeCoderIdSetByRoundId = (value) => {
+  const byRoundId = new Map();
+  if (!(value instanceof Map)) {
+    return byRoundId;
+  }
+
+  value.forEach((coderIds, roundId) => {
+    const normalizedRoundId = String(roundId || "").trim();
+    if (!normalizedRoundId) {
+      return;
+    }
+
+    const normalizedCoderIds = new Set(
+      Array.from(coderIds || [])
+        .map((coderId) => String(coderId || "").trim())
+        .filter(Boolean)
+    );
+    if (normalizedCoderIds.size > 0) {
+      byRoundId.set(normalizedRoundId, normalizedCoderIds);
+    }
+  });
+
+  return byRoundId;
+};
+
+const selectLaterSubmissionRow = (currentRow, candidateRow) => {
+  if (!currentRow) {
+    return candidateRow || null;
+  }
+  if (!candidateRow) {
+    return currentRow;
+  }
+  return compareSubmissionRows(currentRow, candidateRow) <= 0 ? candidateRow : currentRow;
+};
+
 const deriveLegacySubmissionId = ({ longComponentStateId, submissionNumber }) => {
   const normalizedStateId = String(longComponentStateId || "").trim();
   if (!normalizedStateId) {
@@ -118,6 +153,7 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
   longComponentStateFile,
   longSubmissionPattern,
   roundIds,
+  attachableExampleOnlyFinalistCoderIdsByRoundId = new Map(),
 }) => {
   const selectedRoundIds = Array.from(new Set((roundIds || []).map((roundId) => String(roundId || "").trim()).filter(Boolean)));
   const rowsByRoundId = new Map(selectedRoundIds.map((roundId) => [roundId, []]));
@@ -134,6 +170,8 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
   );
 
   const selectedRoundIdSet = new Set(selectedRoundIds);
+  const normalizedAttachableExampleOnlyFinalistCoderIdsByRoundId =
+    normalizeCoderIdSetByRoundId(attachableExampleOnlyFinalistCoderIdsByRoundId);
   const stateInfoById = new Map();
   await streamJsonArray(longComponentStatePath, "long_component_state", (row) => {
     const roundId = String(row && row.round_id ? row.round_id : "").trim();
@@ -154,6 +192,9 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
   });
 
   const generatedSubmissionOrdinalByStateId = new Map();
+  const generatedExampleSubmissionOrdinalByStateId = new Map();
+  const latestExampleOnlyCandidateByStateId = new Map();
+  const stateIdsWithNonExampleSubmissions = new Set();
   await Promise.all(
     longSubmissionFiles.map((filePath) =>
       streamJsonArray(filePath, "long_submission", (row) => {
@@ -167,9 +208,38 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
 
         const isExample = String(row && row.example ? row.example : "").trim() === "1";
         if (isExample) {
+          const currentExampleOrdinal =
+            generatedExampleSubmissionOrdinalByStateId.get(longComponentStateId) || 0;
+          const fallbackOrdinal = currentExampleOrdinal + 1;
+          generatedExampleSubmissionOrdinalByStateId.set(longComponentStateId, fallbackOrdinal);
+          const submissionNumber =
+            parsePositiveInteger(row && row.submission_number) || fallbackOrdinal;
+          const legacySubmissionId = deriveLegacySubmissionId({
+            longComponentStateId,
+            submissionNumber,
+          });
+          latestExampleOnlyCandidateByStateId.set(
+            longComponentStateId,
+            selectLaterSubmissionRow(
+              latestExampleOnlyCandidateByStateId.get(longComponentStateId),
+              {
+                legacyRoundId: stateInfo.legacyRoundId,
+                coderId: stateInfo.coderId,
+                longComponentStateId,
+                submissionNumber,
+                submitTimeMs: parseEpochMs(row && row.submit_time),
+                submittedDate: parseEpochMs(row && row.submit_time)
+                  ? new Date(parseEpochMs(row && row.submit_time))
+                  : null,
+                legacySubmissionId,
+                isSyntheticExampleOnlyFinalist: true,
+              }
+            )
+          );
           return;
         }
 
+        stateIdsWithNonExampleSubmissions.add(longComponentStateId);
         const currentOrdinal = generatedSubmissionOrdinalByStateId.get(longComponentStateId) || 0;
         const fallbackOrdinal = currentOrdinal + 1;
         generatedSubmissionOrdinalByStateId.set(longComponentStateId, fallbackOrdinal);
@@ -190,10 +260,30 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
             ? new Date(parseEpochMs(row && row.submit_time))
             : null,
           legacySubmissionId,
+          isSyntheticExampleOnlyFinalist: false,
         });
       })
     )
   );
+
+  stateInfoById.forEach((stateInfo, longComponentStateId) => {
+    if (stateIdsWithNonExampleSubmissions.has(longComponentStateId)) {
+      return;
+    }
+
+    const attachableCoderIds =
+      normalizedAttachableExampleOnlyFinalistCoderIdsByRoundId.get(stateInfo.legacyRoundId);
+    if (!attachableCoderIds || !attachableCoderIds.has(stateInfo.coderId)) {
+      return;
+    }
+
+    const exampleOnlyCandidate = latestExampleOnlyCandidateByStateId.get(longComponentStateId);
+    if (!exampleOnlyCandidate) {
+      return;
+    }
+
+    rowsByRoundId.get(stateInfo.legacyRoundId).push(exampleOnlyCandidate);
+  });
 
   rowsByRoundId.forEach((rows, roundId) => {
     const sortedRows = [...rows].sort(compareSubmissionRows);
@@ -373,6 +463,10 @@ const reconcileRoundSubmissionHistory = async ({
   }
 
   const legacyRows = rowsByRoundId.get(roundId) || [];
+  const legacyNonExampleSubmissions = legacyRows.filter(
+    (row) => row && row.isSyntheticExampleOnlyFinalist !== true
+  ).length;
+  const legacyExampleOnlyFinalistSubmissions = legacyRows.length - legacyNonExampleSubmissions;
   const existingByLegacySubmissionId = await submissionStore.listExistingSubmissionsByLegacyId({
     challengeId,
   });
@@ -448,7 +542,8 @@ const reconcileRoundSubmissionHistory = async ({
   }
 
   return {
-    legacyNonExampleSubmissions: legacyRows.length,
+    legacyNonExampleSubmissions,
+    legacyExampleOnlyFinalistSubmissions,
     importedSubmissions: createdSubmissions + alreadyPresentSubmissions,
     alreadyPresentSubmissions,
     createdSubmissions,

@@ -139,6 +139,91 @@ describe("importHistoricalMarathonMatches final score import", () => {
     }
   });
 
+  test("clears conflicting duplicate legacy placements while preserving the raw value", async () => {
+    const duplicatePlacementFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-duplicate-placement-fixture-")
+    );
+    try {
+      writeJson(
+        duplicatePlacementFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [{ long_component_state_id: "4001", round_id: "10929", coder_id: "2", points: "0" }]
+      );
+      writeJson(
+        duplicatePlacementFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10929",
+            coder_id: "1",
+            system_point_total: "19837.23",
+            point_total: "2486.27",
+            placed: "18",
+          },
+          {
+            round_id: "10929",
+            coder_id: "2",
+            system_point_total: "0.00",
+            point_total: null,
+            placed: "18",
+          },
+          {
+            round_id: "10929",
+            coder_id: "3",
+            system_point_total: null,
+            point_total: null,
+            placed: "18",
+          },
+          {
+            round_id: "10929",
+            coder_id: "4",
+            system_point_total: "123.45",
+            point_total: null,
+            placed: "19",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: duplicatePlacementFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10929"],
+      });
+
+      expect(rowsByRoundId.get("10929")).toEqual([
+        expect.objectContaining({
+          coderId: "1",
+          legacyPlacement: 18,
+          rawLegacyPlacement: 18,
+          aggregateScore: 19837.23,
+        }),
+        expect.objectContaining({
+          coderId: "4",
+          legacyPlacement: 19,
+          rawLegacyPlacement: 19,
+          aggregateScore: 123.45,
+        }),
+        expect.objectContaining({
+          coderId: "2",
+          legacyPlacement: null,
+          rawLegacyPlacement: 18,
+          aggregateScore: 0,
+        }),
+        expect.objectContaining({
+          coderId: "3",
+          legacyPlacement: null,
+          rawLegacyPlacement: 18,
+          aggregateScore: null,
+        }),
+      ]);
+    } finally {
+      fs.rmSync(duplicatePlacementFixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test("attaches one final per member to latest imported non-example submission and tracks skips", async () => {
     const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
       dataDir: fixtureDir,
@@ -222,11 +307,21 @@ describe("importHistoricalMarathonMatches final score import", () => {
         submissionId: "sub-1-new",
         aggregateScore: 100,
         legacySubmissionId: "10010002",
+        metadata: expect.objectContaining({
+          legacyPlacement: 1,
+          rawLegacyPlacement: 1,
+          scoreSource: "system_point_total",
+        }),
       }),
       expect.objectContaining({
         submissionId: "sub-2",
         aggregateScore: 70,
         legacySubmissionId: "10020001",
+        metadata: expect.objectContaining({
+          legacyPlacement: 2,
+          rawLegacyPlacement: 2,
+          scoreSource: "point_total",
+        }),
       }),
     ]);
   });

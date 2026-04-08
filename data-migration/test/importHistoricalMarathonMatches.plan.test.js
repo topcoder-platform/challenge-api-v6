@@ -180,6 +180,7 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
       eligibleRegistrants: 2,
       nonExampleSubmissions: 3,
       exampleSubmissionsFiltered: 1,
+      exampleOnlyFinalistSubmissions: 0,
       plannedFinalScores: 0,
       plannedProvisionalScores: 0,
       finalistsWithoutAttachableSubmission: 0,

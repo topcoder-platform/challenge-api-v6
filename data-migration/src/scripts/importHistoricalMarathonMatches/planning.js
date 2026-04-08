@@ -31,14 +31,18 @@ const createEmptyCounters = () => ({
   eligibleRegistrants: new Set(),
   nonExampleSubmissions: 0,
   exampleSubmissions: 0,
+  exampleOnlyFinalistSubmissions: 0,
   nonExampleSubmitterCoderIds: new Set(),
   nonExampleSubmissionCountsByCoderId: new Map(),
+  exampleOnlyFinalistSubmissionCountsByCoderId: new Map(),
   finalCandidateCoderIds: new Set(),
   registrationStartMs: null,
   registrationEndMs: null,
   earliestSubmissionOpenMs: null,
   earliestNonExampleSubmitMs: null,
   latestNonExampleSubmitMs: null,
+  earliestExampleOnlyFinalistSubmitMs: null,
+  latestExampleOnlyFinalistSubmitMs: null,
 });
 
 const sortIds = (values) =>
@@ -152,6 +156,7 @@ const buildRoundSummaryCounts = ({
   eligibleRegistrants: counters.eligibleRegistrants.size,
   nonExampleSubmissions: counters.nonExampleSubmissions,
   exampleSubmissionsFiltered: counters.exampleSubmissions,
+  exampleOnlyFinalistSubmissions: counters.exampleOnlyFinalistSubmissions,
   plannedFinalScores,
   plannedProvisionalScores,
   finalistsWithoutAttachableSubmission,
@@ -178,6 +183,7 @@ const buildZeroPartitions = () => ({
   submissions: {
     legacyNonExample: 0,
     legacyExampleFiltered: 0,
+    legacyExampleOnlyFinalists: 0,
     toImport: 0,
     alreadyPresent: 0,
     missingMember: 0,
@@ -198,6 +204,7 @@ const buildZeroPartitions = () => ({
   },
   provisionalScores: {
     legacyNonExample: 0,
+    legacyExampleOnlyFinalists: 0,
     toImport: 0,
     alreadyPresent: 0,
     missingMember: 0,
@@ -454,7 +461,10 @@ const buildSurfacePartitionsForRound = ({
   const partitions = buildZeroPartitions();
   partitions.submissions.legacyNonExample = counters.nonExampleSubmissions;
   partitions.submissions.legacyExampleFiltered = counters.exampleSubmissions;
+  partitions.submissions.legacyExampleOnlyFinalists = counters.exampleOnlyFinalistSubmissions;
   partitions.provisionalScores.legacyNonExample = counters.nonExampleSubmissions;
+  partitions.provisionalScores.legacyExampleOnlyFinalists =
+    counters.exampleOnlyFinalistSubmissions;
   partitions.finalScores.legacyFinalCandidates = counters.finalCandidateCoderIds.size;
 
   const memberStatsByMemberId = new Map();
@@ -472,7 +482,7 @@ const buildSurfacePartitionsForRound = ({
         memberHandle: memberHandle || null,
         coderIds: new Set(),
         eligibleResourceCount: 0,
-        nonExampleSubmissionCount: 0,
+        attachableSubmissionCount: 0,
         finalCandidateCount: 0,
       });
     }
@@ -511,7 +521,19 @@ const buildSurfacePartitionsForRound = ({
     if (!stats) {
       return;
     }
-    stats.nonExampleSubmissionCount += parseNonNegativeInteger(count);
+    stats.attachableSubmissionCount += parseNonNegativeInteger(count);
+  });
+
+  counters.exampleOnlyFinalistSubmissionCountsByCoderId.forEach((count, coderId) => {
+    const identity = resolveIdentityForCoderId(coderId, normalizedIdentityByCoderId);
+    if (!identity) {
+      return;
+    }
+    const stats = ensureMemberStats(identity);
+    if (!stats) {
+      return;
+    }
+    stats.attachableSubmissionCount += parseNonNegativeInteger(count);
   });
 
   counters.finalCandidateCoderIds.forEach((coderId) => {
@@ -536,9 +558,9 @@ const buildSurfacePartitionsForRound = ({
   memberStatsByMemberId.forEach((stats) => {
     const isResolved = resolvedMemberIds.has(stats.memberId);
     const missingResourceCount = isResolved ? 0 : stats.eligibleResourceCount;
-    const missingSubmissionCount = isResolved ? 0 : stats.nonExampleSubmissionCount;
-    const missingProvisionalCount = isResolved ? 0 : stats.nonExampleSubmissionCount;
-    const hasAttachableFinal = stats.nonExampleSubmissionCount > 0;
+    const missingSubmissionCount = isResolved ? 0 : stats.attachableSubmissionCount;
+    const missingProvisionalCount = isResolved ? 0 : stats.attachableSubmissionCount;
+    const hasAttachableFinal = stats.attachableSubmissionCount > 0;
     const missingFinalCount = isResolved ? 0 : stats.finalCandidateCount;
     const explicitFinalSkipCount =
       isResolved && !hasAttachableFinal
@@ -555,8 +577,8 @@ const buildSurfacePartitionsForRound = ({
     partitions.finalScores.missingMember += missingFinalCount;
 
     materializableResourceCount += isResolved ? stats.eligibleResourceCount : 0;
-    materializableSubmissionCount += isResolved ? stats.nonExampleSubmissionCount : 0;
-    materializableProvisionalCount += isResolved ? stats.nonExampleSubmissionCount : 0;
+    materializableSubmissionCount += isResolved ? stats.attachableSubmissionCount : 0;
+    materializableProvisionalCount += isResolved ? stats.attachableSubmissionCount : 0;
     materializableFinalScoreCount += importableFinalCount;
 
     if (!isResolved) {
@@ -889,6 +911,7 @@ const summarizePlan = (records, selectedRoundIds, skippedFilePath) => {
     eligibleRegistrants: 0,
     nonExampleSubmissions: 0,
     exampleSubmissionsFiltered: 0,
+    exampleOnlyFinalistSubmissions: 0,
     plannedFinalScores: 0,
     plannedProvisionalScores: 0,
     finalistsWithoutAttachableSubmission: 0,
@@ -911,6 +934,8 @@ const summarizePlan = (records, selectedRoundIds, skippedFilePath) => {
     totals.eligibleRegistrants += record.summaryCounts.eligibleRegistrants;
     totals.nonExampleSubmissions += record.summaryCounts.nonExampleSubmissions;
     totals.exampleSubmissionsFiltered += record.summaryCounts.exampleSubmissionsFiltered;
+    totals.exampleOnlyFinalistSubmissions +=
+      parseNonNegativeInteger(record.summaryCounts.exampleOnlyFinalistSubmissions);
     totals.plannedFinalScores += record.summaryCounts.plannedFinalScores;
     totals.plannedProvisionalScores += record.summaryCounts.plannedProvisionalScores;
     totals.finalistsWithoutAttachableSubmission +=
@@ -932,6 +957,8 @@ const summarizePlan = (records, selectedRoundIds, skippedFilePath) => {
         record.partitions.submissions.legacyNonExample;
       totals.partitions.submissions.legacyExampleFiltered +=
         record.partitions.submissions.legacyExampleFiltered;
+      totals.partitions.submissions.legacyExampleOnlyFinalists +=
+        parseNonNegativeInteger(record.partitions.submissions.legacyExampleOnlyFinalists);
       totals.partitions.submissions.toImport += record.partitions.submissions.toImport;
       totals.partitions.submissions.alreadyPresent +=
         record.partitions.submissions.alreadyPresent;
@@ -957,6 +984,8 @@ const summarizePlan = (records, selectedRoundIds, skippedFilePath) => {
 
       totals.partitions.provisionalScores.legacyNonExample +=
         record.partitions.provisionalScores.legacyNonExample;
+      totals.partitions.provisionalScores.legacyExampleOnlyFinalists +=
+        parseNonNegativeInteger(record.partitions.provisionalScores.legacyExampleOnlyFinalists);
       totals.partitions.provisionalScores.toImport +=
         record.partitions.provisionalScores.toImport;
       totals.partitions.provisionalScores.alreadyPresent +=
@@ -1027,6 +1056,7 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
   const selectedRoundIdSet = new Set(roundDataById.keys());
   const selectedComponentIds = new Set();
   const longComponentStateById = new Map();
+  const stateSubmissionSummaryById = new Map();
 
   await streamJsonArray(fixedFiles.round, "round", (row) => {
     const roundId = String(row && row.round_id ? row.round_id : "").trim();
@@ -1106,6 +1136,13 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       roundId,
       coderId,
     });
+    stateSubmissionSummaryById.set(longComponentStateId, {
+      roundId,
+      coderId,
+      nonExampleCount: 0,
+      exampleCount: 0,
+      latestExampleSubmitMs: null,
+    });
   });
 
   await Promise.all(
@@ -1127,11 +1164,26 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
         counters.earliestSubmissionOpenMs = minMs(counters.earliestSubmissionOpenMs, submissionOpenMs);
 
         const isExample = String(row && row.example ? row.example : "").trim() === "1";
+        const stateSubmissionSummary =
+          stateSubmissionSummaryById.get(longComponentStateId) || {
+            roundId: stateInfo.roundId,
+            coderId: stateInfo.coderId,
+            nonExampleCount: 0,
+            exampleCount: 0,
+            latestExampleSubmitMs: null,
+          };
+        stateSubmissionSummaryById.set(longComponentStateId, stateSubmissionSummary);
         if (isExample) {
           counters.exampleSubmissions += 1;
+          stateSubmissionSummary.exampleCount += 1;
+          stateSubmissionSummary.latestExampleSubmitMs = maxMs(
+            stateSubmissionSummary.latestExampleSubmitMs,
+            parseEpochMs(row && row.submit_time)
+          );
           return;
         }
         counters.nonExampleSubmissions += 1;
+        stateSubmissionSummary.nonExampleCount += 1;
 
         const submitMs = parseEpochMs(row && row.submit_time);
         counters.earliestNonExampleSubmitMs = minMs(counters.earliestNonExampleSubmitMs, submitMs);
@@ -1163,6 +1215,30 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       })
     )
   );
+
+  stateSubmissionSummaryById.forEach((summary) => {
+    const counters = roundDataById.get(summary.roundId);
+    if (!counters) {
+      return;
+    }
+    if (summary.nonExampleCount > 0 || summary.exampleCount <= 0) {
+      return;
+    }
+    if (!counters.finalCandidateCoderIds.has(summary.coderId)) {
+      return;
+    }
+
+    counters.exampleOnlyFinalistSubmissions += 1;
+    addCount(counters.exampleOnlyFinalistSubmissionCountsByCoderId, summary.coderId, 1);
+    counters.earliestExampleOnlyFinalistSubmitMs = minMs(
+      counters.earliestExampleOnlyFinalistSubmitMs,
+      summary.latestExampleSubmitMs
+    );
+    counters.latestExampleOnlyFinalistSubmitMs = maxMs(
+      counters.latestExampleOnlyFinalistSubmitMs,
+      summary.latestExampleSubmitMs
+    );
+  });
 };
 
 const buildDryRunPlan = async (options, existingStateByRoundId, planningPrerequisites = {}) => {

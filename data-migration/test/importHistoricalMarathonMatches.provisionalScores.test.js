@@ -21,6 +21,7 @@ const createFixtureDataDirectory = () => {
   writeJson(baseDir, "long_component_state_1.json", "long_component_state", [
     { long_component_state_id: "1001", round_id: "9892", coder_id: "1", component_id: "5503" },
     { long_component_state_id: "1002", round_id: "9892", coder_id: "2", component_id: "5503" },
+    { long_component_state_id: "1003", round_id: "9892", coder_id: "3", component_id: "5503" },
   ]);
   writeJson(baseDir, "long_submission_1.json", "long_submission", [
     {
@@ -50,6 +51,20 @@ const createFixtureDataDirectory = () => {
       example: "0",
       submit_time: "1003",
       submission_points: "7.0",
+    },
+    {
+      long_component_state_id: "1003",
+      submission_number: "1",
+      example: "1",
+      submit_time: "1004",
+      submission_points: "6.0",
+    },
+    {
+      long_component_state_id: "1003",
+      submission_number: "2",
+      example: "1",
+      submit_time: "1005",
+      submission_points: "5.5",
     },
   ]);
 
@@ -175,6 +190,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
 
     expect(firstRun).toEqual({
       legacyNonExampleProvisionalScores: 3,
+      legacyExampleOnlyFinalistProvisionalScores: 0,
       importedProvisionalScores: 2,
       alreadyPresentProvisionalScores: 1,
       createdProvisionalScores: 1,
@@ -220,6 +236,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
 
     expect(secondRun).toEqual({
       legacyNonExampleProvisionalScores: 3,
+      legacyExampleOnlyFinalistProvisionalScores: 0,
       importedProvisionalScores: 2,
       alreadyPresentProvisionalScores: 2,
       createdProvisionalScores: 0,
@@ -242,5 +259,45 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
         }),
       ],
     });
+  });
+
+  test("loads the latest example-only finalist provisional row when requested", async () => {
+    const rowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longSubmissionPattern: "^long_submission_\\d+\\.json$",
+      roundIds: ["9892"],
+      attachableExampleOnlyFinalistCoderIdsByRoundId: new Map([
+        ["9892", new Set(["3"])],
+      ]),
+    });
+
+    expect(rowsByRoundId.get("9892")).toEqual([
+      expect.objectContaining({
+        legacyRoundId: "9892",
+        coderId: "1",
+        legacySubmissionId: "10010001",
+        isSyntheticExampleOnlyFinalist: false,
+      }),
+      expect.objectContaining({
+        legacyRoundId: "9892",
+        coderId: "1",
+        legacySubmissionId: "10010003",
+        isSyntheticExampleOnlyFinalist: false,
+      }),
+      expect.objectContaining({
+        legacyRoundId: "9892",
+        coderId: "2",
+        legacySubmissionId: "10020001",
+        isSyntheticExampleOnlyFinalist: false,
+      }),
+      expect.objectContaining({
+        legacyRoundId: "9892",
+        coderId: "3",
+        legacySubmissionId: "10030002",
+        aggregateScore: 5.5,
+        isSyntheticExampleOnlyFinalist: true,
+      }),
+    ]);
   });
 });

@@ -122,6 +122,56 @@ const compareFinalRows = (left, right) => {
   });
 };
 
+/**
+ * Clears legacy placements when Informix reused the same raw `placed` value for multiple rows
+ * that do not share the same score. The original placement is preserved in
+ * `rawLegacyPlacement` for diagnostics, while lower-scoring or unscored rows lose their
+ * normalized `legacyPlacement` so downstream imports do not treat the duplicate placement as
+ * authoritative.
+ *
+ * @param {Array<object>} rows legacy final rows for a single round
+ * @returns {Array<object>} rows cloned with normalized placement fields
+ */
+const normalizeConflictingDuplicatePlacements = (rows = []) => {
+  const normalizedRows = rows.map((row) => ({
+    ...row,
+    rawLegacyPlacement: Number.isFinite(row && row.legacyPlacement) ? row.legacyPlacement : null,
+  }));
+
+  const rowsByPlacement = new Map();
+  normalizedRows.forEach((row) => {
+    if (!Number.isFinite(row.rawLegacyPlacement)) {
+      return;
+    }
+    if (!rowsByPlacement.has(row.rawLegacyPlacement)) {
+      rowsByPlacement.set(row.rawLegacyPlacement, []);
+    }
+    rowsByPlacement.get(row.rawLegacyPlacement).push(row);
+  });
+
+  rowsByPlacement.forEach((placementRows) => {
+    const scoredRows = placementRows.filter((row) => Number.isFinite(row.aggregateScore));
+    if (scoredRows.length === 0) {
+      return;
+    }
+
+    const distinctScores = Array.from(new Set(scoredRows.map((row) => row.aggregateScore)));
+    const hasUnscoredRows = scoredRows.length !== placementRows.length;
+    if (distinctScores.length <= 1 && !hasUnscoredRows) {
+      return;
+    }
+
+    const topScore = distinctScores.reduce((highest, score) => Math.max(highest, score), Number.NEGATIVE_INFINITY);
+    placementRows.forEach((row) => {
+      if (!Number.isFinite(row.aggregateScore) || row.aggregateScore !== topScore) {
+        row.legacyPlacement = null;
+      }
+    });
+  });
+
+  return normalizedRows;
+};
+
 const loadLegacyFinalRowsByRoundId = async ({
   dataDir,
   longComponentStateFile,
@@ -201,7 +251,11 @@ const loadLegacyFinalRowsByRoundId = async ({
   );
 
   rowsByRoundId.forEach((rows, roundId) => {
-    rowsByRoundId.set(roundId, [...rows].sort(compareFinalRows));
+    rowsByRoundId.set(
+      roundId,
+      normalizeConflictingDuplicatePlacements(rows)
+        .sort(compareFinalRows)
+    );
   });
 
   return rowsByRoundId;
@@ -379,6 +433,7 @@ const reconcileRoundFinalScores = async ({
         legacyCoderId: finalRow.coderId,
         scoreSource: finalRow.scoreSource,
         legacyPlacement: finalRow.legacyPlacement,
+        rawLegacyPlacement: finalRow.rawLegacyPlacement,
       },
     });
     existingFinalSummationsBySubmissionId.set(submissionId, [

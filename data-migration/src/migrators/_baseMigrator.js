@@ -899,7 +899,7 @@ class BaseMigrator {
       }
       try {
         return BigInt(trimmed);
-      } catch (err) {
+      } catch {
         return null;
       }
     }
@@ -930,7 +930,7 @@ class BaseMigrator {
       if (Prisma?.Decimal) {
         try {
           return new Prisma.Decimal(trimmed);
-        } catch (err) {
+        } catch {
           // Fallback to native number if Decimal instantiation fails
         }
       }
@@ -1023,7 +1023,7 @@ class BaseMigrator {
     if (upsertData?.where) {
       try {
         return `[where: ${JSON.stringify(upsertData.where)}]`;
-      } catch (err) {
+      } catch {
         return '[where: unable to serialize]';
       }
     }
