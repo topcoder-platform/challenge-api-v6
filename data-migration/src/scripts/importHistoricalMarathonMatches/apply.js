@@ -33,6 +33,27 @@ const {
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
 const TEMPORARY_RESOURCE_WRITE_STATUS = "ACTIVE";
+const buildFallbackImportedDescription = (legacyId) =>
+  `Imported historical Marathon Match from legacy round ${legacyId}`;
+
+const isUsableProblemText = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.toLowerCase() !== "null";
+};
+
+const resolveChallengeDescription = ({ legacyId, counters }) => {
+  const candidate = counters && counters.descriptionProblemText;
+  if (isUsableProblemText(candidate)) {
+    return String(candidate);
+  }
+  return buildFallbackImportedDescription(legacyId);
+};
 
 const parseRoundLegacyId = (roundId) => {
   const parsed = Number.parseInt(String(roundId || "").trim(), 10);
@@ -180,7 +201,7 @@ const buildChallengeCreateData = ({
     name:
       String((round && (round.short_name || round.name)) || "").trim() ||
       `Historical Marathon Match ${legacyId}`,
-    description: `Imported historical Marathon Match from legacy round ${legacyId}`,
+    description: resolveChallengeDescription({ legacyId, counters }),
     typeId: marathonTypeId,
     trackId: dataScienceTrackId,
     timelineTemplateId,
@@ -635,20 +656,80 @@ const resolveTargetedRerunSelection = ({ options, planRecordByRoundId }) => {
   };
 };
 
-const runTargetedRerunMode = async ({ options, plan }) => {
+const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical-mm-importer" }) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
+  const roundDataById = plan && plan.roundDataById instanceof Map ? plan.roundDataById : null;
+  const counters = roundDataById ? roundDataById.get(selection.roundId) : null;
+  const legacyProblemId = String(
+    counters && counters.descriptionProblemId ? counters.descriptionProblemId : ""
+  ).trim();
+  const candidateProblemText = counters && counters.descriptionProblemText;
+  const hasProblemTextUpdate = isUsableProblemText(candidateProblemText);
+
+  if (hasProblemTextUpdate) {
+    if (
+      !prisma ||
+      !prisma.challenge ||
+      typeof prisma.challenge.update !== "function"
+    ) {
+      throw new Error(
+        "Targeted rerun requires Prisma challenge.update to apply description patches."
+      );
+    }
+    await prisma.challenge.update({
+      where: { id: selection.challengeId },
+      data: {
+        description: String(candidateProblemText),
+        updatedBy: String(actor || "").trim() || "historical-mm-importer",
+      },
+      select: { id: true },
+    });
+
+    return {
+      records: [
+        {
+          recordType: "apply-record",
+          legacyRoundId: selection.roundId,
+          status: "targeted-rerun-applied",
+          challengeId: selection.challengeId,
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-problem-text",
+          legacyProblemId: legacyProblemId || null,
+          reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+        },
+      ],
+      summary: {
+        recordType: "apply-summary",
+        created: 0,
+        existing: 0,
+        unmatched: 0,
+        unresolved: 0,
+        errors: 0,
+        targetedRerunValidated: 1,
+        targetedRerunDescriptionUpdated: 1,
+        targetedRerunDescriptionPreserved: 0,
+        targetedRerunWritesAttempted: 1,
+        skippedFileArtifact: null,
+      },
+    };
+  }
 
   return {
     records: [
       {
         recordType: "apply-record",
         legacyRoundId: selection.roundId,
-        status: "targeted-rerun-ready",
+        status: "targeted-rerun-preserved",
         challengeId: selection.challengeId,
         mode: "targeted-rerun",
         writesAttempted: false,
-        reason: "targeted-rerun-override-validated",
+        descriptionUpdated: false,
+        descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+        legacyProblemId: null,
+        reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
       },
     ],
     summary: {
@@ -659,6 +740,9 @@ const runTargetedRerunMode = async ({ options, plan }) => {
       unresolved: 0,
       errors: 0,
       targetedRerunValidated: 1,
+      targetedRerunDescriptionUpdated: 0,
+      targetedRerunDescriptionPreserved: 1,
+      targetedRerunWritesAttempted: 0,
       skippedFileArtifact: null,
     },
   };

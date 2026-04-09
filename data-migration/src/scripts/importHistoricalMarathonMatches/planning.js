@@ -28,6 +28,8 @@ const createEmptyCounters = () => ({
   round: null,
   componentIds: new Set(),
   problemIds: new Set(),
+  descriptionProblemId: null,
+  descriptionProblemText: null,
   eligibleRegistrants: new Set(),
   nonExampleSubmissions: 0,
   exampleSubmissions: 0,
@@ -101,6 +103,17 @@ const parseEpochMs = (value) => {
     return null;
   }
   return parsed;
+};
+
+const isUsableProblemText = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.toLowerCase() !== "null";
 };
 
 const minMs = (left, right) => {
@@ -1055,6 +1068,9 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
 
   const selectedRoundIdSet = new Set(roundDataById.keys());
   const selectedComponentIds = new Set();
+  const selectedProblemIds = new Set();
+  const componentProblemIdById = new Map();
+  const problemTextByProblemId = new Map();
   const longComponentStateById = new Map();
   const stateSubmissionSummaryById = new Map();
 
@@ -1088,12 +1104,46 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
     if (!problemId) {
       return;
     }
+    componentProblemIdById.set(componentId, problemId);
+    selectedProblemIds.add(problemId);
     for (const counters of roundDataById.values()) {
       if (counters.componentIds.has(componentId)) {
         counters.problemIds.add(problemId);
       }
     }
   });
+
+  await streamJsonArray(fixedFiles.problem, "problem", (row) => {
+    const problemId = String(row && row.problem_id ? row.problem_id : "").trim();
+    if (!selectedProblemIds.has(problemId)) {
+      return;
+    }
+    const rawProblemText =
+      row && Object.prototype.hasOwnProperty.call(row, "problem_text")
+        ? row.problem_text
+        : null;
+    problemTextByProblemId.set(problemId, rawProblemText);
+  });
+
+  for (const counters of roundDataById.values()) {
+    counters.descriptionProblemId = null;
+    counters.descriptionProblemText = null;
+
+    for (const componentId of sortIds(counters.componentIds)) {
+      const problemId = componentProblemIdById.get(componentId);
+      if (!problemId) {
+        continue;
+      }
+      const rawProblemText = problemTextByProblemId.get(problemId);
+      if (!isUsableProblemText(rawProblemText)) {
+        continue;
+      }
+
+      counters.descriptionProblemId = problemId;
+      counters.descriptionProblemText = String(rawProblemText);
+      break;
+    }
+  }
 
   await Promise.all(
     roundRegistrationFiles.map((filePath) =>

@@ -132,6 +132,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       typeId: "type-mm",
       trackId: "track-ds",
       timelineTemplateId: "timeline-mm",
+      description: "Imported historical Marathon Match from legacy round 9892",
       status: "COMPLETED",
       currentPhaseNames: [],
       numOfRegistrants: 2,
@@ -143,6 +144,54 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       "Submission",
       "Review",
     ]);
+  });
+
+  test("apply create-path uses mapped raw legacy problem HTML when available", async () => {
+    const calls = { createdChallenge: null };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdChallenge = data;
+          return { id: "challenge-1" };
+        }),
+      },
+      challengePhase: {
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    };
+
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const rawProblemHtml = "<p><strong>Legacy</strong> description</p>";
+    await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", name: "MM 9892" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+        descriptionProblemText: rawProblemHtml,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(calls.createdChallenge.description).toBe(rawProblemHtml);
   });
 
   test("apply create-path is idempotent when challenge already exists", async () => {
@@ -666,7 +715,14 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     );
   });
 
-  test("targeted rerun mode returns explicit patch-path apply report for a validated override", async () => {
+  test("targeted rerun mode applies mapped raw problem HTML when available", async () => {
+    const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
+    const prisma = {
+      challenge: {
+        update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+      },
+    };
+
     const result = await runTargetedRerunMode({
       options: {
         roundIds: ["9892"],
@@ -680,19 +736,38 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             matchedChallengeId: "challenge-1",
           },
         ],
+        roundDataById: new Map([
+          [
+            "9892",
+            {
+              descriptionProblemText: rawProblemHtml,
+              descriptionProblemId: "9001",
+            },
+          ],
+        ]),
       },
+      prisma,
+      actor: "importer",
     });
 
+    expect(prisma.challenge.update).toHaveBeenCalledWith({
+      where: { id: "challenge-1" },
+      data: { description: rawProblemHtml, updatedBy: "importer" },
+      select: { id: true },
+    });
     expect(result).toEqual({
       records: [
         {
           recordType: "apply-record",
           legacyRoundId: "9892",
-          status: "targeted-rerun-ready",
+          status: "targeted-rerun-applied",
           challengeId: "challenge-1",
           mode: "targeted-rerun",
-          writesAttempted: false,
-          reason: "targeted-rerun-override-validated",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-problem-text",
+          legacyProblemId: "9001",
+          reason: "targeted-rerun-description-updated-from-legacy-problem-text",
         },
       ],
       summary: {
@@ -703,8 +778,75 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         unresolved: 0,
         errors: 0,
         targetedRerunValidated: 1,
+        targetedRerunDescriptionUpdated: 1,
+        targetedRerunDescriptionPreserved: 0,
+        targetedRerunWritesAttempted: 1,
         skippedFileArtifact: null,
       },
+    });
+  });
+
+  test("targeted rerun mode preserves existing description when no usable problem text exists", async () => {
+    const prisma = {
+      challenge: {
+        update: jest.fn(),
+      },
+    };
+
+    const result = await runTargetedRerunMode({
+      options: {
+        roundIds: ["9892"],
+        challengeId: "challenge-1",
+      },
+      plan: {
+        records: [
+          {
+            legacyRoundId: "9892",
+            decision: "reuse/backfill-only",
+            matchedChallengeId: "challenge-1",
+          },
+        ],
+        roundDataById: new Map([
+          [
+            "9892",
+            {
+              descriptionProblemText: "   ",
+              descriptionProblemId: "9001",
+            },
+          ],
+        ]),
+      },
+      prisma,
+      actor: "importer",
+    });
+
+    expect(prisma.challenge.update).not.toHaveBeenCalled();
+    expect(result.records).toEqual([
+      {
+        recordType: "apply-record",
+        legacyRoundId: "9892",
+        status: "targeted-rerun-preserved",
+        challengeId: "challenge-1",
+        mode: "targeted-rerun",
+        writesAttempted: false,
+        descriptionUpdated: false,
+        descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+        legacyProblemId: null,
+        reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+      },
+    ]);
+    expect(result.summary).toEqual({
+      recordType: "apply-summary",
+      created: 0,
+      existing: 0,
+      unmatched: 0,
+      unresolved: 0,
+      errors: 0,
+      targetedRerunValidated: 1,
+      targetedRerunDescriptionUpdated: 0,
+      targetedRerunDescriptionPreserved: 1,
+      targetedRerunWritesAttempted: 0,
+      skippedFileArtifact: null,
     });
   });
 

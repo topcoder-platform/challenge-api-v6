@@ -26,7 +26,9 @@ const buildFixtureDataDirectory = () => {
   writeJson(baseDir, "component_1.json", "component", [
     { component_id: "5503", problem_id: "9001" },
   ]);
-  writeJson(baseDir, "problem_1.json", "problem", [{ problem_id: "9001" }]);
+  writeJson(baseDir, "problem_1.json", "problem", [
+    { problem_id: "9001", problem_text: "<p>Legacy <strong>problem</strong> text</p>" },
+  ]);
   writeJson(baseDir, "long_component_state_1.json", "long_component_state", [
     { long_component_state_id: "lcs-1", round_id: "9892", coder_id: "1", component_id: "5503" },
   ]);
@@ -121,5 +123,29 @@ describe("importHistoricalMarathonMatches planning prerequisites", () => {
       phaseNames: ["Registration", "Submission", "Review"],
       timelineTemplateId: "timeline-mm",
     });
+  });
+
+  test("captures mapped raw legacy problem HTML for apply-mode description sourcing", async () => {
+    const plan = await buildDryRunPlan(
+      buildOptions(fixtureDir),
+      new Map(),
+      {
+        authoritativeDiscovery: { available: true },
+        canonicalTimelineTemplate: {
+          resolved: true,
+          timelineTemplateId: "timeline-mm",
+        },
+        memberResolution: {
+          available: true,
+          resolvedMemberIds: new Set(["1"]),
+        },
+      }
+    );
+
+    const counters = plan.roundDataById.get("9892");
+    expect(counters.descriptionProblemId).toBe("9001");
+    expect(counters.descriptionProblemText).toBe(
+      "<p>Legacy <strong>problem</strong> text</p>"
+    );
   });
 });

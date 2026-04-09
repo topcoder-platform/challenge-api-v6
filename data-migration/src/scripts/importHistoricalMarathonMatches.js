@@ -262,6 +262,8 @@ const run = async () => {
       const targetedRerunResult = await runTargetedRerunMode({
         options,
         plan,
+        prisma,
+        actor: DEFAULT_ACTOR,
       });
       emitApplyReport(targetedRerunResult);
       return;
