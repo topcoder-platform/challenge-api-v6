@@ -152,6 +152,17 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(result.stderr).toContain("Invalid round id value \"abc\"");
   });
 
+  test("targeted rerun mode requires an explicit challenge-id override", () => {
+    const result = runImporter(
+      ["--data-dir", fixtureDir, "--apply", "--targeted-rerun", "--round-id", "9892"],
+      fixtureDir
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--targeted-rerun requires --challenge-id");
+    expect(result.stderr).not.toContain("RESOURCES_API_URL must be set");
+  });
+
   test("dry-run emits one deterministic parseable record per selected round including unmatched", () => {
     const args = [
       "--data-dir",

@@ -8,6 +8,7 @@ const { parseArgs, usage } = require("./importHistoricalMarathonMatches/argParse
 const { buildDryRunPlan } = require("./importHistoricalMarathonMatches/planning");
 const {
   runApplyMode,
+  runTargetedRerunMode,
   DEFAULT_SUBMITTER_ROLE_ID,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
@@ -254,6 +255,15 @@ const run = async () => {
     );
     if (!options.apply) {
       emitPlanReport(plan);
+      return;
+    }
+
+    if (options.targetedRerun) {
+      const targetedRerunResult = await runTargetedRerunMode({
+        options,
+        plan,
+      });
+      emitApplyReport(targetedRerunResult);
       return;
     }
 

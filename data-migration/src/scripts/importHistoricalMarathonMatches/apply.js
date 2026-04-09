@@ -594,6 +594,76 @@ const collectSkipMemberIdsByRoundId = ({
   return byRoundId;
 };
 
+const resolveTargetedRerunSelection = ({ options, planRecordByRoundId }) => {
+  const roundIds = Array.isArray(options && options.roundIds) ? options.roundIds : [];
+  if (roundIds.length !== 1) {
+    throw new Error("--targeted-rerun requires exactly one selected round.");
+  }
+  const [roundId] = roundIds;
+  const challengeIdOverride = String((options && options.challengeId) || "").trim();
+  if (!challengeIdOverride) {
+    throw new Error("--targeted-rerun requires --challenge-id <id>.");
+  }
+
+  const planRecord = planRecordByRoundId.get(roundId);
+  if (!planRecord) {
+    throw new Error(
+      `Targeted rerun requires a plan record for selected round ${roundId}; none was generated.`
+    );
+  }
+  if (planRecord.decision !== "reuse/backfill-only") {
+    throw new Error(
+      `Targeted rerun requires selected round ${roundId} to be already imported (decision reuse/backfill-only), but got ${planRecord.decision}.`
+    );
+  }
+
+  const matchedChallengeId = String((planRecord && planRecord.matchedChallengeId) || "").trim();
+  if (!matchedChallengeId) {
+    throw new Error(
+      `Targeted rerun requires selected round ${roundId} to resolve an existing matched challenge id.`
+    );
+  }
+  if (challengeIdOverride !== matchedChallengeId) {
+    throw new Error(
+      `Targeted rerun challenge-id override "${challengeIdOverride}" does not match selected round ${roundId} target challenge "${matchedChallengeId}".`
+    );
+  }
+
+  return {
+    roundId,
+    challengeId: matchedChallengeId,
+  };
+};
+
+const runTargetedRerunMode = async ({ options, plan }) => {
+  const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
+  const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
+
+  return {
+    records: [
+      {
+        recordType: "apply-record",
+        legacyRoundId: selection.roundId,
+        status: "targeted-rerun-ready",
+        challengeId: selection.challengeId,
+        mode: "targeted-rerun",
+        writesAttempted: false,
+        reason: "targeted-rerun-override-validated",
+      },
+    ],
+    summary: {
+      recordType: "apply-summary",
+      created: 0,
+      existing: 0,
+      unmatched: 0,
+      unresolved: 0,
+      errors: 0,
+      targetedRerunValidated: 1,
+      skippedFileArtifact: null,
+    },
+  };
+};
+
 const runApplyMode = async ({
   prisma,
   options,
@@ -1150,5 +1220,6 @@ module.exports = {
   resolveDataScienceTrackId,
   resolveCanonicalTimelineTemplateId,
   reconcileSubmitterResourcesForRound,
+  runTargetedRerunMode,
   runApplyMode,
 };

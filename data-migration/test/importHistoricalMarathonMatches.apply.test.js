@@ -7,6 +7,7 @@ const {
   applyCreateRound,
   reconcileSubmitterResourcesForRound,
   runApplyMode,
+  runTargetedRerunMode,
 } = require("../src/scripts/importHistoricalMarathonMatches/apply");
 
 const buildSkippedFilePath = (suffix) =>
@@ -622,6 +623,89 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     );
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("targeted rerun mode fails closed when challenge-id override is missing", async () => {
+    await expect(
+      runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow("--targeted-rerun requires --challenge-id");
+  });
+
+  test("targeted rerun mode fails closed when challenge-id override mismatches selected round", async () => {
+    await expect(
+      runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-2",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow(
+      'Targeted rerun challenge-id override "challenge-2" does not match selected round 9892 target challenge "challenge-1".'
+    );
+  });
+
+  test("targeted rerun mode returns explicit patch-path apply report for a validated override", async () => {
+    const result = await runTargetedRerunMode({
+      options: {
+        roundIds: ["9892"],
+        challengeId: "challenge-1",
+      },
+      plan: {
+        records: [
+          {
+            legacyRoundId: "9892",
+            decision: "reuse/backfill-only",
+            matchedChallengeId: "challenge-1",
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual({
+      records: [
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-ready",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: false,
+          reason: "targeted-rerun-override-validated",
+        },
+      ],
+      summary: {
+        recordType: "apply-summary",
+        created: 0,
+        existing: 0,
+        unmatched: 0,
+        unresolved: 0,
+        errors: 0,
+        targetedRerunValidated: 1,
+        skippedFileArtifact: null,
+      },
+    });
   });
 
   test("apply mode reconciles submitter resources from eligible registrations", async () => {

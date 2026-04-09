@@ -16,6 +16,8 @@ const DEFAULT_OPTIONS = {
   dryRun: true,
   apply: false,
   roundIds: [],
+  targetedRerun: false,
+  challengeId: null,
   help: false,
 };
 
@@ -155,6 +157,19 @@ const parseArgs = (argv) => {
       options.dryRun = false;
       continue;
     }
+    if (arg === "--targeted-rerun") {
+      options.targetedRerun = true;
+      continue;
+    }
+    if (arg === "--challenge-id") {
+      const value = String(requireNextValue(argv, index, "--challenge-id")).trim();
+      if (!value) {
+        throw new Error("--challenge-id requires a value");
+      }
+      options.challengeId = value;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`Unknown option: ${arg}`);
   }
@@ -163,6 +178,18 @@ const parseArgs = (argv) => {
 
   if (!options.help && options.roundIds.length === 0) {
     throw new Error("At least one round filter is required. Use --round-id or --round-ids.");
+  }
+  if (options.targetedRerun && !options.apply) {
+    throw new Error("--targeted-rerun requires --apply mode.");
+  }
+  if (options.challengeId && !options.targetedRerun) {
+    throw new Error("--challenge-id is only supported with --targeted-rerun.");
+  }
+  if (options.targetedRerun && !options.challengeId) {
+    throw new Error("--targeted-rerun requires --challenge-id <id>.");
+  }
+  if (options.targetedRerun && options.roundIds.length !== 1) {
+    throw new Error("--targeted-rerun requires exactly one selected round.");
   }
 
   return options;
@@ -192,6 +219,8 @@ Input options:
 
 Apply mode:
   --apply                            Apply reconciliation writes (challenge + phase create path)
+  --targeted-rerun                   Use explicit targeted rerun patch mode (already-imported rounds only)
+  --challenge-id <id>                Required existing challenge-id override for --targeted-rerun
 
 Other:
   --help, -h                         Show this help
