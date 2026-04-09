@@ -25,9 +25,10 @@ There is no browser or TUI surface for this mission.
 2. Capture per-round decision records and deltas.
 3. Run apply for the same selected round set.
 4. Verify challenge/resource/submission/review state through API responses.
-5. Inspect the skipped-file artifact for any missing-member records reported by the run.
-6. Compare imported data plus skipped-member reporting to legacy data using read-only Python scripts.
-7. Re-run apply or dry-run to prove idempotency.
+5. For follow-up patch validation, inspect local archive files under `SUBMISSION_ARCHIVE_DIR` and compare their contents to legacy submission text.
+6. Inspect the skipped-file artifact for any missing-member records reported by the run.
+7. Compare imported data plus skipped-member reporting to legacy data using read-only Python scripts.
+8. Re-run apply or dry-run to prove idempotency / patch-only behavior.
 
 Canonical live validation endpoints:
 
@@ -41,6 +42,7 @@ If the approved missing-member policy is exercised, validators should reconcile 
 
 - `10815` — primary create-path round during planning-challenge; in the shared dev environment it is now a post-create/backfill fixture
 - one score-rich Marathon Match round selected during score-feature work for final-ranking validation
+- `10015` when available — already-imported description-backfill / targeted-rerun fixture
 - `14272` — second round for multi-round filter checks
 - one existing-v6 round chosen from dry-run output in the validation environment
 - one Marathon Match round with unattachable finalists selected during score-feature work for explicit skip/report validation
@@ -57,6 +59,7 @@ If the approved missing-member policy is exercised, validators should reconcile 
 
 - Validation uses the existing dev environment referenced by `.env.importer.local`.
 - `.env.importer.local` is populated, so live end-to-end apply-mode validation can proceed on the selected dev environment.
+- `SUBMISSION_ARCHIVE_DIR` must point at a writable local directory before follow-up targeted rerun validation can pass.
 - Pre-existing repo-wide `standard-lint` noise in `challenge-api-v6` should not be mistaken for importer regressions; validators should focus on mission-owned surfaces.
 - The shared dev environment does not necessarily contain every historical legacy member id, so member-owned validation must account for approved `missing-member` skips rather than assuming full one-to-one import coverage.
 - If dry-run/apply returns `target-member-resolution-unavailable`, the validation environment still lacks reachable member lookup configuration. Provide `MEMBER_DB_URL` (or a `DATABASE_URL` that can resolve members) plus a valid `MEMBER_DB_SCHEMA` before expecting populated missing-member partitions or skipped-file records from live runs.
@@ -68,10 +71,14 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - Immediate rerun dry-run on `10815` now reports `reuse/backfill-only` with `phases.toCreate=0`, but still classifies the round as `partial-backfill` because resources/submissions/finalScores/provisionalScores remain pending later-milestone work. Use it to verify challenge/phase reuse only, not full-surface no-op reruns.
 - In the current shared dev environment, `13897` is a partial-backfill fixture: the challenge and standard phases already exist, while linked resources/submissions/review-summation surfaces still read as empty. That means no-op rerun assertions for a fully imported round cannot be proven here without a separately completed fixture.
 - `GET https://api.topcoder-dev.com/v6/challenges` and `GET https://api.topcoder-dev.com/v6/challenges/<id>` work without auth in this environment. `GET https://api.topcoder-dev.com/v6/resources?challengeId=<id>` and `GET https://api.topcoder-dev.com/v6/submissions?challengeId=<id>` are also readable without auth.
+- Follow-up description validation should read `GET /v6/challenges/<id>` before and after the targeted rerun and compare the raw HTML `description` field directly.
 - `GET https://api.topcoder-dev.com/v6/reviewSummations?challengeId=<id>` requires an M2M bearer token. Source `.env.importer.local`, run `node get_token.js`, and use the final stdout line as the token value.
 - Response shapes are mixed: challenge/resource lookups return arrays directly, while `submissions` and authenticated `reviewSummations` return paginated objects with `data` and `meta`. Validators should count rows from the `data` array and set a large `perPage` value (for example `1000` or higher) before reconciling totals.
+- Follow-up submission-archive validation should read submissions before and after the rerun, record URL deltas, and inspect at least one generated zip file locally to confirm it contains the expected legacy submission text.
+- Patch-only rerun validation must capture resource / submission-count / review-count snapshots before and after the rerun and show that only description plus submission URL/archive surfaces changed.
 - When participant backfill encounters legacy members absent from the dev environment, validators should expect a skipped-file artifact and should confirm that the skipped member ids plus the imported member-owned records reconcile back to the legacy totals for the round.
 - Round `14272` currently dry-runs as `decision=unresolved` with reason `selected-round-round-type-is-not-marathon-match`; it remains useful for exact-filter and unresolved-path validation but should not be treated as an importable Marathon Match fixture.
+- The approved follow-up rerun mode must fail closed without an explicit challenge-id override; validators should include one negative-path run that omits the override and confirm no writes occur.
 - Previously considered score candidates such as `10089` and `10722` should not be assumed valid Marathon Match fixtures in the current validation environment unless a later score-feature investigation reconfirms them.
 - Dry-run planning against `/mnt/Informix` can take several minutes; use generous timeouts (roughly 360-480s) for evidence-capture runs to avoid false timeout failures.
 - Do not run apply-mode validators concurrently on the same round or shared dev database. Read-only dry-run/API checks may run concurrently only when they avoid rounds being mutated by another validator.

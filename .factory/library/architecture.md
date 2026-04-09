@@ -17,12 +17,14 @@ The mission adds a reusable importer inside `challenge-api-v6/data-migration/` t
 - existing v6 challenge data through the challenge DB / challenge-api schema
 - existing v6 resource data through the Resource API
 - existing v6 submission and review-summation data through the review DB / review-api schema
+- local env configuration from `.env.importer.local`, including `SUBMISSION_ARCHIVE_DIR`
 
 ### Write surfaces
 
 - Challenge and ChallengePhase records in the challenge DB
 - submitter Resource records through the Resource API
 - Submission and ReviewSummation records in the review DB
+- local submission archive zip files under `SUBMISSION_ARCHIVE_DIR`
 
 ## Import Pipeline
 
@@ -59,6 +61,15 @@ For each selected round:
 - if a v6 challenge is matched unambiguously and passes the reuse preconditions above, keep the same challenge id and preserve challenge-level fields
 
 Created challenges must use `challenge.legacyId = round.id`. Reused challenges are not challenge-level rewrite candidates; they must already be matched unambiguously by the rule above or remain `unresolved`.
+
+### Challenge description sourcing
+
+Challenge description content comes from the legacy `round -> component -> problem` mapping:
+
+- when a selected round maps to a legacy `problem` row with non-empty `problem_text`, persist that raw HTML as the v6 challenge description
+- when no problem row or no usable `problem_text` is available, retain the existing placeholder/fallback description behavior
+- on standard reuse/backfill runs, preserve existing challenge-level fields other than the approved follow-up description patch
+- on targeted rerun patch mode, description overwrite is allowed only when the caller provides an explicit existing challenge-id override
 
 ### 3. Phase materialization
 
@@ -122,6 +133,16 @@ Only non-example legacy submissions are imported. The importer must preserve the
 
 **Stable submission identity invariant:** imported `Submission.legacySubmissionId` must be a deterministic composite derived from legacy submission identity so round-wide and rerun validation can compare exact sets. The contract assumes `legacySubmissionId` is the stable external identity for imported submissions.
 
+### Submission archive backfill
+
+Imported/reused submissions also participate in a deterministic archive backfill flow:
+
+- load legacy submission text from the same submission identity used for `legacySubmissionId`, preferring the main long-submission text field and only falling back to secondary legacy text fields when needed
+- build a deterministic archive filename from stable submission identity so reruns converge on the same local file and the same `submission.url`
+- write a zip file containing a single text file with the recovered legacy submission text under `SUBMISSION_ARCHIVE_DIR`
+- set `submission.url` to the delayed-upload target format `https://s3.amazonaws.com/topcoder-submissions/<archive-file-name>`
+- on reruns, treat archive generation plus URL update as reconciliation work: recreate/refresh only as needed without duplicating submission rows
+
 ### 6. Score materialization
 
 Two score streams are imported:
@@ -148,6 +169,7 @@ These are core safety invariants:
 
 - existing v6 marathon challenges are source of truth for challenge-level fields
 - backfill may add missing linked records only
+- the approved follow-up patch mode may additionally overwrite challenge `description` and submission archive/url data, but nothing else
 - already-present standard phase rows on reused challenges are preserved
 - reruns must not duplicate challenges, phases, resources, submissions, or review summations
 - example submissions and example review summations are never imported
@@ -164,6 +186,12 @@ Cross-service writes are not a single distributed transaction. The importer ther
 The observable result of rerunning a partially imported round should be reconciliation to the same steady state, not duplication or destructive rewrite.
 
 If a temporary status-transition workflow is used during participant backfill, reruns must still converge to the same final completed state.
+
+Targeted rerun patch mode is deliberately narrow and explicit:
+
+- it requires an explicit existing challenge-id override
+- it may patch only the challenge description plus submission archive/url data for the selected round
+- it must not recreate submissions or mutate resource/review/phase state outside the approved patch surfaces
 
 ## Data Ownership Invariants
 
@@ -188,6 +216,14 @@ Owns:
 - imported submissions
 - provisional review summations per submission
 - final review summations attached to the latest imported non-example submission per member
+- the `submission.url` field pointing at the deterministic archive path
+
+### Local filesystem (`SUBMISSION_ARCHIVE_DIR`)
+
+Owns:
+
+- generated zip archives for legacy submission text
+- deterministic archive filenames used to derive `submission.url`
 
 ## Validation-Oriented Invariants
 
@@ -197,5 +233,7 @@ The validation contract relies on these high-level invariants being preserved:
 - a score-rich Marathon Match fixture is selected during score-feature work for final-ranking validation
 - round `14272` is the second selected round for multi-round blast-radius checks
 - imported submission identity is externally testable via `legacySubmissionId`
+- imported description sourcing is externally testable via raw HTML challenge description reads
+- imported archive backfill is externally testable via `submission.url` plus local zip inspection
 - reused-round verification depends on comparing both identity sets and externally visible field snapshots
 - for member-owned surfaces, validation now reconciles `imported subset + skipped missing-member subset = legacy total`

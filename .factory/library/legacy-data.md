@@ -11,6 +11,8 @@ Legacy source facts that workers should reuse instead of rediscovering.
 
 - `round_1.json`
 - `round_registration_*.json`
+- `component_1.json`
+- `problem_1.json`
 - `long_component_state_1.json`
 - `long_submission_*.json`
 - `long_comp_result_*.json`
@@ -27,6 +29,10 @@ Use this legacy relationship when deriving participant/submission/final-score da
 
 - `round -> long_component_state -> long_submission -> long_comp_result`
 
+Use this legacy relationship when deriving challenge descriptions:
+
+- `round -> component -> problem`
+
 ## Resource Source
 
 - submitter resources come from `round_registration_*.json`
@@ -38,6 +44,13 @@ Use this legacy relationship when deriving participant/submission/final-score da
 - import full **non-example** history only
 - example submissions are excluded from imported submissions and imported score history
 - imported `Submission.legacySubmissionId` must be deterministic and stable across reruns
+- submission archive text should prefer the primary legacy submission body field from `long_submission`; only fall back to secondary legacy submission text when that preferred body is absent
+- generated archive filenames and derived `submission.url` values must remain deterministic across reruns
+
+## Description Rules
+
+- when the mapped `problem.problem_text` is non-empty, use that raw HTML as the challenge description
+- when `problem_text` is empty or the round does not map cleanly to a problem row, fall back to the importer's placeholder description behavior
 
 ### Named participant fixture
 
@@ -66,6 +79,7 @@ Use this legacy relationship when deriving participant/submission/final-score da
 
 - `10815`: `836` eligible registrations, `1445` non-example submissions, `2424` example submissions, `267` submitters with non-example history, and fallback-heavy final-score behavior; in the current target-member snapshot this round plans `283` final candidates split into `266` importable finals, `2` missing-member final skips, and `15` explicit `finalist-without-attachable-submission` skips. Treat this as the selected unattachable-finalists fixture for score validation.
 - `17948`: selected score-rich Marathon Match fixture for final-score validation. Current planning/apply evidence for this round yields `81` legacy final candidates with `45` importable finals, `36` `missing-member` final skips, and `0` explicit `finalist-without-attachable-submission` skips. Imported finals on this fixture are `system_point_total`-backed and preserve legacy placement order when sorted by aggregate score descending after excluding missing-member finalists.
+- `10015`: already-imported Marathon Match fixture observed with a placeholder v6 description despite having legacy problem text available; use this fixture for description overwrite and targeted rerun validation when it remains available in the shared dev environment.
 - `13897`: remains a useful large MM backfill fixture, but it is **not** the selected score-rich placement fixture because it currently includes `33` explicit `finalist-without-attachable-submission` skips.
 - `14272`: second selected-round filter fixture; current validation guidance treats it as an unresolved/non-Marathon-Match round rather than an importable Marathon Match target
 - `10089` and `10722` remain non-Marathon in current planning and should not be used as Marathon Match score fixtures.
