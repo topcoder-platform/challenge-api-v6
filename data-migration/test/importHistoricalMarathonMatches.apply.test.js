@@ -1,3 +1,4 @@
+const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
@@ -15,6 +16,37 @@ const buildSkippedFilePath = (suffix) =>
     os.tmpdir(),
     `mm-apply-skipped-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
   );
+
+const buildArchiveDirPath = (suffix) =>
+  fs.mkdtempSync(
+    path.join(
+      os.tmpdir(),
+      `mm-targeted-archive-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}-`
+    )
+  );
+
+const readSingleEntryStoredZip = (zipPath) => {
+  const zipBuffer = fs.readFileSync(zipPath);
+  expect(zipBuffer.readUInt32LE(0)).toBe(0x04034b50);
+  const fileNameLength = zipBuffer.readUInt16LE(26);
+  const extraFieldLength = zipBuffer.readUInt16LE(28);
+  const compressedSize = zipBuffer.readUInt32LE(18);
+  const localFileDataOffset = 30 + fileNameLength + extraFieldLength;
+  const fileName = zipBuffer
+    .slice(30, 30 + fileNameLength)
+    .toString("utf8");
+  const contents = zipBuffer
+    .slice(localFileDataOffset, localFileDataOffset + compressedSize)
+    .toString("utf8");
+
+  const centralDirectoryOffset = localFileDataOffset + compressedSize;
+  expect(zipBuffer.readUInt32LE(centralDirectoryOffset)).toBe(0x02014b50);
+  const endRecordOffset = zipBuffer.length - 22;
+  expect(zipBuffer.readUInt32LE(endRecordOffset)).toBe(0x06054b50);
+  expect(zipBuffer.readUInt16LE(endRecordOffset + 8)).toBe(1);
+
+  return { fileName, contents };
+};
 
 describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   test("derives coherent closed MM phase windows from legacy activity", () => {
@@ -715,62 +747,208 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     );
   });
 
-  test("targeted rerun mode applies mapped raw problem HTML when available", async () => {
-    const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
-    const prisma = {
-      challenge: {
-        update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
-      },
-    };
+  test("targeted rerun mode backfills deterministic submission archives and URLs while applying mapped raw problem HTML", async () => {
+    const archiveDir = buildArchiveDirPath("description-and-archives");
+    try {
+      const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
+      const prisma = {
+        challenge: {
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([
+            ["50010001", { legacySubmissionId: "50010001", url: null }],
+            ["50010002", { legacySubmissionId: "50010002", url: "https://example.com/old.zip" }],
+          ])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
 
-    const result = await runTargetedRerunMode({
-      options: {
-        roundIds: ["9892"],
-        challengeId: "challenge-1",
-      },
-      plan: {
-        records: [
-          {
-            legacyRoundId: "9892",
-            decision: "reuse/backfill-only",
-            matchedChallengeId: "challenge-1",
-          },
-        ],
-        roundDataById: new Map([
-          [
-            "9892",
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
             {
-              descriptionProblemText: rawProblemHtml,
-              descriptionProblemId: "9001",
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
             },
           ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: rawProblemHtml,
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [
+              { legacySubmissionId: "50010001", submissionText: "first legacy submission text" },
+              { legacySubmissionId: "50010002", submissionText: "second legacy submission text" },
+            ],
+          ],
         ]),
-      },
-      prisma,
-      actor: "importer",
-    });
+        actor: "importer",
+      });
 
-    expect(prisma.challenge.update).toHaveBeenCalledWith({
-      where: { id: "challenge-1" },
-      data: { description: rawProblemHtml, updatedBy: "importer" },
-      select: { id: true },
-    });
-    expect(result).toEqual({
-      records: [
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: { description: rawProblemHtml, updatedBy: "importer" },
+        select: { id: true },
+      });
+      expect(submissionArchiveStore.listSubmissionsByLegacyId).toHaveBeenCalledWith({
+        challengeId: "challenge-1",
+      });
+      expect(submissionArchiveStore.updateSubmissionUrl).toHaveBeenCalledTimes(2);
+      const updatedUrlsByLegacyId = Object.fromEntries(
+        submissionArchiveStore.updateSubmissionUrl.mock.calls.map(([call]) => [
+          call.legacySubmissionId,
+          call.url,
+        ])
+      );
+      expect(Object.keys(updatedUrlsByLegacyId).sort()).toEqual(["50010001", "50010002"]);
+      Object.values(updatedUrlsByLegacyId).forEach((url) => {
+        expect(url.startsWith("https://s3.amazonaws.com/topcoder-submissions/")).toBe(true);
+        expect(url.endsWith(".zip")).toBe(true);
+      });
+      expect(updatedUrlsByLegacyId["50010001"]).not.toBe(updatedUrlsByLegacyId["50010002"]);
+
+      const archiveFiles = fs.readdirSync(archiveDir).filter((entry) => entry.endsWith(".zip")).sort();
+      expect(archiveFiles).toHaveLength(2);
+      const entryInfo = readSingleEntryStoredZip(path.join(archiveDir, archiveFiles[0]));
+      expect(entryInfo.fileName.endsWith(".txt")).toBe(true);
+      expect(entryInfo.contents.length).toBeGreaterThan(0);
+
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-applied",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: true,
+            descriptionUpdated: true,
+            descriptionSource: "legacy-problem-text",
+            legacyProblemId: "9001",
+            reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 2,
+              archivesWritten: 2,
+              urlsUpdated: 2,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 1,
+          targetedRerunDescriptionPreserved: 0,
+          targetedRerunSubmissionArchivesWritten: 2,
+          targetedRerunSubmissionUrlsUpdated: 2,
+          targetedRerunWritesAttempted: 1,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode preserves existing description but still backfills submission archive URLs", async () => {
+    const archiveDir = buildArchiveDirPath("preserve-description");
+    try {
+      const prisma = {
+        challenge: {
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([["50010001", { legacySubmissionId: "50010001", url: null }]])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [{ legacySubmissionId: "50010001", submissionText: "single legacy submission text" }],
+          ],
+        ]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(submissionArchiveStore.updateSubmissionUrl).toHaveBeenCalledTimes(1);
+      expect(result.records).toEqual([
         {
           recordType: "apply-record",
           legacyRoundId: "9892",
-          status: "targeted-rerun-applied",
+          status: "targeted-rerun-preserved",
           challengeId: "challenge-1",
           mode: "targeted-rerun",
           writesAttempted: true,
-          descriptionUpdated: true,
-          descriptionSource: "legacy-problem-text",
-          legacyProblemId: "9001",
-          reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+          descriptionUpdated: false,
+          descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+          legacyProblemId: null,
+          reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 1,
+            archivesWritten: 1,
+            urlsUpdated: 1,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
         },
-      ],
-      summary: {
+      ]);
+      expect(result.summary).toEqual({
         recordType: "apply-summary",
         created: 0,
         existing: 0,
@@ -778,76 +956,16 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         unresolved: 0,
         errors: 0,
         targetedRerunValidated: 1,
-        targetedRerunDescriptionUpdated: 1,
-        targetedRerunDescriptionPreserved: 0,
+        targetedRerunDescriptionUpdated: 0,
+        targetedRerunDescriptionPreserved: 1,
+        targetedRerunSubmissionArchivesWritten: 1,
+        targetedRerunSubmissionUrlsUpdated: 1,
         targetedRerunWritesAttempted: 1,
         skippedFileArtifact: null,
-      },
-    });
-  });
-
-  test("targeted rerun mode preserves existing description when no usable problem text exists", async () => {
-    const prisma = {
-      challenge: {
-        update: jest.fn(),
-      },
-    };
-
-    const result = await runTargetedRerunMode({
-      options: {
-        roundIds: ["9892"],
-        challengeId: "challenge-1",
-      },
-      plan: {
-        records: [
-          {
-            legacyRoundId: "9892",
-            decision: "reuse/backfill-only",
-            matchedChallengeId: "challenge-1",
-          },
-        ],
-        roundDataById: new Map([
-          [
-            "9892",
-            {
-              descriptionProblemText: "   ",
-              descriptionProblemId: "9001",
-            },
-          ],
-        ]),
-      },
-      prisma,
-      actor: "importer",
-    });
-
-    expect(prisma.challenge.update).not.toHaveBeenCalled();
-    expect(result.records).toEqual([
-      {
-        recordType: "apply-record",
-        legacyRoundId: "9892",
-        status: "targeted-rerun-preserved",
-        challengeId: "challenge-1",
-        mode: "targeted-rerun",
-        writesAttempted: false,
-        descriptionUpdated: false,
-        descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
-        legacyProblemId: null,
-        reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
-      },
-    ]);
-    expect(result.summary).toEqual({
-      recordType: "apply-summary",
-      created: 0,
-      existing: 0,
-      unmatched: 0,
-      unresolved: 0,
-      errors: 0,
-      targetedRerunValidated: 1,
-      targetedRerunDescriptionUpdated: 0,
-      targetedRerunDescriptionPreserved: 1,
-      targetedRerunWritesAttempted: 0,
-      skippedFileArtifact: null,
-    });
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
   });
 
   test("apply mode reconciles submitter resources from eligible registrations", async () => {

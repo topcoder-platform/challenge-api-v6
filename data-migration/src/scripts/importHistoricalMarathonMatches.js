@@ -263,6 +263,9 @@ const run = async () => {
         options,
         plan,
         prisma,
+        reviewClient: reviewPrisma,
+        reviewSchema: reviewDbSchema,
+        submissionArchiveDir: process.env.SUBMISSION_ARCHIVE_DIR,
         actor: DEFAULT_ACTOR,
       });
       emitApplyReport(targetedRerunResult);

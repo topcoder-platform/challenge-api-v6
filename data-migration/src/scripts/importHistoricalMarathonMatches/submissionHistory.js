@@ -48,6 +48,41 @@ const normalizeReviewSchema = (value) => {
   return normalized;
 };
 
+const LEGACY_SUBMISSION_TEXT_FIELDS = [
+  "submission",
+  "submission_text",
+  "submissionText",
+  "text",
+  "body",
+  "source",
+  "source_code",
+  "sourceCode",
+  "code",
+  "content",
+  "contents",
+];
+
+const isUsableLegacySubmissionText = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.toLowerCase() !== "null";
+};
+
+const resolveLegacySubmissionText = (row) => {
+  const record = row && typeof row === "object" ? row : {};
+  for (const fieldName of LEGACY_SUBMISSION_TEXT_FIELDS) {
+    if (isUsableLegacySubmissionText(record[fieldName])) {
+      return String(record[fieldName]);
+    }
+  }
+  return "";
+};
+
 const buildQualifiedTableName = (schemaName, tableName) =>
   `"${String(schemaName).replace(/"/g, "\"\"")}"."${String(tableName).replace(/"/g, "\"\"")}"`;
 
@@ -233,6 +268,7 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
                   : null,
                 legacySubmissionId,
                 isSyntheticExampleOnlyFinalist: true,
+                submissionText: resolveLegacySubmissionText(row),
               }
             )
           );
@@ -261,6 +297,7 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
             : null,
           legacySubmissionId,
           isSyntheticExampleOnlyFinalist: false,
+          submissionText: resolveLegacySubmissionText(row),
         });
       })
     )
@@ -450,6 +487,95 @@ const createReviewSubmissionStore = async ({
   };
 };
 
+const createReviewSubmissionArchiveStore = async ({
+  reviewClient,
+  reviewSchema = DEFAULT_REVIEW_SCHEMA,
+}) => {
+  if (!reviewClient || typeof reviewClient.$queryRawUnsafe !== "function") {
+    throw new Error(
+      "Review DB client with $queryRawUnsafe is required for submission archive reconciliation."
+    );
+  }
+
+  const schema = normalizeReviewSchema(reviewSchema);
+  const submissionTable = buildQualifiedTableName(schema, "submission");
+  const columnRows = await reviewClient.$queryRawUnsafe(
+    `SELECT column_name AS "columnName"
+       FROM information_schema.columns
+      WHERE table_schema = $1
+        AND table_name = 'submission'`,
+    schema
+  );
+  const columnNames = new Set((columnRows || []).map((columnRow) => String(columnRow.columnName)));
+
+  if (!columnNames.has("challengeId") || !columnNames.has("legacySubmissionId")) {
+    throw new Error(
+      `Review submission table ${schema}.submission must expose challengeId and legacySubmissionId columns.`
+    );
+  }
+  if (!columnNames.has("url")) {
+    throw new Error(`Review submission table ${schema}.submission must expose url column.`);
+  }
+
+  const listSubmissionsByLegacyId = async ({ challengeId }) => {
+    const rows = await reviewClient.$queryRawUnsafe(
+      `SELECT "legacySubmissionId", "url"
+         FROM ${submissionTable}
+        WHERE "challengeId" = $1
+          AND "legacySubmissionId" IS NOT NULL`,
+      challengeId
+    );
+
+    const byLegacySubmissionId = new Map();
+    (rows || []).forEach((row) => {
+      const legacySubmissionId = String(
+        row && row.legacySubmissionId ? row.legacySubmissionId : ""
+      ).trim();
+      if (!legacySubmissionId) {
+        return;
+      }
+      if (byLegacySubmissionId.has(legacySubmissionId)) {
+        throw new Error(
+          `Challenge ${challengeId} has duplicate submission rows for legacySubmissionId "${legacySubmissionId}".`
+        );
+      }
+
+      byLegacySubmissionId.set(legacySubmissionId, {
+        legacySubmissionId,
+        url:
+          row && row.url !== null && row.url !== undefined ? String(row.url) : null,
+      });
+    });
+    return byLegacySubmissionId;
+  };
+
+  const updateSubmissionUrl = async ({ challengeId, legacySubmissionId, url }) => {
+    const normalizedLegacySubmissionId = String(legacySubmissionId || "").trim();
+    const normalizedUrl = String(url || "").trim();
+    if (!normalizedLegacySubmissionId) {
+      throw new Error("updateSubmissionUrl requires legacySubmissionId.");
+    }
+    if (!normalizedUrl) {
+      throw new Error("updateSubmissionUrl requires url.");
+    }
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET "url" = $1
+        WHERE "challengeId" = $2
+          AND "legacySubmissionId" = $3`,
+      normalizedUrl,
+      challengeId,
+      normalizedLegacySubmissionId
+    );
+  };
+
+  return {
+    listSubmissionsByLegacyId,
+    updateSubmissionUrl,
+  };
+};
+
 const reconcileRoundSubmissionHistory = async ({
   roundId,
   challengeId,
@@ -562,5 +688,7 @@ module.exports = {
   deriveLegacySubmissionId,
   loadNonExampleLegacySubmissionRowsByRoundId,
   createReviewSubmissionStore,
+  createReviewSubmissionArchiveStore,
   reconcileRoundSubmissionHistory,
+  resolveLegacySubmissionText,
 };

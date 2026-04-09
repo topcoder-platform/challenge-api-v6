@@ -17,6 +17,7 @@ const {
   DEFAULT_REVIEW_SCHEMA,
   loadNonExampleLegacySubmissionRowsByRoundId,
   createReviewSubmissionStore,
+  createReviewSubmissionArchiveStore,
   reconcileRoundSubmissionHistory,
 } = require("./submissionHistory");
 const {
@@ -29,6 +30,13 @@ const {
   createReviewProvisionalScoreStore,
   reconcileRoundProvisionalScores,
 } = require("./provisionalScores");
+const {
+  buildSubmissionArchiveFileName,
+  buildSubmissionArchiveEntryName,
+  buildSubmissionArchiveUrl,
+  resolveSubmissionArchiveDirectory,
+  writeSubmissionArchiveZip,
+} = require("./submissionArchives");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -656,7 +664,186 @@ const resolveTargetedRerunSelection = ({ options, planRecordByRoundId }) => {
   };
 };
 
-const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical-mm-importer" }) => {
+const compareLegacySubmissionIds = (left, right) =>
+  String(left || "").localeCompare(String(right || ""), undefined, { numeric: true });
+
+const buildLegacySubmissionRowsByLegacySubmissionId = (roundId, legacySubmissionRows = []) => {
+  const byLegacySubmissionId = new Map();
+  legacySubmissionRows.forEach((row) => {
+    const legacySubmissionId = String(row && row.legacySubmissionId ? row.legacySubmissionId : "").trim();
+    if (!legacySubmissionId) {
+      return;
+    }
+    if (byLegacySubmissionId.has(legacySubmissionId)) {
+      throw new Error(
+        `Targeted rerun round ${roundId} has duplicate legacy submission text rows for legacySubmissionId "${legacySubmissionId}".`
+      );
+    }
+    byLegacySubmissionId.set(legacySubmissionId, row);
+  });
+  return byLegacySubmissionId;
+};
+
+const loadTargetedRerunLegacySubmissionRowsByRoundId = async ({
+  selection,
+  options,
+  plan,
+  legacySubmissionRowsByRoundId,
+}) => {
+  if (legacySubmissionRowsByRoundId instanceof Map) {
+    return legacySubmissionRowsByRoundId;
+  }
+
+  const roundDataById = plan && plan.roundDataById instanceof Map ? plan.roundDataById : null;
+  const counters = roundDataById ? roundDataById.get(selection.roundId) : null;
+  const finalCandidateCoderIds =
+    counters && counters.finalCandidateCoderIds instanceof Set
+      ? counters.finalCandidateCoderIds
+      : new Set();
+  return loadNonExampleLegacySubmissionRowsByRoundId({
+    dataDir: options.dataDir,
+    longComponentStateFile: options.longComponentStateFile,
+    longSubmissionPattern: options.longSubmissionPattern,
+    roundIds: [selection.roundId],
+    attachableExampleOnlyFinalistCoderIdsByRoundId: new Map([
+      [selection.roundId, finalCandidateCoderIds],
+    ]),
+  });
+};
+
+const reconcileTargetedRerunSubmissionArchives = async ({
+  selection,
+  options,
+  plan,
+  submissionArchiveStore,
+  reviewClient,
+  reviewSchema,
+  legacySubmissionRowsByRoundId,
+  submissionArchiveDir,
+}) => {
+  const archiveDirectory = resolveSubmissionArchiveDirectory(
+    submissionArchiveDir ||
+      options.submissionArchiveDir ||
+      process.env.SUBMISSION_ARCHIVE_DIR
+  );
+  const store =
+    submissionArchiveStore ||
+    (await createReviewSubmissionArchiveStore({
+      reviewClient,
+      reviewSchema: reviewSchema || DEFAULT_REVIEW_SCHEMA,
+    }));
+  const existingSubmissionsByLegacyId = await store.listSubmissionsByLegacyId({
+    challengeId: selection.challengeId,
+  });
+  const existingSubmissions = Array.from(existingSubmissionsByLegacyId.values()).sort((left, right) =>
+    compareLegacySubmissionIds(left.legacySubmissionId, right.legacySubmissionId)
+  );
+  if (existingSubmissions.length === 0) {
+    return {
+      targetedSubmissions: 0,
+      archivesWritten: 0,
+      urlsUpdated: 0,
+      urlsAlreadyMatched: 0,
+      archiveDirectory,
+    };
+  }
+
+  const rowsByRoundId = await loadTargetedRerunLegacySubmissionRowsByRoundId({
+    selection,
+    options,
+    plan,
+    legacySubmissionRowsByRoundId,
+  });
+  const legacyRowsByLegacySubmissionId = buildLegacySubmissionRowsByLegacySubmissionId(
+    selection.roundId,
+    (rowsByRoundId && rowsByRoundId.get(selection.roundId)) || []
+  );
+
+  let urlsUpdated = 0;
+  const archiveFileNameByLegacySubmissionId = new Map();
+  existingSubmissions.forEach((submission) => {
+    const legacySubmissionId = String(
+      submission && submission.legacySubmissionId ? submission.legacySubmissionId : ""
+    ).trim();
+    if (!legacySubmissionId) {
+      return;
+    }
+    const archiveFileName = buildSubmissionArchiveFileName({
+      challengeId: selection.challengeId,
+      legacySubmissionId,
+    });
+    const existingLegacySubmissionId = archiveFileNameByLegacySubmissionId.get(archiveFileName);
+    if (existingLegacySubmissionId && existingLegacySubmissionId !== legacySubmissionId) {
+      throw new Error(
+        `Targeted rerun generated colliding archive filename "${archiveFileName}" for legacy submissions ${existingLegacySubmissionId} and ${legacySubmissionId}.`
+      );
+    }
+    archiveFileNameByLegacySubmissionId.set(archiveFileName, legacySubmissionId);
+  });
+
+  for (const submission of existingSubmissions) {
+    const legacySubmissionId = String(
+      submission && submission.legacySubmissionId ? submission.legacySubmissionId : ""
+    ).trim();
+    if (!legacySubmissionId) {
+      continue;
+    }
+
+    const legacyRow = legacyRowsByLegacySubmissionId.get(legacySubmissionId);
+    if (!legacyRow) {
+      throw new Error(
+        `Targeted rerun could not recover legacy submission text for round ${selection.roundId} legacySubmissionId "${legacySubmissionId}".`
+      );
+    }
+
+    const archiveFileName = buildSubmissionArchiveFileName({
+      challengeId: selection.challengeId,
+      legacySubmissionId,
+    });
+    const archiveEntryName = buildSubmissionArchiveEntryName({
+      legacySubmissionId,
+    });
+    const submissionArchiveUrl = buildSubmissionArchiveUrl({ archiveFileName });
+    writeSubmissionArchiveZip({
+      archiveDirectory,
+      archiveFileName,
+      archiveEntryName,
+      submissionText: legacyRow.submissionText || "",
+    });
+
+    const existingUrl = String(
+      submission && submission.url !== null && submission.url !== undefined ? submission.url : ""
+    ).trim();
+    if (existingUrl !== submissionArchiveUrl) {
+      await store.updateSubmissionUrl({
+        challengeId: selection.challengeId,
+        legacySubmissionId,
+        url: submissionArchiveUrl,
+      });
+      urlsUpdated += 1;
+    }
+  }
+
+  return {
+    targetedSubmissions: existingSubmissions.length,
+    archivesWritten: existingSubmissions.length,
+    urlsUpdated,
+    urlsAlreadyMatched: existingSubmissions.length - urlsUpdated,
+    archiveDirectory,
+  };
+};
+
+const runTargetedRerunMode = async ({
+  options,
+  plan,
+  prisma,
+  actor = "historical-mm-importer",
+  submissionArchiveStore,
+  reviewClient,
+  reviewSchema,
+  legacySubmissionRowsByRoundId,
+  submissionArchiveDir,
+}) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
   const roundDataById = plan && plan.roundDataById instanceof Map ? plan.roundDataById : null;
@@ -666,6 +853,19 @@ const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical
   ).trim();
   const candidateProblemText = counters && counters.descriptionProblemText;
   const hasProblemTextUpdate = isUsableProblemText(candidateProblemText);
+  const submissionArchiveReconciliation =
+    await reconcileTargetedRerunSubmissionArchives({
+      selection,
+      options,
+      plan,
+      submissionArchiveStore,
+      reviewClient,
+      reviewSchema,
+      legacySubmissionRowsByRoundId,
+      submissionArchiveDir,
+    });
+  const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
+  const hasWritesAttempted = hasProblemTextUpdate || hasSubmissionArchiveWrites;
 
   if (hasProblemTextUpdate) {
     if (
@@ -694,11 +894,12 @@ const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical
           status: "targeted-rerun-applied",
           challengeId: selection.challengeId,
           mode: "targeted-rerun",
-          writesAttempted: true,
+          writesAttempted: hasWritesAttempted,
           descriptionUpdated: true,
           descriptionSource: "legacy-problem-text",
           legacyProblemId: legacyProblemId || null,
           reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+          submissionArchiveReconciliation,
         },
       ],
       summary: {
@@ -711,7 +912,9 @@ const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical
         targetedRerunValidated: 1,
         targetedRerunDescriptionUpdated: 1,
         targetedRerunDescriptionPreserved: 0,
-        targetedRerunWritesAttempted: 1,
+        targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
+        targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
+        targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
         skippedFileArtifact: null,
       },
     };
@@ -725,11 +928,12 @@ const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical
         status: "targeted-rerun-preserved",
         challengeId: selection.challengeId,
         mode: "targeted-rerun",
-        writesAttempted: false,
+        writesAttempted: hasWritesAttempted,
         descriptionUpdated: false,
         descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
         legacyProblemId: null,
         reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+        submissionArchiveReconciliation,
       },
     ],
     summary: {
@@ -742,7 +946,9 @@ const runTargetedRerunMode = async ({ options, plan, prisma, actor = "historical
       targetedRerunValidated: 1,
       targetedRerunDescriptionUpdated: 0,
       targetedRerunDescriptionPreserved: 1,
-      targetedRerunWritesAttempted: 0,
+      targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
+      targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
+      targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
       skippedFileArtifact: null,
     },
   };
