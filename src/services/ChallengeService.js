@@ -944,7 +944,10 @@ async function searchChallenges(currentUser, criteria) {
   } else {
     if (criteria.name) {
       prismaFilter.where.AND.push({
-        name: { contains: criteria.name },
+        name: {
+          contains: criteria.name,
+          mode: "insensitive",
+        },
       });
     }
 

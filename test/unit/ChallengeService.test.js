@@ -863,6 +863,18 @@ describe("challenge service unit tests", () => {
       should.equal(result.result.length, 0);
     });
 
+    it("search challenges by name case-insensitively", async () => {
+      const result = await service.searchChallenges(
+        { isMachine: true },
+        { name: data.challenge.name.toLowerCase() },
+      );
+
+      should.equal(result.total, 1);
+      should.equal(result.result.length, 1);
+      should.equal(result.result[0].id, data.challenge.id);
+      should.equal(result.result[0].name, data.challenge.name);
+    });
+
     it("search challenges successfully 3", async () => {
       const res = await service.searchChallenges(
         { isMachine: true },
