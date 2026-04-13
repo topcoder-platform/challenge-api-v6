@@ -926,7 +926,10 @@ async function searchChallenges(currentUser, criteria) {
     prismaFilter.where.AND.push({
       OR: [
         {
-          name: { contains: criteria.search },
+          name: {
+            contains: criteria.search,
+            mode: "insensitive",
+          },
         },
         {
           description: { contains: criteria.search },
@@ -944,7 +947,10 @@ async function searchChallenges(currentUser, criteria) {
   } else {
     if (criteria.name) {
       prismaFilter.where.AND.push({
-        name: { contains: criteria.name },
+        name: {
+          contains: criteria.name,
+          mode: "insensitive",
+        },
       });
     }
 
@@ -2524,7 +2530,7 @@ async function validateChallengeActivationBillingAccount({
 
   if (!normalizedBillingAccountId) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project has no billing account."
+      "Cannot activate challenge because the project has no billing account.",
     );
   }
 
@@ -2533,36 +2539,37 @@ async function validateChallengeActivationBillingAccount({
 
   if (resolvedProjectActive === false) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account is inactive."
+      "Cannot activate challenge because the project billing account is inactive.",
     );
   }
 
   if (isBillingAccountExpired(resolvedProjectActive, resolvedProjectEndDate)) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account is expired."
+      "Cannot activate challenge because the project billing account is expired.",
     );
   }
 
-  const billingAccountDetails = await projectHelper.getBillingAccountDetails(normalizedBillingAccountId);
+  const billingAccountDetails = await projectHelper.getBillingAccountDetails(
+    normalizedBillingAccountId,
+  );
   const resolvedActive = resolveBillingAccountActive(billingAccountDetails);
-  const resolvedEndDate =
-    normalizeOptionalString(_.get(billingAccountDetails, "endDate"));
+  const resolvedEndDate = normalizeOptionalString(_.get(billingAccountDetails, "endDate"));
 
   if (!billingAccountDetails) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account could not be found."
+      "Cannot activate challenge because the project billing account could not be found.",
     );
   }
 
   if (resolvedActive === false) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account is inactive."
+      "Cannot activate challenge because the project billing account is inactive.",
     );
   }
 
   if (isBillingAccountExpired(resolvedActive, resolvedEndDate)) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account is expired."
+      "Cannot activate challenge because the project billing account is expired.",
     );
   }
 
@@ -2570,7 +2577,7 @@ async function validateChallengeActivationBillingAccount({
 
   if (!_.isNil(remainingBudget) && remainingBudget <= 0) {
     throw new errors.BadRequestError(
-      "Cannot activate challenge because the project billing account has insufficient remaining funds."
+      "Cannot activate challenge because the project billing account has insufficient remaining funds.",
     );
   }
 }
