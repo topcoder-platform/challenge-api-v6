@@ -1,7 +1,7 @@
 {
   "milestone": "followup-content-archives",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,24 +20,14 @@
     }
   },
   "reviewsSummary": {
-    "total": 5,
-    "passed": 3,
-    "failed": 2,
-    "failedFeatures": [
-      "mm-importer-problem-text-description-backfill",
-      "mm-importer-component-text-markdown-fallback"
-    ]
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
-    {
-      "featureId": "mm-importer-problem-text-description-backfill",
-      "severity": "blocking",
-      "description": "Targeted-rerun description patches are not idempotent. `runTargetedRerunMode` rewrites the challenge row whenever usable legacy description content exists, even when the stored description already matches; live evidence for round 17948 shows no description delta but a changed challenge updated timestamp. The same unconditional write pattern is duplicated in the component_text fallback branch.",
-      "suggestedFix": "Load the current challenge description (or add an equivalent equality check) before calling `prisma.challenge.update`, and skip the write when the computed legacy problem HTML or component Markdown already matches the stored description."
-    }
-  ],
+  "blockingIssues": [],
   "appliedUpdates": [],
   "suggestedGuidanceUpdates": [],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": ".factory/validation/followup-content-archives/scrutiny/synthesis.round1.json"
 }

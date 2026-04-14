@@ -1,0 +1,43 @@
+{
+  "milestone": "followup-content-archives",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "source \"$HOME/.config/nvm/nvm.sh\" && (cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration\" && nvm use 18.19.0 >/dev/null && pnpm test --maxWorkers=16 --testPathIgnorePatterns test/challenge-migration.test.js)",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"No dedicated typecheck command for this JavaScript importer surface\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "source \"$HOME/.config/nvm/nvm.sh\" && (cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration\" && nvm use 18.19.0 >/dev/null && pnpm lint)",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "failedFeatures": [
+      "mm-importer-problem-text-description-backfill",
+      "mm-importer-component-text-markdown-fallback"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "mm-importer-problem-text-description-backfill",
+      "severity": "blocking",
+      "description": "Targeted-rerun description patches are not idempotent. `runTargetedRerunMode` rewrites the challenge row whenever usable legacy description content exists, even when the stored description already matches; live evidence for round 17948 shows no description delta but a changed challenge updated timestamp. The same unconditional write pattern is duplicated in the component_text fallback branch.",
+      "suggestedFix": "Load the current challenge description (or add an equivalent equality check) before calling `prisma.challenge.update`, and skip the write when the computed legacy problem HTML or component Markdown already matches the stored description."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}

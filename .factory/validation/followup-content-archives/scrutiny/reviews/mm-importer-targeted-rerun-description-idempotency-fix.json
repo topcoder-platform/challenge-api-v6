@@ -1,0 +1,18 @@
+{
+  "featureId": "mm-importer-targeted-rerun-description-idempotency-fix",
+  "reviewedAt": "2026-04-14T04:30:45Z",
+  "commitId": "179714c75ba9b2fe19a7f2e4765ee1406c0676ba",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix closes the prior targeted-rerun idempotency blockers by reading the current challenge description before patching and skipping `prisma.challenge.update` when the stored value already matches either the legacy problem HTML or the converted component Markdown.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": [
+    "mm-importer-problem-text-description-backfill",
+    "mm-importer-component-text-markdown-fallback"
+  ],
+  "summary": "Reviewed the fix handoff, transcript skeleton, prior failed reviews, commit `179714c75ba9b2fe19a7f2e4765ee1406c0676ba`, current `runTargetedRerunMode` logic, and the new regression tests. Result: pass. The targeted-rerun flow now fetches the current description, skips challenge updates when the computed raw HTML or component-markdown text already matches, and preserves archive/URL reconciliation behavior while covering both no-op branches in tests."
+}
