@@ -10,6 +10,7 @@ Legacy source facts that workers should reuse instead of rediscovering.
 ## Primary Files
 
 - `round_1.json`
+- `round_component_1.json`
 - `round_registration_*.json`
 - `component_1.json`
 - `problem_1.json`
@@ -31,7 +32,7 @@ Use this legacy relationship when deriving participant/submission/final-score da
 
 Use this legacy relationship when deriving challenge descriptions:
 
-- `round -> component -> problem`
+- `round -> round_component -> component -> problem`
 
 ## Resource Source
 
@@ -50,7 +51,10 @@ Use this legacy relationship when deriving challenge descriptions:
 ## Description Rules
 
 - when the mapped `problem.problem_text` is non-empty, use that raw HTML as the challenge description
-- when `problem_text` is empty or the round does not map cleanly to a problem row, fall back to the importer's placeholder description behavior
+- when `problem_text` is empty/unusable but `component.component_text` exists, convert that XML into best-effort Markdown for the challenge description
+- do not store raw XML wrappers in the description, and do not dump hidden/internal test cases wholesale; if test cases are rendered from XML fallback, keep public/example-style content only
+- when neither source is usable or the round does not map cleanly, fall back to the importer's placeholder/preserve behavior
+- component-level description lookup must stay round-scoped through `round_component`; `component_id` values can be reused across multiple rounds
 
 ### Named participant fixture
 
@@ -78,6 +82,7 @@ Use this legacy relationship when deriving challenge descriptions:
 ## Fixture Rounds
 
 - `10815`: `836` eligible registrations, `1445` non-example submissions, `2424` example submissions, `267` submitters with non-example history, and fallback-heavy final-score behavior; in the current target-member snapshot this round plans `283` final candidates split into `266` importable finals, `2` missing-member final skips, and `15` explicit `finalist-without-attachable-submission` skips. Treat this as the selected unattachable-finalists fixture for score validation.
+- `10758`: Marathon Match round with `round_component.component_id=6775`, `problem_id=7542`, empty `problem.problem_text`, and populated `component.component_text` for `RobotRouting`. Use this as the primary create-path fixture for XML-to-Markdown description fallback validation. The component XML is large and includes many hidden/internal test cases, so conversion rules must stay user-facing.
 - `17948`: selected score-rich Marathon Match fixture for final-score validation. Current planning/apply evidence for this round yields `81` legacy final candidates with `45` importable finals, `36` `missing-member` final skips, and `0` explicit `finalist-without-attachable-submission` skips. Imported finals on this fixture are `system_point_total`-backed and preserve legacy placement order when sorted by aggregate score descending after excluding missing-member finalists.
 - `10015`: already-imported Marathon Match fixture observed with a placeholder v6 description despite having legacy problem text available; use this fixture for description overwrite and targeted rerun validation when it remains available in the shared dev environment.
 - `13897`: remains a useful large MM backfill fixture, but it is **not** the selected score-rich placement fixture because it currently includes `33` explicit `finalist-without-attachable-submission` skips.

@@ -65,7 +65,8 @@ These are informational boundaries for worker safety:
 
 - Marathon matches come from legacy `round` rows with `round_type_id='13'`.
 - Primary join path: `round -> long_component_state -> long_submission -> long_comp_result`.
-- Challenge description backfill uses the legacy `round -> component -> problem` mapping and reads raw `problem.problem_text`.
+- Challenge description backfill uses the legacy `round -> round_component -> component -> problem` mapping.
+- Description-source precedence is: raw `problem.problem_text` HTML first, then best-effort Markdown converted from `component.component_text` XML, then placeholder/preserve behavior only when neither source is usable.
 - `round_registration_*.json` is the source of submitter resources.
 - Submission archive content comes from legacy submission text fields associated with the imported non-example submissions.
 - `user_*.json` resolves `coder_id` identities.

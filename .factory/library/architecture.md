@@ -64,10 +64,12 @@ Created challenges must use `challenge.legacyId = round.id`. Reused challenges a
 
 ### Challenge description sourcing
 
-Challenge description content comes from the legacy `round -> component -> problem` mapping:
+Challenge description content comes from the legacy `round -> round_component -> component -> problem` mapping:
 
 - when a selected round maps to a legacy `problem` row with non-empty `problem_text`, persist that raw HTML as the v6 challenge description
-- when no problem row or no usable `problem_text` is available, retain the existing placeholder/fallback description behavior
+- when `problem_text` is absent or unusable but the mapped `component.component_text` exists, convert that XML into best-effort Markdown and persist the converted Markdown as the v6 challenge description
+- the XML fallback should keep user-facing content and avoid storing raw XML wrappers or wholesale hidden/internal test cases; if test cases are rendered, keep public/example-style cases only
+- when neither a usable `problem_text` nor a usable `component_text` conversion is available, retain the existing placeholder/fallback description behavior
 - on standard reuse/backfill runs, preserve existing challenge-level fields other than the approved follow-up description patch
 - on targeted rerun patch mode, description overwrite is allowed only when the caller provides an explicit existing challenge-id override
 

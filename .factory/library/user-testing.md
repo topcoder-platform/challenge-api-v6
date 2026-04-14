@@ -43,6 +43,7 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - `10815` — primary create-path round during planning-challenge; in the shared dev environment it is now a post-create/backfill fixture
 - one score-rich Marathon Match round selected during score-feature work for final-ranking validation
 - `10015` when available — already-imported description-backfill / targeted-rerun fixture
+- `10758` — create-path XML-to-Markdown description-fallback fixture (`problem_text` empty, `component_text` present)
 - `14272` — second round for multi-round filter checks
 - one existing-v6 round chosen from dry-run output in the validation environment
 - one Marathon Match round with unattachable finalists selected during score-feature work for explicit skip/report validation
@@ -60,6 +61,7 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - Validation uses the existing dev environment referenced by `.env.importer.local`.
 - `.env.importer.local` is populated, so live end-to-end apply-mode validation can proceed on the selected dev environment.
 - `SUBMISSION_ARCHIVE_DIR` must point at a writable local directory before follow-up targeted rerun validation can pass.
+- If `SUBMISSION_ARCHIVE_DIR` is missing from `.env.importer.local`, validators may export a writable override in the same shell command for live targeted-rerun validation instead of editing the env file.
 - Pre-existing repo-wide `standard-lint` noise in `challenge-api-v6` should not be mistaken for importer regressions; validators should focus on mission-owned surfaces.
 - The shared dev environment does not necessarily contain every historical legacy member id, so member-owned validation must account for approved `missing-member` skips rather than assuming full one-to-one import coverage.
 - If dry-run/apply returns `target-member-resolution-unavailable`, the validation environment still lacks reachable member lookup configuration. Provide `MEMBER_DB_URL` (or a `DATABASE_URL` that can resolve members) plus a valid `MEMBER_DB_SCHEMA` before expecting populated missing-member partitions or skipped-file records from live runs.
@@ -74,7 +76,8 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - Follow-up description validation should read `GET /v6/challenges/<id>` before and after the targeted rerun and compare the raw HTML `description` field directly.
 - `GET https://api.topcoder-dev.com/v6/reviewSummations?challengeId=<id>` requires an M2M bearer token. Source `.env.importer.local`, run `node get_token.js`, and use the final stdout line as the token value.
 - Response shapes are mixed: challenge/resource lookups return arrays directly, while `submissions` and authenticated `reviewSummations` return paginated objects with `data` and `meta`. Validators should count rows from the `data` array and set a large `perPage` value (for example `1000` or higher) before reconciling totals.
-- Follow-up submission-archive validation should read submissions before and after the rerun, record URL deltas, and inspect at least one generated zip file locally to confirm it contains the expected legacy submission text.
+- Follow-up submission-archive validation should read submissions before and after the rerun, record URL deltas, and inspect at least one generated zip file locally to confirm it contains the expected legacy submission text. In this environment the submissions API does not reliably expose the persisted `url`, so URL-specific assertions should use review DB snapshots or equivalent read-only DB evidence.
+- XML-fallback description validation should use round `10758` (or an equivalent round with empty `problem_text` and populated `component_text`) and verify that the persisted description is converted Markdown rather than raw XML, while avoiding wholesale hidden/internal test-case dumps.
 - Patch-only rerun validation must capture resource / submission-count / review-count snapshots before and after the rerun and show that only description plus submission URL/archive surfaces changed.
 - When participant backfill encounters legacy members absent from the dev environment, validators should expect a skipped-file artifact and should confirm that the skipped member ids plus the imported member-owned records reconcile back to the legacy totals for the round.
 - Round `14272` currently dry-runs as `decision=unresolved` with reason `selected-round-round-type-is-not-marathon-match`; it remains useful for exact-filter and unresolved-path validation but should not be treated as an importable Marathon Match fixture.
