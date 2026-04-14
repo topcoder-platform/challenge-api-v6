@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-end-to-end-orchestration",
+  "reviewedAt": "2026-04-03T00:51:16Z",
+  "commitId": "561d064d677f9ef7532c34606168a178d57a4ea6",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The orchestration layer now resolves authoritative linked counts during planning, prefers those counts over supplemental snapshots for safe reused rounds, and keeps the no-op/rerun classification aligned with actual linked state discovered from review/resource surfaces.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and end-to-end orchestration changes for `mm-importer-end-to-end-orchestration` at commit `561d064d677f9ef7532c34606168a178d57a4ea6`. Result: pass. The linked-count resolver and existing-state merge logic improve dry-run/apply convergence without overriding authoritative reuse matching."
+}

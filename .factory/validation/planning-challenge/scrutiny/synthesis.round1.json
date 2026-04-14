@@ -1,0 +1,88 @@
+{
+  "milestone": "planning-challenge",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "source \"$HOME/.config/nvm/nvm.sh\" && (cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration\" && nvm use 18.19.0 >/dev/null && pnpm test --maxWorkers=16 --testPathIgnorePatterns test/challenge-migration.test.js)",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"No dedicated typecheck command for this JavaScript importer surface\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "source \"$HOME/.config/nvm/nvm.sh\" && (cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration\" && nvm use 18.19.0 >/dev/null && pnpm lint)",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5,
+    "failedFeatures": [
+      "mm-importer-plan-cli",
+      "mm-importer-create-historical-challenge-phases",
+      "mm-importer-reuse-challenge-safety",
+      "mm-importer-authoritative-round-selection-and-reuse-fix",
+      "mm-importer-challenge-phase-plan-and-rerun-convergence-fix"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "mm-importer-plan-cli",
+      "severity": "blocking",
+      "description": "Dry-run planning still lacked authoritative existing-v6 reuse matching and therefore could not safely report matched challenge ids, reuse/backfill deltas, or rerun no-op classification from authoritative state."
+    },
+    {
+      "featureId": "mm-importer-plan-cli",
+      "severity": "blocking",
+      "description": "Planning initially failed to gate on `round.round_type_id == \"13\"`, allowing non-marathon rounds to be classified as Marathon Match import work."
+    },
+    {
+      "featureId": "mm-importer-plan-cli",
+      "severity": "blocking",
+      "description": "Create-path dry-run records initially omitted the required Marathon Match / Data Science challenge-shape and explicit Registration/Submission/Review phase-plan facts."
+    },
+    {
+      "featureId": "mm-importer-create-historical-challenge-phases",
+      "severity": "blocking",
+      "description": "Apply reruns initially short-circuited on any existing `legacyId` match instead of backfilling missing standard phases, so partially created challenges could remain non-converged."
+    },
+    {
+      "featureId": "mm-importer-create-historical-challenge-phases",
+      "severity": "blocking",
+      "description": "Apply reuse initially matched the first challenge by `legacyId` without enforcing unique Marathon Match / Data Science safety checks."
+    },
+    {
+      "featureId": "mm-importer-authoritative-round-selection-and-reuse-fix",
+      "severity": "blocking",
+      "description": "Dry-run still falls back to `decision=create` when direct DB-backed reuse discovery is unavailable instead of surfacing an unresolved or prerequisite failure."
+    },
+    {
+      "featureId": "mm-importer-challenge-phase-plan-and-rerun-convergence-fix",
+      "severity": "blocking",
+      "description": "Create-path dry-run still does not validate canonical Marathon Match / Data Science timeline-template resolution before returning `decision=create`, so planning can promise creates that apply later rejects."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
+    {
+      "observation": "The mission-owned `.factory/services.yaml` test command was incorrect for Jest.",
+      "reason": "already-documented"
+    },
+    {
+      "observation": "The shared-state docs pointed workers at non-marathon round `9892` as the primary create-path fixture.",
+      "reason": "already-documented"
+    },
+    {
+      "observation": "The shared state does not yet document `--existing-state-file` generation/schema/authority.",
+      "reason": "ambiguous"
+    }
+  ],
+  "previousRound": null
+}

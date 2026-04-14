@@ -3,6 +3,8 @@
 
 /**
  * Import marathon match winners from Informix JSON exports.
+ * Conflicting duplicate legacy placements are normalized by score so lower-scoring rows with the
+ * same raw `placed` value are skipped instead of creating duplicate placements downstream.
  *
  * Required environment:
  * - DATABASE_URL: Challenge DB connection string.
@@ -235,6 +237,161 @@ const parseNumericString = (value) => {
   return Number.isInteger(num) ? num : null;
 };
 
+const parseNumericScore = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === "null") {
+    return null;
+  }
+  const num = Number.parseFloat(text);
+  return Number.isFinite(num) ? num : null;
+};
+
+const resolvePlacementScore = (row) => {
+  const systemPointTotal = parseNumericScore(row && row.system_point_total);
+  if (Number.isFinite(systemPointTotal)) {
+    return systemPointTotal;
+  }
+  const pointTotal = parseNumericScore(row && row.point_total);
+  if (Number.isFinite(pointTotal)) {
+    return pointTotal;
+  }
+  return null;
+};
+
+/**
+ * Clears duplicate legacy placements within the same round when Informix reused the same raw
+ * `placed` value for rows that do not share the same score. Lower-scoring or unscored rows lose
+ * their normalized `placement`, but retain `rawPlacement` for diagnostics.
+ *
+ * @param {Array<object>} entries parsed winner entries across one or more rounds
+ * @returns {Array<object>} cloned entries with normalized placement fields
+ */
+const normalizeConflictingDuplicatePlacements = (entries = []) => {
+  const normalizedEntries = entries.map((entry) => ({
+    ...entry,
+    rawPlacement: Number.isFinite(entry && entry.placement) ? entry.placement : null,
+  }));
+
+  const entriesByRoundPlacement = new Map();
+  normalizedEntries.forEach((entry) => {
+    if (!entry.roundId || !Number.isFinite(entry.rawPlacement)) {
+      return;
+    }
+    const key = `${entry.roundId}:${entry.rawPlacement}`;
+    if (!entriesByRoundPlacement.has(key)) {
+      entriesByRoundPlacement.set(key, []);
+    }
+    entriesByRoundPlacement.get(key).push(entry);
+  });
+
+  entriesByRoundPlacement.forEach((placementEntries) => {
+    const scoredEntries = placementEntries.filter((entry) => Number.isFinite(entry.score));
+    if (scoredEntries.length === 0) {
+      return;
+    }
+
+    const distinctScores = Array.from(new Set(scoredEntries.map((entry) => entry.score)));
+    const hasUnscoredEntries = scoredEntries.length !== placementEntries.length;
+    if (distinctScores.length <= 1 && !hasUnscoredEntries) {
+      return;
+    }
+
+    const topScore = distinctScores.reduce(
+      (highest, score) => Math.max(highest, score),
+      Number.NEGATIVE_INFINITY
+    );
+    placementEntries.forEach((entry) => {
+      if (!Number.isFinite(entry.score) || entry.score !== topScore) {
+        entry.placement = null;
+      }
+    });
+  });
+
+  return normalizedEntries;
+};
+
+/**
+ * Parses long_comp_result rows into placement entries grouped by round, clearing duplicate legacy
+ * placements when the shared raw `placed` value conflicts with the score ordering.
+ *
+ * @param {Array<object>} longCompResults raw Informix long_comp_result rows
+ * @param {object} options parse options
+ * @param {Array<string>} options.roundIds optional round ids to include
+ * @returns {{resultsByRound: Map<string, Array<object>>, userIds: Set<number>, skipped: object}}
+ */
+const buildPlacementEntries = (longCompResults = [], { roundIds = [] } = {}) => {
+  const selectedRoundIds = new Set((roundIds || []).map((roundId) => String(roundId || "").trim()).filter(Boolean));
+  const parsedEntries = [];
+  const resultsByRound = new Map();
+  const userIds = new Set();
+  const skipped = {
+    missingRoundId: 0,
+    invalidUserId: 0,
+    missingPlacement: 0,
+    invalidPlacement: 0,
+    conflictingDuplicatePlacement: 0,
+  };
+
+  longCompResults.forEach((row) => {
+    if (!row) {
+      return;
+    }
+    const roundId = String(row.round_id || "").trim();
+    if (!roundId) {
+      skipped.missingRoundId += 1;
+      return;
+    }
+    if (selectedRoundIds.size > 0 && !selectedRoundIds.has(roundId)) {
+      return;
+    }
+
+    const placement = parseNumericString(row.placed);
+    if (placement === null) {
+      skipped.missingPlacement += 1;
+      return;
+    }
+    if (!Number.isFinite(placement) || placement <= 0) {
+      skipped.invalidPlacement += 1;
+      return;
+    }
+
+    const userId = parseNumericString(row.coder_id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      skipped.invalidUserId += 1;
+      return;
+    }
+
+    parsedEntries.push({
+      roundId,
+      placement,
+      userId,
+      score: resolvePlacementScore(row),
+    });
+    userIds.add(userId);
+  });
+
+  normalizeConflictingDuplicatePlacements(parsedEntries).forEach((entry) => {
+    if (!Number.isFinite(entry.placement) || entry.placement <= 0) {
+      skipped.conflictingDuplicatePlacement += 1;
+      return;
+    }
+
+    if (!resultsByRound.has(entry.roundId)) {
+      resultsByRound.set(entry.roundId, []);
+    }
+    resultsByRound.get(entry.roundId).push(entry);
+  });
+
+  return {
+    resultsByRound,
+    userIds,
+    skipped,
+  };
+};
+
 const levenshtein = (a, b) => {
   if (a === b) return 0;
   if (!a) return b.length;
@@ -424,50 +581,8 @@ async function main() {
     }
   });
 
-  const resultsByRound = new Map();
-  const userIds = new Set();
-  const skipped = {
-    missingRoundId: 0,
-    invalidUserId: 0,
-    missingPlacement: 0,
-    invalidPlacement: 0,
-  };
-
-  longCompResults.forEach((row) => {
-    if (!row) {
-      return;
-    }
-    const roundId = String(row.round_id || "").trim();
-    if (!roundId) {
-      skipped.missingRoundId += 1;
-      return;
-    }
-    if (options.roundIds.length && !options.roundIds.includes(roundId)) {
-      return;
-    }
-
-    const placement = parseNumericString(row.placed);
-    if (placement === null) {
-      skipped.missingPlacement += 1;
-      return;
-    }
-    if (!Number.isFinite(placement) || placement <= 0) {
-      skipped.invalidPlacement += 1;
-      return;
-    }
-
-    const userId = parseNumericString(row.coder_id);
-    if (!Number.isFinite(userId) || userId <= 0) {
-      skipped.invalidUserId += 1;
-      return;
-    }
-
-    const entry = { roundId, placement, userId };
-    if (!resultsByRound.has(roundId)) {
-      resultsByRound.set(roundId, []);
-    }
-    resultsByRound.get(roundId).push(entry);
-    userIds.add(userId);
+  const { resultsByRound, userIds, skipped } = buildPlacementEntries(longCompResults, {
+    roundIds: options.roundIds,
   });
 
   if (!resultsByRound.size) {
@@ -647,7 +762,7 @@ async function main() {
     console.log(`  Winners skipped (existing): ${summary.winnersSkippedExisting}`);
     console.log(`  Winners skipped (missing handle): ${summary.winnersSkippedMissingHandle}`);
     console.log(
-      `  Skipped rows: missingRoundId=${skipped.missingRoundId}, missingPlacement=${skipped.missingPlacement}, invalidPlacement=${skipped.invalidPlacement}, invalidUserId=${skipped.invalidUserId}`
+      `  Skipped rows: missingRoundId=${skipped.missingRoundId}, missingPlacement=${skipped.missingPlacement}, invalidPlacement=${skipped.invalidPlacement}, invalidUserId=${skipped.invalidUserId}, conflictingDuplicatePlacement=${skipped.conflictingDuplicatePlacement}`
     );
   } finally {
     if (rl) {
@@ -660,7 +775,15 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  buildPlacementEntries,
+  normalizeConflictingDuplicatePlacements,
+  parseArgs,
+};

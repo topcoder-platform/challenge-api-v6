@@ -1,0 +1,143 @@
+{
+  "groupId": "create-and-rerun-10815",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-01T06:29:52.397070Z",
+  "isolation": {
+    "legacyRoundId": 10815,
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1",
+    "evidenceDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/planning-challenge/create-and-rerun-10815",
+    "envFile": "/home/jmgasper/Documents/Git/v6/challenge-api-v6/.env.importer.local",
+    "cliNodeVersion": "18.19.0",
+    "allowedSurfaces": [
+      "node",
+      "curl",
+      "python"
+    ]
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PLAN-009",
+      "title": "Missing historical rounds show a complete creation plan",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run importer dry-run for legacy round 10815 before any apply",
+          "expected": "One create decision with completed Marathon Match/Data Science challenge shape and Registration/Submission/Review phase plan",
+          "observed": "decision=create, reason=no-matching-v6-challenge-found, createPathChallengeShape={'type': 'Marathon Match', 'track': 'Data Science', 'status': 'COMPLETED', 'phaseNames': ['Registration', 'Submission', 'Review'], 'timelineTemplateId': '6969125a-a12f-4b89-8de6-e66b0056f36b'}, createPathPhasePlan keys=['Registration', 'Submission', 'Review']"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-before-apply.stdout.txt",
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-before-apply.stderr.txt",
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-before-apply.exitcode.txt"
+        ],
+        "network": "GET /v6/challenges?legacyId=10815 before apply -> 200, x-total: 0"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CHALLENGE-001",
+      "title": "Missing historical round creates one completed marathon challenge",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Confirm no challenge exists for legacyId 10815 before apply",
+          "expected": "Challenge API returns zero matches",
+          "observed": "0 matches before apply"
+        },
+        {
+          "action": "Run importer apply for legacy round 10815",
+          "expected": "Apply creates one challenge",
+          "observed": "status=created, challengeId=5fa76bd9-da55-422d-8d4c-4f0155dc62c5"
+        },
+        {
+          "action": "Read Challenge API after apply",
+          "expected": "Exactly one completed Marathon Match/Data Science challenge with legacyId 10815",
+          "observed": "1 match; legacyId=10815, type=Marathon Match, track=Data Science, status=COMPLETED"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "planning-challenge/create-and-rerun-10815/challenges-legacyId-10815-before.json",
+          "planning-challenge/create-and-rerun-10815/challenges-legacyId-10815-before.headers.txt",
+          "planning-challenge/create-and-rerun-10815/apply-10815.stdout.txt",
+          "planning-challenge/create-and-rerun-10815/apply-10815.stderr.txt",
+          "planning-challenge/create-and-rerun-10815/apply-10815.exitcode.txt",
+          "planning-challenge/create-and-rerun-10815/challenges-legacyId-10815-after.json",
+          "planning-challenge/create-and-rerun-10815/challenges-legacyId-10815-after.headers.txt",
+          "planning-challenge/create-and-rerun-10815/challenge-5fa76bd9-da55-422d-8d4c-4f0155dc62c5.json",
+          "planning-challenge/create-and-rerun-10815/challenge-5fa76bd9-da55-422d-8d4c-4f0155dc62c5.headers.txt"
+        ],
+        "network": "GET /v6/challenges?legacyId=10815 after apply -> 200, x-total: 1; GET /v6/challenges/5fa76bd9-da55-422d-8d4c-4f0155dc62c5 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CHALLENGE-002",
+      "title": "Created historical MM binds to a canonical marathon-match timeline mapping",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect created challenge detail",
+          "expected": "timelineTemplateId=6969125a-a12f-4b89-8de6-e66b0056f36b",
+          "observed": "timelineTemplateId=6969125a-a12f-4b89-8de6-e66b0056f36b"
+        },
+        {
+          "action": "Lookup timeline template 6969125a-a12f-4b89-8de6-e66b0056f36b",
+          "expected": "Active Marathon Match template with non-empty MM phase shape",
+          "observed": "name=Marathon Match, isActive=True, templatePhaseCount=3; created challenge phases=['Registration', 'Submission', 'Review']"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "planning-challenge/create-and-rerun-10815/challenge-5fa76bd9-da55-422d-8d4c-4f0155dc62c5.json",
+          "planning-challenge/create-and-rerun-10815/challenge-5fa76bd9-da55-422d-8d4c-4f0155dc62c5.headers.txt",
+          "planning-challenge/create-and-rerun-10815/timeline-template-6969125a-a12f-4b89-8de6-e66b0056f36b.json",
+          "planning-challenge/create-and-rerun-10815/timeline-template-6969125a-a12f-4b89-8de6-e66b0056f36b.headers.txt"
+        ],
+        "network": "GET /v6/timeline-templates/6969125a-a12f-4b89-8de6-e66b0056f36b -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-014",
+      "title": "Rerun planning classifies already-imported work as no-op",
+      "status": "blocked",
+      "steps": [
+        {
+          "action": "Rerun importer dry-run for legacy round 10815 after the apply run",
+          "expected": "Already-imported work is classified as no-op with no duplicate creates across the full contract surface",
+          "observed": "decision=reuse/backfill-only, matchedChallengeId=5fa76bd9-da55-422d-8d4c-4f0155dc62c5, rerunClassification=partial-backfill, phases.toCreate=0, resources.toCreate=836, submissions.toCreate=1445, finalScores.toCreate=267, provisionalScores.toCreate=1445"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-after-apply.stdout.txt",
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-after-apply.stderr.txt",
+          "planning-challenge/create-and-rerun-10815/dry-run-10815-after-apply.exitcode.txt",
+          "planning-challenge/create-and-rerun-10815/challenge-5fa76bd9-da55-422d-8d4c-4f0155dc62c5.json"
+        ],
+        "network": "Rerun dry-run only; no additional write call was made."
+      },
+      "issues": "Post-apply rerun proved challenge/phase reuse only: the dry-run switched to reuse/backfill-only for 5fa76bd9-da55-422d-8d4c-4f0155dc62c5 and reported phases existing=3/toCreate=0, but rerunClassification remained partial-backfill because resources/submissions/finalScores/provisionalScores still showed pending creates (836/1445/267/1445). This milestone does not backfill those later-surface entities, so a true no-op rerun for the full contract cannot be proven from this run."
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "description": "Post-apply rerun proved challenge/phase reuse only: the dry-run switched to reuse/backfill-only for 5fa76bd9-da55-422d-8d4c-4f0155dc62c5 and reported phases existing=3/toCreate=0, but rerunClassification remained partial-backfill because resources/submissions/finalScores/provisionalScores still showed pending creates (836/1445/267/1445). This milestone does not backfill those later-surface entities, so a true no-op rerun for the full contract cannot be proven from this run.",
+      "affectedAssertions": [
+        "VAL-PLAN-014"
+      ],
+      "quickFixAttempted": "Completed the create-path apply and reran dry-run immediately to see whether the importer would classify the round as a full no-op."
+    }
+  ],
+  "summary": "Tested 4 assertions: 3 passed, 0 failed, 1 blocked. VAL-PLAN-014 is blocked because rerun proved challenge/phase reuse but still planned later-milestone resources, submissions, and scores."
+}

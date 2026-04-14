@@ -1,0 +1,58 @@
+{
+  "milestone": "planning-challenge",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 22,
+    "passed": 18,
+    "failed": 0,
+    "blocked": 4
+  },
+  "passedAssertions": [
+    "VAL-CHALLENGE-003",
+    "VAL-CHALLENGE-004",
+    "VAL-CHALLENGE-005",
+    "VAL-CHALLENGE-006",
+    "VAL-CHALLENGE-007",
+    "VAL-CHALLENGE-008",
+    "VAL-PLAN-001",
+    "VAL-PLAN-002",
+    "VAL-PLAN-003",
+    "VAL-PLAN-004",
+    "VAL-PLAN-005",
+    "VAL-PLAN-006",
+    "VAL-PLAN-007",
+    "VAL-PLAN-008",
+    "VAL-PLAN-010",
+    "VAL-PLAN-011",
+    "VAL-PLAN-012",
+    "VAL-PLAN-013"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-CHALLENGE-001",
+      "blockedBy": "Round 13897 was already imported in the shared dev environment before this validation run, so the contract's missing-round create path could not be reproduced within the allowed isolation boundary."
+    },
+    {
+      "id": "VAL-CHALLENGE-002",
+      "blockedBy": "Because round 13897 already existed and apply only returned existing, this run could observe current timeline binding but could not prove the create-path binding event required by the assertion."
+    },
+    {
+      "id": "VAL-PLAN-009",
+      "blockedBy": "The shared dev fixture for legacy round 13897 is already imported, so dry-run legitimately plans reuse/backfill-only instead of a create path; within read-only scope this prevents proving missing-historical create-path behavior."
+    },
+    {
+      "id": "VAL-PLAN-014",
+      "blockedBy": "Read-only scope plus a partially imported shared fixture prevented verification of the required post-successful-import no-op rerun behavior."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Added importer CLI flow guidance covering the shared 13897 partial-backfill fixture, auth expectations for reviewSummations, non-marathon read-only fixtures, safe apply concurrency, and longer dry-run timeout expectations.",
+      "source": "setup"
+    }
+  ],
+  "previousRound": null
+}

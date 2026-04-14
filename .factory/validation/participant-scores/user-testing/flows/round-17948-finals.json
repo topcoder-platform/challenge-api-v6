@@ -1,0 +1,176 @@
+{
+  "groupId": "round-17948-finals",
+  "testedAt": "2026-04-03T02:28:51Z",
+  "isolation": {
+    "surface": "importer CLI + API verification",
+    "roundId": 17948,
+    "challengeId": "8d6775ad-2235-4a4d-9daa-062bd4417978",
+    "environment": "shared existing dev environment",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1"
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-SCORE-001",
+      "title": "Final review summations reconcile exact system scores and missing-member skips on a score-rich round",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Capture pre-state and run importer dry-run for round 17948",
+          "expected": "Dry-run reports the score-rich fixture counts from shared state",
+          "observed": "decision=reuse/backfill-only; legacyFinalCandidates=81; alreadyPresent=45; missingMember=36; explicitSkips=0"
+        },
+        {
+          "action": "Run apply and fetch post-apply review summations and skipped artifact",
+          "expected": "Imported finals plus missing-member skips reconcile one-for-one to legacy finalists",
+          "observed": "post finals=45; skipped final members=36; legacy finalists=81; imported+skipped matched legacy member set exactly"
+        },
+        {
+          "action": "Compare imported final aggregateScore values to /mnt/Informix long_comp_result.system_point_total in Python",
+          "expected": "Every imported final score equals legacy system_point_total and skipped members have no imported final",
+          "observed": "All 45 imported finals matched legacy system_point_total exactly; 36 missing-member finalists appeared only in the skipped artifact"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-17948-finals/pre-challenge-detail.json",
+          "participant-scores/round-17948-finals/pre-resources.json",
+          "participant-scores/round-17948-finals/pre-submissions.json",
+          "participant-scores/round-17948-finals/pre-review-summations.json",
+          "participant-scores/round-17948-finals/dry-run.stdout.txt",
+          "participant-scores/round-17948-finals/apply.stdout.txt",
+          "participant-scores/round-17948-finals/apply-skipped.json",
+          "participant-scores/round-17948-finals/post-review-summations.json",
+          "participant-scores/round-17948-finals/assertion-analysis.json"
+        ],
+        "consoleErrors": "n/a (CLI/API validation surface)",
+        "network": "GET /v6/challenges?legacyId=17948 -> 200; GET /v6/challenges/8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /resources?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /v6/submissions?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200; GET /v6/reviewSummations?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-003",
+      "title": "Each imported final score is attached to the member's latest non-example submission only",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Fetch full submission and review-summation API snapshots after apply",
+          "expected": "Every imported finalist has one attached final review summation on an imported non-example submission",
+          "observed": "post submissions=370 and post finals=45; each finalist had exactly one final review summation"
+        },
+        {
+          "action": "Compare each final reviewSummation submissionId to the member's latest imported submission",
+          "expected": "Each final attaches to the member's latest imported non-example submission only",
+          "observed": "All 45 finals referenced the same submission id and legacySubmissionId as the member's latest imported submission"
+        },
+        {
+          "action": "Compare attached legacySubmissionId values to latest legacy non-example submissions in Python",
+          "expected": "Final attachments match legacy latest non-example submissions and never point at example runs",
+          "observed": "All 45 finals matched the latest legacy non-example submission; legacy example submission count for round 17948 was 0"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-17948-finals/post-submissions.json",
+          "participant-scores/round-17948-finals/post-review-summations.json",
+          "participant-scores/round-17948-finals/assertion-analysis.json"
+        ],
+        "consoleErrors": "n/a (CLI/API validation surface)",
+        "network": "GET /v6/challenges?legacyId=17948 -> 200; GET /v6/challenges/8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /resources?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /v6/submissions?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200; GET /v6/reviewSummations?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-006",
+      "title": "Final-score order reproduces legacy placement order after excluding missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Sort imported final review summations by aggregateScore descending",
+          "expected": "Imported final ordering reproduces legacy placement order after excluding missing-member finalists",
+          "observed": "Imported sorted final list contained 45 members and matched the legacy filtered finalist order exactly"
+        },
+        {
+          "action": "Filter legacy final-result rows by skipped missing-member finalists",
+          "expected": "Legacy filtered order has the same member and placement sequence as imported finals",
+          "observed": "Legacy filtered member order and placement sequence both matched the imported final order"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-17948-finals/apply-skipped.json",
+          "participant-scores/round-17948-finals/post-review-summations.json",
+          "participant-scores/round-17948-finals/assertion-analysis.json"
+        ],
+        "consoleErrors": "n/a (CLI/API validation surface)",
+        "network": "GET /v6/challenges?legacyId=17948 -> 200; GET /v6/challenges/8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /resources?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /v6/submissions?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200; GET /v6/reviewSummations?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-SCORE-009",
+      "title": "Score reruns preserve stable imported identities and skipped-member reporting",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run apply for round 17948 twice and capture raw stdout/stderr plus skipped artifacts",
+          "expected": "Rerun creates no duplicate final/provisional records and preserves skipped-member reporting",
+          "observed": "first apply created provisional scores=370; rerun created provisional scores=0; rerun created final scores=0"
+        },
+        {
+          "action": "Compare post-apply and post-rerun review-summation identity sets",
+          "expected": "Final and provisional identity sets stay unchanged and remain one-per-submission",
+          "observed": "final ids stable at 45; provisional ids stable at 370; no duplicate final or provisional submission links found"
+        },
+        {
+          "action": "Diff apply-skipped.json vs rerun-skipped.json for score-related records",
+          "expected": "Score skip records remain deterministic and duplicate-free across reruns",
+          "observed": "score-related skipped records were identical across runs (367 records) with no duplicate entries detected"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-17948-finals/apply.stdout.txt",
+          "participant-scores/round-17948-finals/rerun-apply.stdout.txt",
+          "participant-scores/round-17948-finals/apply-skipped.json",
+          "participant-scores/round-17948-finals/rerun-skipped.json",
+          "participant-scores/round-17948-finals/post-review-summations.json",
+          "participant-scores/round-17948-finals/rerun-review-summations.json",
+          "participant-scores/round-17948-finals/assertion-analysis.json"
+        ],
+        "consoleErrors": "n/a (CLI/API validation surface)",
+        "network": "GET /v6/challenges?legacyId=17948 -> 200; GET /v6/challenges/8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /resources?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978 -> 200; GET /v6/submissions?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200; GET /v6/reviewSummations?challengeId=8d6775ad-2235-4a4d-9daa-062bd4417978&perPage=1000 -> 200"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The submissions and reviewSummations APIs defaulted to paginated responses, so full-round validation required adding perPage=1000 to fetch all round 17948 records.",
+      "resolved": true,
+      "resolution": "Captured evidence with perPage=1000 for submissions and reviewSummations before doing Python reconciliation.",
+      "affectedAssertions": [
+        "VAL-SCORE-001",
+        "VAL-SCORE-003",
+        "VAL-SCORE-006",
+        "VAL-SCORE-009"
+      ]
+    },
+    {
+      "description": "The skipped artifact mixes member-level final/provisional skip records with per-submission provisional skip records, so score validation needed explicit filtering by affectedSurfaces and exact-record diffing.",
+      "resolved": true,
+      "resolution": "Filtered score-related records in Python, compared exact canonical JSON records across runs, and separately counted final-score member skips.",
+      "affectedAssertions": [
+        "VAL-SCORE-001",
+        "VAL-SCORE-009"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 4 assertions for round 17948 finals: 4 passed, 0 failed, 0 blocked. Dry-run confirmed 81 legacy final candidates with 45 imported finals, 36 missing-member final skips, and 0 explicit unattachable-finalist skips; apply added 370 provisional review summations, and rerun preserved stable final/provisional identities and deterministic skipped-member score records."
+}

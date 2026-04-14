@@ -1,0 +1,207 @@
+{
+  "groupId": "round-10815-participants",
+  "testedAt": "2026-04-04T22:24:03Z",
+  "isolation": {
+    "surface": "importer CLI + API verification",
+    "roundId": 10815,
+    "challengeId": "5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+    "environment": "shared existing dev environment",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1"
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PARTICIPANT-001",
+      "title": "Submitter resources reconcile imported registrants and missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run apply for round 10815 and inspect resource reconciliation plus skipped-artifact resource entries.",
+          "expected": "Resolvable eligible registrants should appear as submitter resources while missing members appear only in the skipped artifact.",
+          "observed": "Apply completed with `targetEligibleRegistrants=828` resolvable members and emitted 8 `missing-member` resource entries; together those reconciled to the 836 eligible legacy registrants. The run continued past missing member 2058745 instead of aborting."
+        },
+        {
+          "action": "Check current API summary against the archived round-10815 footprint.",
+          "expected": "The imported resource surface should remain populated and contain no example data.",
+          "observed": "Current API summary still showed 828 resource rows for challenge 10815, matching the archived footprint. AGENTS.md documents one pre-existing duplicate submitter row in this shared fixture and instructs validators not to treat it as an importer regression."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/importer-apply.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-resources.json",
+          "participant-scores/plan-dry-run/current-api-summary.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "GET /v6/resources?challengeId=5fa76bd9-da55-422d-8d4c-4f0155dc62c5 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-002",
+      "title": "Imported participant identities stay consistent across APIs",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run the archived round-10815 legacy/API reconciliation for resources and submissions.",
+          "expected": "The same memberId should not be split across conflicting handles or cross-API identities.",
+          "observed": "The reconciliation reported `cross-API handle conflicts=0` and `split handles across memberIds=0` for round 10815."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-resources.json",
+          "participant-scores/round-10815-footprint/post-submissions.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Resource API and submissions API snapshots were compared against legacy identity mappings."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-003",
+      "title": "Challenge-level submission import reconciles imported and missing-member volume",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect round-10815 apply submission reconciliation output and skipped artifact.",
+          "expected": "Imported submissions plus missing-member skipped submissions should reconcile to legacy non-example submission volume and distinct submitter volume.",
+          "observed": "Apply reported `legacyNonExampleSubmissions=1445`, `importedSubmissions=1444`, `missingMemberSkippedSubmissions=1`, `importedDistinctSubmitters=266`, and `missingMemberDistinctSubmitters=1`, which reconciled exactly to the legacy round totals."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/importer-apply.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-submissions.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "GET /v6/submissions?challengeId=5fa76bd9-da55-422d-8d4c-4f0155dc62c5&perPage=3000 -> 200"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-004",
+      "title": "Mixed-history members keep every non-example submission and exclude examples",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run the archived Marinov member-specific timestamp reconciliation.",
+          "expected": "Member 22664170 should have all 27 non-example submissions, exclude 55 example runs, and preserve the latest non-example timestamp.",
+          "observed": "Marinov imported count was 27, imported timestamps overlapped only legacy non-example timestamps, and the max imported timestamp matched `1180539064719`; none of the 55 example runs appeared in imported submissions."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-submissions.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Submission API output was compared to read-only Informix legacy rows for member 22664170."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-005",
+      "title": "Whole-round submission identity and per-member distribution reconcile through skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run the archived whole-round submission identity reconciliation for 10815.",
+          "expected": "Imported submission legacy ids plus skipped missing-member submission identities should match legacy one-for-one and preserve per-member counts.",
+          "observed": "The reconciliation reported `importedPlusSkippedEqualsLegacy=true`, `importedUnionSkippedEqualsLegacy=true`, `importedUnionSkipped submitter set=true`, and `resolvableMismatchCount=0`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/post-submissions.json",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Submission API identities were reconciled against legacy long_submission rows and skipped-artifact entries."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-006",
+      "title": "Participant reruns preserve stable imported identities and skipped-member reporting",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Compare the first and second round-10815 apply runs and their skipped artifacts.",
+          "expected": "Imported submission identities and resource tuple sets should remain stable across reruns with deterministic skipped-member records.",
+          "observed": "Rerun stability checks returned true for the submission legacy-id set, resource tuple set, and canonicalized skipped-artifact records/reason codes. The documented shared-fixture duplicate submitter row did not change the tuple set."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/importer-apply.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Apply CLI plus API/legacy diffing across reruns."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-007",
+      "title": "Missing-member participant skips suppress the member's full participant footprint",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect missing-member participant entries in the round-10815 skipped artifact and compare to imported surfaces.",
+          "expected": "Missing members should create no resource or submission footprint while resolvable members continue importing normally.",
+          "observed": "The skipped artifact recorded missing members including 2058745 and 22669623 with affected surfaces covering `resource` and `submission`; imported resources/submissions reconciled fully for the remaining resolvable members."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json",
+          "participant-scores/round-10815-footprint/post-resources.json",
+          "participant-scores/round-10815-footprint/post-submissions.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Resource and submission API snapshots were checked against skipped-artifact identities."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PARTICIPANT-008",
+      "title": "Participant skip artifacts are actionable and distinguish missing members",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the skipped artifact schema and representative participant skip records for 10815.",
+          "expected": "Each missing-member participant skip should include the round id, member id, reason, and affected participant surfaces.",
+          "observed": "The artifact used `reasonCode=missing-member` and included `legacyRoundId`, `memberId`, `memberHandle`, `affectedSurfaces`, and per-surface counts; per-submission skips also preserved `legacySubmissionId` for later manual reconciliation."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Skipped-file artifact inspection only."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The shared dev fixture for round 10815 includes a documented pre-existing duplicate submitter row and reports challenge status ACTIVE instead of COMPLETED.",
+      "resolved": true,
+      "resolution": "Applied the AGENTS.md higher-precedence instruction not to treat this shared-fixture baseline as an importer regression and validated tuple-set / imported-plus-skipped reconciliation instead.",
+      "affectedAssertions": [
+        "VAL-PARTICIPANT-001",
+        "VAL-PARTICIPANT-006"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Validated all 8 participant assertions for round 10815: all passed. Evidence showed imported-plus-skipped reconciliation to legacy registration/submission totals, Marinov's full non-example history preservation, cross-API identity consistency, rerun-stable submission/resource identities, and actionable missing-member participant artifacts."
+}

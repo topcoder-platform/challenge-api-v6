@@ -1,0 +1,201 @@
+{
+  "groupId": "plan-dry-run",
+  "testedAt": "2026-04-04T22:24:03Z",
+  "isolation": {
+    "surface": "importer CLI + API verification",
+    "roundIds": [
+      10815,
+      17948,
+      14272
+    ],
+    "environment": "shared existing dev environment",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1"
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PLAN-003",
+      "title": "Planning prerequisites are distinguished from apply-only prerequisites",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the fail-closed dry-run captures with authoritative challenge discovery intentionally unavailable and with member resolution intentionally unavailable.",
+          "expected": "Dry-run should resolve to `unresolved` with an explicit prerequisite reason instead of fabricating zero skips or a safe create/reuse decision.",
+          "observed": "The authoritative-discovery run reported `decision=unresolved` with reason `authoritative-existing-v6-discovery-unavailable`; the member-resolution run reported `decision=unresolved` with reason `target-member-resolution-unavailable`."
+        },
+        {
+          "action": "Compare those fail-closed captures to the restored-env dry-runs for rounds 10815 and 17948.",
+          "expected": "Once prerequisites are available, dry-run should emit populated partitions and stable decisions.",
+          "observed": "Current and archived dry-runs for 10815/17948 emitted populated resource/submission/final/provisional partitions, matched challenge ids, and stable skip counts instead of unresolved output."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-17948-authoritative-unavailable.stdout.txt",
+          "participant-scores/planning-reporting/dry-run-17948-authoritative-unavailable.stderr.txt",
+          "participant-scores/planning-reporting/dry-run-17948-member-resolution-unavailable.stdout.txt",
+          "participant-scores/planning-reporting/dry-run-17948-member-resolution-unavailable.stderr.txt",
+          "participant-scores/plan-dry-run/current-dry-run-10815.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-17948.stdout.txt"
+        ],
+        "consoleErrors": "Expected warning-only fail-closed messages for unreachable DB/member lookup in the negative-prerequisite runs.",
+        "network": "Dry-run CLI only for prerequisite-negative checks; no writes were performed."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-008",
+      "title": "Reused rounds expose entity-level deltas",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Compare dry-run for an existing-v6 round with and without a supplemental `--existing-state-file` snapshot.",
+          "expected": "Decision and matched challenge id should remain authoritative while delta counts may be enriched by the snapshot.",
+          "observed": "For round 13897, the decision stayed `reuse/backfill-only` with the same matched challenge id; only supplemental alreadyPresent/toImport counts changed when the snapshot was supplied."
+        },
+        {
+          "action": "Inspect current existing-v6 dry-runs for 10815 and 17948.",
+          "expected": "Entity-level deltas should be broken out by phases/resources/submissions/finalScores/provisionalScores.",
+          "observed": "Both current dry-runs exposed separate per-entity deltas and partitions rather than an opaque reuse result."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-10815.stdout.txt",
+          "participant-scores/planning-reporting/dry-run-17948.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-10815.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-17948.stdout.txt"
+        ],
+        "consoleErrors": "n/a (CLI/API validation surface)",
+        "network": "Validated using archived live dry-run evidence plus the current shared-env dry-runs."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-010",
+      "title": "Resource planning reconciles resolvable registrants and missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the round-10815 dry-run resource partitions and planned skip records.",
+          "expected": "`toCreate + alreadyPresent + missing-member` should reconcile exactly to the eligible registrant total and expose per-member missing-member records for the resource surface.",
+          "observed": "Round 10815 reported `eligibleRegistrants=836` with resources `toCreate=1`, `alreadyPresent=827`, and `missingMember=8`; the planned skip records included per-member `missing-member` entries whose affected surfaces included `resource`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-10815.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-10815.stdout.txt"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Dry-run CLI only."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-011",
+      "title": "Submission planning excludes examples and quantifies missing-member skips",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the round-10815 submission partitions in dry-run output.",
+          "expected": "The plan should separate example rows, imported/no-op rows, and missing-member submission skips so totals reconcile to legacy non-example submissions.",
+          "observed": "Round 10815 reported `legacyNonExample=1445`, `legacyExampleFiltered=2424`, `alreadyPresent=1444`, and `missingMember=1`, with a per-submission missing-member planned skip record for legacySubmissionId `35348310001`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-10815.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-10815.stdout.txt"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Dry-run CLI only."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-012",
+      "title": "Final and provisional score plans quantify imported and skipped subsets",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect 10815 dry-run output for fallback-heavy score partitions.",
+          "expected": "Final and provisional streams should separate imported/no-op, missing-member, and other explicit skip reasons.",
+          "observed": "Round 10815 reported final scores `legacyFinalCandidates=283`, `alreadyPresent=266`, `missingMember=2`, `explicitSkips=15` (`finalist-without-attachable-submission`), and provisional scores `legacyNonExample=1445`, `alreadyPresent=1444`, `missingMember=1`."
+        },
+        {
+          "action": "Inspect the score-rich 17948 dry-run output.",
+          "expected": "The score-rich fixture should show the imported/no-op subset and missing-member subset without explicit unattachable-finalist skips.",
+          "observed": "Round 17948 reported finals `81 = 45 alreadyPresent + 36 missingMember + 0 explicitSkips` and provisional `700 = 370 alreadyPresent + 330 missingMember + 0 explicitSkips`."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-10815.stdout.txt",
+          "participant-scores/planning-reporting/dry-run-17948.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-10815.stdout.txt",
+          "participant-scores/plan-dry-run/current-dry-run-17948.stdout.txt"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Dry-run CLI only."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-014",
+      "title": "Rerun planning classifies imported work as no-op and preserved skips as stable",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the linked-count orchestration verification for existing-v6 round 13897.",
+          "expected": "A fully imported reused round should report no-op rerun classification with stable skip identities and zero toCreate deltas.",
+          "observed": "Two consecutive dry-runs for 13897 both reported `rerunClassification=no-op`, all entity `toCreate` deltas at 0, and identical planned skip identity/reason/surface sets (47 records)."
+        },
+        {
+          "action": "Re-run current dry-run on score-rich round 17948.",
+          "expected": "Current live output should still classify the fully imported round as no-op.",
+          "observed": "Current round-17948 dry-run reported `decision=reuse/backfill-only` and `rerunClassification=no-op` with all `toCreate` values at 0."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/plan-dry-run/current-dry-run-17948.stdout.txt",
+          "participant-scores/user-testing-reruns/13897-pre-summary.json",
+          "participant-scores/user-testing-reruns/13897-post-summary.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Current dry-run plus archived live no-op rerun evidence from the shared dev environment."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-PLAN-015",
+      "title": "Missing-member skips are distinguished from other skip reasons",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Inspect the dry-run skipped-file metadata and planned skip records for 10815.",
+          "expected": "The report should distinguish `missing-member` from non-missing-member skip reasons and identify the skipped-file artifact.",
+          "observed": "Round 10815 dry-run identified skipped artifact path(s) and reason codes `missing-member` plus `finalist-without-attachable-submission`; planned skip records included affected surfaces and per-member counts for each reason."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/planning-reporting/dry-run-10815.stdout.txt",
+          "participant-scores/round-10815-footprint/round-10815-apply-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Dry-run CLI only for planning evidence; apply artifact inspected read-only."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Validated 7 planning assertions for participant-scores: all passed. Evidence covered fail-closed prerequisite handling, authoritative existing-state classification, exact resource/submission/score partitions for 10815 and 17948, stable no-op rerun planning on fully imported rounds, and distinct skip reasons plus skipped-artifact metadata."
+}

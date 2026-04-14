@@ -1,0 +1,24 @@
+{
+  "featureId": "mm-importer-planning-prerequisite-convergence-fix",
+  "reviewedAt": "2026-04-01T04:00:27Z",
+  "commitId": "6122ec0c6f8d0a9bf53b057fed6af37167c1339b",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix closes the two remaining dry-run/apply convergence gaps from the prior scrutiny round. Dry-run now fails closed to `unresolved` when authoritative existing-v6 discovery is unavailable, and create-path planning only returns `decision=create` after the same canonical Marathon Match/Data Science timeline-template resolution that apply mode uses.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The `migration-worker` skill's mandatory red/green steps do not mention the interrupted-session case where the assigned feature commit is already on `HEAD` and the remaining work is validation plus handoff. This worker followed a justified resume path and had to record it as a deviation, so the skill should document that exception.",
+      "evidence": "`.factory/skills/migration-worker/SKILL.md:32-38` requires tests-first red/green on every run, while `/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/handoffs/2026-04-01T03-56-27-373Z__mm-importer-planning-prerequisite-convergence-fix__683f3f74-0fa4-4f13-9c89-475b3d5b879e.json:89-99` records `followedProcedure=false` because the session resumed an already-landed commit (`6122ec0`) mid-validation and explicitly suggests adding resume guidance."
+    }
+  ],
+  "addressesFailureFrom": [
+    "mm-importer-authoritative-round-selection-and-reuse-fix",
+    "mm-importer-challenge-phase-plan-and-rerun-convergence-fix"
+  ],
+  "summary": "Reviewed the fix handoff, transcript skeleton, prior failed reviews, shared-state docs, and commit `6122ec0c6f8d0a9bf53b057fed6af37167c1339b`. Result: pass. The commit addresses both prior blockers by making dry-run fail closed when authoritative discovery is unavailable and by requiring canonical MM/Data Science timeline-template resolution before advertising create-path work; the handoff's env-backed checks also show dry-run/apply convergence for round `13897`."
+}

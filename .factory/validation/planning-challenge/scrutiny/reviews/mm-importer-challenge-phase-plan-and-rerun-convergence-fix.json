@@ -1,0 +1,22 @@
+{
+  "featureId": "mm-importer-challenge-phase-plan-and-rerun-convergence-fix",
+  "reviewedAt": "2026-04-01T13:59:51+11:00",
+  "commitId": "765e7d7f26dc4a1c6a9815bd866421be6131f5a3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The commit fixes the original create-path phase-plan reporting gap and the partial-rerun phase backfill behavior, but dry-run/create alignment is still incomplete. Planning now hard-codes a Marathon Match/Data Science create shape plus phase windows, yet it still does not validate the canonical timeline-template prerequisite that apply mode enforces before any create can succeed.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/planning.js",
+        "line": 164,
+        "severity": "blocking",
+        "description": "For create-path rounds, planning now emits `createPathChallengeShape` and `createPathPhasePlan`, but it never resolves the canonical Marathon Match/Data Science timeline mapping before returning `decision: \"create\"`. Apply mode still calls `resolveCanonicalTimelineTemplateId()` (`data-migration/src/scripts/importHistoricalMarathonMatches/apply.js:334-388,411-415`) and aborts when zero or multiple valid mappings exist. Because `planning.js:164-177` and `planning.js:285-289` hard-code the create-path shape/phase plan without that check, dry-run can still promise a create plan that apply cannot materialize in the target environment. That breaks the feature's requirement that dry-run promises stay aligned with apply-time reconciliation for create-path rounds and conflicts with `.factory/library/architecture.md:73`, which requires create-path planning to stop with `unresolved` when the canonical timeline mapping cannot be resolved."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the feature handoff, transcript skeleton, shared-state docs, and commit `765e7d7f26dc4a1c6a9815bd866421be6131f5a3`. Result: fail. The rerun-backfill fix itself looks correct, but dry-run still omits one create-path prerequisite check (canonical MM/Data Science timeline mapping), so planning can advertise `decision=create` in environments where apply will reject the round."
+}

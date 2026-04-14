@@ -1,0 +1,72 @@
+{
+  "groupId": "existing-v6-reruns",
+  "testedAt": "2026-04-04T22:24:03Z",
+  "isolation": {
+    "surface": "importer CLI + API verification",
+    "roundIds": [
+      13897,
+      17948
+    ],
+    "environment": "shared existing dev environment",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1"
+  },
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-CROSS-002",
+      "title": "Existing v6 marathon matches are backfill-only and preserve prior linked records while skipping missing members",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Review the archived existing-v6 apply comparator for round 13897.",
+          "expected": "Apply should preserve challenge-level and already-present linked-record snapshots while adding no duplicate work.",
+          "observed": "Round 13897 apply remained a pure no-op: `createdSubmitterResources=0`, `createdSubmissions=0`, `createdFinalScores=0`, and `createdProvisionalScores=0`; challenge field snapshot and resource/submission/review identity sets remained unchanged."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/user-testing-reruns/13897-pre-summary.json",
+          "participant-scores/user-testing-reruns/13897-post-summary.json",
+          "participant-scores/user-testing-reruns/13897-apply.stdout.txt",
+          "participant-scores/user-testing-reruns/13897-skipped.json"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Existing-v6 challenge/resource/submission/review snapshots were compared pre/post apply."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-CROSS-005",
+      "title": "A second apply run preserves the fully reconciled steady state across every writable surface",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Compare pre/post summaries for fully imported rounds 13897 and 17948 after rerun apply validation.",
+          "expected": "Challenge/resource/submission/review identity sets should remain unchanged and new writes should be zero.",
+          "observed": "Round 13897 pre/post summaries matched exactly (`resourceCount=796`, `submissionCount=1784`, `reviewSummationCount=2009`), and round 17948 pre/post summaries also matched exactly (`resourceCount=47`, `submissionCount=370`, `reviewSummationCount=415`). Their apply outputs both reported zero created resources/submissions/finals/provisionals."
+        }
+      ],
+      "evidence": {
+        "files": [
+          "participant-scores/user-testing-reruns/13897-pre-summary.json",
+          "participant-scores/user-testing-reruns/13897-post-summary.json",
+          "participant-scores/user-testing-reruns/17948-pre-summary.json",
+          "participant-scores/user-testing-reruns/17948-post-summary.json",
+          "participant-scores/user-testing-reruns/13897-apply.stdout.txt",
+          "participant-scores/user-testing-reruns/17948-apply.stdout.txt"
+        ],
+        "consoleErrors": "n/a",
+        "network": "Steady-state verification used shared-env rerun applies plus pre/post API summaries."
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Validated the 2 remaining existing-v6 rerun assertions: both passed. Shared-environment rerun evidence for 13897 and 17948 showed pure no-op apply behavior with unchanged challenge/resource/submission/review footprints."
+}

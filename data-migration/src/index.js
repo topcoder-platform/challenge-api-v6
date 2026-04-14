@@ -1,5 +1,4 @@
 const { MigrationManager } = require('./migrationManager');
-const { AuditLogMigrator } = require('./migrators/auditLogMigrator')
 const { ChallengeMigrator } = require('./migrators/challengeMigrator')
 const { ChallengeTypeMigrator } = require('./migrators/challengeTypeMigrator');
 const { ChallengeTrackMigrator } = require('./migrators/challengeTrackMigrator');
@@ -21,31 +20,7 @@ const { ChallengeSkillMigrator } = require('./migrators/challengeSkillMigrator')
 const { ChallengeEventMigrator } = require('./migrators/challengeEventMigrator');
 const { ChallengeDiscussionOptionMigrator } = require('./migrators/challengeDiscussionOptionMigrator');
 const { ChallengeConstraintMigrator } = require('./migrators/challengeConstraintMigrator');
-const { PrismaClient } = require('@prisma/client');
-
-async function checkDatabaseConnection() {
-  const prisma = new PrismaClient();
-  try {
-    await prisma.$connect();
-    console.log('Database connection successful');
-    return true;
-  } catch (error) {
-    console.error('Database connection failed:', error.message);
-    console.error('Make sure your Docker database is running with: npm run db:up');
-    return false;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-
 async function main() {
-  // Check database connection first
-  // const isConnected = await checkDatabaseConnection();
-  // if (!isConnected) {
-  //   process.exit(1);
-  // }
-
   try {
     // Create migration manager
     const manager = new MigrationManager();

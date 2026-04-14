@@ -1,0 +1,33 @@
+{
+  "groupId": "create-path-plan-check",
+  "surface": "importer CLI + API verification",
+  "toolsUsed": [
+    "node",
+    "python",
+    "curl"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-PLAN-009",
+      "status": "blocked",
+      "summary": "Dry-run for round 13897 exited 0 but emitted decision reuse/backfill-only against existing challenge a15cbb04-a0d3-4647-85bd-23d8d11e9f3f with createPathChallengeShape/createPathPhasePlan both null. Challenge API confirms legacyId 13897 already exists as a completed Marathon Match on the Data Science track with Registration, Submission, and Review phases, so the current shared fixture cannot prove the missing-historical create-path plan required by this assertion.",
+      "evidence": [
+        "planning-challenge/create-path-plan-check/dry-run-13897.stdout.txt",
+        "planning-challenge/create-path-plan-check/dry-run-13897.stderr.txt",
+        "planning-challenge/create-path-plan-check/dry-run-13897.exitcode.txt",
+        "planning-challenge/create-path-plan-check/challenges-legacyId-13897.json",
+        "planning-challenge/create-path-plan-check/challenges-legacyId-13897.http.txt",
+        "planning-challenge/create-path-plan-check/challenge-a15cbb04-a0d3-4647-85bd-23d8d11e9f3f.json",
+        "planning-challenge/create-path-plan-check/challenge-a15cbb04-a0d3-4647-85bd-23d8d11e9f3f.http.txt",
+        "planning-challenge/create-path-plan-check/create-path-assessment.json"
+      ]
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "assertionId": "VAL-PLAN-009",
+      "reason": "The shared dev fixture for legacy round 13897 is already imported, so dry-run legitimately plans reuse/backfill-only instead of a create path; within read-only scope this prevents proving missing-historical create-path behavior."
+    }
+  ]
+}

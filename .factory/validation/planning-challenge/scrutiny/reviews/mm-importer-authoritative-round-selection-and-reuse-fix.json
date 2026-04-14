@@ -1,0 +1,22 @@
+{
+  "featureId": "mm-importer-authoritative-round-selection-and-reuse-fix",
+  "reviewedAt": "2026-04-01T02:59:36Z",
+  "commitId": "83c8ac843def95d2b578e3aefd9ca943dd6d6923",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The new matcher correctly rejects non-MM rounds and unsafe/ambiguous legacyId reuse targets when authoritative discovery is available, but the feature still fails scrutiny because dry-run silently drops the authoritative matcher whenever direct DB discovery is unavailable and then plans every selected round as create.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches.js",
+        "line": 42,
+        "severity": "blocking",
+        "description": "Dry-run only attempts authoritative existing-v6 discovery when `DATABASE_URL` is already present, and discovery errors are downgraded to a warning that continues \"without reuse matching\". The fallback path then calls `buildExistingStateByRoundId({ prisma: null, ... })`, whose early return leaves every round at `matchStatus: \"none\"` / `reason: \"no-matching-v6-challenge-found\"` (`data-migration/src/scripts/importHistoricalMarathonMatches/existingState.js:128-130`). That means a real rerun/backfill target is reported as `decision: \"create\"` instead of surfacing a true planning-prerequisite failure or unresolved result, so dry-run and apply no longer share the same authoritative matcher this feature was supposed to unify. The new test suite codifies the regression by forcing `DATABASE_URL: \"\"` and expecting `decision: \"create\"` for the snapshot-backed round (`data-migration/test/importHistoricalMarathonMatches.plan.test.js:101-104,262-280`). This is a correctness/safety issue because operators can receive a misleading create plan for an already-imported round whenever direct discovery is unavailable."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed feature `mm-importer-authoritative-round-selection-and-reuse-fix` at commit `83c8ac843def95d2b578e3aefd9ca943dd6d6923`. The direct matcher itself is a solid improvement, but the feature fails scrutiny because dry-run still silently falls back to `create` planning when authoritative DB-backed reuse discovery is unavailable, which undermines the intended planning/apply convergence."
+}

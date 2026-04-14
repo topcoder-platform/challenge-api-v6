@@ -1,0 +1,50 @@
+{
+  "featureId": "mm-importer-plan-cli",
+  "reviewedAt": "2026-04-01T03:00:49.605010+00:00",
+  "commitId": "6a38297ad56c1d7b845c8b684639e3a0e53cafb3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "Fail. The feature establishes a dry-run CLI and deterministic record format, but it misses three contract-critical planning behaviors: authoritative reuse detection, marathon-only round selection, and complete create-path reporting.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches.js",
+        "line": 32,
+        "severity": "blocking",
+        "description": "Existing-v6 reconciliation is snapshot-only. The CLI never queries an authoritative v6 surface; it only loads `--existing-state-file`, and `planning.js` switches to `reuse/backfill-only` solely from the presence of `existingStateEntry.challengeId`. Without that sidecar file, real existing-v6 rounds are always planned as `create`, so the feature cannot satisfy matched challenge-id reporting, reuse/backfill deltas, or rerun no-op classification for normal dry-runs. Because the snapshot is arbitrary JSON, a stale or hand-edited `challengeId` can also force an unsafe reuse classification."
+      },
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/planning.js",
+        "line": 95,
+        "severity": "blocking",
+        "description": "The planner never checks `round.round_type_id == '13'`. Any selected round with components plus registrations, submissions, or finals is treated as Marathon-Match work. In the real export, round `9892` is `round_type_id: \"15\"` (`/mnt/Informix/round_1.json:22899-22908`), yet the worker's handoff/manual verification used `--round-id 9892` and observed `decision=create`. That means the feature can plan Marathon Match creation for a non-marathon legacy round, violating the mission's authoritative MM identification rule."
+      },
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/planning.js",
+        "line": 141,
+        "severity": "blocking",
+        "description": "Create-path output is not a complete creation plan. The record only exposes numeric counts and `entityDeltas.phases.target = 3`; it never reports that the planned challenge is `Marathon Match` / `Data Science`, nor that the three phases are specifically `Registration`, `Submission`, and `Review`. That falls short of VAL-PLAN-009's required dry-run evidence for missing historical rounds and leaves validators without the parseable challenge/phase shape the feature claims to provide."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "services",
+      "observation": "The mission-owned test command in `.factory/services.yaml` was incorrect for Jest and caused the worker to deviate from the skill procedure.",
+      "evidence": "Commit `6a38297` added `.factory/services.yaml:3` with `pnpm test -- --maxWorkers=16`; the handoff's `skillFeedback.followedProcedure=false` explains that this command produced a pre-existing argument-handling failure, so the worker had to fall back to a scoped test invocation instead."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The feature introduced `--existing-state-file`, but the mission shared state never documented how to generate that snapshot, what schema is expected, or which live surface is authoritative for it.",
+      "evidence": "`AGENTS.md:20` requires sidecar snapshots to be documented in `.factory/library/`; commit `6a38297` only documents the flag in `argParser.js:166`, parses an ad hoc shape in `existingState.js:18-75`, and the handoff validated reuse by creating `/tmp/mm-existing-state.json` manually."
+    },
+    {
+      "area": "knowledge",
+      "observation": "The initial shared-state docs pointed workers at the wrong create-path fixture round, which contributed to validating against a non-marathon round.",
+      "evidence": "Commit `6a38297` set `.factory/library/architecture.md:165` to `round 9892` as the primary missing-historical fixture, but `/mnt/Informix/round_1.json:22899-22908` shows `9892` has `round_type_id=\"15\"`; the worker handoff's manual dry-run checks also used `--round-id 9892`."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, commit diff, mission docs, and shared-state files for `mm-importer-plan-cli`. Result: fail, with three blocking issues: reuse reporting depends on an undocumented snapshot instead of authoritative v6 discovery, non-marathon rounds are not filtered out before planning, and create-path records do not expose the complete Marathon Match/Data Science phase plan required by the validation contract."
+}

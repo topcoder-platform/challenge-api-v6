@@ -1,0 +1,108 @@
+{
+  "groupId": "challenge-reuse-apply",
+  "surface": "importer CLI + API verification",
+  "toolsUsed": [
+    "node",
+    "python",
+    "curl"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-CHALLENGE-001",
+      "status": "blocked",
+      "summary": "Could not prove missing-round create-path behavior because round 13897 was already imported before this session: dry-run reported reuse/backfill-only, challenge lookup already returned one row, and apply reported existing.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/01-dry-run-13897.stdout",
+        "planning-challenge/challenge-reuse-apply/02-pre-search-13897.json",
+        "planning-challenge/challenge-reuse-apply/06-apply-1-13897.stdout"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-002",
+      "status": "blocked",
+      "summary": "The current challenge uses the Marathon Match/Data Science ids and canonical MM timeline template, but the create-path binding itself could not be proven because the shared fixture was already imported and no create run was possible.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/01-dry-run-13897.stdout",
+        "planning-challenge/challenge-reuse-apply/03-pre-detail-13897.json",
+        "planning-challenge/challenge-reuse-apply/05-pre-timeline-template.json",
+        "planning-challenge/challenge-reuse-apply/14-challenge-types.json",
+        "planning-challenge/challenge-reuse-apply/15-challenge-tracks.json",
+        "planning-challenge/challenge-reuse-apply/16-challenge-phases.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-003",
+      "status": "pass",
+      "summary": "The imported challenge detail exposes exactly one Registration, one Submission, and one Review phase, and the phase-name counts remained 1/1/1 across pre, post-apply, and rerun snapshots.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/03-pre-detail-13897.json",
+        "planning-challenge/challenge-reuse-apply/09-post-apply-1-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/17-snapshot-comparison.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-004",
+      "status": "pass",
+      "summary": "All three visible phases were closed with non-null actualEndDate values and the challenge had no current open phase names before or after apply.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/03-pre-detail-13897.json",
+        "planning-challenge/challenge-reuse-apply/09-post-apply-1-normalized-13897.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-005",
+      "status": "pass",
+      "summary": "Registration and Submission phase windows contain the legacy eligible-registration and non-example submission timestamp ranges, and the Review phase starts at the Submission phase end with a coherent closed window.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/03-pre-detail-13897.json",
+        "planning-challenge/challenge-reuse-apply/18-legacy-activity-comparison-13897.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-006",
+      "status": "pass",
+      "summary": "Dry-run classified round 13897 as reuse/backfill-only, and the normalized pre/post snapshots were identical: the challenge id, name, typeId, trackId, status, timelineTemplateId, startDate, and endDate did not change across the first apply.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/01-dry-run-13897.stdout",
+        "planning-challenge/challenge-reuse-apply/04-pre-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/09-post-apply-1-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/17-snapshot-comparison.json",
+        "planning-challenge/challenge-reuse-apply/19-curl-challenge-search-13897.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-007",
+      "status": "pass",
+      "summary": "The same Registration, Submission, and Review phase rows remained attached to the challenge with unchanged ids, open/closed state, and visible timestamps; no duplicate standard phase names appeared after apply.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/04-pre-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/09-post-apply-1-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/17-snapshot-comparison.json"
+      ]
+    },
+    {
+      "id": "VAL-CHALLENGE-008",
+      "status": "pass",
+      "summary": "The second apply also reported existing, challenge lookup still returned exactly one row, and the post-apply and rerun snapshots had identical phase ids and phase-name counts.",
+      "evidence": [
+        "planning-challenge/challenge-reuse-apply/10-apply-2-13897.stdout",
+        "planning-challenge/challenge-reuse-apply/09-post-apply-1-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/13-post-apply-2-normalized-13897.json",
+        "planning-challenge/challenge-reuse-apply/17-snapshot-comparison.json"
+      ]
+    }
+  ],
+  "frictions": [
+    "GET /v6/timeline-templates/<id> returned 401 without a bearer token even though the challenge, type, track, and phase metadata endpoints used here were readable without auth; resolved by sourcing .env.importer.local and using node get_token.js for a read-only token."
+  ],
+  "blockers": [
+    {
+      "assertionId": "VAL-CHALLENGE-001",
+      "reason": "Round 13897 was already imported in the shared dev environment before this validation run, so the contract's missing-round create path could not be reproduced within the allowed isolation boundary."
+    },
+    {
+      "assertionId": "VAL-CHALLENGE-002",
+      "reason": "Because round 13897 already existed and apply only returned existing, this run could observe current timeline binding but could not prove the create-path binding event required by the assertion."
+    }
+  ]
+}

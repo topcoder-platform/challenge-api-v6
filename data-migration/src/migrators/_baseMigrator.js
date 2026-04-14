@@ -724,7 +724,7 @@ class BaseMigrator {
   extractNumericFieldTypesFromError(error) {
     const message = error?.message || '';
     const fieldTypeMap = new Map();
-    const argumentPattern = /Argument\s+(?:["'`])?([A-Za-z0-9_.\[\]]+)(?:["'`])?\s*:\s*Invalid value provided\.?\s*Expected\s+([A-Za-z0-9]+)[^,]*,\s*provided\s+String/gi;
+    const argumentPattern = /Argument\s+(?:["'`])?([A-Za-z0-9_.[\]]+)(?:["'`])?\s*:\s*Invalid value provided\.?\s*Expected\s+([A-Za-z0-9]+)[^,]*,\s*provided\s+String/gi;
     let match;
 
     while ((match = argumentPattern.exec(message)) !== null) {
@@ -899,7 +899,7 @@ class BaseMigrator {
       }
       try {
         return BigInt(trimmed);
-      } catch (err) {
+      } catch {
         return null;
       }
     }
@@ -930,7 +930,7 @@ class BaseMigrator {
       if (Prisma?.Decimal) {
         try {
           return new Prisma.Decimal(trimmed);
-        } catch (err) {
+        } catch {
           // Fallback to native number if Decimal instantiation fails
         }
       }
@@ -1023,7 +1023,7 @@ class BaseMigrator {
     if (upsertData?.where) {
       try {
         return `[where: ${JSON.stringify(upsertData.where)}]`;
-      } catch (err) {
+      } catch {
         return '[where: unable to serialize]';
       }
     }

@@ -1,0 +1,10 @@
+commands:
+  install: source "$HOME/.config/nvm/nvm.sh" && nvm use >/dev/null && pnpm install && (cd data-migration && nvm use 18.19.0 >/dev/null && pnpm install)
+  test: source "$HOME/.config/nvm/nvm.sh" && (cd data-migration && nvm use 18.19.0 >/dev/null && pnpm test --maxWorkers=16 --testPathIgnorePatterns test/challenge-migration.test.js)
+  lint: source "$HOME/.config/nvm/nvm.sh" && (cd data-migration && nvm use 18.19.0 >/dev/null && pnpm lint)
+  typecheck: echo "No dedicated typecheck command for this JavaScript importer surface"
+  build: echo "No build script is defined for the historical importer surface"
+  root_smoke_test: source "$HOME/.config/nvm/nvm.sh" && nvm use >/dev/null && pnpm test
+  test_full_existing: source "$HOME/.config/nvm/nvm.sh" && (cd data-migration && nvm use 18.19.0 >/dev/null && pnpm test --maxWorkers=16)
+
+services: {}

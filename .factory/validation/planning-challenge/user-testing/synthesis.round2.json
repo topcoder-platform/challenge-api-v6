@@ -1,0 +1,31 @@
+{
+  "milestone": "planning-challenge",
+  "round": 2,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 0,
+    "blocked": 1
+  },
+  "passedAssertions": [
+    "VAL-PLAN-009",
+    "VAL-CHALLENGE-001",
+    "VAL-CHALLENGE-002"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [
+    {
+      "id": "VAL-PLAN-014",
+      "blockedBy": "Round 10815 now reruns as reuse/backfill-only for the created challenge with phases fully converged, but resources/submissions/finalScores/provisionalScores still plan creates (836/1445/267/1445), so the full-contract no-op rerun remains a later-milestone blocker rather than a planning-challenge regression."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Recorded that round 10815 is now a shared post-create fixture (challenge 5fa76bd9-da55-422d-8d4c-4f0155dc62c5) and that its immediate rerun proves challenge/phase reuse but remains partial-backfill for later participant/score surfaces.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/planning-challenge/user-testing/synthesis.round1.json"
+}
