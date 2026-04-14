@@ -23,6 +23,9 @@ const {
 const {
   TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
 } = require("./targetMemberResolution");
+const {
+  resolveDescriptionFromMappedLegacySources,
+} = require("./descriptionSourcing");
 
 const createEmptyCounters = () => ({
   round: null,
@@ -30,6 +33,8 @@ const createEmptyCounters = () => ({
   problemIds: new Set(),
   descriptionProblemId: null,
   descriptionProblemText: null,
+  descriptionComponentId: null,
+  descriptionComponentTextMarkdown: null,
   eligibleRegistrants: new Set(),
   nonExampleSubmissions: 0,
   exampleSubmissions: 0,
@@ -103,17 +108,6 @@ const parseEpochMs = (value) => {
     return null;
   }
   return parsed;
-};
-
-const isUsableProblemText = (value) => {
-  if (value === null || value === undefined) {
-    return false;
-  }
-  const normalized = String(value).trim();
-  if (!normalized) {
-    return false;
-  }
-  return normalized.toLowerCase() !== "null";
 };
 
 const minMs = (left, right) => {
@@ -1070,6 +1064,7 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
   const selectedComponentIds = new Set();
   const selectedProblemIds = new Set();
   const componentProblemIdById = new Map();
+  const componentTextByComponentId = new Map();
   const problemTextByProblemId = new Map();
   const longComponentStateById = new Map();
   const stateSubmissionSummaryById = new Map();
@@ -1101,6 +1096,11 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       return;
     }
     const problemId = String(row && row.problem_id ? row.problem_id : "").trim();
+    const componentText =
+      row && Object.prototype.hasOwnProperty.call(row, "component_text")
+        ? row.component_text
+        : null;
+    componentTextByComponentId.set(componentId, componentText);
     if (!problemId) {
       return;
     }
@@ -1128,21 +1128,19 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
   for (const counters of roundDataById.values()) {
     counters.descriptionProblemId = null;
     counters.descriptionProblemText = null;
+    counters.descriptionComponentId = null;
+    counters.descriptionComponentTextMarkdown = null;
 
-    for (const componentId of sortIds(counters.componentIds)) {
-      const problemId = componentProblemIdById.get(componentId);
-      if (!problemId) {
-        continue;
-      }
-      const rawProblemText = problemTextByProblemId.get(problemId);
-      if (!isUsableProblemText(rawProblemText)) {
-        continue;
-      }
-
-      counters.descriptionProblemId = problemId;
-      counters.descriptionProblemText = String(rawProblemText);
-      break;
-    }
+    const descriptionSource = resolveDescriptionFromMappedLegacySources({
+      componentIds: sortIds(counters.componentIds),
+      componentProblemIdById,
+      problemTextByProblemId,
+      componentTextByComponentId,
+    });
+    counters.descriptionProblemId = descriptionSource.problemId;
+    counters.descriptionProblemText = descriptionSource.problemText;
+    counters.descriptionComponentId = descriptionSource.componentId;
+    counters.descriptionComponentTextMarkdown = descriptionSource.componentTextMarkdown;
   }
 
   await Promise.all(

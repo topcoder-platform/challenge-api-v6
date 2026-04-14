@@ -37,6 +37,10 @@ const {
   resolveSubmissionArchiveDirectory,
   writeSubmissionArchiveZip,
 } = require("./submissionArchives");
+const {
+  isUsableProblemText,
+  isUsableComponentMarkdown,
+} = require("./descriptionSourcing");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -44,21 +48,15 @@ const TEMPORARY_RESOURCE_WRITE_STATUS = "ACTIVE";
 const buildFallbackImportedDescription = (legacyId) =>
   `Imported historical Marathon Match from legacy round ${legacyId}`;
 
-const isUsableProblemText = (value) => {
-  if (value === null || value === undefined) {
-    return false;
-  }
-  const normalized = String(value).trim();
-  if (!normalized) {
-    return false;
-  }
-  return normalized.toLowerCase() !== "null";
-};
-
 const resolveChallengeDescription = ({ legacyId, counters }) => {
   const candidate = counters && counters.descriptionProblemText;
   if (isUsableProblemText(candidate)) {
     return String(candidate);
+  }
+  const componentMarkdownCandidate =
+    counters && counters.descriptionComponentTextMarkdown;
+  if (isUsableComponentMarkdown(componentMarkdownCandidate)) {
+    return String(componentMarkdownCandidate);
   }
   return buildFallbackImportedDescription(legacyId);
 };
@@ -852,7 +850,13 @@ const runTargetedRerunMode = async ({
     counters && counters.descriptionProblemId ? counters.descriptionProblemId : ""
   ).trim();
   const candidateProblemText = counters && counters.descriptionProblemText;
+  const legacyComponentId = String(
+    counters && counters.descriptionComponentId ? counters.descriptionComponentId : ""
+  ).trim();
+  const candidateComponentMarkdown =
+    counters && counters.descriptionComponentTextMarkdown;
   const hasProblemTextUpdate = isUsableProblemText(candidateProblemText);
+  const hasComponentMarkdownUpdate = isUsableComponentMarkdown(candidateComponentMarkdown);
   const submissionArchiveReconciliation =
     await reconcileTargetedRerunSubmissionArchives({
       selection,
@@ -865,7 +869,8 @@ const runTargetedRerunMode = async ({
       submissionArchiveDir,
     });
   const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
-  const hasWritesAttempted = hasProblemTextUpdate || hasSubmissionArchiveWrites;
+  const hasWritesAttempted =
+    hasProblemTextUpdate || hasComponentMarkdownUpdate || hasSubmissionArchiveWrites;
 
   if (hasProblemTextUpdate) {
     if (
@@ -899,6 +904,60 @@ const runTargetedRerunMode = async ({
           descriptionSource: "legacy-problem-text",
           legacyProblemId: legacyProblemId || null,
           reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+          submissionArchiveReconciliation,
+        },
+      ],
+      summary: {
+        recordType: "apply-summary",
+        created: 0,
+        existing: 0,
+        unmatched: 0,
+        unresolved: 0,
+        errors: 0,
+        targetedRerunValidated: 1,
+        targetedRerunDescriptionUpdated: 1,
+        targetedRerunDescriptionPreserved: 0,
+        targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
+        targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
+        targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
+        skippedFileArtifact: null,
+      },
+    };
+  }
+
+  if (hasComponentMarkdownUpdate) {
+    if (
+      !prisma ||
+      !prisma.challenge ||
+      typeof prisma.challenge.update !== "function"
+    ) {
+      throw new Error(
+        "Targeted rerun requires Prisma challenge.update to apply description patches."
+      );
+    }
+    await prisma.challenge.update({
+      where: { id: selection.challengeId },
+      data: {
+        description: String(candidateComponentMarkdown),
+        updatedBy: String(actor || "").trim() || "historical-mm-importer",
+      },
+      select: { id: true },
+    });
+
+    return {
+      records: [
+        {
+          recordType: "apply-record",
+          legacyRoundId: selection.roundId,
+          status: "targeted-rerun-applied",
+          challengeId: selection.challengeId,
+          mode: "targeted-rerun",
+          writesAttempted: hasWritesAttempted,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-component-text-markdown",
+          legacyProblemId: null,
+          legacyComponentId: legacyComponentId || null,
+          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
           submissionArchiveReconciliation,
         },
       ],

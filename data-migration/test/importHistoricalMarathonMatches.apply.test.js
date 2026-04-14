@@ -226,6 +226,55 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     expect(calls.createdChallenge.description).toBe(rawProblemHtml);
   });
 
+  test("apply create-path falls back to mapped component_text markdown when problem text is unusable", async () => {
+    const calls = { createdChallenge: null };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdChallenge = data;
+          return { id: "challenge-1" };
+        }),
+      },
+      challengePhase: {
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    };
+
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const markdownFallback = "## Robot Routing\n\nPublic example only.";
+    await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", name: "MM 9892" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+        descriptionProblemText: "   ",
+        descriptionComponentTextMarkdown: markdownFallback,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(calls.createdChallenge.description).toBe(markdownFallback);
+  });
+
   test("apply create-path is idempotent when challenge already exists", async () => {
     const calls = { createdPhases: null };
     const tx = {
@@ -870,6 +919,91 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           skippedFileArtifact: null,
         },
       });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode backfills component_text markdown when problem text is unusable", async () => {
+    const archiveDir = buildArchiveDirPath("component-markdown-fallback");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([["50010001", { legacySubmissionId: "50010001", url: null }]])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [{ legacySubmissionId: "50010001", submissionText: "single legacy submission text" }],
+          ],
+        ]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: { description: componentMarkdown, updatedBy: "importer" },
+        select: { id: true },
+      });
+      expect(result.records).toEqual([
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-applied",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-component-text-markdown",
+          legacyProblemId: null,
+          legacyComponentId: "5503",
+          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 1,
+            archivesWritten: 1,
+            urlsUpdated: 1,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
+        },
+      ]);
     } finally {
       fs.rmSync(archiveDir, { recursive: true, force: true });
     }

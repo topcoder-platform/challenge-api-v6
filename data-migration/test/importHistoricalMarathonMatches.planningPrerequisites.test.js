@@ -24,7 +24,12 @@ const buildFixtureDataDirectory = () => {
     { round_id: "9892", component_id: "5503" },
   ]);
   writeJson(baseDir, "component_1.json", "component", [
-    { component_id: "5503", problem_id: "9001" },
+    {
+      component_id: "5503",
+      problem_id: "9001",
+      component_text:
+        "<problem_statement><h2>Robot Routing</h2><p>Public summary.</p></problem_statement>",
+    },
   ]);
   writeJson(baseDir, "problem_1.json", "problem", [
     { problem_id: "9001", problem_text: "<p>Legacy <strong>problem</strong> text</p>" },
@@ -147,5 +152,44 @@ describe("importHistoricalMarathonMatches planning prerequisites", () => {
     expect(counters.descriptionProblemText).toBe(
       "<p>Legacy <strong>problem</strong> text</p>"
     );
+  });
+
+  test("captures component_text markdown fallback when problem text is unusable", async () => {
+    writeJson(fixtureDir, "problem_1.json", "problem", [
+      { problem_id: "9001", problem_text: "   " },
+    ]);
+    writeJson(fixtureDir, "component_1.json", "component", [
+      {
+        component_id: "5503",
+        problem_id: "9001",
+        component_text:
+          "<problem_statement><h2>Robot Routing</h2><p>Public summary.</p><hidden_test_cases><case>secret</case></hidden_test_cases></problem_statement>",
+      },
+    ]);
+
+    const plan = await buildDryRunPlan(
+      buildOptions(fixtureDir),
+      new Map(),
+      {
+        authoritativeDiscovery: { available: true },
+        canonicalTimelineTemplate: {
+          resolved: true,
+          timelineTemplateId: "timeline-mm",
+        },
+        memberResolution: {
+          available: true,
+          resolvedMemberIds: new Set(["1"]),
+        },
+      }
+    );
+
+    const counters = plan.roundDataById.get("9892");
+    expect(counters.descriptionProblemId).toBe(null);
+    expect(counters.descriptionProblemText).toBe(null);
+    expect(counters.descriptionComponentId).toBe("5503");
+    expect(counters.descriptionComponentTextMarkdown).toContain("Robot Routing");
+    expect(counters.descriptionComponentTextMarkdown).toContain("Public summary.");
+    expect(counters.descriptionComponentTextMarkdown).not.toContain("<problem_statement>");
+    expect(counters.descriptionComponentTextMarkdown).not.toContain("secret");
   });
 });
