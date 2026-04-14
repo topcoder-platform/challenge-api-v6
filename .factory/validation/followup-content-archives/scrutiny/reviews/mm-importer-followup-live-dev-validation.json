@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-followup-live-dev-validation",
+  "reviewedAt": "2026-04-14T04:16:01Z",
+  "commitId": "d1c4bfd0f55d6999b8f3d99c8f19e22fec386316",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The validation feature captured substantial live evidence under the mission `evidence/` tree: before/after snapshots, review-DB URL coverage, archive existence checks, and sampled archive payload verification for both targeted rounds.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, and saved evidence for `mm-importer-followup-live-dev-validation`. Result: pass. The artifacts comprehensively cover archive/url reconciliation and patch-only resource/submission/review behavior, and they were useful for spotting the separate description-rerun bug called out in the description-feature reviews."
+}

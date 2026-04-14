@@ -1,0 +1,22 @@
+{
+  "featureId": "mm-importer-component-text-markdown-fallback",
+  "reviewedAt": "2026-04-14T04:16:01Z",
+  "commitId": "b383a4da4de96b6eeafe86d622884a8ec5beeaec",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The XML-to-Markdown conversion and planning/apply wiring are solid, but the new targeted-rerun fallback branch duplicates the same non-idempotent description-write behavior as the raw problem-text branch.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/apply.js",
+        "line": 938,
+        "severity": "blocking",
+        "description": "The component-markdown branch of `runTargetedRerunMode` also unconditionally calls `prisma.challenge.update` whenever usable converted Markdown exists. Once a fallback description has already been backfilled, rerunning targeted rerun will still mutate challenge audit fields/timestamps even when the stored description already equals the generated Markdown. That copies the same patch-only violation found in the raw `problem_text` branch. Add the same current-description equality guard before writing the component-markdown update."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, commit `b383a4da4de96b6eeafe86d622884a8ec5beeaec`, and current fallback logic for `mm-importer-component-text-markdown-fallback`. Result: fail. The Markdown fallback behavior itself is correct, but its targeted-rerun update path is not idempotent once the description has already been patched."
+}

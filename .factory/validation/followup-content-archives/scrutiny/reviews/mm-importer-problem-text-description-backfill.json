@@ -1,0 +1,22 @@
+{
+  "featureId": "mm-importer-problem-text-description-backfill",
+  "reviewedAt": "2026-04-14T04:16:01Z",
+  "commitId": "5122aae05124f7e3c946984501b88dd9df29eb25",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature correctly resolves legacy `problem.problem_text` and uses it for description sourcing, but the targeted-rerun write path is not idempotent on challenge metadata.",
+    "issues": [
+      {
+        "file": "data-migration/src/scripts/importHistoricalMarathonMatches/apply.js",
+        "line": 885,
+        "severity": "blocking",
+        "description": "When usable legacy `problem.problem_text` exists, `runTargetedRerunMode` always calls `prisma.challenge.update` without first checking whether the current challenge description already matches that HTML. The live validation evidence for round `17948` shows `descriptionChangedPreToPost=false` while `updatedTimestampChangedPreToPost=true`, so a second targeted rerun mutates non-description challenge fields even though there is no description delta. That violates the patch-only contract for reruns. Read the current description first (or otherwise compare before writing) and skip the update when the stored description already matches the legacy HTML."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, current `apply.js` logic, and live validation artifacts for `mm-importer-problem-text-description-backfill` at commit `5122aae05124f7e3c946984501b88dd9df29eb25`. Result: fail. Raw HTML sourcing works, but repeated targeted reruns still rewrite the challenge row when the description is already correct."
+}

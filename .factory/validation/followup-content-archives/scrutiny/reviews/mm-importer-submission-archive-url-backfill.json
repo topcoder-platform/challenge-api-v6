@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-submission-archive-url-backfill",
+  "reviewedAt": "2026-04-14T04:16:01Z",
+  "commitId": "d1c4bfd0f55d6999b8f3d99c8f19e22fec386316",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The archive/url backfill feature deterministically maps `legacySubmissionId` values to unique local zip archives and S3-style URLs, updates only mismatched submission URLs, and has matching automated plus live evidence for one-to-one archive coverage.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, evidence-backed live validation, and commit `d1c4bfd0f55d6999b8f3d99c8f19e22fec386316` for `mm-importer-submission-archive-url-backfill`. Result: pass. The reconciliation logic and evidence both support deterministic archive/url backfill without unrelated submission mutations."
+}
