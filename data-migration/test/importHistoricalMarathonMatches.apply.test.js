@@ -802,6 +802,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
       const prisma = {
         challenge: {
+          findUnique: jest.fn().mockResolvedValue({ description: "Old description" }),
           update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
         },
       };
@@ -930,6 +931,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const componentMarkdown = "## Robot Routing\n\nPublic example only.";
       const prisma = {
         challenge: {
+          findUnique: jest.fn().mockResolvedValue({ description: "Old description" }),
           update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
         },
       };
@@ -1096,6 +1098,195 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         targetedRerunSubmissionUrlsUpdated: 1,
         targetedRerunWritesAttempted: 1,
         skippedFileArtifact: null,
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode skips challenge description write when legacy problem HTML already matches", async () => {
+    const archiveDir = buildArchiveDirPath("problem-text-already-matched");
+    try {
+      const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({ description: rawProblemHtml }),
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: rawProblemHtml,
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        select: { description: true },
+      });
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "legacy-problem-text",
+            legacyProblemId: "9001",
+            reason: "targeted-rerun-description-already-matched-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode skips challenge description write when component markdown already matches", async () => {
+    const archiveDir = buildArchiveDirPath("component-markdown-already-matched");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({ description: componentMarkdown }),
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        select: { description: true },
+      });
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "legacy-component-text-markdown",
+            legacyProblemId: null,
+            legacyComponentId: "5503",
+            reason: "targeted-rerun-description-already-matched-legacy-component-text-markdown",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
       });
     } finally {
       fs.rmSync(archiveDir, { recursive: true, force: true });

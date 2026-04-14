@@ -869,129 +869,89 @@ const runTargetedRerunMode = async ({
       submissionArchiveDir,
     });
   const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
-  const hasWritesAttempted =
-    hasProblemTextUpdate || hasComponentMarkdownUpdate || hasSubmissionArchiveWrites;
+  let hasDescriptionWrite = false;
+  let descriptionUpdated = false;
+  let descriptionSource = "existing-description-preserved-no-usable-legacy-problem-text";
+  let reason = "targeted-rerun-description-preserved-no-usable-legacy-problem-text";
+  let status = "targeted-rerun-preserved";
 
-  if (hasProblemTextUpdate) {
+  if (hasProblemTextUpdate || hasComponentMarkdownUpdate) {
     if (
       !prisma ||
       !prisma.challenge ||
+      typeof prisma.challenge.findUnique !== "function" ||
       typeof prisma.challenge.update !== "function"
     ) {
       throw new Error(
-        "Targeted rerun requires Prisma challenge.update to apply description patches."
+        "Targeted rerun requires Prisma challenge.findUnique and challenge.update to apply idempotent description patches."
       );
     }
-    await prisma.challenge.update({
+    const nextDescription = hasProblemTextUpdate
+      ? String(candidateProblemText)
+      : String(candidateComponentMarkdown);
+    const existingChallenge = await prisma.challenge.findUnique({
       where: { id: selection.challengeId },
-      data: {
-        description: String(candidateProblemText),
-        updatedBy: String(actor || "").trim() || "historical-mm-importer",
-      },
-      select: { id: true },
+      select: { description: true },
     });
-
-    return {
-      records: [
-        {
-          recordType: "apply-record",
-          legacyRoundId: selection.roundId,
-          status: "targeted-rerun-applied",
-          challengeId: selection.challengeId,
-          mode: "targeted-rerun",
-          writesAttempted: hasWritesAttempted,
-          descriptionUpdated: true,
-          descriptionSource: "legacy-problem-text",
-          legacyProblemId: legacyProblemId || null,
-          reason: "targeted-rerun-description-updated-from-legacy-problem-text",
-          submissionArchiveReconciliation,
-        },
-      ],
-      summary: {
-        recordType: "apply-summary",
-        created: 0,
-        existing: 0,
-        unmatched: 0,
-        unresolved: 0,
-        errors: 0,
-        targetedRerunValidated: 1,
-        targetedRerunDescriptionUpdated: 1,
-        targetedRerunDescriptionPreserved: 0,
-        targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
-        targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
-        targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
-        skippedFileArtifact: null,
-      },
-    };
-  }
-
-  if (hasComponentMarkdownUpdate) {
-    if (
-      !prisma ||
-      !prisma.challenge ||
-      typeof prisma.challenge.update !== "function"
-    ) {
+    if (!existingChallenge) {
       throw new Error(
-        "Targeted rerun requires Prisma challenge.update to apply description patches."
+        `Targeted rerun challenge "${selection.challengeId}" was not found for description reconciliation.`
       );
     }
-    await prisma.challenge.update({
-      where: { id: selection.challengeId },
-      data: {
-        description: String(candidateComponentMarkdown),
-        updatedBy: String(actor || "").trim() || "historical-mm-importer",
-      },
-      select: { id: true },
-    });
+    const existingDescription = String(
+      existingChallenge.description !== null && existingChallenge.description !== undefined
+        ? existingChallenge.description
+        : ""
+    );
+    const descriptionMatches = existingDescription === nextDescription;
 
-    return {
-      records: [
-        {
-          recordType: "apply-record",
-          legacyRoundId: selection.roundId,
-          status: "targeted-rerun-applied",
-          challengeId: selection.challengeId,
-          mode: "targeted-rerun",
-          writesAttempted: hasWritesAttempted,
-          descriptionUpdated: true,
-          descriptionSource: "legacy-component-text-markdown",
-          legacyProblemId: null,
-          legacyComponentId: legacyComponentId || null,
-          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
-          submissionArchiveReconciliation,
+    if (hasProblemTextUpdate) {
+      descriptionSource = "legacy-problem-text";
+      reason = descriptionMatches
+        ? "targeted-rerun-description-already-matched-legacy-problem-text"
+        : "targeted-rerun-description-updated-from-legacy-problem-text";
+    } else {
+      descriptionSource = "legacy-component-text-markdown";
+      reason = descriptionMatches
+        ? "targeted-rerun-description-already-matched-legacy-component-text-markdown"
+        : "targeted-rerun-description-updated-from-legacy-component-text-markdown";
+    }
+
+    if (!descriptionMatches) {
+      await prisma.challenge.update({
+        where: { id: selection.challengeId },
+        data: {
+          description: nextDescription,
+          updatedBy: String(actor || "").trim() || "historical-mm-importer",
         },
-      ],
-      summary: {
-        recordType: "apply-summary",
-        created: 0,
-        existing: 0,
-        unmatched: 0,
-        unresolved: 0,
-        errors: 0,
-        targetedRerunValidated: 1,
-        targetedRerunDescriptionUpdated: 1,
-        targetedRerunDescriptionPreserved: 0,
-        targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
-        targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
-        targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
-        skippedFileArtifact: null,
-      },
-    };
+        select: { id: true },
+      });
+      hasDescriptionWrite = true;
+      descriptionUpdated = true;
+      status = "targeted-rerun-applied";
+    }
   }
+
+  const hasWritesAttempted = hasDescriptionWrite || hasSubmissionArchiveWrites;
+  const summaryDescriptionUpdated = descriptionUpdated ? 1 : 0;
+  const summaryDescriptionPreserved = descriptionUpdated ? 0 : 1;
 
   return {
     records: [
       {
         recordType: "apply-record",
         legacyRoundId: selection.roundId,
-        status: "targeted-rerun-preserved",
+        status,
         challengeId: selection.challengeId,
         mode: "targeted-rerun",
         writesAttempted: hasWritesAttempted,
-        descriptionUpdated: false,
-        descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
-        legacyProblemId: null,
-        reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+        descriptionUpdated,
+        descriptionSource,
+        legacyProblemId: hasProblemTextUpdate && legacyProblemId ? legacyProblemId : null,
+        ...(hasComponentMarkdownUpdate
+          ? { legacyComponentId: legacyComponentId || null }
+          : {}),
+        reason,
         submissionArchiveReconciliation,
       },
     ],
@@ -1003,8 +963,8 @@ const runTargetedRerunMode = async ({
       unresolved: 0,
       errors: 0,
       targetedRerunValidated: 1,
-      targetedRerunDescriptionUpdated: 0,
-      targetedRerunDescriptionPreserved: 1,
+      targetedRerunDescriptionUpdated: summaryDescriptionUpdated,
+      targetedRerunDescriptionPreserved: summaryDescriptionPreserved,
       targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
       targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
       targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
