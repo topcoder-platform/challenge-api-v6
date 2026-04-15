@@ -9,6 +9,7 @@ const {
 const { deriveLegacySubmissionId } = require("./submissionHistory");
 const {
   MISSING_MEMBER_REASON_CODE,
+  MALFORMED_PROVISIONAL_SCORE_REASON_CODE,
 } = require("./skippedArtifact");
 
 const DEFAULT_REVIEW_SCHEMA = "reviews";
@@ -334,6 +335,7 @@ const reconcileRoundProvisionalScores = async ({
 
   let createdProvisionalScores = 0;
   let alreadyPresentProvisionalScores = 0;
+  let malformedSkippedProvisionalScores = 0;
   let missingMemberSkippedProvisionalScores = 0;
   const importedCountsByMemberId = new Map();
   const importedMemberIds = new Set();
@@ -374,9 +376,20 @@ const reconcileRoundProvisionalScores = async ({
     }
 
     if (!Number.isFinite(provisionalRow.aggregateScore)) {
-      throw new Error(
-        `Legacy provisional score for round ${roundId} submission ${provisionalRow.legacySubmissionId} (coder ${provisionalRow.coderId}) is missing numeric submission_points.`
-      );
+      malformedSkippedProvisionalScores += 1;
+      skippedProvisionalRecords.push({
+        legacyRoundId: roundId,
+        memberId,
+        memberHandle: memberHandle || undefined,
+        coderIds: [String(provisionalRow.coderId || "").trim()].filter(Boolean),
+        reasonCode: MALFORMED_PROVISIONAL_SCORE_REASON_CODE,
+        affectedSurfaces: ["provisional-score"],
+        legacySubmissionId: provisionalRow.legacySubmissionId,
+        counts: {
+          provisionalScore: 1,
+        },
+      });
+      continue;
     }
 
     const importedSubmission = importedSubmissionByLegacySubmissionId.get(
@@ -439,6 +452,7 @@ const reconcileRoundProvisionalScores = async ({
       createdProvisionalScores + alreadyPresentProvisionalScores,
     alreadyPresentProvisionalScores,
     createdProvisionalScores,
+    malformedSkippedProvisionalScores,
     missingMemberSkippedProvisionalScores,
     importedDistinctSubmitters: importedMemberIds.size,
     missingMemberDistinctSubmitters: missingMemberIdsObserved.size,

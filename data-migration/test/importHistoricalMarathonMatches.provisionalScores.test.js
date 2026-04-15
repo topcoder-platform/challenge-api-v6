@@ -194,6 +194,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       importedProvisionalScores: 2,
       alreadyPresentProvisionalScores: 1,
       createdProvisionalScores: 1,
+      malformedSkippedProvisionalScores: 0,
       missingMemberSkippedProvisionalScores: 1,
       importedDistinctSubmitters: 1,
       missingMemberDistinctSubmitters: 1,
@@ -240,6 +241,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       importedProvisionalScores: 2,
       alreadyPresentProvisionalScores: 2,
       createdProvisionalScores: 0,
+      malformedSkippedProvisionalScores: 0,
       missingMemberSkippedProvisionalScores: 1,
       importedDistinctSubmitters: 1,
       missingMemberDistinctSubmitters: 1,
@@ -259,6 +261,85 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
         }),
       ],
     });
+  });
+
+  test("skips malformed provisional rows with missing numeric submission_points and continues importing valid rows", async () => {
+    const rowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longSubmissionPattern: "^long_submission_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+
+    const malformedRows = rowsByRoundId.get("9892").map((row) =>
+      row.legacySubmissionId === "10010001"
+        ? { ...row, aggregateScore: null }
+        : row
+    );
+    rowsByRoundId.set("9892", malformedRows);
+
+    const created = [];
+    const provisionalScoreStore = {
+      listImportedNonExampleSubmissionsByLegacySubmissionId: async () =>
+        new Map([
+          ["10010001", { id: "sub-10010001", memberId: "1", legacySubmissionId: "10010001" }],
+          ["10010003", { id: "sub-10010003", memberId: "1", legacySubmissionId: "10010003" }],
+          ["10020001", { id: "sub-10020001", memberId: "2", legacySubmissionId: "10020001" }],
+        ]),
+      listExistingProvisionalSummationsBySubmissionId: async () => new Map(),
+      createProvisionalSummation: async (payload) => {
+        created.push(payload);
+      },
+    };
+
+    const result = await reconcileRoundProvisionalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      provisionalRowsByRoundId: rowsByRoundId,
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+        ["2", { coderId: "2", memberId: 2, memberHandle: "bravo" }],
+      ]),
+      provisionalScoreStore,
+    });
+
+    expect(result).toEqual({
+      legacyNonExampleProvisionalScores: 3,
+      legacyExampleOnlyFinalistProvisionalScores: 0,
+      importedProvisionalScores: 2,
+      alreadyPresentProvisionalScores: 0,
+      createdProvisionalScores: 2,
+      malformedSkippedProvisionalScores: 1,
+      missingMemberSkippedProvisionalScores: 0,
+      importedDistinctSubmitters: 2,
+      missingMemberDistinctSubmitters: 0,
+      importedProvisionalCountsByMemberId: {
+        1: 1,
+        2: 1,
+      },
+      skippedProvisionalRecords: [
+        expect.objectContaining({
+          legacyRoundId: "9892",
+          memberId: "1",
+          reasonCode: "malformed-provisional-score",
+          affectedSurfaces: ["provisional-score"],
+          legacySubmissionId: "10010001",
+          counts: {
+            provisionalScore: 1,
+          },
+        }),
+      ],
+    });
+    expect(created).toEqual([
+      expect.objectContaining({
+        submissionId: "sub-10010003",
+        aggregateScore: 8.25,
+      }),
+      expect.objectContaining({
+        submissionId: "sub-10020001",
+        aggregateScore: 7,
+      }),
+    ]);
   });
 
   test("loads the latest example-only finalist provisional row when requested", async () => {
