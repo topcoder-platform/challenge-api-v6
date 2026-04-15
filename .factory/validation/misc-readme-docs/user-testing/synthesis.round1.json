@@ -1,0 +1,28 @@
+{
+  "milestone": "misc-readme-docs",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "notes": [
+    "No validation-contract assertion IDs are mapped to misc-readme-docs, so validation-state.json remains unchanged.",
+    "Validation for round 1 used synthetic smoke flow MISC-README-DOCS-SMOKE-001 against the importer README and documented read-only challenge lookup surface."
+  ],
+  "manualChecks": [
+    {
+      "id": "MISC-README-DOCS-SMOKE-001",
+      "status": "pass",
+      "flowReport": ".factory/validation/misc-readme-docs/user-testing/flows/readme-rerun-operator-guidance.json",
+      "summary": "The README contained standard rerun and targeted-rerun steps, challenge-id lookup guidance, SUBMISSION_ARCHIVE_DIR setup, description precedence, idempotency notes, and malformed provisional-score reporting; `node ... --help` exposed the documented flags; and the documented curl lookup for round 17391 returned exactly one challenge id `b983de6f-cc7f-463e-867c-87e54f3b72f1`."
+    }
+  ],
+  "appliedUpdates": [],
+  "previousRound": null
+}

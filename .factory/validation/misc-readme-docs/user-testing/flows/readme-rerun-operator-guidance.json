@@ -1,0 +1,92 @@
+{
+  "groupId": "readme-rerun-operator-guidance",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-15T23:31:16.760760+00:00",
+  "isolation": {
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "flowReportPath": "/home/jmgasper/Documents/Git/v6/challenge-api-v6/.factory/validation/misc-readme-docs/user-testing/flows/readme-rerun-operator-guidance.json",
+    "evidenceDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-readme-docs/readme-rerun-operator-guidance",
+    "readmeUnderTest": "/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration/MARATHON_README.md",
+    "completedImplementationFeature": "mm-importer-readme-rerun-steps",
+    "legacyRoundId": "17391",
+    "expectedChallengeId": "b983de6f-cc7f-463e-867c-87e54f3b72f1",
+    "surface": "importer CLI + API verification",
+    "validationStateUpdate": "do-not-update-validation-state-json",
+    "syntheticAssertionId": "MISC-README-DOCS-SMOKE-001",
+    "contractAssertionIds": [],
+    "readOnlyBoundary": "Only local file reads, node --help, curl GET requests, and evidence/report file creation were used."
+  },
+  "toolsUsed": [
+    "Read",
+    "node",
+    "curl",
+    "jq",
+    "python3"
+  ],
+  "commandsRun": [
+    "cp \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration/MARATHON_README.md\" \"/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-readme-docs/readme-rerun-operator-guidance/MARATHON_README.md\"",
+    "python3 <readme topic check script over MARATHON_README.md>",
+    "node \"/home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration/src/scripts/importHistoricalMarathonMatches.js\" --help",
+    "curl -sS -D \"/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup.headers.txt\" \"https://api.topcoder-dev.com/v6/challenges?legacyId=17391\" -o \"/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup.json\" -w \"%{http_code}\\n\"",
+    "curl -s \"https://api.topcoder-dev.com/v6/challenges?legacyId=17391\" | jq -r '.[0].id'",
+    "python3 <parse README/help/lookup evidence into JSON checks and flow report>"
+  ],
+  "assertions": [
+    {
+      "id": "MISC-README-DOCS-SMOKE-001",
+      "title": "README rerun guidance is practical and verifiable from the documented read-only operator surface",
+      "status": "pass",
+      "contractAssertionIds": [],
+      "validationStateUpdate": "do-not-update-validation-state-json",
+      "steps": [
+        {
+          "action": "Review the importer README for rerun operator guidance.",
+          "expected": "README covers standard rerun, targeted rerun patch mode, challenge-id lookup, SUBMISSION_ARCHIVE_DIR setup, description precedence, idempotent rerun expectations, and malformed provisional-score skip/report behavior.",
+          "observed": "The README snapshot contains all requested guidance: standard full apply rerun (line 236), targeted rerun patch mode (line 258), explicit legacyId challenge lookup via curl (line 275), SUBMISSION_ARCHIVE_DIR export/setup (line 283), description precedence problem_text HTML -> component_text Markdown -> preserve existing description (lines 300-302), idempotent rerun language for both standard and targeted reruns (lines 250 and 304), and malformed provisional-score skip/report behavior with reasonCode=malformed-provisional-score (line 253)."
+        },
+        {
+          "action": "Check the importer help output in read-only mode.",
+          "expected": "node ... --help exits successfully and documents the CLI surface referenced by the README, including --apply, --dry-run, --round-id, --round-ids, --skipped-file, --targeted-rerun, and --challenge-id.",
+          "observed": "The help command exited 0 and the captured help text listed all required flags: --apply, --dry-run, --round-id, --round-ids, --skipped-file, --targeted-rerun, --challenge-id. The usage header and apply-mode section matched the README command surface."
+        },
+        {
+          "action": "Follow the documented challenge-id lookup step for round 17391 using curl in read-only mode.",
+          "expected": "The shared fixture resolves to exactly one challenge and jq extracts challenge id b983de6f-cc7f-463e-867c-87e54f3b72f1.",
+          "observed": "GET /v6/challenges?legacyId=17391 returned HTTP 200 with a one-item JSON array; the only returned id was b983de6f-cc7f-463e-867c-87e54f3b72f1. The documented curl|jq pipeline exited 0 and printed b983de6f-cc7f-463e-867c-87e54f3b72f1."
+        },
+        {
+          "action": "Assess whether an operator can prepare for rerun execution without extra undocumented steps.",
+          "expected": "The README should be sufficient for rerun preparation on the documented read-only surface.",
+          "observed": "Pass. The README was internally consistent with the live CLI help and shared-fixture challenge lookup, and this smoke run did not require any extra undocumented preparation step beyond the instructions already present in the README."
+        }
+      ],
+      "evidence": {
+        "readmeSnapshot": "misc-readme-docs/readme-rerun-operator-guidance/MARATHON_README.md",
+        "readmeTopicCheck": "misc-readme-docs/readme-rerun-operator-guidance/readme-topic-check.json",
+        "help": {
+          "stdout": "misc-readme-docs/readme-rerun-operator-guidance/importer-help.txt",
+          "stderr": "misc-readme-docs/readme-rerun-operator-guidance/importer-help.stderr.log",
+          "exitCode": "misc-readme-docs/readme-rerun-operator-guidance/importer-help.exitcode.txt",
+          "check": "misc-readme-docs/readme-rerun-operator-guidance/importer-help-check.json"
+        },
+        "lookup": {
+          "headers": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup.headers.txt",
+          "body": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup.json",
+          "httpCode": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup.httpcode.txt",
+          "jqResult": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup-id.txt",
+          "jqStderr": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup-id.stderr.log",
+          "jqExitCode": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup-id.exitcode.txt",
+          "check": "misc-readme-docs/readme-rerun-operator-guidance/challenge-17391-lookup-check.json"
+        },
+        "network": [
+          "GET https://api.topcoder-dev.com/v6/challenges?legacyId=17391 -> 200"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "MISC-README-DOCS-SMOKE-001 passed. The README includes the requested rerun-preparation guidance, the importer help output exposes the documented flags, and the read-only challenge lookup for round 17391 resolved exactly one challenge with id b983de6f-cc7f-463e-867c-87e54f3b72f1; validation-state.json was not updated."
+}
