@@ -1,0 +1,111 @@
+{
+  "groupId": "round3-no-source-preserve",
+  "testedAt": "2026-04-15T04:31:11.346150+00:00",
+  "isolation": {
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "flowReportPath": "/home/jmgasper/Documents/Git/v6/challenge-api-v6/.factory/validation/followup-content-archives/user-testing/flows/round3-no-source-preserve.json",
+    "evidenceDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round3/no-source-preserve",
+    "archiveDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round3/no-source-preserve/archive-dir",
+    "tmpDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round3/no-source-preserve/tmp",
+    "legacyRoundId": "17391",
+    "challengeId": "b983de6f-cc7f-463e-867c-87e54f3b72f1"
+  },
+  "toolsUsed": [
+    "node",
+    "python3",
+    "challenge-api"
+  ],
+  "commandsRun": [
+    "python3 availability check over 237 exported no-source Marathon Match rounds -> followup-content-archives/round3/no-source-preserve/current-fixture-availability.json",
+    "source \"$HOME/.config/nvm/nvm.sh\" && source .env.importer.local && nvm use 18.19.0 >/dev/null && node data-migration/src/scripts/importHistoricalMarathonMatches.js --dry-run --round-id 17391",
+    "source \"$HOME/.config/nvm/nvm.sh\" && source .env.importer.local && nvm use 18.19.0 >/dev/null && node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 17391",
+    "python3 challenge API lookup for legacyId=17391 before/after create and before/after targeted rerun",
+    "source \"$HOME/.config/nvm/nvm.sh\" && source .env.importer.local && nvm use 18.19.0 >/dev/null && export SUBMISSION_ARCHIVE_DIR=<isolated archive dir> && node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17391 --challenge-id b983de6f-cc7f-463e-867c-87e54f3b72f1"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-005",
+      "title": "When neither usable problem text nor usable component_text Markdown exists, targeted rerun preserves the placeholder or fallback description",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Check whether any exported no-source Marathon Match round is already imported in the shared dev environment.",
+          "expected": "Reuse an existing imported no-source fixture if one exists.",
+          "observed": "Queried 237 exported no-source Marathon Match rounds; imported count was 0."
+        },
+        {
+          "action": "Select a create-path no-source round and run dry-run planning.",
+          "expected": "Find a currently unimported exported Marathon Match round whose dry-run decision is create.",
+          "observed": "Round 17391 was selected because it was the only export-backed no-source round with mapped component ids; dry-run returned decision=create with no matching existing challenge."
+        },
+        {
+          "action": "Inspect legacy round/component/problem source data for round 17391.",
+          "expected": "No usable problem.problem_text and no usable component.component_text Markdown source.",
+          "observed": "round_type_id=13; component_id=-8 mapped to problem_id=-1; problem text usable=False; component Markdown usable=False; resolved description source=None."
+        },
+        {
+          "action": "Run the standard importer apply for round 17391 to create the fixture.",
+          "expected": "Create/import the round in the shared dev environment.",
+          "observed": "The apply run created challenge b983de6f-cc7f-463e-867c-87e54f3b72f1 with placeholder description but then exited with `Legacy provisional score for round 17391 submission -403380560001 (coder 22836077) is missing numeric submission_points.`"
+        },
+        {
+          "action": "Fetch the created challenge before targeted rerun.",
+          "expected": "Challenge detail is readable and shows the pre-rerun placeholder/fallback description.",
+          "observed": "GET /v6/challenges/b983de6f-cc7f-463e-867c-87e54f3b72f1 returned description `Imported historical Marathon Match from legacy round 17391`."
+        },
+        {
+          "action": "Run targeted rerun with explicit challenge-id override and isolated SUBMISSION_ARCHIVE_DIR.",
+          "expected": "Description is preserved because no usable legacy source exists; archive/url backfill may still occur.",
+          "observed": "Targeted rerun returned status `targeted-rerun-preserved`; descriptionUpdated=false; descriptionSource=`existing-description-preserved-no-usable-legacy-problem-text`; archivesWritten=248; urlsUpdated=248."
+        },
+        {
+          "action": "Fetch the challenge again after targeted rerun and compare descriptions.",
+          "expected": "Post-rerun description exactly matches the pre-rerun placeholder/fallback description.",
+          "observed": "Pre/post description SHA256 matched (31f0618c74a55037e564bd06f128fac04c92233d61118d71bef7c46d0f27ea46); description remained `Imported historical Marathon Match from legacy round 17391`."
+        }
+      ],
+      "evidence": {
+        "availabilityCheck": "followup-content-archives/round3/no-source-preserve/current-fixture-availability.json",
+        "candidateAnalysis": "followup-content-archives/round3/no-source-preserve/candidate-analysis.json",
+        "legacyLookup": "followup-content-archives/round3/no-source-preserve/legacy-source-lookup-round-17391.json",
+        "preCreateChallengeLookup": "followup-content-archives/round3/no-source-preserve/challenge-api-pre-create-round-17391.json",
+        "postApplyChallengeLookup": "followup-content-archives/round3/no-source-preserve/challenge-api-post-apply-round-17391.json",
+        "preRerunChallengeDetail": "followup-content-archives/round3/no-source-preserve/challenge-api-pre-rerun-detail-round-17391.json",
+        "postRerunChallengeDetail": "followup-content-archives/round3/no-source-preserve/challenge-api-post-rerun-detail-round-17391.json",
+        "verificationSummary": "followup-content-archives/round3/no-source-preserve/verification-summary-round-17391.json",
+        "createApplyStdout": "followup-content-archives/round3/no-source-preserve/create-apply.stdout.log",
+        "createApplyStderr": "followup-content-archives/round3/no-source-preserve/create-apply.stderr.log",
+        "targetedRerunStdout": "followup-content-archives/round3/no-source-preserve/targeted-rerun.stdout.log",
+        "targetedRerunStderr": "followup-content-archives/round3/no-source-preserve/targeted-rerun.stderr.log",
+        "network": [
+          "GET https://api.topcoder-dev.com/v6/challenges?legacyId=17391&perPage=100 -> 200 [] before create",
+          "GET https://api.topcoder-dev.com/v6/challenges?legacyId=17391&perPage=100 -> 200 [b983de6f-cc7f-463e-867c-87e54f3b72f1] after apply attempt",
+          "GET https://api.topcoder-dev.com/v6/challenges/b983de6f-cc7f-463e-867c-87e54f3b72f1 -> 200 before targeted rerun",
+          "GET https://api.topcoder-dev.com/v6/challenges/b983de6f-cc7f-463e-867c-87e54f3b72f1 -> 200 after targeted rerun"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "No already-imported exported Marathon Match no-source fixture existed in the shared dev environment.",
+      "resolved": true,
+      "resolution": "Queried all 237 exported no-source Marathon Match rounds, then used round 17391 because it was the only export-backed no-source round with mapped component ids and a create-path dry-run.",
+      "affectedAssertions": [
+        "VAL-FOLLOWUP-005"
+      ]
+    },
+    {
+      "description": "The standard create apply for round 17391 exited on a legacy provisional-score data issue after the challenge row had already been created.",
+      "resolved": true,
+      "resolution": "Confirmed the apply created challenge b983de6f-cc7f-463e-867c-87e54f3b72f1 with the placeholder description, then validated the targeted rerun against that created challenge because the assertion depends on preserving an existing description when no usable legacy source exists.",
+      "affectedAssertions": [
+        "VAL-FOLLOWUP-005"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "VAL-FOLLOWUP-005 passed using new fixture round 17391 / challenge b983de6f-cc7f-463e-867c-87e54f3b72f1. The targeted rerun preserved the placeholder description exactly and also wrote 248 local archives / updated 248 submission URLs; the initial create apply had a non-blocking provisional-score error after creating the challenge."
+}

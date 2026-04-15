@@ -1,45 +1,29 @@
 {
   "milestone": "followup-content-archives",
-  "round": 2,
-  "status": "fail",
+  "round": 3,
+  "status": "pass",
   "assertionsSummary": {
-    "total": 8,
-    "passed": 7,
+    "total": 1,
+    "passed": 1,
     "failed": 0,
-    "blocked": 1
+    "blocked": 0
   },
   "passedAssertions": [
-    "VAL-FOLLOWUP-001",
-    "VAL-FOLLOWUP-002",
-    "VAL-FOLLOWUP-003",
-    "VAL-FOLLOWUP-004",
-    "VAL-FOLLOWUP-006",
-    "VAL-FOLLOWUP-007",
-    "VAL-FOLLOWUP-008"
+    "VAL-FOLLOWUP-005"
   ],
   "failedAssertions": [],
-  "blockedAssertions": [
-    {
-      "id": "VAL-FOLLOWUP-005",
-      "blockedBy": "No already-imported exported Marathon Match challenge currently satisfies the no-source preserve precondition in the shared environment/export set; export-wide search found 237 no-source Marathon Match rounds in /mnt/Informix, but none are imported."
-    }
-  ],
+  "blockedAssertions": [],
   "appliedUpdates": [
     {
       "target": "user-testing.md",
-      "description": "Documented that follow-up round 2 restored positive apply-mode validation: raw-HTML targeted reruns now pass on round 17948, XML-fallback create-path validation now passes on round 10758, and XML-fallback targeted reruns now pass on round 13897.",
+      "description": "Recorded that follow-up round 3 resolved the no-source preserve gap by creating round 17391 as challenge b983de6f-cc7f-463e-867c-87e54f3b72f1 and then proving targeted rerun preserves its placeholder description while backfilling 248 local archives and submission URLs.",
       "source": "flow-report"
     },
     {
       "target": "user-testing.md",
-      "description": "Recorded current fixture availability: round 10015 is not imported in the shared dev environment, round 10758 is now imported as challenge 324a7cf2-f967-4578-9012-55be2730e2b0, and round 13897 is no longer a placeholder-description candidate after the successful rerun patch.",
-      "source": "flow-report"
-    },
-    {
-      "target": "user-testing.md",
-      "description": "Recorded the remaining no-source preserve blocker: export-wide search found 237 no-source Marathon Match rounds, but none are already imported in the shared environment, so VAL-FOLLOWUP-005 currently lacks a valid fixture.",
+      "description": "Documented round 17391 as the shared-environment no-source preserve fixture for VAL-FOLLOWUP-005 and noted the non-blocking provisional-score data issue encountered during its initial create apply.",
       "source": "flow-report"
     }
   ],
-  "previousRound": ".factory/validation/followup-content-archives/user-testing/synthesis.round1.json"
+  "previousRound": ".factory/validation/followup-content-archives/user-testing/synthesis.round2.json"
 }
