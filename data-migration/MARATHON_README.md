@@ -250,7 +250,8 @@ Expected rerun behavior:
 - reruns are idempotent: already-imported records are reconciled as existing
   instead of duplicated
 - if legacy provisional rows are malformed, they are skipped/reported (not
-  fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact
+  fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact;
+  apply reruns continue and still complete successfully
 - existing `missing-member` skips remain deterministic and rerun-stable for
   members still absent from the target environment
 
@@ -261,6 +262,12 @@ Targeted rerun is explicit patch mode for already-imported rounds. It requires:
 - `--apply --targeted-rerun --round-id <id> --challenge-id <challengeId>`
 - exactly one selected round
 - a writable `SUBMISSION_ARCHIVE_DIR` (used to generate local zip archives)
+
+Canonical command shape:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id <id> --challenge-id <challengeId>
+```
 
 1. Look up the existing challenge id by legacy round id:
 
