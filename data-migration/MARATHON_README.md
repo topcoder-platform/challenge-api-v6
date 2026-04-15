@@ -231,6 +231,75 @@ Expected apply result:
 - `APPLY_SUMMARY.unmatched` is `0`
 - rounds show `created` or `existing` status as expected
 
+## Rerun operator workflows
+
+### Standard full apply rerun
+
+Use this when you want to rerun full reconciliation for a round that was
+already imported/backfilled:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js \
+  --apply \
+  --round-id <legacyRoundId> \
+  --skipped-file data-migration/out/historical-mm-skipped-<legacyRoundId>.json
+```
+
+Expected rerun behavior:
+
+- reruns are idempotent: already-imported records are reconciled as existing
+  instead of duplicated
+- if legacy provisional rows are malformed, they are skipped/reported (not
+  fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact
+- existing `missing-member` skips remain deterministic and rerun-stable for
+  members still absent from the target environment
+
+### Targeted rerun patch mode (description + submission archive/url only)
+
+Targeted rerun is explicit patch mode for already-imported rounds. It requires:
+
+- `--apply --targeted-rerun --round-id <id> --challenge-id <challengeId>`
+- exactly one selected round
+- a writable `SUBMISSION_ARCHIVE_DIR` (used to generate local zip archives)
+
+1. Look up the existing challenge id by legacy round id:
+
+```bash
+curl -s "https://api.topcoder-dev.com/v6/challenges?legacyId=<legacyRoundId>" \
+  | jq -r '.[0].id'
+```
+
+2. Ensure `SUBMISSION_ARCHIVE_DIR` is configured and writable (export in-shell
+if needed, instead of editing committed env files):
+
+```bash
+export SUBMISSION_ARCHIVE_DIR=/tmp/mm-submission-archives
+mkdir -p "$SUBMISSION_ARCHIVE_DIR"
+```
+
+3. Run targeted rerun with explicit override:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js \
+  --apply \
+  --targeted-rerun \
+  --round-id <legacyRoundId> \
+  --challenge-id <challengeId> \
+  --skipped-file data-migration/out/historical-mm-skipped-<legacyRoundId>.json
+```
+
+Description source precedence in targeted rerun:
+
+1. use raw legacy `problem.problem_text` HTML when usable
+2. otherwise use Markdown converted from legacy `component.component_text` XML
+3. if neither source is usable, preserve the existing description
+
+Targeted rerun is patch-only and idempotent:
+
+- it may patch only challenge `description` and submission archive/url data
+- it must not mutate phases, resources, or review-summation identities
+- rerunning the same targeted patch converges without creating duplicates
+
 ## Recommended rollout sequence
 
 1. Run `--dry-run` for a single round.
