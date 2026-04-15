@@ -1,6 +1,6 @@
 {
   "milestone": "misc-readme-docs",
-  "round": 1,
+  "round": 2,
   "status": "pass",
   "validatorsRun": {
     "test": {
@@ -27,20 +27,7 @@
   },
   "blockingIssues": [],
   "appliedUpdates": [],
-  "suggestedGuidanceUpdates": [
-    {
-      "target": "skill",
-      "suggestion": "Update `scrutiny-validator` to describe a worker-safe fallback when Task-based reviewer subagents cannot launch in mission worker sessions, such as performing the review inline and writing the review JSON directly.",
-      "evidence": "Both Task attempts in this run (`scrutiny-feature-reviewer` and a fallback `worker` review task) exited immediately with `insufficient permission to proceed`, so the milestone review had to be completed inline from the current file plus worker handoff evidence.",
-      "isSystemic": true
-    },
-    {
-      "target": "skill",
-      "suggestion": "Document how validation workers should finish required `.factory/validation/...` commit steps when git CLI reads/writes are confirmation-blocked, or explicitly delegate the commit to the orchestrator in that scenario.",
-      "evidence": "This worker session could not execute read-only git commands (`git status`, `git diff`, `git ls-files`) because the mission environment required confirmation that worker sessions cannot provide, which prevents the commit flow currently mandated by `scrutiny-validator` and `mission-worker-base`.",
-      "isSystemic": true
-    }
-  ],
+  "suggestedGuidanceUpdates": [],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": ".factory/validation/misc-readme-docs/scrutiny/synthesis.round1.json"
 }
