@@ -1,0 +1,87 @@
+{
+  "groupId": "round2-raw-problem-html",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-15T00:27:26.127Z",
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-001",
+      "status": "pass",
+      "reason": "Round 10015 is unavailable in this environment and candidate search found no imported raw-problem-html mismatch fixture, so round 17948 was used as the allowed fallback. Its legacy problem.problem_text is usable raw HTML, the pre-rerun challenge description already matches that HTML exactly, and both successful targeted reruns reported descriptionSource=legacy-problem-text with reason targeted-rerun-description-already-matched-legacy-problem-text, proving raw HTML kept precedence over any XML fallback on the positive rerun path.",
+      "evidence": [
+        "challenge-query-10015.json",
+        "candidate-search.json",
+        "legacy-problem-mapping-17948.json",
+        "legacy-problem-17948.html",
+        "pre-snapshot.json",
+        "positive-first-rerun.stdout.txt",
+        "positive-second-rerun.stdout.txt",
+        "analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-002",
+      "status": "pass",
+      "reason": "The submissions API omits a usable persisted url surface here, so read-only review DB snapshots were used. Across both successful targeted reruns, the target challenge kept the same 370 legacySubmissionId values and the same 370 review-DB submission rows; every row matched the deterministic https://s3.amazonaws.com/topcoder-submissions/<generated-file>.zip pattern, the assigned archive dir contained exactly one matching zip per submission with no filename/url collisions, and the inspected sample archive 108839490001-546ad4972d0e.zip contained the expected single empty text file matching the legacy submission text.",
+      "evidence": [
+        "pre-snapshot.json",
+        "post-first-snapshot.json",
+        "post-second-snapshot.json",
+        "legacy-submission-summary-17948.json",
+        "sample-archive-inspection.json",
+        "submission-url-mapping-post-second.json",
+        "positive-first-rerun.stdout.txt",
+        "positive-second-rerun.stdout.txt",
+        "analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-004",
+      "status": "pass",
+      "reason": "Pre vs post-first vs post-second snapshots show the target challenge id and every non-description challenge field, phase, resource, submission (non-url), and review surface unchanged, while the unselected control round 10815 also remained unchanged. The only observed writable side effect was the dedicated local archive directory changing from 0 to 370 deterministic zip files on the first rerun and then preserving the same archive filename/content set on the second rerun.",
+      "evidence": [
+        "pre-snapshot.json",
+        "post-first-snapshot.json",
+        "post-second-snapshot.json",
+        "positive-first-rerun.stdout.txt",
+        "positive-second-rerun.stdout.txt",
+        "analysis.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python"
+  ],
+  "commands": [
+    "curl -sS \"https://api.topcoder-dev.com/v6/challenges?legacyId=10015\" > challenge-query-10015.json",
+    "curl -sS \"https://api.topcoder-dev.com/v6/challenges?legacyId=17948\" > challenge-query-17948.json",
+    "node data-migration/src/scripts/importHistoricalMarathonMatches.js --dry-run --round-id 17948 --skipped-file <evidence>/dry-run-skipped-17948.json",
+    "REVIEW_TOKEN=$(node get_token.js | tail -n 1) node capture_snapshot.js --output pre-snapshot.json --archive-dir <assigned archives dir> --target-round-id 17948 --target-challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978 --control-round-id 10815 --control-challenge-id 5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+    "SUBMISSION_ARCHIVE_DIR=<assigned archives dir> node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17948 --challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978",
+    "REVIEW_TOKEN=$(node get_token.js | tail -n 1) node capture_snapshot.js --output post-first-snapshot.json --archive-dir <assigned archives dir> --target-round-id 17948 --target-challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978 --control-round-id 10815 --control-challenge-id 5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+    "SUBMISSION_ARCHIVE_DIR=<assigned archives dir> node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17948 --challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978",
+    "REVIEW_TOKEN=$(node get_token.js | tail -n 1) node capture_snapshot.js --output post-second-snapshot.json --archive-dir <assigned archives dir> --target-round-id 17948 --target-challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978 --control-round-id 10815 --control-challenge-id 5fa76bd9-da55-422d-8d4c-4f0155dc62c5"
+  ],
+  "frictions": [
+    {
+      "description": "Fixture round 10015 is not imported in the shared dev environment and candidate search found no already-imported raw-problem-html mismatch fixture, so the allowed fallback fixture 17948 had to be used for the positive rerun path.",
+      "resolved": true,
+      "resolution": "Used round 17948 / challenge 8d6775ad-2235-4a4d-9daa-062bd4417978 and documented that the evidence is an already-matched positive path rather than a visible description-delta fixture.",
+      "affectedAssertions": [
+        "VAL-FOLLOWUP-001"
+      ]
+    },
+    {
+      "description": "The submissions API does not expose usable persisted submission.url values in this environment.",
+      "resolved": true,
+      "resolution": "Captured read-only review DB submission-url snapshots alongside the API snapshots to prove the full legacySubmissionId -> filename -> url mapping.",
+      "affectedAssertions": [
+        "VAL-FOLLOWUP-002",
+        "VAL-FOLLOWUP-004"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "Validated round 17948 with control round 10815. VAL-FOLLOWUP-001 passed via the only available already-matched raw-HTML positive rerun path, VAL-FOLLOWUP-002 passed with full 370-row deterministic archive/url mapping plus sample zip inspection, and VAL-FOLLOWUP-004 passed with patch-only stability across target/control API surfaces and second-rerun idempotency."
+}

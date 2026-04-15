@@ -1,0 +1,96 @@
+{
+  "groupId": "round2-xml-fallback",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-15T00:25:04.890257+00:00",
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-006",
+      "status": "pass",
+      "reason": "Round 10758 was absent before apply, the standard importer created challenge 324a7cf2-f967-4578-9012-55be2730e2b0, and the persisted description exactly matched Markdown derived from component 6775 instead of the fallback placeholder.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-pre-challenges.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-apply.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-post-create-challenge-list.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-post-create-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-expected-description.md",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/xml-fallback-analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-007",
+      "status": "pass",
+      "reason": "Targeted rerun on already-imported round 13897 with challenge override a15cbb04-a0d3-4647-85bd-23d8d11e9f3f updated the placeholder description to the exact Markdown derived from component 9378 while leaving non-description challenge fields and linked-record identity sets stable.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-pre-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-targeted-rerun.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-post-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-expected-description.md",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-pre-resources.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-post-resources.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-pre-submissions.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-post-submissions.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-pre-reviewSummations.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-post-reviewSummations.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/9874-pre-control-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/9874-post-control-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/xml-fallback-analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-008",
+      "status": "pass",
+      "reason": "Both persisted XML-fallback descriptions (create-path 10758 and rerun 13897) were user-facing Markdown that matched the importer conversion output and contained no XML wrappers, serialized tags, CDATA markers, or hidden/internal test-case markers.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-source-component-preview.xml",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-source-component-preview.xml",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-post-create-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-post-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-expected-description.md",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/13897-expected-description.md",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/xml-fallback-analysis.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "node",
+    "python",
+    "Challenge API"
+  ],
+  "commands": [
+    {
+      "command": "python3 <preprobe extractor using /mnt/Informix + Challenge API> -> preprobe.json",
+      "exitCode": 0,
+      "observation": "Confirmed round 10758 as the preferred absent create-path XML-fallback fixture and round 13897 / challenge a15cbb04-a0d3-4647-85bd-23d8d11e9f3f as the preferred already-imported rerun fixture with a placeholder description."
+    },
+    {
+      "command": "python3 <pre-run snapshot capture> -> 10758-pre-*.json, 13897-pre-*.json, 9874-pre-control-*.json, pre-archive-dir.json",
+      "exitCode": 0,
+      "observation": "Captured 10758 absent before apply, 13897 placeholder description plus pre-run resource/submission/review counts, 9874 control challenge state, and an empty archive directory."
+    },
+    {
+      "command": "/home/jmgasper/.config/nvm/versions/node/v18.19.0/bin/node /home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 10758 --skipped-file /home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/round2/xml-rerun/10758-apply-skipped.json",
+      "exitCode": 0,
+      "observation": "Importer created challenge 324a7cf2-f967-4578-9012-55be2730e2b0 for round 10758 and reported created challenge status in 10758-apply.log."
+    },
+    {
+      "command": "python3 <post-create snapshot capture> -> 10758-post-create-*.json",
+      "exitCode": 0,
+      "observation": "Verified the newly created 10758 challenge description matched converted component_text Markdown, with 310 resources, 119 submissions, and 148 review summations visible after create-path apply."
+    },
+    {
+      "command": "/home/jmgasper/.config/nvm/versions/node/v18.19.0/bin/node /home/jmgasper/Documents/Git/v6/challenge-api-v6/data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 13897 --challenge-id a15cbb04-a0d3-4647-85bd-23d8d11e9f3f",
+      "exitCode": 0,
+      "observation": "Targeted rerun updated the 13897 challenge description from the placeholder to legacy component_text Markdown and wrote 1784 local archives while reporting no submission URL changes were needed."
+    },
+    {
+      "command": "python3 <post-run snapshot + comparison analysis> -> 13897-post-*.json, 9874-post-control-*.json, post-archive-dir.json, xml-fallback-analysis.json",
+      "exitCode": 0,
+      "observation": "Verified 13897 non-description challenge fields, resource tuple set, submission legacySubmissionId set, review ID set, and the 9874 control challenge remained unchanged while both XML-fallback descriptions passed wrapper/hidden-marker checks."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Validated rounds 10758 (create path) and 13897 (targeted rerun). VAL-FOLLOWUP-006, VAL-FOLLOWUP-007, and VAL-FOLLOWUP-008 all passed; 13897 patch-only checks and 9874 control snapshots stayed stable while 1784 rerun archive files were generated under the assigned archive directory."
+}
