@@ -386,6 +386,15 @@ const createReviewSubmissionStore = async ({
     if (columnsByName.has("submitter")) {
       selectedColumns.push(`"submitter"`);
     }
+    if (columnsByName.has("systemFileName")) {
+      selectedColumns.push(`"systemFileName"`);
+    }
+    if (columnsByName.has("virusScan")) {
+      selectedColumns.push(`"virusScan"`);
+    }
+    if (columnsByName.has("isFileSubmission")) {
+      selectedColumns.push(`"isFileSubmission"`);
+    }
 
     const rows = await reviewClient.$queryRawUnsafe(
       `SELECT ${selectedColumns.join(", ")}
@@ -405,6 +414,16 @@ const createReviewSubmissionStore = async ({
         legacySubmissionId,
         memberId: normalizeMemberId(row && row.memberId),
         submitter: row && row.submitter ? String(row.submitter) : null,
+        systemFileName:
+          row && row.systemFileName !== null && row.systemFileName !== undefined
+            ? String(row.systemFileName).trim()
+            : null,
+        virusScan:
+          row && (row.virusScan === true || row.virusScan === false) ? row.virusScan : null,
+        isFileSubmission:
+          row && (row.isFileSubmission === true || row.isFileSubmission === false)
+            ? row.isFileSubmission
+            : null,
       });
     });
     return byLegacyId;
@@ -499,9 +518,85 @@ const createReviewSubmissionStore = async ({
     );
   };
 
+  /**
+   * Backfills file-submission metadata for an already imported review submission row.
+   *
+   * @param {Object} params reconciliation parameters
+   * @param {string} params.challengeId v6 challenge identifier for the submission row
+   * @param {string} params.legacySubmissionId deterministic legacy submission identifier
+   * @param {Object} [params.existingSubmission] current row snapshot returned from
+   * listExistingSubmissionsByLegacyId
+   * @returns {Promise<boolean>} true when an UPDATE was issued, otherwise false
+   * @throws {Error} when legacySubmissionId is blank
+   */
+  const updateSubmissionMetadata = async ({
+    challengeId,
+    legacySubmissionId,
+    existingSubmission = null,
+  }) => {
+    const normalizedLegacySubmissionId = String(legacySubmissionId || "").trim();
+    if (!normalizedLegacySubmissionId) {
+      throw new Error("updateSubmissionMetadata requires legacySubmissionId.");
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      assignments.push(`"${columnName}" = $${values.length + 1}`);
+      values.push(value);
+    };
+
+    const currentSystemFileName =
+      existingSubmission &&
+      existingSubmission.systemFileName !== null &&
+      existingSubmission.systemFileName !== undefined
+        ? String(existingSubmission.systemFileName).trim()
+        : null;
+    const expectedArchiveFileName = columnsByName.has("systemFileName")
+      ? buildSubmissionArchiveFileName({
+        challengeId,
+        legacySubmissionId: normalizedLegacySubmissionId,
+      })
+      : null;
+    if (
+      columnsByName.has("systemFileName") &&
+      expectedArchiveFileName &&
+      currentSystemFileName !== expectedArchiveFileName
+    ) {
+      pushAssignment("systemFileName", expectedArchiveFileName);
+    }
+    if (columnsByName.has("virusScan") && (!existingSubmission || existingSubmission.virusScan !== true)) {
+      pushAssignment("virusScan", true);
+    }
+    if (
+      columnsByName.has("isFileSubmission") &&
+      (!existingSubmission || existingSubmission.isFileSubmission !== true)
+    ) {
+      pushAssignment("isFileSubmission", true);
+    }
+    if (assignments.length === 0) {
+      return false;
+    }
+    if (columnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+
+    values.push(challengeId);
+    values.push(normalizedLegacySubmissionId);
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET ${assignments.join(", ")}
+        WHERE "challengeId" = $${values.length - 1}
+          AND "legacySubmissionId" = $${values.length}`,
+      ...values
+    );
+    return true;
+  };
+
   return {
     listExistingSubmissionsByLegacyId,
     createSubmission,
+    updateSubmissionMetadata,
   };
 };
 
@@ -663,6 +758,13 @@ const reconcileRoundSubmissionHistory = async ({
         throw new Error(
           `Existing submission legacySubmissionId "${row.legacySubmissionId}" is linked to memberId ${existingMemberId} but legacy coder ${row.coderId} resolves to memberId ${memberId}.`
         );
+      }
+      if (typeof submissionStore.updateSubmissionMetadata === "function") {
+        await submissionStore.updateSubmissionMetadata({
+          challengeId,
+          legacySubmissionId: row.legacySubmissionId,
+          existingSubmission: existing,
+        });
       }
       alreadyPresentSubmissions += 1;
       incrementImportedCount(memberId);

@@ -322,4 +322,58 @@ describe("importHistoricalMarathonMatches submission history", () => {
       ACTIVE_SUBMISSION_STATUS,
     ]);
   });
+
+  test("review submission updates include file submission metadata when an existing row is missing it", async () => {
+    const reviewClient = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { columnName: "id", dataType: "character varying", udtName: "varchar" },
+          { columnName: "challengeId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "legacySubmissionId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "memberId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "submitter", dataType: "character varying", udtName: "varchar" },
+          { columnName: "submittedDate", dataType: "timestamp without time zone", udtName: "timestamp" },
+          { columnName: "systemFileName", dataType: "character varying", udtName: "varchar" },
+          { columnName: "virusScan", dataType: "boolean", udtName: "bool" },
+          { columnName: "isFileSubmission", dataType: "boolean", udtName: "bool" },
+          { columnName: "updatedBy", dataType: "character varying", udtName: "varchar" },
+        ])
+        .mockResolvedValueOnce([]),
+    };
+    const submissionStore = await createReviewSubmissionStore({
+      reviewClient,
+      actor: "importer",
+    });
+    const challengeId = "challenge-1";
+    const legacySubmissionId = "10010001";
+
+    const updated = await submissionStore.updateSubmissionMetadata({
+      challengeId,
+      legacySubmissionId,
+      existingSubmission: {
+        legacySubmissionId,
+        memberId: "1",
+        systemFileName: null,
+        virusScan: false,
+        isFileSubmission: false,
+      },
+    });
+
+    expect(updated).toBe(true);
+    const [updateSql, ...updateValues] = reviewClient.$queryRawUnsafe.mock.calls[1];
+    expect(updateSql).toContain('UPDATE "reviews"."submission"');
+    expect(updateSql).toContain('"systemFileName" = $1');
+    expect(updateSql).toContain('"virusScan" = $2');
+    expect(updateSql).toContain('"isFileSubmission" = $3');
+    expect(updateSql).toContain('"updatedBy" = $4');
+    expect(updateValues).toEqual([
+      buildSubmissionArchiveFileName({ challengeId, legacySubmissionId }),
+      true,
+      true,
+      "importer",
+      challengeId,
+      legacySubmissionId,
+    ]);
+  });
 });

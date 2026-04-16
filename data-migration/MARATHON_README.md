@@ -22,8 +22,8 @@ The script can:
   review database
 
 When the review submission table exposes `systemFileName`, `virusScan`, and
-`isFileSubmission`, new imported submissions set those fields to the generated
-zip filename, `true`, and `true` respectively.
+`isFileSubmission`, submission-history reconciliation sets or backfills those
+fields to the generated zip filename, `true`, and `true` respectively.
 
 The default mode is `--dry-run`. No writes happen unless `--apply` is provided.
 
@@ -253,6 +253,9 @@ Expected rerun behavior:
 
 - reruns are idempotent: already-imported records are reconciled as existing
   instead of duplicated
+- existing submissions are backfilled with deterministic `systemFileName`,
+  `virusScan=true`, and `isFileSubmission=true` when the review schema exposes
+  those columns
 - if legacy provisional rows are malformed, they are skipped/reported (not
   fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact;
   apply reruns continue and still complete successfully
