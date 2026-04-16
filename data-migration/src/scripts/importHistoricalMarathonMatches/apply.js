@@ -38,8 +38,7 @@ const {
   writeSubmissionArchiveZip,
 } = require("./submissionArchives");
 const {
-  isUsableProblemText,
-  isUsableComponentMarkdown,
+  resolveDescriptionCandidateFromCounters,
 } = require("./descriptionSourcing");
 const {
   TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
@@ -52,16 +51,15 @@ const buildFallbackImportedDescription = (legacyId) =>
   `Imported historical Marathon Match from legacy round ${legacyId}`;
 
 const resolveChallengeDescription = ({ legacyId, counters }) => {
-  const candidate = counters && counters.descriptionProblemText;
-  if (isUsableProblemText(candidate)) {
-    return String(candidate);
+  const descriptionCandidate = resolveDescriptionCandidateFromCounters(counters);
+  if (descriptionCandidate) {
+    return descriptionCandidate;
   }
-  const componentMarkdownCandidate =
-    counters && counters.descriptionComponentTextMarkdown;
-  if (isUsableComponentMarkdown(componentMarkdownCandidate)) {
-    return String(componentMarkdownCandidate);
-  }
-  return buildFallbackImportedDescription(legacyId);
+  return {
+    description: buildFallbackImportedDescription(legacyId),
+    descriptionFormat: "markdown",
+    source: "fallback-imported-description",
+  };
 };
 
 const parseRoundLegacyId = (roundId) => {
@@ -204,13 +202,15 @@ const buildChallengeCreateData = ({
       ? counters.exampleOnlyFinalistSubmissions
       : 0;
   const submissionCount = nonExampleSubmissionCount + exampleOnlyFinalistSubmissionCount;
+  const descriptionPayload = resolveChallengeDescription({ legacyId, counters });
 
   return {
     legacyId,
     name:
       String((round && (round.short_name || round.name)) || "").trim() ||
       `Historical Marathon Match ${legacyId}`,
-    description: resolveChallengeDescription({ legacyId, counters }),
+    description: descriptionPayload.description,
+    descriptionFormat: descriptionPayload.descriptionFormat,
     typeId: marathonTypeId,
     trackId: dataScienceTrackId,
     timelineTemplateId,
@@ -853,17 +853,17 @@ const runTargetedRerunMode = async ({
   const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
   const roundDataById = plan && plan.roundDataById instanceof Map ? plan.roundDataById : null;
   const counters = roundDataById ? roundDataById.get(selection.roundId) : null;
+  const descriptionCandidate = resolveDescriptionCandidateFromCounters(counters);
   const legacyProblemId = String(
     counters && counters.descriptionProblemId ? counters.descriptionProblemId : ""
   ).trim();
-  const candidateProblemText = counters && counters.descriptionProblemText;
   const legacyComponentId = String(
     counters && counters.descriptionComponentId ? counters.descriptionComponentId : ""
   ).trim();
-  const candidateComponentMarkdown =
-    counters && counters.descriptionComponentTextMarkdown;
-  const hasProblemTextUpdate = isUsableProblemText(candidateProblemText);
-  const hasComponentMarkdownUpdate = isUsableComponentMarkdown(candidateComponentMarkdown);
+  const hasProblemTextUpdate =
+    descriptionCandidate && descriptionCandidate.source === "legacy-problem-text";
+  const hasComponentMarkdownUpdate =
+    descriptionCandidate && descriptionCandidate.source === "legacy-component-text-markdown";
   const submissionArchiveReconciliation =
     await reconcileTargetedRerunSubmissionArchives({
       selection,
@@ -882,7 +882,7 @@ const runTargetedRerunMode = async ({
   let reason = "targeted-rerun-description-preserved-no-usable-legacy-problem-text";
   let status = "targeted-rerun-preserved";
 
-  if (hasProblemTextUpdate || hasComponentMarkdownUpdate) {
+  if (descriptionCandidate) {
     if (
       !prisma ||
       !prisma.challenge ||
@@ -893,12 +893,11 @@ const runTargetedRerunMode = async ({
         "Targeted rerun requires Prisma challenge.findUnique and challenge.update to apply idempotent description patches."
       );
     }
-    const nextDescription = hasProblemTextUpdate
-      ? String(candidateProblemText)
-      : String(candidateComponentMarkdown);
+    const nextDescription = descriptionCandidate.description;
+    const nextDescriptionFormat = descriptionCandidate.descriptionFormat;
     const existingChallenge = await prisma.challenge.findUnique({
       where: { id: selection.challengeId },
-      select: { description: true },
+      select: { description: true, descriptionFormat: true },
     });
     if (!existingChallenge) {
       throw new Error(
@@ -910,25 +909,34 @@ const runTargetedRerunMode = async ({
         ? existingChallenge.description
         : ""
     );
-    const descriptionMatches = existingDescription === nextDescription;
+    const existingDescriptionFormat = String(
+      existingChallenge.descriptionFormat !== null &&
+        existingChallenge.descriptionFormat !== undefined
+        ? existingChallenge.descriptionFormat
+        : ""
+    );
+    const descriptionStateMatches =
+      existingDescription === nextDescription &&
+      existingDescriptionFormat === nextDescriptionFormat;
 
     if (hasProblemTextUpdate) {
       descriptionSource = "legacy-problem-text";
-      reason = descriptionMatches
+      reason = descriptionStateMatches
         ? "targeted-rerun-description-already-matched-legacy-problem-text"
         : "targeted-rerun-description-updated-from-legacy-problem-text";
     } else {
       descriptionSource = "legacy-component-text-markdown";
-      reason = descriptionMatches
+      reason = descriptionStateMatches
         ? "targeted-rerun-description-already-matched-legacy-component-text-markdown"
         : "targeted-rerun-description-updated-from-legacy-component-text-markdown";
     }
 
-    if (!descriptionMatches) {
+    if (!descriptionStateMatches) {
       await prisma.challenge.update({
         where: { id: selection.challengeId },
         data: {
           description: nextDescription,
+          descriptionFormat: nextDescriptionFormat,
           updatedBy: String(actor || "").trim() || "historical-mm-importer",
         },
         select: { id: true },
@@ -954,7 +962,9 @@ const runTargetedRerunMode = async ({
         writesAttempted: hasWritesAttempted,
         descriptionUpdated,
         descriptionSource,
-        legacyProblemId: hasProblemTextUpdate && legacyProblemId ? legacyProblemId : null,
+        legacyProblemId: descriptionSource === "legacy-problem-text" && legacyProblemId
+          ? legacyProblemId
+          : null,
         ...(hasComponentMarkdownUpdate
           ? { legacyComponentId: legacyComponentId || null }
           : {}),

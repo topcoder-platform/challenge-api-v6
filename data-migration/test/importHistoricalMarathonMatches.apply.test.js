@@ -165,6 +165,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       trackId: "track-ds",
       timelineTemplateId: "timeline-mm",
       description: "Imported historical Marathon Match from legacy round 9892",
+      descriptionFormat: "markdown",
       status: "COMPLETED",
       currentPhaseNames: [],
       numOfRegistrants: 2,
@@ -224,6 +225,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     });
 
     expect(calls.createdChallenge.description).toBe(rawProblemHtml);
+    expect(calls.createdChallenge.descriptionFormat).toBe("html");
   });
 
   test("apply create-path falls back to mapped component_text markdown when problem text is unusable", async () => {
@@ -273,6 +275,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     });
 
     expect(calls.createdChallenge.description).toBe(markdownFallback);
+    expect(calls.createdChallenge.descriptionFormat).toBe("markdown");
   });
 
   test("apply create-path is idempotent when challenge already exists", async () => {
@@ -877,7 +880,10 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
       const prisma = {
         challenge: {
-          findUnique: jest.fn().mockResolvedValue({ description: "Old description" }),
+          findUnique: jest.fn().mockResolvedValue({
+            description: "Old description",
+            descriptionFormat: "markdown",
+          }),
           update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
         },
       };
@@ -931,7 +937,11 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
 
       expect(prisma.challenge.update).toHaveBeenCalledWith({
         where: { id: "challenge-1" },
-        data: { description: rawProblemHtml, updatedBy: "importer" },
+        data: {
+          description: rawProblemHtml,
+          descriptionFormat: "html",
+          updatedBy: "importer",
+        },
         select: { id: true },
       });
       expect(submissionArchiveStore.listSubmissionsByLegacyId).toHaveBeenCalledWith({
@@ -1006,7 +1016,10 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const componentMarkdown = "## Robot Routing\n\nPublic example only.";
       const prisma = {
         challenge: {
-          findUnique: jest.fn().mockResolvedValue({ description: "Old description" }),
+          findUnique: jest.fn().mockResolvedValue({
+            description: "Old description",
+            descriptionFormat: "html",
+          }),
           update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
         },
       };
@@ -1056,7 +1069,11 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
 
       expect(prisma.challenge.update).toHaveBeenCalledWith({
         where: { id: "challenge-1" },
-        data: { description: componentMarkdown, updatedBy: "importer" },
+        data: {
+          description: componentMarkdown,
+          descriptionFormat: "markdown",
+          updatedBy: "importer",
+        },
         select: { id: true },
       });
       expect(result.records).toEqual([
@@ -1076,6 +1093,90 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             targetedSubmissions: 1,
             archivesWritten: 1,
             urlsUpdated: 1,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
+        },
+      ]);
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode updates description format even when the description text already matches", async () => {
+    const archiveDir = buildArchiveDirPath("description-format-only");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: componentMarkdown,
+            descriptionFormat: null,
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          description: componentMarkdown,
+          descriptionFormat: "markdown",
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(result.records).toEqual([
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-applied",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-component-text-markdown",
+          legacyProblemId: null,
+          legacyComponentId: "5503",
+          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 0,
+            archivesWritten: 0,
+            urlsUpdated: 0,
             urlsAlreadyMatched: 0,
             archiveDirectory: archiveDir,
           },
@@ -1185,7 +1286,10 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
       const prisma = {
         challenge: {
-          findUnique: jest.fn().mockResolvedValue({ description: rawProblemHtml }),
+          findUnique: jest.fn().mockResolvedValue({
+            description: rawProblemHtml,
+            descriptionFormat: "html",
+          }),
           update: jest.fn(),
         },
       };
@@ -1226,7 +1330,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
 
       expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
         where: { id: "challenge-1" },
-        select: { description: true },
+        select: { description: true, descriptionFormat: true },
       });
       expect(prisma.challenge.update).not.toHaveBeenCalled();
       expect(result).toEqual({
@@ -1278,7 +1382,10 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       const componentMarkdown = "## Robot Routing\n\nPublic example only.";
       const prisma = {
         challenge: {
-          findUnique: jest.fn().mockResolvedValue({ description: componentMarkdown }),
+          findUnique: jest.fn().mockResolvedValue({
+            description: componentMarkdown,
+            descriptionFormat: "markdown",
+          }),
           update: jest.fn(),
         },
       };
@@ -1321,7 +1428,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
 
       expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
         where: { id: "challenge-1" },
-        select: { description: true },
+        select: { description: true, descriptionFormat: true },
       });
       expect(prisma.challenge.update).not.toHaveBeenCalled();
       expect(result).toEqual({

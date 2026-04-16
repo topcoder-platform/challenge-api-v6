@@ -300,9 +300,15 @@ node data-migration/src/scripts/importHistoricalMarathonMatches.js \
 
 Description source precedence in targeted rerun:
 
-1. use raw legacy `problem.problem_text` HTML when usable
+1. use raw legacy `problem.problem_text` only when it contains renderable HTML
 2. otherwise use Markdown converted from legacy `component.component_text` XML
 3. if neither source is usable, preserve the existing description
+
+Description writes also set `descriptionFormat` deterministically:
+
+- `html` when raw legacy `problem.problem_text` HTML is used
+- `markdown` when converted `component.component_text` content is used or when
+  fallback importer text is stored
 
 Targeted rerun is patch-only and idempotent:
 
