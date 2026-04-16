@@ -3,9 +3,15 @@ const os = require("os");
 const path = require("path");
 
 const {
+  ACTIVE_SUBMISSION_STATUS,
+  CONTEST_SUBMISSION_TYPE,
+  createReviewSubmissionStore,
   loadNonExampleLegacySubmissionRowsByRoundId,
   reconcileRoundSubmissionHistory,
 } = require("../src/scripts/importHistoricalMarathonMatches/submissionHistory");
+const {
+  buildSubmissionArchiveFileName,
+} = require("../src/scripts/importHistoricalMarathonMatches/submissionArchives");
 
 const writeJson = (baseDir, fileName, rootKey, rows) => {
   fs.writeFileSync(
@@ -253,6 +259,67 @@ describe("importHistoricalMarathonMatches submission history", () => {
         legacySubmissionId: "10030002",
         isSyntheticExampleOnlyFinalist: true,
       }),
+    ]);
+  });
+
+  test("review submission inserts include file submission metadata when the schema exposes those columns", async () => {
+    const reviewClient = {
+      $queryRawUnsafe: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { columnName: "id", dataType: "character varying", udtName: "varchar" },
+          { columnName: "challengeId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "legacySubmissionId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "memberId", dataType: "character varying", udtName: "varchar" },
+          { columnName: "submitter", dataType: "character varying", udtName: "varchar" },
+          { columnName: "submittedDate", dataType: "timestamp without time zone", udtName: "timestamp" },
+          { columnName: "systemFileName", dataType: "character varying", udtName: "varchar" },
+          { columnName: "virusScan", dataType: "boolean", udtName: "bool" },
+          { columnName: "isFileSubmission", dataType: "boolean", udtName: "bool" },
+          { columnName: "isExample", dataType: "boolean", udtName: "bool" },
+          { columnName: "createdBy", dataType: "character varying", udtName: "varchar" },
+          { columnName: "updatedBy", dataType: "character varying", udtName: "varchar" },
+          { columnName: "type", dataType: "USER-DEFINED", udtName: "SubmissionType" },
+          { columnName: "status", dataType: "USER-DEFINED", udtName: "SubmissionStatus" },
+        ])
+        .mockResolvedValueOnce([]),
+    };
+    const submissionStore = await createReviewSubmissionStore({
+      reviewClient,
+      actor: "importer",
+    });
+    const submittedDate = new Date("2020-01-01T00:00:00.000Z");
+    const challengeId = "challenge-1";
+    const legacySubmissionId = "10010001";
+
+    await submissionStore.createSubmission({
+      challengeId,
+      legacySubmissionId,
+      memberId: 1,
+      memberHandle: "alpha",
+      submittedDate,
+    });
+
+    const [insertSql, ...insertValues] = reviewClient.$queryRawUnsafe.mock.calls[1];
+    expect(insertSql).toContain('INSERT INTO "reviews"."submission"');
+    expect(insertSql).toContain('"systemFileName"');
+    expect(insertSql).toContain('"virusScan"');
+    expect(insertSql).toContain('"isFileSubmission"');
+    expect(insertValues).toEqual([
+      expect.any(String),
+      challengeId,
+      legacySubmissionId,
+      "1",
+      "alpha",
+      submittedDate,
+      buildSubmissionArchiveFileName({ challengeId, legacySubmissionId }),
+      true,
+      true,
+      false,
+      "importer",
+      "importer",
+      CONTEST_SUBMISSION_TYPE,
+      ACTIVE_SUBMISSION_STATUS,
     ]);
   });
 });

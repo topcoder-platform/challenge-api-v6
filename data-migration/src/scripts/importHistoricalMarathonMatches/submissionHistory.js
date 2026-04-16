@@ -3,6 +3,9 @@
 const crypto = require("crypto");
 
 const {
+  buildSubmissionArchiveFileName,
+} = require("./submissionArchives");
+const {
   ensureFileExists,
   listFilesByPattern,
   resolveFilePath,
@@ -418,6 +421,12 @@ const createReviewSubmissionStore = async ({
     if (!normalizedLegacySubmissionId) {
       throw new Error("createSubmission requires legacySubmissionId.");
     }
+    const archiveFileName = columnsByName.has("systemFileName")
+      ? buildSubmissionArchiveFileName({
+        challengeId,
+        legacySubmissionId: normalizedLegacySubmissionId,
+      })
+      : null;
 
     const derivedId = crypto
       .createHash("sha1")
@@ -447,6 +456,15 @@ const createReviewSubmissionStore = async ({
     }
     if (columnsByName.has("submittedDate") && submittedDate) {
       pushColumn("submittedDate", submittedDate);
+    }
+    if (columnsByName.has("systemFileName") && archiveFileName) {
+      pushColumn("systemFileName", archiveFileName);
+    }
+    if (columnsByName.has("virusScan")) {
+      pushColumn("virusScan", true);
+    }
+    if (columnsByName.has("isFileSubmission")) {
+      pushColumn("isFileSubmission", true);
     }
     if (columnsByName.has("isExample")) {
       pushColumn("isExample", false);

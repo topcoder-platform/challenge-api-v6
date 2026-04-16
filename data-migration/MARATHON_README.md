@@ -21,6 +21,10 @@ The script can:
 - import submission history, final scores, and provisional scores into the
   review database
 
+When the review submission table exposes `systemFileName`, `virusScan`, and
+`isFileSubmission`, new imported submissions set those fields to the generated
+zip filename, `true`, and `true` respectively.
+
 The default mode is `--dry-run`. No writes happen unless `--apply` is provided.
 
 ## Required legacy input files
