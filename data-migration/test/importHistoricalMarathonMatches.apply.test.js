@@ -796,6 +796,81 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     );
   });
 
+  test("targeted rerun mode accepts matched rounds that are unresolved only because member resolution is unavailable", async () => {
+    const archiveDir = buildArchiveDirPath("member-resolution-unavailable");
+    try {
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "unresolved",
+              reason: "target-member-resolution-unavailable",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([["9892", {}]]),
+        },
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map(),
+      });
+
+      expect(submissionArchiveStore.listSubmissionsByLegacyId).toHaveBeenCalledWith({
+        challengeId: "challenge-1",
+      });
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+            legacyProblemId: null,
+            reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
   test("targeted rerun mode backfills deterministic submission archives and URLs while applying mapped raw problem HTML", async () => {
     const archiveDir = buildArchiveDirPath("description-and-archives");
     try {

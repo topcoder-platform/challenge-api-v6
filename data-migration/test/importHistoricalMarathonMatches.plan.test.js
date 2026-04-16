@@ -2,6 +2,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const {
+  buildDryRunPlan,
+} = require("../src/scripts/importHistoricalMarathonMatches/planning");
+const {
+  TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+} = require("../src/scripts/importHistoricalMarathonMatches/targetMemberResolution");
 
 const scriptPath = path.resolve(
   __dirname,
@@ -288,5 +294,58 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(record.decision).toBe("unresolved");
     expect(record.reason).toBe("authoritative-existing-v6-discovery-unavailable");
     expect(record.matchedChallengeId).toBe(null);
+  });
+
+  test("matched existing challenges stay traceable when only member resolution is unavailable", async () => {
+    const plan = await buildDryRunPlan(
+      {
+        dataDir: fixtureDir,
+        cwd: fixtureDir,
+        roundIds: ["9892"],
+        roundFile: "round_1.json",
+        roundComponentFile: "round_component_1.json",
+        componentFile: "component_1.json",
+        problemFile: "problem_1.json",
+        longComponentStateFile: "long_component_state_1.json",
+        roundRegistrationPattern: "^round_registration_\\d+\\.json$",
+        userPattern: "^user_\\d+\\.json$",
+        longSubmissionPattern: "^long_submission_\\d+\\.json$",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+      },
+      new Map([
+        [
+          "9892",
+          {
+            legacyRoundId: "9892",
+            matchStatus: "safe",
+            reason: "existing-v6-challenge-found",
+            challengeId: "challenge-1",
+            existing: {
+              phases: 3,
+              resources: 0,
+              submissions: 0,
+              finalScores: 0,
+              provisionalScores: 0,
+            },
+          },
+        ],
+      ]),
+      {
+        authoritativeDiscovery: { available: true },
+        canonicalTimelineTemplate: {
+          resolved: true,
+          timelineTemplateId: "timeline-1",
+        },
+        memberResolution: {
+          available: false,
+          reason: TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+        },
+      }
+    );
+
+    const [record] = plan.records;
+    expect(record.decision).toBe("unresolved");
+    expect(record.reason).toBe(TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON);
+    expect(record.matchedChallengeId).toBe("challenge-1");
   });
 });

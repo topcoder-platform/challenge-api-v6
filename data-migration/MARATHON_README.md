@@ -261,6 +261,9 @@ Targeted rerun is explicit patch mode for already-imported rounds. It requires:
 
 - `--apply --targeted-rerun --round-id <id> --challenge-id <challengeId>`
 - exactly one selected round
+- the selected round to resolve an existing imported v6 challenge; if full planning
+  is blocked only by `target-member-resolution-unavailable`, targeted rerun can
+  still proceed because it patches only description and submission archive/url data
 - a writable `SUBMISSION_ARCHIVE_DIR` (used to generate local zip archives)
 
 Canonical command shape:

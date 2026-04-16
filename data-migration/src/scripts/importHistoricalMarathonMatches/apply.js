@@ -41,6 +41,9 @@ const {
   isUsableProblemText,
   isUsableComponentMarkdown,
 } = require("./descriptionSourcing");
+const {
+  TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+} = require("./targetMemberResolution");
 
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
@@ -638,13 +641,17 @@ const resolveTargetedRerunSelection = ({ options, planRecordByRoundId }) => {
       `Targeted rerun requires a plan record for selected round ${roundId}; none was generated.`
     );
   }
-  if (planRecord.decision !== "reuse/backfill-only") {
+  const matchedChallengeId = String((planRecord && planRecord.matchedChallengeId) || "").trim();
+  const decisionAllowsTargetedRerun =
+    planRecord.decision === "reuse/backfill-only" ||
+    (planRecord.decision === "unresolved" &&
+      planRecord.reason === TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON &&
+      Boolean(matchedChallengeId));
+  if (!decisionAllowsTargetedRerun) {
     throw new Error(
       `Targeted rerun requires selected round ${roundId} to be already imported (decision reuse/backfill-only), but got ${planRecord.decision}.`
     );
   }
-
-  const matchedChallengeId = String((planRecord && planRecord.matchedChallengeId) || "").trim();
   if (!matchedChallengeId) {
     throw new Error(
       `Targeted rerun requires selected round ${roundId} to resolve an existing matched challenge id.`
