@@ -22,6 +22,8 @@ The script can:
 - reconcile submitter resources through the Resources API
 - import submission history, final scores, and provisional scores into the
   review database
+- treat `long_component_state.points` as the authoritative public final score
+  when legacy `long_comp_result` score columns disagree with it
 
 When the review submission table exposes `systemFileName`, `virusScan`, and
 `isFileSubmission`, submission-history reconciliation sets or backfills those
@@ -273,7 +275,7 @@ Expected rerun behavior:
 - existing `missing-member` skips remain deterministic and rerun-stable for
   members still absent from the target environment
 
-### Targeted rerun patch mode (description + submission archive/url only)
+### Targeted rerun patch mode (description + submission archive/url + score reconciliation)
 
 Targeted rerun is explicit patch mode for already-imported rounds. It requires:
 
@@ -281,7 +283,8 @@ Targeted rerun is explicit patch mode for already-imported rounds. It requires:
 - exactly one selected round
 - the selected round to resolve an existing imported v6 challenge; if full planning
   is blocked only by `target-member-resolution-unavailable`, targeted rerun can
-  still proceed because it patches only description and submission archive/url data
+  still proceed because it patches only description, submission archive/url data,
+  and existing review score rows
 - a writable `SUBMISSION_ARCHIVE_DIR` (used to generate local zip archives)
 
 Canonical command shape:
@@ -330,7 +333,8 @@ Description writes also set `descriptionFormat` deterministically:
 
 Targeted rerun is patch-only and idempotent:
 
-- it may patch only challenge `description` and submission archive/url data
+- it may patch challenge `description`, submission archive/url data, and
+  existing final/provisional review summation scores
 - it must not mutate phases, resources, or review-summation identities
 - rerunning the same targeted patch converges without creating duplicates
 

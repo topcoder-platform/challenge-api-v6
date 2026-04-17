@@ -151,6 +151,9 @@ const formatImportedCountsByMemberId = (countsByMemberId) =>
     )
   );
 
+const hasMatchingAggregateScore = (existingSummations = [], aggregateScore) =>
+  existingSummations.every((summation) => summation.aggregateScore === aggregateScore);
+
 const loadLegacyProvisionalRowsByRoundId = async ({
   dataDir,
   longComponentStateFile,
@@ -301,6 +304,7 @@ const reconcileRoundProvisionalScores = async ({
   normalizedIdentityByCoderId,
   missingMemberProvisionalSkipMemberIds = new Set(),
   provisionalScoreStore,
+  updateExistingScores = false,
 }) => {
   if (
     !provisionalScoreStore ||
@@ -335,6 +339,7 @@ const reconcileRoundProvisionalScores = async ({
 
   let createdProvisionalScores = 0;
   let alreadyPresentProvisionalScores = 0;
+  let updatedProvisionalScores = 0;
   let malformedSkippedProvisionalScores = 0;
   let missingMemberSkippedProvisionalScores = 0;
   const importedCountsByMemberId = new Map();
@@ -416,6 +421,45 @@ const reconcileRoundProvisionalScores = async ({
     const existingProvisionalSummations =
       existingProvisionalSummationsBySubmissionId.get(submissionId) || [];
     if (existingProvisionalSummations.length > 0) {
+      if (
+        updateExistingScores &&
+        !hasMatchingAggregateScore(existingProvisionalSummations, provisionalRow.aggregateScore)
+      ) {
+        if (typeof provisionalScoreStore.updateProvisionalSummation !== "function") {
+          throw new Error(
+            "provisionalScoreStore must provide updateProvisionalSummation when updateExistingScores is enabled."
+          );
+        }
+        await Promise.all(
+          existingProvisionalSummations.map((existingProvisionalSummation) =>
+            provisionalScoreStore.updateProvisionalSummation({
+              reviewSummationId: existingProvisionalSummation.id,
+              submissionId,
+              aggregateScore: provisionalRow.aggregateScore,
+              isPassing: provisionalRow.aggregateScore > 0,
+              reviewedDate:
+                importedSubmission.submittedDate || importedSubmission.createdAt || null,
+              legacySubmissionId: provisionalRow.legacySubmissionId || null,
+              isFinal: false,
+              isExample: false,
+              metadata: {
+                legacyRoundId: roundId,
+                legacyCoderId: provisionalRow.coderId,
+              },
+            })
+          )
+        );
+        existingProvisionalSummationsBySubmissionId.set(
+          submissionId,
+          existingProvisionalSummations.map((existingProvisionalSummation) => ({
+            ...existingProvisionalSummation,
+            aggregateScore: provisionalRow.aggregateScore,
+          }))
+        );
+        updatedProvisionalScores += 1;
+        incrementImportedCount(memberId);
+        continue;
+      }
       alreadyPresentProvisionalScores += 1;
       incrementImportedCount(memberId);
       continue;
@@ -449,9 +493,10 @@ const reconcileRoundProvisionalScores = async ({
     legacyNonExampleProvisionalScores,
     legacyExampleOnlyFinalistProvisionalScores,
     importedProvisionalScores:
-      createdProvisionalScores + alreadyPresentProvisionalScores,
+      createdProvisionalScores + updatedProvisionalScores + alreadyPresentProvisionalScores,
     alreadyPresentProvisionalScores,
     createdProvisionalScores,
+    ...(updateExistingScores ? { updatedProvisionalScores } : {}),
     malformedSkippedProvisionalScores,
     missingMemberSkippedProvisionalScores,
     importedDistinctSubmitters: importedMemberIds.size,
@@ -579,7 +624,8 @@ const createReviewProvisionalScoreStore = async ({
       whereClauses.push(`COALESCE(rs."isExample", false) = false`);
     }
     const rows = await reviewClient.$queryRawUnsafe(
-      `SELECT rs."submissionId" AS "submissionId",
+      `SELECT ${reviewSummationColumnsByName.has("id") ? 'rs."id" AS "id",' : ""}
+              rs."submissionId" AS "submissionId",
               rs."aggregateScore" AS "aggregateScore"
          FROM ${reviewSummationTable} rs
          INNER JOIN ${submissionTable} s ON s."id" = rs."submissionId"
@@ -597,6 +643,7 @@ const createReviewProvisionalScoreStore = async ({
         bySubmissionId.set(submissionId, []);
       }
       bySubmissionId.get(submissionId).push({
+        id: String(row && row.id ? row.id : "").trim() || null,
         submissionId,
         aggregateScore: parseNumericScore(row && row.aggregateScore),
       });
@@ -662,10 +709,71 @@ const createReviewProvisionalScoreStore = async ({
     );
   };
 
+  const updateProvisionalSummation = async ({
+    reviewSummationId,
+    aggregateScore,
+    isPassing,
+    reviewedDate,
+    legacySubmissionId,
+    isFinal = false,
+    isExample = false,
+    metadata = null,
+  }) => {
+    const normalizedReviewSummationId = String(reviewSummationId || "").trim();
+    if (!normalizedReviewSummationId) {
+      throw new Error("updateProvisionalSummation requires reviewSummationId.");
+    }
+    if (!reviewSummationColumnsByName.has("id")) {
+      throw new Error(
+        `Review reviewSummation table ${schema}.reviewSummation must expose id for targeted score reruns.`
+      );
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      values.push(value);
+      assignments.push(`"${columnName}" = $${values.length}`);
+    };
+
+    pushAssignment("aggregateScore", aggregateScore);
+    pushAssignment("isPassing", Boolean(isPassing));
+    if (reviewSummationColumnsByName.has("isFinal")) {
+      pushAssignment("isFinal", Boolean(isFinal));
+    }
+    if (reviewSummationColumnsByName.has("reviewedDate")) {
+      pushAssignment("reviewedDate", reviewedDate || null);
+    }
+    if (reviewSummationColumnsByName.has("legacySubmissionId")) {
+      pushAssignment("legacySubmissionId", legacySubmissionId ? String(legacySubmissionId) : null);
+    }
+    if (reviewSummationColumnsByName.has("isExample")) {
+      pushAssignment("isExample", Boolean(isExample));
+    }
+    if (reviewSummationColumnsByName.has("metadata")) {
+      pushAssignment("metadata", metadata);
+    }
+    if (reviewSummationColumnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+    if (reviewSummationColumnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", reviewedDate || new Date());
+    }
+    values.push(normalizedReviewSummationId);
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${reviewSummationTable}
+          SET ${assignments.join(", ")}
+        WHERE "id" = $${values.length}`,
+      ...values
+    );
+  };
+
   return {
     listImportedNonExampleSubmissionsByLegacySubmissionId,
     listExistingProvisionalSummationsBySubmissionId,
     createProvisionalSummation,
+    updateProvisionalSummation,
   };
 };
 

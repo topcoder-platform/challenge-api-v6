@@ -1184,6 +1184,10 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       roundId,
       coderId,
     });
+    const rankingScore = Number.parseFloat(String(row && row.points ? row.points : "").trim());
+    if (coderId && Number.isFinite(rankingScore)) {
+      roundDataById.get(roundId).finalCandidateCoderIds.add(coderId);
+    }
     stateSubmissionSummaryById.set(longComponentStateId, {
       roundId,
       coderId,

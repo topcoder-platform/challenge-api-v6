@@ -235,6 +235,52 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(record.createPathPhasePlan).toBe(null);
   });
 
+  test("round data tracks finalists from long component state points even when long_comp_result omits them", async () => {
+    writeJson(fixtureDir, "long_component_state_1.json", "long_component_state", [
+      {
+        long_component_state_id: "lcs-1",
+        round_id: "9892",
+        coder_id: "1",
+        component_id: "5503",
+        points: "98.1",
+      },
+      {
+        long_component_state_id: "lcs-2",
+        round_id: "9892",
+        coder_id: "2",
+        component_id: "5504",
+        points: "91.5",
+      },
+      { long_component_state_id: "lcs-3", round_id: "7000", coder_id: "8", component_id: "7777" },
+    ]);
+    writeJson(fixtureDir, "long_comp_result_1.json", "long_comp_result", [
+      { round_id: "9892", coder_id: "1", system_point_total: "98.1", point_total: null, placed: "1" },
+      { round_id: "7000", coder_id: "8", system_point_total: "77.0", point_total: null, placed: "1" },
+    ]);
+
+    const plan = await buildDryRunPlan(
+      {
+        dataDir: fixtureDir,
+        roundFile: "round_1.json",
+        roundComponentFile: "round_component_1.json",
+        componentFile: "component_1.json",
+        problemFile: "problem_1.json",
+        longComponentStateFile: "long_component_state_1.json",
+        roundRegistrationPattern: "^round_registration_\\d+\\.json$",
+        userPattern: "^user_\\d+\\.json$",
+        longSubmissionPattern: "^long_submission_\\d+\\.json$",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["9892"],
+        cwd: fixtureDir,
+      },
+      new Map()
+    );
+
+    expect(plan.roundDataById.get("9892").finalCandidateCoderIds).toEqual(
+      new Set(["1", "2"])
+    );
+  });
+
   test("dry-run with broken DATABASE_URL still emits unresolved instead of create", () => {
     const result = runImporter(
       [

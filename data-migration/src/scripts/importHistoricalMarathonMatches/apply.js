@@ -1053,15 +1053,21 @@ const runTargetedRerunMode = async ({
   prisma,
   actor = "historical-mm-importer",
   submissionArchiveStore,
+  finalScoreStore,
+  provisionalScoreStore,
   reviewClient,
   reviewSchema,
   legacySubmissionRowsByRoundId,
   submissionArchiveDir,
+  normalizedIdentityByCoderId: providedNormalizedIdentityByCoderId,
 }) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
   const roundDataById = plan && plan.roundDataById instanceof Map ? plan.roundDataById : null;
   const counters = roundDataById ? roundDataById.get(selection.roundId) : null;
+  const finalScoreReconciliationEnabled = Boolean(finalScoreStore) || Boolean(reviewClient);
+  const provisionalScoreReconciliationEnabled =
+    Boolean(provisionalScoreStore) || Boolean(reviewClient);
   const descriptionCandidate = resolveDescriptionCandidateFromCounters(counters);
   const legacyProblemId = String(
     counters && counters.descriptionProblemId ? counters.descriptionProblemId : ""
@@ -1085,6 +1091,140 @@ const runTargetedRerunMode = async ({
       submissionArchiveDir,
     });
   const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
+  let finalScoreReconciliation = null;
+  let provisionalScoreReconciliation = null;
+  if (finalScoreReconciliationEnabled || provisionalScoreReconciliationEnabled) {
+    let normalizedIdentityByCoderId =
+      providedNormalizedIdentityByCoderId instanceof Map
+        ? providedNormalizedIdentityByCoderId
+        : null;
+    let roundFinalRowsByRoundId = new Map();
+    let roundProvisionalRowsByRoundId = new Map();
+
+    if (finalScoreReconciliationEnabled) {
+      roundFinalRowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: options.dataDir,
+        longComponentStateFile: options.longComponentStateFile,
+        longCompResultPattern: options.longCompResultPattern,
+        roundIds: [selection.roundId],
+      });
+    }
+    if (provisionalScoreReconciliationEnabled) {
+      roundProvisionalRowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+        dataDir: options.dataDir,
+        longComponentStateFile: options.longComponentStateFile,
+        longSubmissionPattern: options.longSubmissionPattern,
+        roundIds: [selection.roundId],
+        attachableExampleOnlyFinalistCoderIdsByRoundId: new Map([
+          [
+            selection.roundId,
+            (counters && counters.finalCandidateCoderIds) || new Set(),
+          ],
+        ]),
+      });
+    }
+
+    if (!normalizedIdentityByCoderId) {
+      const relevantCoderIds = new Set();
+      roundFinalRowsByRoundId.forEach((rows) => {
+        (rows || []).forEach((row) => {
+          const coderId = String(row && row.coderId ? row.coderId : "").trim();
+          if (coderId) {
+            relevantCoderIds.add(coderId);
+          }
+        });
+      });
+      roundProvisionalRowsByRoundId.forEach((rows) => {
+        (rows || []).forEach((row) => {
+          const coderId = String(row && row.coderId ? row.coderId : "").trim();
+          if (coderId) {
+            relevantCoderIds.add(coderId);
+          }
+        });
+      });
+
+      normalizedIdentityByCoderId =
+        relevantCoderIds.size > 0
+          ? await loadNormalizedIdentityByCoderId({
+            dataDir: options.dataDir,
+            userPattern: options.userPattern || DEFAULT_USER_PATTERN,
+            coderIds: relevantCoderIds,
+          })
+          : new Map();
+    }
+
+    if (finalScoreReconciliationEnabled) {
+      const missingMemberFinalSkipMemberIdsByRoundId =
+        collectMissingMemberSkipMemberIdsByRoundId({
+          roundIds: [selection.roundId],
+          planRecordByRoundId,
+          affectedSurface: "final-score",
+        });
+      const plannedUnattachableFinalSkipMemberIdsByRoundId = collectSkipMemberIdsByRoundId({
+        roundIds: [selection.roundId],
+        planRecordByRoundId,
+        reasonCode: FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
+        affectedSurface: "final-score",
+      });
+      const resolvedFinalScoreStore =
+        finalScoreStore ||
+        (await createReviewFinalScoreStore({
+          reviewClient,
+          reviewSchema: reviewSchema || DEFAULT_REVIEW_SCHEMA,
+          actor,
+        }));
+      finalScoreReconciliation = await reconcileRoundFinalScores({
+        roundId: selection.roundId,
+        challengeId: selection.challengeId,
+        finalRowsByRoundId: roundFinalRowsByRoundId,
+        normalizedIdentityByCoderId,
+        missingMemberFinalSkipMemberIds:
+          missingMemberFinalSkipMemberIdsByRoundId.get(selection.roundId) || new Set(),
+        plannedUnattachableFinalSkipMemberIds:
+          plannedUnattachableFinalSkipMemberIdsByRoundId.get(selection.roundId) || new Set(),
+        finalScoreStore: resolvedFinalScoreStore,
+        updateExistingScores: true,
+      });
+    }
+
+    if (provisionalScoreReconciliationEnabled) {
+      const missingMemberProvisionalSkipMemberIdsByRoundId =
+        collectMissingMemberSkipMemberIdsByRoundId({
+          roundIds: [selection.roundId],
+          planRecordByRoundId,
+          affectedSurface: "provisional-score",
+        });
+      const resolvedProvisionalScoreStore =
+        provisionalScoreStore ||
+        (await createReviewProvisionalScoreStore({
+          reviewClient,
+          reviewSchema: reviewSchema || DEFAULT_REVIEW_SCHEMA,
+          actor,
+        }));
+      provisionalScoreReconciliation = await reconcileRoundProvisionalScores({
+        roundId: selection.roundId,
+        challengeId: selection.challengeId,
+        provisionalRowsByRoundId: roundProvisionalRowsByRoundId,
+        normalizedIdentityByCoderId,
+        missingMemberProvisionalSkipMemberIds:
+          missingMemberProvisionalSkipMemberIdsByRoundId.get(selection.roundId) || new Set(),
+        provisionalScoreStore: resolvedProvisionalScoreStore,
+        updateExistingScores: true,
+      });
+    }
+  }
+
+  const hasFinalScoreWrites = Boolean(
+    finalScoreReconciliation &&
+      ((finalScoreReconciliation.createdFinalScores || 0) > 0 ||
+        (finalScoreReconciliation.updatedFinalScores || 0) > 0)
+  );
+  const hasProvisionalScoreWrites = Boolean(
+    provisionalScoreReconciliation &&
+      ((provisionalScoreReconciliation.createdProvisionalScores || 0) > 0 ||
+        (provisionalScoreReconciliation.updatedProvisionalScores || 0) > 0)
+  );
+  const hasScoreWrites = hasFinalScoreWrites || hasProvisionalScoreWrites;
   let hasDescriptionWrite = false;
   let descriptionUpdated = false;
   let descriptionSource = "existing-description-preserved-no-usable-legacy-problem-text";
@@ -1156,7 +1296,11 @@ const runTargetedRerunMode = async ({
     }
   }
 
-  const hasWritesAttempted = hasDescriptionWrite || hasSubmissionArchiveWrites;
+  if (!hasDescriptionWrite && hasScoreWrites) {
+    status = "targeted-rerun-applied";
+  }
+
+  const hasWritesAttempted = hasDescriptionWrite || hasSubmissionArchiveWrites || hasScoreWrites;
   const summaryDescriptionUpdated = descriptionUpdated ? 1 : 0;
   const summaryDescriptionPreserved = descriptionUpdated ? 0 : 1;
 
@@ -1179,6 +1323,8 @@ const runTargetedRerunMode = async ({
           : {}),
         reason,
         submissionArchiveReconciliation,
+        ...(finalScoreReconciliation ? { finalScoreReconciliation } : {}),
+        ...(provisionalScoreReconciliation ? { provisionalScoreReconciliation } : {}),
       },
     ],
     summary: {
@@ -1193,6 +1339,20 @@ const runTargetedRerunMode = async ({
       targetedRerunDescriptionPreserved: summaryDescriptionPreserved,
       targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
       targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
+      ...(finalScoreReconciliation
+        ? {
+          targetedRerunFinalScoresCreated: finalScoreReconciliation.createdFinalScores || 0,
+          targetedRerunFinalScoresUpdated: finalScoreReconciliation.updatedFinalScores || 0,
+        }
+        : {}),
+      ...(provisionalScoreReconciliation
+        ? {
+          targetedRerunProvisionalScoresCreated:
+              provisionalScoreReconciliation.createdProvisionalScores || 0,
+          targetedRerunProvisionalScoresUpdated:
+              provisionalScoreReconciliation.updatedProvisionalScores || 0,
+        }
+        : {}),
       targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
       skippedFileArtifact: null,
     },

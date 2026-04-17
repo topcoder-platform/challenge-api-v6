@@ -99,11 +99,22 @@ const resolveIdentityForCoderId = (coderId, normalizedIdentityByCoderId = new Ma
 };
 
 const deriveFinalScore = ({ systemPointTotal, pointTotal, rankingScore }) => {
-  if (Number.isFinite(systemPointTotal)) {
-    return { aggregateScore: systemPointTotal, scoreSource: "system_point_total" };
+  const preferredLegacyScore = Number.isFinite(systemPointTotal)
+    ? { aggregateScore: systemPointTotal, scoreSource: "system_point_total" }
+    : Number.isFinite(pointTotal)
+    ? { aggregateScore: pointTotal, scoreSource: "point_total" }
+    : { aggregateScore: null, scoreSource: null };
+
+  if (Number.isFinite(rankingScore)) {
+    if (
+      !Number.isFinite(preferredLegacyScore.aggregateScore) ||
+      preferredLegacyScore.aggregateScore !== rankingScore
+    ) {
+      return { aggregateScore: rankingScore, scoreSource: "ranking_score" };
+    }
   }
-  if (Number.isFinite(pointTotal)) {
-    return { aggregateScore: pointTotal, scoreSource: "point_total" };
+  if (Number.isFinite(preferredLegacyScore.aggregateScore)) {
+    return preferredLegacyScore;
   }
   if (Number.isFinite(rankingScore)) {
     return { aggregateScore: rankingScore, scoreSource: "ranking_score" };
@@ -196,6 +207,8 @@ const loadLegacyFinalRowsByRoundId = async ({
   );
 
   const rankingScoreByRoundCoder = new Map();
+  const resultRowByRoundCoder = new Map();
+  const roundCoderKeys = new Set();
   await streamJsonArray(longComponentStatePath, "long_component_state", (row) => {
     const roundId = String(row && row.round_id ? row.round_id : "").trim();
     if (!selectedRoundIdSet.has(roundId)) {
@@ -209,7 +222,9 @@ const loadLegacyFinalRowsByRoundId = async ({
     if (!Number.isFinite(points)) {
       return;
     }
-    rankingScoreByRoundCoder.set(`${roundId}:${coderId}`, points);
+    const roundCoderKey = `${roundId}:${coderId}`;
+    rankingScoreByRoundCoder.set(roundCoderKey, points);
+    roundCoderKeys.add(roundCoderKey);
   });
 
   await Promise.all(
@@ -229,26 +244,44 @@ const loadLegacyFinalRowsByRoundId = async ({
 
         const systemPointTotal = parseNumericScore(row && row.system_point_total);
         const pointTotal = parseNumericScore(row && row.point_total);
-        const rankingScore = rankingScoreByRoundCoder.get(`${roundId}:${coderId}`) ?? null;
-        const { aggregateScore, scoreSource } = deriveFinalScore({
-          systemPointTotal,
-          pointTotal,
-          rankingScore,
-        });
-
-        rowsByRoundId.get(roundId).push({
-          legacyRoundId: roundId,
-          coderId,
+        const roundCoderKey = `${roundId}:${coderId}`;
+        roundCoderKeys.add(roundCoderKey);
+        resultRowByRoundCoder.set(roundCoderKey, {
           legacyPlacement: parsePlacement(row && row.placed),
-          aggregateScore,
-          scoreSource,
           systemPointTotal,
           pointTotal,
-          rankingScore,
         });
       })
     )
   );
+
+  roundCoderKeys.forEach((roundCoderKey) => {
+    const separatorIndex = roundCoderKey.indexOf(":");
+    const roundId = separatorIndex >= 0 ? roundCoderKey.slice(0, separatorIndex) : "";
+    const coderId = separatorIndex >= 0 ? roundCoderKey.slice(separatorIndex + 1) : "";
+    if (!roundId || !coderId || !rowsByRoundId.has(roundId)) {
+      return;
+    }
+
+    const resultRow = resultRowByRoundCoder.get(roundCoderKey) || {};
+    const rankingScore = rankingScoreByRoundCoder.get(roundCoderKey) ?? null;
+    const { aggregateScore, scoreSource } = deriveFinalScore({
+      systemPointTotal: resultRow.systemPointTotal ?? null,
+      pointTotal: resultRow.pointTotal ?? null,
+      rankingScore,
+    });
+
+    rowsByRoundId.get(roundId).push({
+      legacyRoundId: roundId,
+      coderId,
+      legacyPlacement: resultRow.legacyPlacement ?? null,
+      aggregateScore,
+      scoreSource,
+      systemPointTotal: resultRow.systemPointTotal ?? null,
+      pointTotal: resultRow.pointTotal ?? null,
+      rankingScore,
+    });
+  });
 
   rowsByRoundId.forEach((rows, roundId) => {
     rowsByRoundId.set(
@@ -323,6 +356,9 @@ const buildLatestImportedSubmissionByMemberId = (submissions = []) => {
   return latestByMemberId;
 };
 
+const hasMatchingAggregateScore = (existingSummations = [], aggregateScore) =>
+  existingSummations.every((summation) => summation.aggregateScore === aggregateScore);
+
 const reconcileRoundFinalScores = async ({
   roundId,
   challengeId,
@@ -331,6 +367,7 @@ const reconcileRoundFinalScores = async ({
   missingMemberFinalSkipMemberIds = new Set(),
   plannedUnattachableFinalSkipMemberIds = new Set(),
   finalScoreStore,
+  updateExistingScores = false,
 }) => {
   if (
     !finalScoreStore ||
@@ -367,6 +404,7 @@ const reconcileRoundFinalScores = async ({
 
   let createdFinalScores = 0;
   let alreadyPresentFinalScores = 0;
+  let updatedFinalScores = 0;
   let missingMemberSkippedFinalScores = 0;
   let explicitSkippedFinalScores = 0;
   const runtimeSkipRecords = [];
@@ -412,6 +450,50 @@ const reconcileRoundFinalScores = async ({
     const existingFinalSummations =
       existingFinalSummationsBySubmissionId.get(submissionId) || [];
     if (existingFinalSummations.length > 0) {
+      if (
+        updateExistingScores &&
+        !hasMatchingAggregateScore(existingFinalSummations, finalRow.aggregateScore)
+      ) {
+        if (typeof finalScoreStore.updateFinalSummation !== "function") {
+          throw new Error(
+            "finalScoreStore must provide updateFinalSummation when updateExistingScores is enabled."
+          );
+        }
+        await Promise.all(
+          existingFinalSummations.map((existingFinalSummation) =>
+            finalScoreStore.updateFinalSummation({
+              reviewSummationId: existingFinalSummation.id,
+              submissionId,
+              aggregateScore: finalRow.aggregateScore,
+              isPassing: finalRow.aggregateScore > 0,
+              reviewedDate:
+                attachableSubmission.submittedDate ||
+                attachableSubmission.createdAt ||
+                null,
+              legacySubmissionId:
+                attachableSubmission.legacySubmissionId || null,
+              isFinal: true,
+              isExample: false,
+              metadata: {
+                legacyRoundId: roundId,
+                legacyCoderId: finalRow.coderId,
+                scoreSource: finalRow.scoreSource,
+                legacyPlacement: finalRow.legacyPlacement,
+                rawLegacyPlacement: finalRow.rawLegacyPlacement,
+              },
+            })
+          )
+        );
+        existingFinalSummationsBySubmissionId.set(
+          submissionId,
+          existingFinalSummations.map((existingFinalSummation) => ({
+            ...existingFinalSummation,
+            aggregateScore: finalRow.aggregateScore,
+          }))
+        );
+        updatedFinalScores += 1;
+        continue;
+      }
       alreadyPresentFinalScores += 1;
       continue;
     }
@@ -445,15 +527,19 @@ const reconcileRoundFinalScores = async ({
     createdFinalScores += 1;
   }
 
-  return {
+  const result = {
     legacyFinalCandidates: legacyFinalRows.length,
-    importedFinalScores: createdFinalScores + alreadyPresentFinalScores,
+    importedFinalScores: createdFinalScores + updatedFinalScores + alreadyPresentFinalScores,
     alreadyPresentFinalScores,
     createdFinalScores,
     missingMemberSkippedFinalScores,
     explicitSkippedFinalScores,
     runtimeSkipRecords,
   };
+  if (updateExistingScores) {
+    result.updatedFinalScores = updatedFinalScores;
+  }
+  return result;
 };
 
 const createReviewFinalScoreStore = async ({
@@ -556,7 +642,8 @@ const createReviewFinalScoreStore = async ({
       whereClauses.push(`COALESCE(rs."isExample", false) = false`);
     }
     const rows = await reviewClient.$queryRawUnsafe(
-      `SELECT rs."submissionId" AS "submissionId",
+      `SELECT ${reviewSummationColumnsByName.has("id") ? 'rs."id" AS "id",' : ""}
+              rs."submissionId" AS "submissionId",
               rs."aggregateScore" AS "aggregateScore"
          FROM ${reviewSummationTable} rs
          INNER JOIN ${submissionTable} s ON s."id" = rs."submissionId"
@@ -574,6 +661,7 @@ const createReviewFinalScoreStore = async ({
         bySubmissionId.set(submissionId, []);
       }
       bySubmissionId.get(submissionId).push({
+        id: String(row && row.id ? row.id : "").trim() || null,
         submissionId,
         aggregateScore: parseNumericScore(row && row.aggregateScore),
       });
@@ -639,10 +727,71 @@ const createReviewFinalScoreStore = async ({
     );
   };
 
+  const updateFinalSummation = async ({
+    reviewSummationId,
+    aggregateScore,
+    isPassing,
+    reviewedDate,
+    legacySubmissionId,
+    isFinal = true,
+    isExample = false,
+    metadata = null,
+  }) => {
+    const normalizedReviewSummationId = String(reviewSummationId || "").trim();
+    if (!normalizedReviewSummationId) {
+      throw new Error("updateFinalSummation requires reviewSummationId.");
+    }
+    if (!reviewSummationColumnsByName.has("id")) {
+      throw new Error(
+        `Review reviewSummation table ${schema}.reviewSummation must expose id for targeted score reruns.`
+      );
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      values.push(value);
+      assignments.push(`"${columnName}" = $${values.length}`);
+    };
+
+    pushAssignment("aggregateScore", aggregateScore);
+    pushAssignment("isPassing", Boolean(isPassing));
+    if (reviewSummationColumnsByName.has("isFinal")) {
+      pushAssignment("isFinal", Boolean(isFinal));
+    }
+    if (reviewSummationColumnsByName.has("reviewedDate")) {
+      pushAssignment("reviewedDate", reviewedDate || null);
+    }
+    if (reviewSummationColumnsByName.has("legacySubmissionId")) {
+      pushAssignment("legacySubmissionId", legacySubmissionId ? String(legacySubmissionId) : null);
+    }
+    if (reviewSummationColumnsByName.has("isExample")) {
+      pushAssignment("isExample", Boolean(isExample));
+    }
+    if (reviewSummationColumnsByName.has("metadata")) {
+      pushAssignment("metadata", metadata);
+    }
+    if (reviewSummationColumnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+    if (reviewSummationColumnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", reviewedDate || new Date());
+    }
+    values.push(normalizedReviewSummationId);
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${reviewSummationTable}
+          SET ${assignments.join(", ")}
+        WHERE "id" = $${values.length}`,
+      ...values
+    );
+  };
+
   return {
     listImportedNonExampleSubmissionsByChallenge,
     listExistingFinalSummationsBySubmissionId,
     createFinalSummation,
+    updateFinalSummation,
   };
 };
 

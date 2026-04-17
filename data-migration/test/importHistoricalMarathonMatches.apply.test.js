@@ -25,6 +25,36 @@ const buildArchiveDirPath = (suffix) =>
     )
   );
 
+const writeJson = (baseDir, fileName, rootKey, rows) => {
+  fs.writeFileSync(
+    path.join(baseDir, fileName),
+    `${JSON.stringify({ [rootKey]: rows }, null, 2)}\n`,
+    "utf8"
+  );
+};
+
+const createTargetedScoreFixtureDataDirectory = () => {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-targeted-score-fixture-"));
+
+  writeJson(baseDir, "long_component_state_1.json", "long_component_state", [
+    { long_component_state_id: "1001", round_id: "9892", coder_id: "1", points: "100.0" },
+  ]);
+  writeJson(baseDir, "long_comp_result_1.json", "long_comp_result", [
+    { round_id: "9892", coder_id: "1", system_point_total: "100.0", point_total: "95.0", placed: "1" },
+  ]);
+  writeJson(baseDir, "long_submission_1.json", "long_submission", [
+    {
+      long_component_state_id: "1001",
+      submission_number: "1",
+      example: "0",
+      submit_time: "1000",
+      submission_points: "9.5",
+    },
+  ]);
+
+  return baseDir;
+};
+
 const readSingleEntryStoredZip = (zipPath) => {
   const zipBuffer = fs.readFileSync(zipPath);
   expect(zipBuffer.readUInt32LE(0)).toBe(0x04034b50);
@@ -1382,6 +1412,190 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       });
     } finally {
       fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode updates existing final and provisional scores", async () => {
+    const archiveDir = buildArchiveDirPath("score-reconciliation");
+    const fixtureDir = createTargetedScoreFixtureDataDirectory();
+    try {
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+      const finalScoreStore = {
+        listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue([
+          {
+            id: "sub-1",
+            memberId: "1",
+            legacySubmissionId: "10010001",
+            submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+            createdAt: new Date("2020-01-01T01:00:00.000Z"),
+          },
+        ]),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "final-1", submissionId: "sub-1", aggregateScore: 1 }],
+            ],
+          ])
+        ),
+        createFinalSummation: jest.fn().mockResolvedValue(undefined),
+        updateFinalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+      const provisionalScoreStore = {
+        listImportedNonExampleSubmissionsByLegacySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "10010001",
+              {
+                id: "sub-1",
+                memberId: "1",
+                legacySubmissionId: "10010001",
+                submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+                createdAt: new Date("2020-01-01T01:00:00.000Z"),
+              },
+            ],
+          ])
+        ),
+        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "prov-1", submissionId: "sub-1", aggregateScore: 2 }],
+            ],
+          ])
+        ),
+        createProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        updateProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+          dataDir: fixtureDir,
+          longComponentStateFile: "long_component_state_1.json",
+          longSubmissionPattern: "^long_submission_\\d+\\.json$",
+          longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                finalCandidateCoderIds: new Set(["1"]),
+              },
+            ],
+          ]),
+        },
+        submissionArchiveStore,
+        finalScoreStore,
+        provisionalScoreStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        normalizedIdentityByCoderId: new Map([
+          ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+        ]),
+      });
+
+      expect(finalScoreStore.updateFinalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "final-1",
+          submissionId: "sub-1",
+          aggregateScore: 100,
+          legacySubmissionId: "10010001",
+          isFinal: true,
+        })
+      );
+      expect(provisionalScoreStore.updateProvisionalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "prov-1",
+          submissionId: "sub-1",
+          aggregateScore: 9.5,
+          legacySubmissionId: "10010001",
+          isFinal: false,
+        })
+      );
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-applied",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: true,
+            descriptionUpdated: false,
+            descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+            legacyProblemId: null,
+            reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+            finalScoreReconciliation: {
+              legacyFinalCandidates: 1,
+              importedFinalScores: 1,
+              alreadyPresentFinalScores: 0,
+              createdFinalScores: 0,
+              updatedFinalScores: 1,
+              missingMemberSkippedFinalScores: 0,
+              explicitSkippedFinalScores: 0,
+              runtimeSkipRecords: [],
+            },
+            provisionalScoreReconciliation: {
+              legacyNonExampleProvisionalScores: 1,
+              legacyExampleOnlyFinalistProvisionalScores: 0,
+              importedProvisionalScores: 1,
+              alreadyPresentProvisionalScores: 0,
+              createdProvisionalScores: 0,
+              updatedProvisionalScores: 1,
+              malformedSkippedProvisionalScores: 0,
+              missingMemberSkippedProvisionalScores: 0,
+              importedDistinctSubmitters: 1,
+              missingMemberDistinctSubmitters: 0,
+              importedProvisionalCountsByMemberId: {
+                1: 1,
+              },
+              skippedProvisionalRecords: [],
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunFinalScoresCreated: 0,
+          targetedRerunFinalScoresUpdated: 1,
+          targetedRerunProvisionalScoresCreated: 0,
+          targetedRerunProvisionalScoresUpdated: 1,
+          targetedRerunWritesAttempted: 1,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
     }
   });
 
