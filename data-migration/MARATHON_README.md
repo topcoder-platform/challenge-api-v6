@@ -17,6 +17,8 @@ The script can:
 - discover an existing v6 Marathon Match challenge and backfill missing data
 - create a new Marathon Match challenge and its standard phases when no safe
   match exists
+- backfill canonical `isRated` challenge metadata from legacy `round.rated_ind`
+  so member rerating can skip explicit unrated rounds
 - reconcile submitter resources through the Resources API
 - import submission history, final scores, and provisional scores into the
   review database
@@ -344,3 +346,89 @@ Targeted rerun is patch-only and idempotent:
   score, or provisional score import starts.
 - If `RESOURCES_API_URL` or Auth0 credentials are missing, apply mode will fail
   before participant reconciliation starts.
+
+## Export Marathon Match submissions
+
+`data-migration/src/scripts/exportMarathonMatchSubmissions.js` exports live
+Marathon Match challenge metadata, submission archives, and review summations
+through the v6 challenge and review APIs.
+
+The script expects a bearer token in the environment. It reads the first
+populated variable from:
+
+- `M2M_TOKEN`
+- `M2M_FULL_ACCESS_TOKEN`
+- `TOPCODER_M2M_TOKEN`
+
+### Required environment
+
+By default the exporter uses:
+
+- `CHALLENGE_API_URL=https://api.topcoder.com/v6/challenges`
+- `REVIEW_API_URL=https://api.topcoder.com/v6`
+
+Override those when you need to point at local/dev deployments.
+
+### Output layout
+
+Given `--output-dir /tmp/mm-export`, the exporter writes:
+
+- `/tmp/mm-export/metadata.json`
+- `/tmp/mm-export/submissions/coder_<memberId>/<submissionId>.zip`
+- `/tmp/mm-export/submissions/coder_<memberId>/<submissionId>.json`
+
+`metadata.json` is the raw response from:
+
+```text
+GET /challenges/{challengeId}
+```
+
+Each per-submission JSON file contains every review summation returned for that
+submission from:
+
+```text
+GET /reviewSummations?challengeId=<challengeId>&metadata=true
+```
+
+That means Marathon Match submissions with multiple rows, such as provisional
+and final summations, are exported as a JSON array in `{submissionId}.json`.
+
+Submissions that do not have any attached review summation rows are ignored and
+are not exported.
+
+If an individual submission archive download fails, for example because the
+submission is not available in clean storage after a failed virus scan, the
+script logs the error and continues exporting the remaining submissions.
+
+### Usage
+
+1. Change into the package folder and select the repo Node version.
+
+```bash
+cd challenge-api-v6/data-migration
+nvm use
+```
+
+2. Export the challenge.
+
+```bash
+M2M_TOKEN=your-token-here \
+pnpm run export:mm:submissions -- \
+  --challenge-id <challengeId> \
+  --output-dir ./out/mm-export-<challengeId>
+```
+
+You can also call the script directly:
+
+```bash
+node src/scripts/exportMarathonMatchSubmissions.js \
+  --challenge-id <challengeId> \
+  --output-dir ./out/mm-export-<challengeId>
+```
+
+Optional flags:
+
+- `--challenge-api-url <url>`: override the challenge collection base URL
+- `--review-api-url <url>`: override the review API root URL
+- `--page-size <n>`: pagination size for submissions and review summations
+- `--concurrency <n>`: number of concurrent submission downloads

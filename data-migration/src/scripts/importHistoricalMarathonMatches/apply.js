@@ -47,6 +47,9 @@ const {
 const STANDARD_PHASE_NAMES = ["Registration", "Submission", "Review"];
 const DEFAULT_SUBMITTER_ROLE_ID = "732339e7-8e30-49d7-9198-cccf9451e221";
 const TEMPORARY_RESOURCE_WRITE_STATUS = "ACTIVE";
+const CANONICAL_RATED_METADATA_NAME = "isRated";
+const LEGACY_RATING_METADATA_NAMES = ["rated", "unrated"];
+const RATED_METADATA_NAMES = [CANONICAL_RATED_METADATA_NAME, ...LEGACY_RATING_METADATA_NAMES];
 const buildFallbackImportedDescription = (legacyId) =>
   `Imported historical Marathon Match from legacy round ${legacyId}`;
 
@@ -149,6 +152,130 @@ const derivePhaseWindows = (roundId, counters) => {
 
 const phaseDurationSeconds = (startDate, endDate) =>
   Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / 1000));
+
+/**
+ * Resolve the legacy Informix round-level rating flag.
+ * The historical Marathon Match importer uses `round.rated_ind` to preserve
+ * whether member-api rerates should include the imported challenge.
+ * @param {Object} round legacy Informix round row
+ * @returns {boolean|null} explicit rated flag, or null when legacy data is missing/indeterminate
+ */
+const resolveLegacyRoundIsRated = (round) => {
+  const normalized = String(
+    round && Object.prototype.hasOwnProperty.call(round, "rated_ind") ? round.rated_ind : ""
+  )
+    .trim()
+    .toLowerCase();
+  if (normalized === "1" || normalized === "true") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false") {
+    return false;
+  }
+  return null;
+};
+
+/**
+ * Reconcile one canonical `isRated` ChallengeMetadata row for an imported challenge.
+ * This keeps rerating inputs deterministic by collapsing any legacy `rated` or
+ * `unrated` rows into a single `isRated` metadata entry.
+ * @param {Object} params reconciliation inputs
+ * @param {Object} params.prisma Prisma client or transaction exposing challengeMetadata CRUD methods
+ * @param {string} params.challengeId target v6 challenge id
+ * @param {Object} params.round legacy Informix round row
+ * @param {string} params.actor audit actor used for metadata writes
+ * @returns {Promise<{applied: boolean, isRated: boolean|null}>} reconciliation summary
+ * @throws {Error} when metadata cleanup or canonicalization fails
+ */
+const reconcileChallengeRatedMetadata = async ({
+  prisma,
+  challengeId,
+  round,
+  actor,
+}) => {
+  const resolvedIsRated = resolveLegacyRoundIsRated(round);
+  if (
+    resolvedIsRated === null ||
+    !prisma ||
+    !prisma.challengeMetadata ||
+    typeof prisma.challengeMetadata.findMany !== "function"
+  ) {
+    return {
+      applied: false,
+      isRated: resolvedIsRated,
+    };
+  }
+
+  const metadataActor = String(actor || "").trim() || "historical-mm-importer";
+  const metadataValue = resolvedIsRated ? "true" : "false";
+  const existingRows = await prisma.challengeMetadata.findMany({
+    where: {
+      challengeId,
+      name: {
+        in: RATED_METADATA_NAMES,
+      },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      value: true,
+    },
+  });
+
+  const canonicalRow =
+    existingRows.find((row) => row.name === CANONICAL_RATED_METADATA_NAME) || existingRows[0] || null;
+
+  if (!canonicalRow) {
+    await prisma.challengeMetadata.create({
+      data: {
+        challengeId,
+        name: CANONICAL_RATED_METADATA_NAME,
+        value: metadataValue,
+        createdBy: metadataActor,
+        updatedBy: metadataActor,
+      },
+      select: { id: true },
+    });
+    return {
+      applied: true,
+      isRated: resolvedIsRated,
+    };
+  }
+
+  if (
+    canonicalRow.name !== CANONICAL_RATED_METADATA_NAME ||
+    String(canonicalRow.value || "").trim().toLowerCase() !== metadataValue
+  ) {
+    await prisma.challengeMetadata.update({
+      where: { id: canonicalRow.id },
+      data: {
+        name: CANONICAL_RATED_METADATA_NAME,
+        value: metadataValue,
+        updatedBy: metadataActor,
+      },
+      select: { id: true },
+    });
+  }
+
+  const duplicateIds = existingRows
+    .filter((row) => row.id !== canonicalRow.id)
+    .map((row) => row.id);
+  if (duplicateIds.length > 0 && typeof prisma.challengeMetadata.deleteMany === "function") {
+    await prisma.challengeMetadata.deleteMany({
+      where: {
+        id: {
+          in: duplicateIds,
+        },
+      },
+    });
+  }
+
+  return {
+    applied: true,
+    isRated: resolvedIsRated,
+  };
+};
 
 const buildChallengePhaseRows = ({ challengeId, phaseIdsByName, windows, actor }) => {
   const rows = [];
@@ -320,6 +447,13 @@ const applyCreateRound = async ({
         }
       }
 
+      await reconcileChallengeRatedMetadata({
+        prisma: tx,
+        challengeId: existingChallenge.id,
+        round,
+        actor,
+      });
+
       return {
         status: "existing",
         challengeId: existingChallenge.id,
@@ -340,6 +474,13 @@ const applyCreateRound = async ({
         windows,
       }),
       select: { id: true },
+    });
+
+    await reconcileChallengeRatedMetadata({
+      prisma: tx,
+      challengeId: challenge.id,
+      round,
+      actor,
     });
 
     const phaseRows = buildChallengePhaseRows({

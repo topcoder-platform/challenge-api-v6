@@ -109,7 +109,11 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   });
 
   test("apply create-path inserts one completed challenge and phase trio for missing rounds", async () => {
-    const calls = { createdChallenge: null, createdPhases: null };
+    const calls = {
+      createdChallenge: null,
+      createdPhases: null,
+      createdMetadata: null,
+    };
     const tx = {
       challenge: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -124,6 +128,13 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           return { count: data.length };
         }),
       },
+      challengeMetadata: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdMetadata = data;
+          return { id: "metadata-1" };
+        }),
+      },
     };
 
     const prisma = {
@@ -133,7 +144,12 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     const result = await applyCreateRound({
       prisma,
       roundId: "9892",
-      round: { round_id: "9892", name: "Intel Multi-Threading Competition 2", short_name: "Intel 2" },
+      round: {
+        round_id: "9892",
+        name: "Intel Multi-Threading Competition 2",
+        short_name: "Intel 2",
+        rated_ind: "0",
+      },
       counters: {
         registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
         registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
@@ -170,6 +186,13 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       currentPhaseNames: [],
       numOfRegistrants: 2,
       numOfSubmissions: 3,
+    });
+    expect(calls.createdMetadata).toEqual({
+      challengeId: "challenge-1",
+      name: "isRated",
+      value: "false",
+      createdBy: "importer",
+      updatedBy: "importer",
     });
     expect(calls.createdPhases).toHaveLength(3);
     expect(calls.createdPhases.map((row) => row.name)).toEqual([
@@ -388,6 +411,88 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     });
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("reuse path canonicalizes legacy rating metadata into one isRated flag", async () => {
+    const calls = {
+      updatedMetadata: null,
+      deletedMetadata: null,
+    };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+          { id: "cp-3", name: "Review", isOpen: false },
+        ]),
+        createMany: jest.fn(),
+      },
+      challengeMetadata: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "metadata-rated", name: "rated", value: "true" },
+          { id: "metadata-unrated", name: "unrated", value: "false" },
+        ]),
+        create: jest.fn(),
+        update: jest.fn().mockImplementation(async ({ data }) => {
+          calls.updatedMetadata = data;
+          return { id: "metadata-rated" };
+        }),
+        deleteMany: jest.fn().mockImplementation(async ({ where }) => {
+          calls.deletedMetadata = where;
+          return { count: 1 };
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const result = await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", rated_ind: "0" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(result).toEqual({
+      status: "existing",
+      challengeId: "existing-challenge-1",
+      legacyRoundId: "9892",
+    });
+    expect(tx.challengeMetadata.create).not.toHaveBeenCalled();
+    expect(calls.updatedMetadata).toEqual({
+      name: "isRated",
+      value: "false",
+      updatedBy: "importer",
+    });
+    expect(calls.deletedMetadata).toEqual({
+      id: {
+        in: ["metadata-unrated"],
+      },
+    });
   });
 
   test("apply-mode reruns converge create decisions by backfilling missing standard phases", async () => {
