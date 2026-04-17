@@ -292,6 +292,7 @@ const run = async () => {
         resourceClient: createDefaultResourceClient(),
         reviewClient: reviewPrisma,
         reviewSchema: reviewDbSchema,
+        submissionArchiveDir: process.env.SUBMISSION_ARCHIVE_DIR,
         importSubmissions: true,
         importFinalScores: true,
         importProvisionalScores: true,

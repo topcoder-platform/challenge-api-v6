@@ -69,9 +69,7 @@ const buildSubmissionArchiveUrl = ({ archiveFileName, urlPrefix = DEFAULT_SUBMIS
 const resolveSubmissionArchiveDirectory = (archiveDirectory) => {
   const normalizedArchiveDirectory = String(archiveDirectory || "").trim();
   if (!normalizedArchiveDirectory) {
-    throw new Error(
-      "SUBMISSION_ARCHIVE_DIR must be set for targeted rerun submission archive generation."
-    );
+    throw new Error("SUBMISSION_ARCHIVE_DIR must be set for submission archive generation.");
   }
   return path.resolve(normalizedArchiveDirectory);
 };

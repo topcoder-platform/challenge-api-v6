@@ -71,6 +71,10 @@ MEMBER_DB_SCHEMA=members
 REVIEW_DB_URL=postgresql://user:password@host:5432/review_db
 REVIEW_DB_SCHEMA=reviews
 
+# optional; when set, standard apply and targeted rerun will write deterministic
+# submission zip archives locally and populate reviews.submission.url
+SUBMISSION_ARCHIVE_DIR=/tmp/mm-submission-archives
+
 # required for apply mode resource reconciliation
 RESOURCES_API_URL=https://api.topcoder-dev.com/v5/resources
 AUTH0_URL=https://topcoder-dev.auth0.com
@@ -104,6 +108,8 @@ For apply mode:
 
 - `DATABASE_URL`
 - `REVIEW_DB_URL`
+- `SUBMISSION_ARCHIVE_DIR` if you want standard apply or targeted rerun to
+  materialize submission archives and populate `reviews.submission.url`
 - `RESOURCES_API_URL`
 - `AUTH0_URL`
 - `AUTH0_AUDIENCE`
@@ -258,6 +264,9 @@ Expected rerun behavior:
 - existing submissions are backfilled with deterministic `systemFileName`,
   `virusScan=true`, and `isFileSubmission=true` when the review schema exposes
   those columns
+- when `SUBMISSION_ARCHIVE_DIR` is configured, standard apply also writes
+  deterministic local submission zip archives and backfills
+  `reviews.submission.url`
 - if legacy provisional rows are malformed, they are skipped/reported (not
   fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact;
   apply reruns continue and still complete successfully
