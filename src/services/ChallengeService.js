@@ -2506,6 +2506,30 @@ function isBillingAccountExpired(active, endDate) {
 }
 
 /**
+ * Determines whether challenge activation should skip expiry/funds validation
+ * for a billing account.
+ *
+ * Missing, inactive, and not-found checks still apply. The bypass is intended
+ * for specific accounts that must remain launchable despite expired dates or
+ * depleted remaining budget.
+ *
+ * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @returns {boolean} `true` when expiry/funds validation should be skipped.
+ */
+function shouldIgnoreChallengeActivationBillingValidation(billingAccountId) {
+  const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
+
+  if (!normalizedBillingAccountId) {
+    return false;
+  }
+
+  return _.includes(
+    _.map(config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS, normalizeOptionalString),
+    normalizedBillingAccountId,
+  );
+}
+
+/**
  * Validates the project billing account before activating a challenge.
  *
  * @param {object} params Validation inputs.
@@ -2514,7 +2538,8 @@ function isBillingAccountExpired(active, endDate) {
  * @param {object} params.challenge Existing challenge model.
  * @param {string|undefined|null} params.endDate Billing-account end date returned by Projects API.
  * @returns {Promise<void>} Resolves when the billing account can be used for launch.
- * @throws {errors.BadRequestError} When the billing account is missing, inactive, expired, or depleted.
+ * @throws {errors.BadRequestError} When the billing account is missing, inactive, or not found, or
+ * for non-ignored billing accounts, expired or depleted.
  */
 async function validateChallengeActivationBillingAccount({
   active,
@@ -2527,6 +2552,9 @@ async function validateChallengeActivationBillingAccount({
   }
 
   const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
+  const shouldIgnoreExpiryAndFundsValidation = shouldIgnoreChallengeActivationBillingValidation(
+    normalizedBillingAccountId,
+  );
 
   if (!normalizedBillingAccountId) {
     throw new errors.BadRequestError(
@@ -2543,7 +2571,10 @@ async function validateChallengeActivationBillingAccount({
     );
   }
 
-  if (isBillingAccountExpired(resolvedProjectActive, resolvedProjectEndDate)) {
+  if (
+    !shouldIgnoreExpiryAndFundsValidation &&
+    isBillingAccountExpired(resolvedProjectActive, resolvedProjectEndDate)
+  ) {
     throw new errors.BadRequestError(
       "Cannot activate challenge because the project billing account is expired.",
     );
@@ -2567,7 +2598,10 @@ async function validateChallengeActivationBillingAccount({
     );
   }
 
-  if (isBillingAccountExpired(resolvedActive, resolvedEndDate)) {
+  if (
+    !shouldIgnoreExpiryAndFundsValidation &&
+    isBillingAccountExpired(resolvedActive, resolvedEndDate)
+  ) {
     throw new errors.BadRequestError(
       "Cannot activate challenge because the project billing account is expired.",
     );
@@ -2575,7 +2609,7 @@ async function validateChallengeActivationBillingAccount({
 
   const remainingBudget = normalizeOptionalNumber(billingAccountDetails.totalBudgetRemaining);
 
-  if (!_.isNil(remainingBudget) && remainingBudget <= 0) {
+  if (!shouldIgnoreExpiryAndFundsValidation && !_.isNil(remainingBudget) && remainingBudget <= 0) {
     throw new errors.BadRequestError(
       "Cannot activate challenge because the project billing account has insufficient remaining funds.",
     );

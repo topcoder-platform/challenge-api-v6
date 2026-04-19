@@ -2073,6 +2073,42 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("update challenge - allow activating with an ignored project billing account that is expired and out of funds", async () => {
+      const activationChallenge = await createProjectActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      const originalGetBillingAccountDetails = projectHelper.getBillingAccountDetails;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        active: true,
+        billingAccountId: "80000062",
+        endDate: "2000-01-01T00:00:00.000Z",
+        markup: 0.25,
+      });
+      projectHelper.getBillingAccountDetails = async () => ({
+        active: true,
+        billingAccountId: "80000062",
+        endDate: "2000-01-01T00:00:00.000Z",
+        status: "ACTIVE",
+        totalBudgetRemaining: 0,
+      });
+
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: buildActivationReviewers(),
+          },
+        );
+        should.equal(updated.status, ChallengeStatusEnum.ACTIVE);
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        projectHelper.getBillingAccountDetails = originalGetBillingAccountDetails;
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+    });
+
     it("update challenge - prevent activating when reviewer is missing required fields", async () => {
       const activationChallenge = await createActivationChallenge();
       await prisma.challengeReviewer.create({

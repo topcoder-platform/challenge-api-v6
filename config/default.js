@@ -83,6 +83,14 @@ module.exports = {
     ? process.env.TOPGEAR_BILLING_ACCOUNTS_ID.split(",")
     : [],
 
+  // billing accounts that can bypass challenge activation expiry/funds validation
+  IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS: process.env
+    .IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS
+    ? process.env.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS.split(",")
+        .map((billingAccountId) => billingAccountId.trim())
+        .filter(Boolean)
+    : ["80000062"],
+
   // health check timeout in milliseconds
   HEALTH_CHECK_TIMEOUT: process.env.HEALTH_CHECK_TIMEOUT || 3000,
 
