@@ -1419,6 +1419,14 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     const archiveDir = buildArchiveDirPath("score-reconciliation");
     const fixtureDir = createTargetedScoreFixtureDataDirectory();
     try {
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            winners: [],
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
       const submissionArchiveStore = {
         listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
         updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
@@ -1497,11 +1505,13 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             ],
           ]),
         },
+        prisma,
         submissionArchiveStore,
         finalScoreStore,
         provisionalScoreStore,
         submissionArchiveDir: archiveDir,
         legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
         normalizedIdentityByCoderId: new Map([
           ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
         ]),
@@ -1525,6 +1535,28 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           isFinal: false,
         })
       );
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          winners: {
+            deleteMany: {
+              type: "PLACEMENT",
+            },
+            create: [
+              {
+                userId: 1,
+                handle: "alpha",
+                placement: 1,
+                type: "PLACEMENT",
+                createdBy: "importer",
+                updatedBy: "importer",
+              },
+            ],
+          },
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
       expect(result).toEqual({
         records: [
           {

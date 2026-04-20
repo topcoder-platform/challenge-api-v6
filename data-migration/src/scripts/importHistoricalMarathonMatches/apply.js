@@ -50,6 +50,7 @@ const TEMPORARY_RESOURCE_WRITE_STATUS = "ACTIVE";
 const CANONICAL_RATED_METADATA_NAME = "isRated";
 const LEGACY_RATING_METADATA_NAMES = ["rated", "unrated"];
 const RATED_METADATA_NAMES = [CANONICAL_RATED_METADATA_NAME, ...LEGACY_RATING_METADATA_NAMES];
+const PLACEMENT_WINNER_TYPE = "PLACEMENT";
 const buildFallbackImportedDescription = (legacyId) =>
   `Imported historical Marathon Match from legacy round ${legacyId}`;
 
@@ -317,6 +318,7 @@ const buildChallengeCreateData = ({
   timelineTemplateId,
   counters,
   windows,
+  placementWinners,
 }) => {
   const legacyId = parseRoundLegacyId(roundId);
   const registrationCount = counters && counters.eligibleRegistrants ? counters.eligibleRegistrants.size : 0;
@@ -331,7 +333,7 @@ const buildChallengeCreateData = ({
   const submissionCount = nonExampleSubmissionCount + exampleOnlyFinalistSubmissionCount;
   const descriptionPayload = resolveChallengeDescription({ legacyId, counters });
 
-  return {
+  const challengeData = {
     legacyId,
     name:
       String((round && (round.short_name || round.name)) || "").trim() ||
@@ -355,6 +357,290 @@ const buildChallengeCreateData = ({
     endDate: windows.review.endDate,
     createdBy: actor,
     updatedBy: actor,
+  };
+
+  if (Array.isArray(placementWinners) && placementWinners.length > 0) {
+    challengeData.winners = {
+      create: placementWinners,
+    };
+  }
+
+  return challengeData;
+};
+
+const parsePlacementWinnerUserId = (value) => {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const comparePlacementWinnerCandidates = (left, right) => {
+  const leftScore = Number.isFinite(left.aggregateScore) ? left.aggregateScore : Number.NEGATIVE_INFINITY;
+  const rightScore = Number.isFinite(right.aggregateScore) ? right.aggregateScore : Number.NEGATIVE_INFINITY;
+  if (leftScore !== rightScore) {
+    return rightScore - leftScore;
+  }
+
+  const leftLegacyPlacement = Number.isFinite(left.legacyPlacement)
+    ? left.legacyPlacement
+    : Number.MAX_SAFE_INTEGER;
+  const rightLegacyPlacement = Number.isFinite(right.legacyPlacement)
+    ? right.legacyPlacement
+    : Number.MAX_SAFE_INTEGER;
+  if (leftLegacyPlacement !== rightLegacyPlacement) {
+    return leftLegacyPlacement - rightLegacyPlacement;
+  }
+
+  return String(left.coderId || "").localeCompare(String(right.coderId || ""), undefined, {
+    numeric: true,
+  });
+};
+
+const normalizePlacementWinnerRecord = (winner) => {
+  const userId = parsePlacementWinnerUserId(winner && winner.userId);
+  const placement = parsePlacementWinnerUserId(winner && winner.placement);
+  const handle = String(winner && winner.handle ? winner.handle : "").trim();
+  if (!userId || !placement || !handle) {
+    return null;
+  }
+
+  return {
+    userId,
+    handle,
+    placement,
+    type: PLACEMENT_WINNER_TYPE,
+  };
+};
+
+const resolvePlacementWinnerIdentity = (
+  coderId,
+  normalizedIdentityByCoderId = new Map()
+) => {
+  const normalizedCoderId = String(coderId || "").trim();
+  if (!normalizedCoderId) {
+    return null;
+  }
+
+  const knownIdentity = normalizedIdentityByCoderId.get(normalizedCoderId);
+  const memberId = parsePlacementWinnerUserId(knownIdentity && knownIdentity.memberId);
+  if (memberId) {
+    return {
+      coderId: normalizedCoderId,
+      memberId,
+      memberHandle: String(
+        knownIdentity && knownIdentity.memberHandle ? knownIdentity.memberHandle : ""
+      ).trim() || null,
+    };
+  }
+
+  const fallbackMemberId = parsePlacementWinnerUserId(normalizedCoderId);
+  if (!fallbackMemberId) {
+    return null;
+  }
+
+  return {
+    coderId: normalizedCoderId,
+    memberId: fallbackMemberId,
+    memberHandle: null,
+  };
+};
+
+/**
+ * Build deterministic placement winners for a round from positive final-score rows.
+ * Winners are ranked by descending aggregate score, with legacy placement and coder id
+ * used only as stable tie-breakers so reruns keep the same ordering.
+ *
+ * @param {Object} params winner derivation inputs
+ * @param {string} params.roundId legacy round id
+ * @param {Map<string, Array<object>>} params.finalRowsByRoundId final rows keyed by round id
+ * @param {Map<string, object>} params.normalizedIdentityByCoderId normalized member identities keyed by coder id
+ * @param {string} params.actor audit actor for nested winner writes
+ * @returns {Array<object>} Prisma nested create inputs for placement winners
+ */
+const buildPlacementWinnersForRound = ({
+  roundId,
+  finalRowsByRoundId,
+  normalizedIdentityByCoderId,
+  actor,
+}) => {
+  const actorName = String(actor || "").trim() || "historical-mm-importer";
+  const candidateByUserId = new Map();
+  const finalRows = finalRowsByRoundId instanceof Map ? finalRowsByRoundId.get(roundId) || [] : [];
+
+  finalRows.forEach((finalRow) => {
+    if (!Number.isFinite(finalRow && finalRow.aggregateScore) || finalRow.aggregateScore <= 0) {
+      return;
+    }
+
+    const identity = resolvePlacementWinnerIdentity(
+      finalRow && finalRow.coderId,
+      normalizedIdentityByCoderId
+    );
+    const userId = parsePlacementWinnerUserId(identity && identity.memberId);
+    if (!userId) {
+      return;
+    }
+
+    const candidate = {
+      userId,
+      handle:
+        String(
+          (identity && identity.memberHandle) ||
+            (identity && identity.memberId) ||
+            (finalRow && finalRow.coderId) ||
+            ""
+        ).trim(),
+      aggregateScore: finalRow.aggregateScore,
+      legacyPlacement: finalRow.legacyPlacement,
+      coderId: finalRow.coderId,
+    };
+    if (!candidate.handle) {
+      return;
+    }
+
+    const existing = candidateByUserId.get(candidate.userId);
+    if (!existing || comparePlacementWinnerCandidates(candidate, existing) < 0) {
+      candidateByUserId.set(candidate.userId, candidate);
+    }
+  });
+
+  return Array.from(candidateByUserId.values())
+    .sort(comparePlacementWinnerCandidates)
+    .map((candidate, index) => ({
+      userId: candidate.userId,
+      handle: candidate.handle,
+      placement: index + 1,
+      type: PLACEMENT_WINNER_TYPE,
+      createdBy: actorName,
+      updatedBy: actorName,
+    }));
+};
+
+/**
+ * Replace placement winners on an imported challenge with a deterministic winner list.
+ *
+ * @param {Object} params winner write inputs
+ * @param {Object} params.prisma Prisma client or transaction exposing challenge.update
+ * @param {string} params.challengeId target v6 challenge id
+ * @param {Array<object>} params.placementWinners desired placement winners
+ * @param {string} params.actor audit actor for challenge updates
+ * @returns {Promise<void>}
+ */
+const setChallengePlacementWinners = async ({
+  prisma,
+  challengeId,
+  placementWinners,
+  actor,
+}) => {
+  if (!prisma || !prisma.challenge || typeof prisma.challenge.update !== "function") {
+    throw new Error("Challenge winner reconciliation requires Prisma challenge.update.");
+  }
+
+  await prisma.challenge.update({
+    where: { id: challengeId },
+    data: {
+      winners: {
+        deleteMany: {
+          type: PLACEMENT_WINNER_TYPE,
+        },
+        ...(placementWinners.length > 0
+          ? {
+            create: placementWinners,
+          }
+          : {}),
+      },
+      updatedBy: String(actor || "").trim() || "historical-mm-importer",
+    },
+    select: { id: true },
+  });
+};
+
+/**
+ * Idempotently reconcile placement winners for targeted reruns.
+ *
+ * @param {Object} params winner reconciliation inputs
+ * @param {Object} params.prisma Prisma client exposing challenge.findUnique/update
+ * @param {string} params.challengeId target v6 challenge id
+ * @param {Array<object>} params.placementWinners desired placement winners
+ * @param {string} params.actor audit actor for challenge updates
+ * @returns {Promise<{updated: boolean, winnerCount: number}>} whether a challenge write was needed
+ */
+const reconcileChallengePlacementWinners = async ({
+  prisma,
+  challengeId,
+  placementWinners,
+  actor,
+}) => {
+  if (
+    !prisma ||
+    !prisma.challenge ||
+    typeof prisma.challenge.findUnique !== "function" ||
+    typeof prisma.challenge.update !== "function"
+  ) {
+    throw new Error(
+      "Challenge winner reconciliation requires Prisma challenge.findUnique and challenge.update."
+    );
+  }
+
+  const existingChallenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    select: {
+      winners: {
+        where: {
+          type: PLACEMENT_WINNER_TYPE,
+        },
+        orderBy: [{ placement: "asc" }, { userId: "asc" }],
+        select: {
+          userId: true,
+          handle: true,
+          placement: true,
+          type: true,
+        },
+      },
+    },
+  });
+  if (!existingChallenge) {
+    throw new Error(`Unable to read challenge winners for ${challengeId}.`);
+  }
+
+  const normalizedExisting = ((existingChallenge && existingChallenge.winners) || [])
+    .map(normalizePlacementWinnerRecord)
+    .filter(Boolean);
+  const normalizedDesired = (placementWinners || [])
+    .map(normalizePlacementWinnerRecord)
+    .filter(Boolean);
+  const winnersMatch =
+    normalizedExisting.length === normalizedDesired.length &&
+    normalizedExisting.every((winner, index) => {
+      const desiredWinner = normalizedDesired[index];
+      return (
+        desiredWinner &&
+        winner.userId === desiredWinner.userId &&
+        winner.handle === desiredWinner.handle &&
+        winner.placement === desiredWinner.placement &&
+        winner.type === desiredWinner.type
+      );
+    });
+
+  if (winnersMatch) {
+    return {
+      updated: false,
+      winnerCount: normalizedDesired.length,
+    };
+  }
+
+  await setChallengePlacementWinners({
+    prisma,
+    challengeId,
+    placementWinners,
+    actor,
+  });
+
+  return {
+    updated: true,
+    winnerCount: normalizedDesired.length,
   };
 };
 
@@ -391,6 +677,7 @@ const applyCreateRound = async ({
   dataScienceTrackId,
   timelineTemplateId,
   phaseIdsByName,
+  placementWinners = null,
 }) => {
   const legacyId = parseRoundLegacyId(roundId);
 
@@ -453,6 +740,14 @@ const applyCreateRound = async ({
         round,
         actor,
       });
+      if (Array.isArray(placementWinners)) {
+        await setChallengePlacementWinners({
+          prisma: tx,
+          challengeId: existingChallenge.id,
+          placementWinners,
+          actor,
+        });
+      }
 
       return {
         status: "existing",
@@ -472,6 +767,7 @@ const applyCreateRound = async ({
         timelineTemplateId,
         counters,
         windows,
+        placementWinners,
       }),
       select: { id: true },
     });
@@ -1093,12 +1389,14 @@ const runTargetedRerunMode = async ({
   const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
   let finalScoreReconciliation = null;
   let provisionalScoreReconciliation = null;
+  let winnerReconciliation = null;
+  let targetedRerunNormalizedIdentityByCoderId =
+    providedNormalizedIdentityByCoderId instanceof Map
+      ? providedNormalizedIdentityByCoderId
+      : null;
+  let roundFinalRowsByRoundId = new Map();
   if (finalScoreReconciliationEnabled || provisionalScoreReconciliationEnabled) {
-    let normalizedIdentityByCoderId =
-      providedNormalizedIdentityByCoderId instanceof Map
-        ? providedNormalizedIdentityByCoderId
-        : null;
-    let roundFinalRowsByRoundId = new Map();
+    let normalizedIdentityByCoderId = targetedRerunNormalizedIdentityByCoderId;
     let roundProvisionalRowsByRoundId = new Map();
 
     if (finalScoreReconciliationEnabled) {
@@ -1152,6 +1450,7 @@ const runTargetedRerunMode = async ({
           })
           : new Map();
     }
+    targetedRerunNormalizedIdentityByCoderId = normalizedIdentityByCoderId;
 
     if (finalScoreReconciliationEnabled) {
       const missingMemberFinalSkipMemberIdsByRoundId =
@@ -1213,6 +1512,16 @@ const runTargetedRerunMode = async ({
       });
     }
   }
+
+  const placementWinners =
+    finalScoreReconciliationEnabled
+      ? buildPlacementWinnersForRound({
+        roundId: selection.roundId,
+        finalRowsByRoundId: roundFinalRowsByRoundId,
+        normalizedIdentityByCoderId: targetedRerunNormalizedIdentityByCoderId || new Map(),
+        actor,
+      })
+      : null;
 
   const hasFinalScoreWrites = Boolean(
     finalScoreReconciliation &&
@@ -1300,7 +1609,21 @@ const runTargetedRerunMode = async ({
     status = "targeted-rerun-applied";
   }
 
-  const hasWritesAttempted = hasDescriptionWrite || hasSubmissionArchiveWrites || hasScoreWrites;
+  if (Array.isArray(placementWinners)) {
+    winnerReconciliation = await reconcileChallengePlacementWinners({
+      prisma,
+      challengeId: selection.challengeId,
+      placementWinners,
+      actor,
+    });
+    if (winnerReconciliation.updated) {
+      status = "targeted-rerun-applied";
+    }
+  }
+
+  const hasWinnerWrite = Boolean(winnerReconciliation && winnerReconciliation.updated);
+  const hasWritesAttempted =
+    hasDescriptionWrite || hasSubmissionArchiveWrites || hasScoreWrites || hasWinnerWrite;
   const summaryDescriptionUpdated = descriptionUpdated ? 1 : 0;
   const summaryDescriptionPreserved = descriptionUpdated ? 0 : 1;
 
@@ -1635,6 +1958,15 @@ const runApplyMode = async ({
     }
 
     try {
+      const placementWinners =
+        finalScoreImportEnabled
+          ? buildPlacementWinnersForRound({
+            roundId,
+            finalRowsByRoundId: roundFinalRowsByRoundId,
+            normalizedIdentityByCoderId,
+            actor,
+          })
+          : null;
       const result = await applyCreateRound({
         prisma,
         roundId,
@@ -1645,6 +1977,7 @@ const runApplyMode = async ({
         dataScienceTrackId,
         timelineTemplateId,
         phaseIdsByName,
+        placementWinners,
       });
       const resourceReconciliation = await reconcileSubmitterResourcesForRound({
         challengeId: result.challengeId,
