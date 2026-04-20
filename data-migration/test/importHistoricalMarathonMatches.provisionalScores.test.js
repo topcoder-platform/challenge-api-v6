@@ -452,6 +452,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       alreadyPresentProvisionalScores: 0,
       createdProvisionalScores: 0,
       updatedProvisionalScores: 1,
+      demotedFinalScores: 0,
       malformedSkippedProvisionalScores: 0,
       missingMemberSkippedProvisionalScores: 0,
       importedDistinctSubmitters: 1,
@@ -467,6 +468,116 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
         submissionId: "sub-10010001",
         aggregateScore: 9.5,
         legacySubmissionId: "10010001",
+        isFinal: false,
+        isExample: false,
+      }),
+    ]);
+  });
+
+  test("demotes misclassified final summations on non-final submissions during targeted rerun", async () => {
+    const rowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longSubmissionPattern: "^long_submission_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+    rowsByRoundId.set(
+      "9892",
+      (rowsByRoundId.get("9892") || []).filter((row) => row.coderId === "1")
+    );
+
+    const created = [];
+    const updated = [];
+    const provisionalScoreStore = {
+      listImportedNonExampleSubmissionsByLegacySubmissionId: async () =>
+        new Map([
+          [
+            "10010001",
+            {
+              id: "sub-10010001",
+              memberId: "1",
+              legacySubmissionId: "10010001",
+              submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+              createdAt: new Date("2020-01-01T01:00:00.000Z"),
+            },
+          ],
+          [
+            "10010003",
+            {
+              id: "sub-10010003",
+              memberId: "1",
+              legacySubmissionId: "10010003",
+              submittedDate: new Date("2020-01-01T02:00:00.000Z"),
+              createdAt: new Date("2020-01-01T02:00:00.000Z"),
+            },
+          ],
+        ]),
+      listExistingProvisionalSummationsBySubmissionId: async () => new Map(),
+      listExistingFinalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-10010001",
+            [{ id: "final-misclassified", submissionId: "sub-10010001", aggregateScore: 999 }],
+          ],
+          [
+            "sub-10010003",
+            [{ id: "final-correct", submissionId: "sub-10010003", aggregateScore: 8.25 }],
+          ],
+        ]),
+      createProvisionalSummation: async (payload) => {
+        created.push(payload);
+      },
+      updateProvisionalSummation: async (payload) => {
+        updated.push(payload);
+      },
+    };
+
+    const result = await reconcileRoundProvisionalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      provisionalRowsByRoundId: rowsByRoundId,
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+      ]),
+      provisionalScoreStore,
+      updateExistingScores: true,
+      finalLegacySubmissionIdsByRoundId: new Map([
+        ["9892", [{ legacySubmissionId: "10010003" }]],
+      ]),
+    });
+
+    expect(result).toEqual({
+      legacyNonExampleProvisionalScores: 2,
+      legacyExampleOnlyFinalistProvisionalScores: 0,
+      importedProvisionalScores: 2,
+      alreadyPresentProvisionalScores: 0,
+      createdProvisionalScores: 1,
+      updatedProvisionalScores: 1,
+      demotedFinalScores: 1,
+      malformedSkippedProvisionalScores: 0,
+      missingMemberSkippedProvisionalScores: 0,
+      importedDistinctSubmitters: 1,
+      missingMemberDistinctSubmitters: 0,
+      importedProvisionalCountsByMemberId: {
+        1: 2,
+      },
+      skippedProvisionalRecords: [],
+    });
+    expect(updated).toEqual([
+      expect.objectContaining({
+        reviewSummationId: "final-misclassified",
+        submissionId: "sub-10010001",
+        aggregateScore: 9.5,
+        legacySubmissionId: "10010001",
+        isFinal: false,
+        isExample: false,
+      }),
+    ]);
+    expect(created).toEqual([
+      expect.objectContaining({
+        submissionId: "sub-10010003",
+        aggregateScore: 8.25,
+        legacySubmissionId: "10010003",
         isFinal: false,
         isExample: false,
       }),

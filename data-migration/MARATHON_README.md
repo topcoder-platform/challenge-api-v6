@@ -335,6 +335,9 @@ Targeted rerun is patch-only and idempotent:
 
 - it may patch challenge `description`, submission archive/url data, and
   existing final/provisional review summation scores
+- it demotes legacy provisional review summations that were previously imported
+  as final, using `long_component_state.submission_number` to preserve only the
+  explicit final submission for each coder as final
 - it must not mutate phases, resources, or review-summation identities
 - rerunning the same targeted patch converges without creating duplicates
 

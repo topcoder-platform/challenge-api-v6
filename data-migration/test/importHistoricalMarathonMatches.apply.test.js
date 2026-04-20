@@ -1594,6 +1594,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
               alreadyPresentProvisionalScores: 0,
               createdProvisionalScores: 0,
               updatedProvisionalScores: 1,
+              demotedFinalScores: 0,
               malformedSkippedProvisionalScores: 0,
               missingMemberSkippedProvisionalScores: 0,
               importedDistinctSubmitters: 1,
@@ -1631,6 +1632,172 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           skippedFileArtifact: null,
         },
       });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode demotes final scores from non-final legacy submissions", async () => {
+    const archiveDir = buildArchiveDirPath("score-demotion");
+    const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-targeted-score-demotion-"));
+    try {
+      writeJson(fixtureDir, "long_component_state_1.json", "long_component_state", [
+        {
+          long_component_state_id: "1001",
+          round_id: "9892",
+          coder_id: "1",
+          points: "100.0",
+          submission_number: "2",
+        },
+      ]);
+      writeJson(fixtureDir, "long_comp_result_1.json", "long_comp_result", [
+        {
+          round_id: "9892",
+          coder_id: "1",
+          system_point_total: "100.0",
+          point_total: "95.0",
+          placed: "1",
+        },
+      ]);
+      writeJson(fixtureDir, "long_submission_1.json", "long_submission", [
+        {
+          long_component_state_id: "1001",
+          submission_number: "1",
+          example: "0",
+          submit_time: "1000",
+          submission_points: "9.5",
+        },
+        {
+          long_component_state_id: "1001",
+          submission_number: "2",
+          example: "0",
+          submit_time: "2000",
+          submission_points: "11.5",
+        },
+      ]);
+
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            winners: [],
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const importedSubmissions = [
+        {
+          id: "sub-1",
+          memberId: "101",
+          legacySubmissionId: "10010001",
+          submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+          createdAt: new Date("2020-01-01T01:00:00.000Z"),
+        },
+        {
+          id: "sub-2",
+          memberId: "101",
+          legacySubmissionId: "10010002",
+          submittedDate: new Date("2020-01-01T02:00:00.000Z"),
+          createdAt: new Date("2020-01-01T02:00:00.000Z"),
+        },
+      ];
+      const existingFinalSummationsBySubmissionId = new Map([
+        [
+          "sub-1",
+          [{ id: "final-misclassified", submissionId: "sub-1", aggregateScore: 9.5 }],
+        ],
+        [
+          "sub-2",
+          [{ id: "final-correct", submissionId: "sub-2", aggregateScore: 100 }],
+        ],
+      ]);
+      const finalScoreStore = {
+        listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue(importedSubmissions),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          existingFinalSummationsBySubmissionId
+        ),
+        createFinalSummation: jest.fn().mockResolvedValue(undefined),
+        updateFinalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+      const provisionalScoreStore = {
+        listImportedNonExampleSubmissionsByLegacySubmissionId: jest.fn().mockResolvedValue(
+          new Map(importedSubmissions.map((submission) => [submission.legacySubmissionId, submission]))
+        ),
+        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(new Map()),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          existingFinalSummationsBySubmissionId
+        ),
+        createProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        updateProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+          dataDir: fixtureDir,
+          longComponentStateFile: "long_component_state_1.json",
+          longSubmissionPattern: "^long_submission_\\d+\\.json$",
+          longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                finalCandidateCoderIds: new Set(["1"]),
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore: {
+          listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+          updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+        },
+        finalScoreStore,
+        provisionalScoreStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+        normalizedIdentityByCoderId: new Map([
+          ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
+        ]),
+      });
+
+      expect(finalScoreStore.updateFinalSummation).not.toHaveBeenCalled();
+      expect(provisionalScoreStore.updateProvisionalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "final-misclassified",
+          submissionId: "sub-1",
+          aggregateScore: 9.5,
+          legacySubmissionId: "10010001",
+          isFinal: false,
+        })
+      );
+      expect(provisionalScoreStore.createProvisionalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          submissionId: "sub-2",
+          aggregateScore: 11.5,
+          legacySubmissionId: "10010002",
+          isFinal: false,
+        })
+      );
+      expect(result.records[0].provisionalScoreReconciliation).toEqual(
+        expect.objectContaining({
+          importedProvisionalScores: 2,
+          createdProvisionalScores: 1,
+          updatedProvisionalScores: 1,
+          demotedFinalScores: 1,
+        })
+      );
     } finally {
       fs.rmSync(archiveDir, { recursive: true, force: true });
       fs.rmSync(fixtureDir, { recursive: true, force: true });

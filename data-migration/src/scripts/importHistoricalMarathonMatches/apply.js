@@ -1642,6 +1642,7 @@ const runTargetedRerunMode = async ({
           missingMemberProvisionalSkipMemberIdsByRoundId.get(selection.roundId) || new Set(),
         provisionalScoreStore: resolvedProvisionalScoreStore,
         updateExistingScores: true,
+        finalLegacySubmissionIdsByRoundId: roundFinalRowsByRoundId,
       });
     }
   }
@@ -2198,6 +2199,7 @@ const runApplyMode = async ({
             missingMemberProvisionalSkipMemberIds:
                 missingMemberProvisionalSkipMemberIdsByRoundId.get(roundId) || new Set(),
             provisionalScoreStore,
+            finalLegacySubmissionIdsByRoundId: roundFinalRowsByRoundId,
           })
           : null;
       if (

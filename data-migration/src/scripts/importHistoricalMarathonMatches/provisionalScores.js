@@ -134,6 +134,51 @@ const normalizeCoderIdSetByRoundId = (value) => {
   return byRoundId;
 };
 
+/**
+ * Normalizes the explicit final legacy submission ids by legacy round. Targeted
+ * score reruns use this marker to repair old provisional rows that were
+ * mistakenly imported as final review summations.
+ *
+ * @param {Map<string, Iterable<string|object>>} value map keyed by round id; each
+ *   entry may contain legacy submission ids or final-row objects with a
+ *   `legacySubmissionId` field
+ * @returns {Map<string, Set<string>>} normalized legacy submission ids by round
+ * @throws Does not throw.
+ */
+const normalizeLegacySubmissionIdSetByRoundId = (value) => {
+  const byRoundId = new Map();
+  if (!(value instanceof Map)) {
+    return byRoundId;
+  }
+
+  value.forEach((submissionIdsOrRows, roundId) => {
+    const normalizedRoundId = String(roundId || "").trim();
+    if (!normalizedRoundId) {
+      return;
+    }
+
+    const normalizedSubmissionIds = new Set(
+      Array.from(submissionIdsOrRows || [])
+        .map((submissionIdOrRow) => {
+          if (
+            submissionIdOrRow &&
+            typeof submissionIdOrRow === "object" &&
+            !Array.isArray(submissionIdOrRow)
+          ) {
+            return String(submissionIdOrRow.legacySubmissionId || "").trim();
+          }
+          return String(submissionIdOrRow || "").trim();
+        })
+        .filter(Boolean)
+    );
+    if (normalizedSubmissionIds.size > 0) {
+      byRoundId.set(normalizedRoundId, normalizedSubmissionIds);
+    }
+  });
+
+  return byRoundId;
+};
+
 const selectLaterProvisionalRow = (currentRow, candidateRow) => {
   if (!currentRow) {
     return candidateRow || null;
@@ -305,6 +350,7 @@ const reconcileRoundProvisionalScores = async ({
   missingMemberProvisionalSkipMemberIds = new Set(),
   provisionalScoreStore,
   updateExistingScores = false,
+  finalLegacySubmissionIdsByRoundId = new Map(),
 }) => {
   if (
     !provisionalScoreStore ||
@@ -331,6 +377,18 @@ const reconcileRoundProvisionalScores = async ({
     await provisionalScoreStore.listExistingProvisionalSummationsBySubmissionId({
       challengeId,
     });
+  const finalLegacySubmissionIds =
+    normalizeLegacySubmissionIdSetByRoundId(finalLegacySubmissionIdsByRoundId).get(roundId) ||
+    new Set();
+  const canDemoteMisclassifiedFinalScores =
+    updateExistingScores &&
+    finalLegacySubmissionIds.size > 0 &&
+    typeof provisionalScoreStore.listExistingFinalSummationsBySubmissionId === "function";
+  const existingFinalSummationsBySubmissionId = canDemoteMisclassifiedFinalScores
+    ? await provisionalScoreStore.listExistingFinalSummationsBySubmissionId({
+      challengeId,
+    })
+    : new Map();
   const missingMemberIds = new Set(
     Array.from(missingMemberProvisionalSkipMemberIds || [])
       .map((memberId) => normalizeMemberId(memberId))
@@ -340,6 +398,7 @@ const reconcileRoundProvisionalScores = async ({
   let createdProvisionalScores = 0;
   let alreadyPresentProvisionalScores = 0;
   let updatedProvisionalScores = 0;
+  let demotedFinalScores = 0;
   let malformedSkippedProvisionalScores = 0;
   let missingMemberSkippedProvisionalScores = 0;
   const importedCountsByMemberId = new Map();
@@ -465,6 +524,52 @@ const reconcileRoundProvisionalScores = async ({
       continue;
     }
 
+    const isExplicitFinalSubmission = finalLegacySubmissionIds.has(
+      String(provisionalRow.legacySubmissionId || "").trim()
+    );
+    const misclassifiedFinalSummations =
+      canDemoteMisclassifiedFinalScores && !isExplicitFinalSubmission
+        ? existingFinalSummationsBySubmissionId.get(submissionId) || []
+        : [];
+    if (misclassifiedFinalSummations.length > 0) {
+      if (typeof provisionalScoreStore.updateProvisionalSummation !== "function") {
+        throw new Error(
+          "provisionalScoreStore must provide updateProvisionalSummation when updateExistingScores is enabled."
+        );
+      }
+      await Promise.all(
+        misclassifiedFinalSummations.map((misclassifiedFinalSummation) =>
+          provisionalScoreStore.updateProvisionalSummation({
+            reviewSummationId: misclassifiedFinalSummation.id,
+            submissionId,
+            aggregateScore: provisionalRow.aggregateScore,
+            isPassing: provisionalRow.aggregateScore > 0,
+            reviewedDate:
+              importedSubmission.submittedDate || importedSubmission.createdAt || null,
+            legacySubmissionId: provisionalRow.legacySubmissionId || null,
+            isFinal: false,
+            isExample: false,
+            metadata: {
+              legacyRoundId: roundId,
+              legacyCoderId: provisionalRow.coderId,
+            },
+          })
+        )
+      );
+      existingFinalSummationsBySubmissionId.set(submissionId, []);
+      existingProvisionalSummationsBySubmissionId.set(
+        submissionId,
+        misclassifiedFinalSummations.map((misclassifiedFinalSummation) => ({
+          ...misclassifiedFinalSummation,
+          aggregateScore: provisionalRow.aggregateScore,
+        }))
+      );
+      updatedProvisionalScores += 1;
+      demotedFinalScores += misclassifiedFinalSummations.length;
+      incrementImportedCount(memberId);
+      continue;
+    }
+
     await provisionalScoreStore.createProvisionalSummation({
       submissionId,
       aggregateScore: provisionalRow.aggregateScore,
@@ -496,7 +601,7 @@ const reconcileRoundProvisionalScores = async ({
       createdProvisionalScores + updatedProvisionalScores + alreadyPresentProvisionalScores,
     alreadyPresentProvisionalScores,
     createdProvisionalScores,
-    ...(updateExistingScores ? { updatedProvisionalScores } : {}),
+    ...(updateExistingScores ? { updatedProvisionalScores, demotedFinalScores } : {}),
     malformedSkippedProvisionalScores,
     missingMemberSkippedProvisionalScores,
     importedDistinctSubmitters: importedMemberIds.size,
@@ -651,6 +756,44 @@ const createReviewProvisionalScoreStore = async ({
     return bySubmissionId;
   };
 
+  const listExistingFinalSummationsBySubmissionId = async ({
+    challengeId,
+  }) => {
+    const whereClauses = [
+      `s."challengeId" = $1`,
+      `COALESCE(rs."isFinal", false) = true`,
+    ];
+    if (reviewSummationColumnsByName.has("isExample")) {
+      whereClauses.push(`COALESCE(rs."isExample", false) = false`);
+    }
+    const rows = await reviewClient.$queryRawUnsafe(
+      `SELECT ${reviewSummationColumnsByName.has("id") ? 'rs."id" AS "id",' : ""}
+              rs."submissionId" AS "submissionId",
+              rs."aggregateScore" AS "aggregateScore"
+         FROM ${reviewSummationTable} rs
+         INNER JOIN ${submissionTable} s ON s."id" = rs."submissionId"
+        WHERE ${whereClauses.join(" AND ")}`,
+      challengeId
+    );
+
+    const bySubmissionId = new Map();
+    (rows || []).forEach((row) => {
+      const submissionId = String(row && row.submissionId ? row.submissionId : "").trim();
+      if (!submissionId) {
+        return;
+      }
+      if (!bySubmissionId.has(submissionId)) {
+        bySubmissionId.set(submissionId, []);
+      }
+      bySubmissionId.get(submissionId).push({
+        id: String(row && row.id ? row.id : "").trim() || null,
+        submissionId,
+        aggregateScore: parseNumericScore(row && row.aggregateScore),
+      });
+    });
+    return bySubmissionId;
+  };
+
   const createProvisionalSummation = async ({
     submissionId,
     aggregateScore,
@@ -772,6 +915,7 @@ const createReviewProvisionalScoreStore = async ({
   return {
     listImportedNonExampleSubmissionsByLegacySubmissionId,
     listExistingProvisionalSummationsBySubmissionId,
+    listExistingFinalSummationsBySubmissionId,
     createProvisionalSummation,
     updateProvisionalSummation,
   };
