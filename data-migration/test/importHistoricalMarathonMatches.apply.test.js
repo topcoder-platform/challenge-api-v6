@@ -1653,6 +1653,25 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
         updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
       };
+      const submissionStore = {
+        listExistingSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "10010001",
+              {
+                legacySubmissionId: "10010001",
+                memberId: "101",
+                submitter: "101",
+                systemFileName: null,
+                virusScan: null,
+                isFileSubmission: null,
+              },
+            ],
+          ])
+        ),
+        createSubmission: jest.fn().mockResolvedValue(undefined),
+        updateSubmissionMetadata: jest.fn().mockResolvedValue(true),
+      };
       const finalScoreStore = {
         listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue([
           {
@@ -1702,17 +1721,28 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           ]),
         },
         prisma,
+        submissionStore,
         submissionArchiveStore,
         finalScoreStore,
         submissionArchiveDir: archiveDir,
-        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
         actor: "importer",
         normalizedIdentityByCoderId: new Map([
           ["1", { coderId: "1", memberId: 101, memberHandle: null }],
         ]),
+        resolveMemberIdentities: jest.fn().mockResolvedValue(
+          new Map([["101", { memberId: "101", memberHandle: "alpha" }]])
+        ),
       });
 
       expect(finalScoreStore.updateFinalSummation).not.toHaveBeenCalled();
+      expect(submissionStore.updateSubmissionMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({
+          challengeId: "challenge-1",
+          legacySubmissionId: "10010001",
+          memberId: "101",
+          memberHandle: "alpha",
+        })
+      );
       expect(prisma.challenge.update).toHaveBeenCalledWith({
         where: { id: "challenge-1" },
         data: {
@@ -1723,7 +1753,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             create: [
               {
                 userId: 101,
-                handle: "101",
+                handle: "alpha",
                 placement: 1,
                 type: "PLACEMENT",
                 createdBy: "importer",
@@ -1748,6 +1778,20 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             explicitSkippedFinalScores: 0,
             runtimeSkipRecords: [],
           },
+          submissionReconciliation: {
+            legacyNonExampleSubmissions: 1,
+            legacyExampleOnlyFinalistSubmissions: 0,
+            importedSubmissions: 1,
+            alreadyPresentSubmissions: 1,
+            createdSubmissions: 0,
+            missingMemberSkippedSubmissions: 0,
+            importedDistinctSubmitters: 1,
+            missingMemberDistinctSubmitters: 0,
+            importedSubmissionCountsByMemberId: {
+              101: 1,
+            },
+            skippedSubmissionRecords: [],
+          },
           winnerReconciliation: {
             updated: true,
             winnerCount: 1,
@@ -1756,6 +1800,8 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       );
       expect(result.summary).toEqual(
         expect.objectContaining({
+          targetedRerunSubmissionsCreated: 0,
+          targetedRerunSubmissionsAlreadyPresent: 1,
           targetedRerunFinalScoresUpdated: 0,
           targetedRerunWinnerCount: 1,
           targetedRerunWinnersUpdated: 1,

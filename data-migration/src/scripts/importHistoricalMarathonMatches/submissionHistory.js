@@ -395,6 +395,9 @@ const createReviewSubmissionStore = async ({
     if (columnsByName.has("isFileSubmission")) {
       selectedColumns.push(`"isFileSubmission"`);
     }
+    if (columnsByName.has("submittedDate")) {
+      selectedColumns.push(`"submittedDate"`);
+    }
 
     const rows = await reviewClient.$queryRawUnsafe(
       `SELECT ${selectedColumns.join(", ")}
@@ -424,6 +427,7 @@ const createReviewSubmissionStore = async ({
           row && (row.isFileSubmission === true || row.isFileSubmission === false)
             ? row.isFileSubmission
             : null,
+        submittedDate: row && row.submittedDate ? row.submittedDate : null,
       });
     });
     return byLegacyId;
@@ -524,6 +528,9 @@ const createReviewSubmissionStore = async ({
    * @param {Object} params reconciliation parameters
    * @param {string} params.challengeId v6 challenge identifier for the submission row
    * @param {string} params.legacySubmissionId deterministic legacy submission identifier
+   * @param {string|number} [params.memberId] expected member id for the submission row
+   * @param {string} [params.memberHandle] expected submitter handle for the submission row
+   * @param {Date|string} [params.submittedDate] expected submitted date for the row
    * @param {Object} [params.existingSubmission] current row snapshot returned from
    * listExistingSubmissionsByLegacyId
    * @returns {Promise<boolean>} true when an UPDATE was issued, otherwise false
@@ -532,6 +539,9 @@ const createReviewSubmissionStore = async ({
   const updateSubmissionMetadata = async ({
     challengeId,
     legacySubmissionId,
+    memberId = null,
+    memberHandle = null,
+    submittedDate = null,
     existingSubmission = null,
   }) => {
     const normalizedLegacySubmissionId = String(legacySubmissionId || "").trim();
@@ -574,11 +584,41 @@ const createReviewSubmissionStore = async ({
     ) {
       pushAssignment("isFileSubmission", true);
     }
+    const normalizedMemberId = normalizeMemberId(memberId);
+    const currentMemberId = normalizeMemberId(existingSubmission && existingSubmission.memberId);
+    if (
+      columnsByName.has("memberId") &&
+      normalizedMemberId &&
+      currentMemberId !== normalizedMemberId
+    ) {
+      pushAssignment("memberId", normalizedMemberId);
+    }
+    const normalizedMemberHandle = String(memberHandle || "").trim();
+    const currentSubmitter = String(
+      existingSubmission && existingSubmission.submitter ? existingSubmission.submitter : ""
+    ).trim();
+    if (
+      columnsByName.has("submitter") &&
+      normalizedMemberHandle &&
+      currentSubmitter !== normalizedMemberHandle
+    ) {
+      pushAssignment("submitter", normalizedMemberHandle);
+    }
+    if (
+      columnsByName.has("submittedDate") &&
+      submittedDate &&
+      !(existingSubmission && existingSubmission.submittedDate)
+    ) {
+      pushAssignment("submittedDate", submittedDate);
+    }
     if (assignments.length === 0) {
       return false;
     }
     if (columnsByName.has("updatedBy")) {
       pushAssignment("updatedBy", actor);
+    }
+    if (columnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", new Date());
     }
 
     values.push(challengeId);
@@ -763,6 +803,9 @@ const reconcileRoundSubmissionHistory = async ({
         await submissionStore.updateSubmissionMetadata({
           challengeId,
           legacySubmissionId: row.legacySubmissionId,
+          memberId,
+          memberHandle,
+          submittedDate: row.submittedDate,
           existingSubmission: existing,
         });
       }

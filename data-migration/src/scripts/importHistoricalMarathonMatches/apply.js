@@ -470,6 +470,72 @@ const resolvePlacementWinnerHandle = (identity) => {
 };
 
 /**
+ * Backfills missing member handles in normalized identity maps from the target
+ * member database. It leaves Informix-provided handles intact and only fills gaps.
+ *
+ * @param {Object} params enrichment inputs
+ * @param {Map<string, object>} params.normalizedIdentityByCoderId identity map keyed by coder id
+ * @param {Function} [params.resolveMemberIdentities] target DB member identity resolver
+ * @returns {Promise<Map<string, object>>} identity map with missing handles hydrated when possible
+ * @throws {Error} when the resolver query fails
+ */
+const hydrateMissingIdentityHandles = async ({
+  normalizedIdentityByCoderId,
+  resolveMemberIdentities,
+}) => {
+  if (
+    !(normalizedIdentityByCoderId instanceof Map) ||
+    typeof resolveMemberIdentities !== "function"
+  ) {
+    return normalizedIdentityByCoderId instanceof Map
+      ? normalizedIdentityByCoderId
+      : new Map();
+  }
+
+  const missingHandleMemberIds = new Set();
+  normalizedIdentityByCoderId.forEach((identity) => {
+    const memberId = parsePlacementWinnerUserId(identity && identity.memberId);
+    const memberHandle = String(
+      identity && identity.memberHandle ? identity.memberHandle : ""
+    ).trim();
+    if (memberId && !memberHandle) {
+      missingHandleMemberIds.add(String(memberId));
+    }
+  });
+
+  if (missingHandleMemberIds.size === 0) {
+    return normalizedIdentityByCoderId;
+  }
+
+  const identityByMemberId = await resolveMemberIdentities({
+    memberIds: Array.from(missingHandleMemberIds),
+  });
+  if (!(identityByMemberId instanceof Map) || identityByMemberId.size === 0) {
+    return normalizedIdentityByCoderId;
+  }
+
+  const hydratedIdentityByCoderId = new Map();
+  normalizedIdentityByCoderId.forEach((identity, coderId) => {
+    const memberId = parsePlacementWinnerUserId(identity && identity.memberId);
+    const targetIdentity = memberId ? identityByMemberId.get(String(memberId)) : null;
+    const targetHandle = String(
+      targetIdentity && targetIdentity.memberHandle ? targetIdentity.memberHandle : ""
+    ).trim();
+    hydratedIdentityByCoderId.set(
+      coderId,
+      targetHandle
+        ? {
+          ...identity,
+          memberHandle: targetHandle,
+        }
+        : identity
+    );
+  });
+
+  return hydratedIdentityByCoderId;
+};
+
+/**
  * Build deterministic placement winners for a round from positive final-score rows.
  * Winners are ranked by descending aggregate score, with legacy placement and coder id
  * used only as stable tie-breakers so reruns keep the same ordering.
@@ -1364,6 +1430,7 @@ const runTargetedRerunMode = async ({
   plan,
   prisma,
   actor = "historical-mm-importer",
+  submissionStore,
   submissionArchiveStore,
   finalScoreStore,
   provisionalScoreStore,
@@ -1372,6 +1439,7 @@ const runTargetedRerunMode = async ({
   legacySubmissionRowsByRoundId,
   submissionArchiveDir,
   normalizedIdentityByCoderId: providedNormalizedIdentityByCoderId,
+  resolveMemberIdentities,
 }) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const selection = resolveTargetedRerunSelection({ options, planRecordByRoundId });
@@ -1391,6 +1459,12 @@ const runTargetedRerunMode = async ({
     descriptionCandidate && descriptionCandidate.source === "legacy-problem-text";
   const hasComponentMarkdownUpdate =
     descriptionCandidate && descriptionCandidate.source === "legacy-component-text-markdown";
+  const roundSubmissionRowsByRoundId = await loadTargetedRerunLegacySubmissionRowsByRoundId({
+    selection,
+    options,
+    plan,
+    legacySubmissionRowsByRoundId,
+  });
   const submissionArchiveReconciliation =
     await reconcileTargetedRerunSubmissionArchives({
       selection,
@@ -1399,10 +1473,12 @@ const runTargetedRerunMode = async ({
       submissionArchiveStore,
       reviewClient,
       reviewSchema,
-      legacySubmissionRowsByRoundId,
+      legacySubmissionRowsByRoundId: roundSubmissionRowsByRoundId,
       submissionArchiveDir,
     });
   const hasSubmissionArchiveWrites = submissionArchiveReconciliation.archivesWritten > 0;
+  const submissionReconciliationEnabled = Boolean(submissionStore) || Boolean(reviewClient);
+  let submissionReconciliation = null;
   let finalScoreReconciliation = null;
   let provisionalScoreReconciliation = null;
   let winnerReconciliation = null;
@@ -1411,7 +1487,11 @@ const runTargetedRerunMode = async ({
       ? providedNormalizedIdentityByCoderId
       : null;
   let roundFinalRowsByRoundId = new Map();
-  if (finalScoreReconciliationEnabled || provisionalScoreReconciliationEnabled) {
+  if (
+    submissionReconciliationEnabled ||
+    finalScoreReconciliationEnabled ||
+    provisionalScoreReconciliationEnabled
+  ) {
     let normalizedIdentityByCoderId = targetedRerunNormalizedIdentityByCoderId;
     let roundProvisionalRowsByRoundId = new Map();
 
@@ -1456,6 +1536,14 @@ const runTargetedRerunMode = async ({
           }
         });
       });
+      roundSubmissionRowsByRoundId.forEach((rows) => {
+        (rows || []).forEach((row) => {
+          const coderId = String(row && row.coderId ? row.coderId : "").trim();
+          if (coderId) {
+            relevantCoderIds.add(coderId);
+          }
+        });
+      });
 
       normalizedIdentityByCoderId =
         relevantCoderIds.size > 0
@@ -1466,7 +1554,36 @@ const runTargetedRerunMode = async ({
           })
           : new Map();
     }
+    normalizedIdentityByCoderId = await hydrateMissingIdentityHandles({
+      normalizedIdentityByCoderId,
+      resolveMemberIdentities,
+    });
     targetedRerunNormalizedIdentityByCoderId = normalizedIdentityByCoderId;
+
+    if (submissionReconciliationEnabled) {
+      const missingMemberSubmissionSkipMemberIdsByRoundId =
+        collectMissingMemberSkipMemberIdsByRoundId({
+          roundIds: [selection.roundId],
+          planRecordByRoundId,
+          affectedSurface: "submission",
+        });
+      const resolvedSubmissionStore =
+        submissionStore ||
+        (await createReviewSubmissionStore({
+          reviewClient,
+          reviewSchema: reviewSchema || DEFAULT_REVIEW_SCHEMA,
+          actor,
+        }));
+      submissionReconciliation = await reconcileRoundSubmissionHistory({
+        roundId: selection.roundId,
+        challengeId: selection.challengeId,
+        rowsByRoundId: roundSubmissionRowsByRoundId,
+        normalizedIdentityByCoderId,
+        missingMemberSubmissionSkipMemberIds:
+          missingMemberSubmissionSkipMemberIdsByRoundId.get(selection.roundId) || new Set(),
+        submissionStore: resolvedSubmissionStore,
+      });
+    }
 
     if (finalScoreReconciliationEnabled) {
       const missingMemberFinalSkipMemberIdsByRoundId =
@@ -1662,6 +1779,7 @@ const runTargetedRerunMode = async ({
           : {}),
         reason,
         submissionArchiveReconciliation,
+        ...(submissionReconciliation ? { submissionReconciliation } : {}),
         ...(finalScoreReconciliation ? { finalScoreReconciliation } : {}),
         ...(provisionalScoreReconciliation ? { provisionalScoreReconciliation } : {}),
         ...(winnerReconciliation ? { winnerReconciliation } : {}),
@@ -1679,6 +1797,13 @@ const runTargetedRerunMode = async ({
       targetedRerunDescriptionPreserved: summaryDescriptionPreserved,
       targetedRerunSubmissionArchivesWritten: submissionArchiveReconciliation.archivesWritten,
       targetedRerunSubmissionUrlsUpdated: submissionArchiveReconciliation.urlsUpdated,
+      ...(submissionReconciliation
+        ? {
+          targetedRerunSubmissionsCreated: submissionReconciliation.createdSubmissions || 0,
+          targetedRerunSubmissionsAlreadyPresent:
+              submissionReconciliation.alreadyPresentSubmissions || 0,
+        }
+        : {}),
       ...(finalScoreReconciliation
         ? {
           targetedRerunFinalScoresCreated: finalScoreReconciliation.createdFinalScores || 0,
@@ -1711,6 +1836,7 @@ const runApplyMode = async ({
   plan,
   actor,
   normalizedIdentityByCoderId: providedNormalizedIdentityByCoderId,
+  resolveMemberIdentities,
 }) => {
   const planRecordByRoundId = new Map((plan.records || []).map((record) => [record.legacyRoundId, record]));
   const skippedFilePath = resolveSkippedFilePath({
@@ -1848,6 +1974,10 @@ const runApplyMode = async ({
       coderIds: relevantCoderIds,
     });
   }
+  normalizedIdentityByCoderId = await hydrateMissingIdentityHandles({
+    normalizedIdentityByCoderId,
+    resolveMemberIdentities,
+  });
 
   let roundSubmissionRowsByRoundId = new Map();
   let roundFinalRowsByRoundId = new Map();

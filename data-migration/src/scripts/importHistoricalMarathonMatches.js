@@ -29,6 +29,7 @@ const {
 const {
   TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
   DEFAULT_MEMBER_SCHEMA,
+  createMemberIdentityResolver,
   createMemberPresenceResolver,
 } = require("./importHistoricalMarathonMatches/targetMemberResolution");
 
@@ -89,6 +90,7 @@ const run = async () => {
   let memberLookupPrisma = null;
   let reviewPrisma = null;
   let resolveMemberPresence = null;
+  let resolveMemberIdentities = null;
 
   if (shouldAttemptDatabaseDiscovery) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
@@ -222,6 +224,10 @@ const run = async () => {
           prisma: memberLookupPrisma,
           memberSchema: memberDbSchema,
         });
+        resolveMemberIdentities = createMemberIdentityResolver({
+          prisma: memberLookupPrisma,
+          memberSchema: memberDbSchema,
+        });
         planningPrerequisites.memberResolution = {
           available: true,
         };
@@ -267,6 +273,7 @@ const run = async () => {
         reviewSchema: reviewDbSchema,
         submissionArchiveDir: process.env.SUBMISSION_ARCHIVE_DIR,
         actor: DEFAULT_ACTOR,
+        resolveMemberIdentities,
       });
       emitApplyReport(targetedRerunResult);
       return;
@@ -299,6 +306,7 @@ const run = async () => {
       },
       plan,
       actor: DEFAULT_ACTOR,
+      resolveMemberIdentities,
     });
     emitApplyReport(applyResult);
   } finally {
