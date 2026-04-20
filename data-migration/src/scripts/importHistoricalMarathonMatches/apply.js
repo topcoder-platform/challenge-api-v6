@@ -448,6 +448,28 @@ const resolvePlacementWinnerIdentity = (
 };
 
 /**
+ * Resolves the non-null handle value required by challenge winner rows. The
+ * marathon importer prefers the normalized member handle from Informix user data,
+ * but targeted reruns may still have a valid member id when a user export shard is
+ * unavailable. In that case the member id is used as a deterministic fallback so
+ * winner reconciliation still populates the challenge-level winners relation.
+ *
+ * @param {object} identity normalized identity with member id and optional handle
+ * @returns {string} handle or member-id fallback for the placement winner row
+ * @throws Does not throw.
+ */
+const resolvePlacementWinnerHandle = (identity) => {
+  const memberHandle = String(
+    identity && identity.memberHandle ? identity.memberHandle : ""
+  ).trim();
+  if (memberHandle) {
+    return memberHandle;
+  }
+  const memberId = parsePlacementWinnerUserId(identity && identity.memberId);
+  return memberId ? String(memberId) : "";
+};
+
+/**
  * Build deterministic placement winners for a round from positive final-score rows.
  * Winners are ranked by descending aggregate score, with legacy placement and coder id
  * used only as stable tie-breakers so reruns keep the same ordering.
@@ -485,7 +507,7 @@ const buildPlacementWinnersForRound = ({
 
     const candidate = {
       userId,
-      handle: String(identity && identity.memberHandle ? identity.memberHandle : "").trim(),
+      handle: resolvePlacementWinnerHandle(identity),
       aggregateScore: finalRow.aggregateScore,
       legacyPlacement: finalRow.legacyPlacement,
       coderId: finalRow.coderId,
@@ -1642,6 +1664,7 @@ const runTargetedRerunMode = async ({
         submissionArchiveReconciliation,
         ...(finalScoreReconciliation ? { finalScoreReconciliation } : {}),
         ...(provisionalScoreReconciliation ? { provisionalScoreReconciliation } : {}),
+        ...(winnerReconciliation ? { winnerReconciliation } : {}),
       },
     ],
     summary: {
@@ -1668,6 +1691,12 @@ const runTargetedRerunMode = async ({
               provisionalScoreReconciliation.createdProvisionalScores || 0,
           targetedRerunProvisionalScoresUpdated:
               provisionalScoreReconciliation.updatedProvisionalScores || 0,
+        }
+        : {}),
+      ...(winnerReconciliation
+        ? {
+          targetedRerunWinnerCount: winnerReconciliation.winnerCount || 0,
+          targetedRerunWinnersUpdated: winnerReconciliation.updated ? 1 : 0,
         }
         : {}),
       targetedRerunWritesAttempted: hasWritesAttempted ? 1 : 0,
