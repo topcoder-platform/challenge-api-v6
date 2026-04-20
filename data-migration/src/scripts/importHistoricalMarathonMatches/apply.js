@@ -485,13 +485,7 @@ const buildPlacementWinnersForRound = ({
 
     const candidate = {
       userId,
-      handle:
-        String(
-          (identity && identity.memberHandle) ||
-            (identity && identity.memberId) ||
-            (finalRow && finalRow.coderId) ||
-            ""
-        ).trim(),
+      handle: String(identity && identity.memberHandle ? identity.memberHandle : "").trim(),
       aggregateScore: finalRow.aggregateScore,
       legacyPlacement: finalRow.legacyPlacement,
       coderId: finalRow.coderId,

@@ -168,8 +168,8 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
       },
       actor: "importer",
       normalizedIdentityByCoderId: new Map([
-        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
-        ["3", { coderId: "3", memberId: 3, memberHandle: "charlie" }],
+        ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
+        ["3", { coderId: "3", memberId: 303, memberHandle: "charlie" }],
       ]),
     });
 
@@ -186,7 +186,7 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
         winners: {
           create: [
             expect.objectContaining({
-              userId: 1,
+              userId: 101,
               handle: "alpha",
               placement: 1,
               type: "PLACEMENT",
@@ -194,7 +194,7 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
               updatedBy: "importer",
             }),
             expect.objectContaining({
-              userId: 3,
+              userId: 303,
               handle: "charlie",
               placement: 2,
               type: "PLACEMENT",
@@ -221,7 +221,7 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
           runtimeSkipRecords: [
             expect.objectContaining({
               reasonCode: "finalist-without-attachable-submission",
-              memberId: "3",
+              memberId: "303",
             }),
           ],
         },

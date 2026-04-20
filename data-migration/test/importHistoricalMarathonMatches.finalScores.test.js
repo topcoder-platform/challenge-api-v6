@@ -211,6 +211,92 @@ describe("importHistoricalMarathonMatches final score import", () => {
     }
   });
 
+  test("ignores unattended result-only artifacts when loading final scores", async () => {
+    const unattendedArtifactFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-unattended-artifact-fixture-")
+    );
+    try {
+      writeJson(
+        unattendedArtifactFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [
+          {
+            long_component_state_id: "2664738",
+            round_id: "10015",
+            coder_id: "16064986",
+            points: "7186.79",
+          },
+          {
+            long_component_state_id: "2664602",
+            round_id: "10015",
+            coder_id: "21874802",
+            points: "7176.17",
+          },
+        ]
+      );
+      writeJson(
+        unattendedArtifactFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10015",
+            coder_id: "10597114",
+            system_point_total: "310402.31",
+            point_total: null,
+            attended: "N",
+            placed: "1",
+          },
+          {
+            round_id: "10015",
+            coder_id: "16064986",
+            system_point_total: "7186.79",
+            point_total: "7186.79",
+            attended: "Y",
+            placed: "1",
+          },
+          {
+            round_id: "10015",
+            coder_id: "21874802",
+            system_point_total: "7176.17",
+            point_total: "7176.17",
+            attended: "Y",
+            placed: "2",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: unattendedArtifactFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10015"],
+      });
+
+      expect(rowsByRoundId.get("10015")).toEqual([
+        expect.objectContaining({
+          legacyRoundId: "10015",
+          coderId: "16064986",
+          legacyPlacement: 1,
+          aggregateScore: 7186.79,
+          scoreSource: "system_point_total",
+          rawLegacyPlacement: 1,
+        }),
+        expect.objectContaining({
+          legacyRoundId: "10015",
+          coderId: "21874802",
+          legacyPlacement: 2,
+          aggregateScore: 7176.17,
+          scoreSource: "system_point_total",
+          rawLegacyPlacement: 2,
+        }),
+      ]);
+    } finally {
+      fs.rmSync(unattendedArtifactFixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test("clears conflicting duplicate legacy placements while preserving the raw value", async () => {
     const duplicatePlacementFixtureDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "mm-final-scores-duplicate-placement-fixture-")

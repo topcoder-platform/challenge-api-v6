@@ -72,6 +72,39 @@ const hasAnyFinalSignal = (finalResultRow) => {
   });
 };
 
+/**
+ * Checks whether an Informix final-result row explicitly marks a coder as not having
+ * attended the marathon round.
+ *
+ * @param {object} finalResultRow raw `long_comp_result` row from the legacy export
+ * @returns {boolean} true when the row has an `attended` value of `N`
+ * @throws Does not throw.
+ */
+const isExplicitlyUnattended = (finalResultRow) =>
+  String((finalResultRow && finalResultRow.attended) || "").trim().toUpperCase() === "N";
+
+/**
+ * Determines whether a legacy final-result row should create or update a final-score
+ * candidate for a round/coder pair. It is used by the marathon match importer when
+ * merging `long_comp_result` rows with authoritative `long_component_state` scores.
+ *
+ * @param {object} finalResultRow raw `long_comp_result` row from the legacy export
+ * @param {boolean} hasRankingScore whether matching `long_component_state` points exist
+ * @returns {boolean} true when the row contains usable final-result data
+ * @throws Does not throw.
+ */
+const shouldUseFinalResultRow = ({ finalResultRow, hasRankingScore }) => {
+  if (!hasAnyFinalSignal(finalResultRow)) {
+    return false;
+  }
+
+  if (isExplicitlyUnattended(finalResultRow) && !hasRankingScore) {
+    return false;
+  }
+
+  return true;
+};
+
 const resolveIdentityForCoderId = (coderId, normalizedIdentityByCoderId = new Map()) => {
   const normalizedCoderId = String(coderId || "").trim();
   if (!normalizedCoderId) {
@@ -234,9 +267,6 @@ const loadLegacyFinalRowsByRoundId = async ({
         if (!selectedRoundIdSet.has(roundId)) {
           return;
         }
-        if (!hasAnyFinalSignal(row)) {
-          return;
-        }
         const coderId = String(row && row.coder_id ? row.coder_id : "").trim();
         if (!coderId) {
           return;
@@ -245,6 +275,14 @@ const loadLegacyFinalRowsByRoundId = async ({
         const systemPointTotal = parseNumericScore(row && row.system_point_total);
         const pointTotal = parseNumericScore(row && row.point_total);
         const roundCoderKey = `${roundId}:${coderId}`;
+        if (
+          !shouldUseFinalResultRow({
+            finalResultRow: row,
+            hasRankingScore: rankingScoreByRoundCoder.has(roundCoderKey),
+          })
+        ) {
+          return;
+        }
         roundCoderKeys.add(roundCoderKey);
         resultRowByRoundCoder.set(roundCoderKey, {
           legacyPlacement: parsePlacement(row && row.placed),

@@ -1435,7 +1435,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue([
           {
             id: "sub-1",
-            memberId: "1",
+            memberId: "101",
             legacySubmissionId: "10010001",
             submittedDate: new Date("2020-01-01T01:00:00.000Z"),
             createdAt: new Date("2020-01-01T01:00:00.000Z"),
@@ -1459,7 +1459,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
               "10010001",
               {
                 id: "sub-1",
-                memberId: "1",
+                memberId: "101",
                 legacySubmissionId: "10010001",
                 submittedDate: new Date("2020-01-01T01:00:00.000Z"),
                 createdAt: new Date("2020-01-01T01:00:00.000Z"),
@@ -1513,7 +1513,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         legacySubmissionRowsByRoundId: new Map([["9892", []]]),
         actor: "importer",
         normalizedIdentityByCoderId: new Map([
-          ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+          ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
         ]),
       });
 
@@ -1544,7 +1544,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
             },
             create: [
               {
-                userId: 1,
+                userId: 101,
                 handle: "alpha",
                 placement: 1,
                 type: "PLACEMENT",
@@ -1599,7 +1599,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
               importedDistinctSubmitters: 1,
               missingMemberDistinctSubmitters: 0,
               importedProvisionalCountsByMemberId: {
-                1: 1,
+                101: 1,
               },
               skippedProvisionalRecords: [],
             },
