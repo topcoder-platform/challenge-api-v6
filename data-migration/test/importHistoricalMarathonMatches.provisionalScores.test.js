@@ -453,6 +453,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       createdProvisionalScores: 0,
       updatedProvisionalScores: 1,
       demotedFinalScores: 0,
+      clearedSubmissionFinalScoreSummaries: 0,
       malformedSkippedProvisionalScores: 0,
       missingMemberSkippedProvisionalScores: 0,
       importedDistinctSubmitters: 1,
@@ -474,6 +475,90 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
     ]);
   });
 
+  test("clears stale submission final score summaries for non-final submissions during targeted rerun", async () => {
+    const rowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longSubmissionPattern: "^long_submission_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+
+    const cleared = [];
+    const provisionalScoreStore = {
+      listImportedNonExampleSubmissionsByLegacySubmissionId: async () =>
+        new Map([
+          [
+            "10010001",
+            {
+              id: "sub-10010001",
+              memberId: "1",
+              legacySubmissionId: "10010001",
+              submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+              createdAt: new Date("2020-01-01T01:00:00.000Z"),
+              finalScore: 9.5,
+              placement: 1,
+              userRank: 1,
+            },
+          ],
+        ]),
+      listExistingProvisionalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-10010001",
+            [{ id: "prov-1", submissionId: "sub-10010001", aggregateScore: 9.5 }],
+          ],
+        ]),
+      listExistingFinalSummationsBySubmissionId: async () => new Map(),
+      createProvisionalSummation: async () => {
+        throw new Error("createProvisionalSummation should not be called");
+      },
+      updateProvisionalSummation: async () => {
+        throw new Error("updateProvisionalSummation should not be called");
+      },
+      clearSubmissionFinalScoreSummary: async (payload) => {
+        cleared.push(payload);
+        return true;
+      },
+    };
+
+    const result = await reconcileRoundProvisionalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      provisionalRowsByRoundId: new Map([
+        [
+          "9892",
+          [(rowsByRoundId.get("9892") || []).find((row) => row.legacySubmissionId === "10010001")],
+        ],
+      ]),
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+      ]),
+      provisionalScoreStore,
+      updateExistingScores: true,
+      finalLegacySubmissionIdsByRoundId: new Map([["9892", ["10010003"]]]),
+    });
+
+    expect(result).toEqual({
+      legacyNonExampleProvisionalScores: 1,
+      legacyExampleOnlyFinalistProvisionalScores: 0,
+      importedProvisionalScores: 1,
+      alreadyPresentProvisionalScores: 0,
+      createdProvisionalScores: 0,
+      updatedProvisionalScores: 1,
+      demotedFinalScores: 0,
+      clearedSubmissionFinalScoreSummaries: 1,
+      malformedSkippedProvisionalScores: 0,
+      missingMemberSkippedProvisionalScores: 0,
+      importedDistinctSubmitters: 1,
+      missingMemberDistinctSubmitters: 0,
+      importedProvisionalCountsByMemberId: {
+        1: 1,
+      },
+      skippedProvisionalRecords: [],
+    });
+    expect(cleared).toEqual([{ submissionId: "sub-10010001" }]);
+  });
+
   test("demotes misclassified final summations on non-final submissions during targeted rerun", async () => {
     const rowsByRoundId = await loadLegacyProvisionalRowsByRoundId({
       dataDir: fixtureDir,
@@ -488,6 +573,7 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
 
     const created = [];
     const updated = [];
+    const cleared = [];
     const provisionalScoreStore = {
       listImportedNonExampleSubmissionsByLegacySubmissionId: async () =>
         new Map([
@@ -499,6 +585,9 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
               legacySubmissionId: "10010001",
               submittedDate: new Date("2020-01-01T01:00:00.000Z"),
               createdAt: new Date("2020-01-01T01:00:00.000Z"),
+              finalScore: 999,
+              placement: 1,
+              userRank: 1,
             },
           ],
           [
@@ -512,7 +601,17 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
             },
           ],
         ]),
-      listExistingProvisionalSummationsBySubmissionId: async () => new Map(),
+      listExistingProvisionalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-10010001",
+            [{ id: "prov-10010001", submissionId: "sub-10010001", aggregateScore: 9.5 }],
+          ],
+          [
+            "sub-10010003",
+            [{ id: "prov-10010003", submissionId: "sub-10010003", aggregateScore: 8.25 }],
+          ],
+        ]),
       listExistingFinalSummationsBySubmissionId: async () =>
         new Map([
           [
@@ -529,6 +628,10 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       },
       updateProvisionalSummation: async (payload) => {
         updated.push(payload);
+      },
+      clearSubmissionFinalScoreSummary: async (payload) => {
+        cleared.push(payload);
+        return true;
       },
     };
 
@@ -550,10 +653,11 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
       legacyNonExampleProvisionalScores: 2,
       legacyExampleOnlyFinalistProvisionalScores: 0,
       importedProvisionalScores: 2,
-      alreadyPresentProvisionalScores: 0,
-      createdProvisionalScores: 1,
+      alreadyPresentProvisionalScores: 1,
+      createdProvisionalScores: 0,
       updatedProvisionalScores: 1,
       demotedFinalScores: 1,
+      clearedSubmissionFinalScoreSummaries: 1,
       malformedSkippedProvisionalScores: 0,
       missingMemberSkippedProvisionalScores: 0,
       importedDistinctSubmitters: 1,
@@ -573,15 +677,8 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
         isExample: false,
       }),
     ]);
-    expect(created).toEqual([
-      expect.objectContaining({
-        submissionId: "sub-10010003",
-        aggregateScore: 8.25,
-        legacySubmissionId: "10010003",
-        isFinal: false,
-        isExample: false,
-      }),
-    ]);
+    expect(cleared).toEqual([{ submissionId: "sub-10010001" }]);
+    expect(created).toEqual([]);
   });
 
   test("skips malformed provisional rows with missing numeric submission_points and continues importing valid rows", async () => {

@@ -1660,7 +1660,8 @@ const runTargetedRerunMode = async ({
   const hasFinalScoreWrites = Boolean(
     finalScoreReconciliation &&
       ((finalScoreReconciliation.createdFinalScores || 0) > 0 ||
-        (finalScoreReconciliation.updatedFinalScores || 0) > 0)
+        (finalScoreReconciliation.updatedFinalScores || 0) > 0 ||
+        (finalScoreReconciliation.updatedSubmissionFinalScoreSummaries || 0) > 0)
   );
   const hasProvisionalScoreWrites = Boolean(
     provisionalScoreReconciliation &&
@@ -1809,6 +1810,19 @@ const runTargetedRerunMode = async ({
         ? {
           targetedRerunFinalScoresCreated: finalScoreReconciliation.createdFinalScores || 0,
           targetedRerunFinalScoresUpdated: finalScoreReconciliation.updatedFinalScores || 0,
+          ...(Object.prototype.hasOwnProperty.call(
+            finalScoreReconciliation,
+            "updatedSubmissionFinalScoreSummaries"
+          )
+            ? {
+              targetedRerunSubmissionFinalScoreSummariesUpdated:
+                  finalScoreReconciliation.updatedSubmissionFinalScoreSummaries || 0,
+              targetedRerunSubmissionFinalScoreSummariesAlreadyMatched:
+                  finalScoreReconciliation.alreadyMatchedSubmissionFinalScoreSummaries || 0,
+              targetedRerunSubmissionFinalScoreSummariesUnsupported:
+                  finalScoreReconciliation.unsupportedSubmissionFinalScoreSummaries || 0,
+            }
+            : {}),
         }
         : {}),
       ...(provisionalScoreReconciliation

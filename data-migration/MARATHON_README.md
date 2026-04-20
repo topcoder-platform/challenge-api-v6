@@ -266,6 +266,13 @@ Expected rerun behavior:
 - existing submissions are backfilled with deterministic `systemFileName`,
   `virusScan=true`, and `isFileSubmission=true` when the review schema exposes
   those columns
+- existing final summations also backfill the attached submission row's
+  `finalScore`, `placement`, and `userRank` summary fields when the review
+  schema exposes those columns, so imported Marathon Match leaders appear
+  correctly in the submissions tab
+- targeted reruns clear those same submission summary fields from non-final
+  Marathon Match submissions and demote any stray final summations, so rerunning
+  a previously imported round repairs provisional-vs-final display state
 - when `SUBMISSION_ARCHIVE_DIR` is configured, standard apply also writes
   deterministic local submission zip archives and backfills
   `reviews.submission.url`

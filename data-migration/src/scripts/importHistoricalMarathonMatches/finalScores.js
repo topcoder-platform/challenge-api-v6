@@ -63,6 +63,9 @@ const parsePlacement = (value) => {
   return parsed || null;
 };
 
+const hasOwnProperty = (value, propertyName) =>
+  Boolean(value) && Object.prototype.hasOwnProperty.call(value, propertyName);
+
 const hasAnyFinalSignal = (finalResultRow) => {
   const candidates = [
     finalResultRow && finalResultRow.system_point_total,
@@ -566,6 +569,82 @@ const selectAttachableFinalSubmission = ({
   return latestImportedSubmissionByMemberId.get(memberId) || null;
 };
 
+/**
+ * Mirrors the imported marathon final score onto the review submission summary
+ * columns used by submission-list APIs. The review summation remains the
+ * detailed score source, while `submission.finalScore`, `submission.placement`,
+ * and `submission.userRank` keep historical Marathon Match rows visible and
+ * sortable in the submissions UI.
+ *
+ * @param {object} params sync inputs
+ * @param {object} params.finalScoreStore store that may update submission score summaries
+ * @param {object} params.attachableSubmission imported submission receiving the final score
+ * @param {object} params.finalRow normalized legacy final score row
+ * @returns {Promise<string>} update status: updated, already-matched, or unsupported
+ * @throws Propagates errors from `finalScoreStore.updateSubmissionFinalScoreSummary`.
+ */
+const syncSubmissionFinalScoreSummary = async ({
+  finalScoreStore,
+  attachableSubmission,
+  finalRow,
+}) => {
+  if (
+    !finalScoreStore ||
+    typeof finalScoreStore.updateSubmissionFinalScoreSummary !== "function"
+  ) {
+    return "unsupported";
+  }
+
+  const submissionId = String(
+    attachableSubmission && attachableSubmission.id ? attachableSubmission.id : ""
+  ).trim();
+  if (!submissionId || !Number.isFinite(finalRow && finalRow.aggregateScore)) {
+    return "unsupported";
+  }
+
+  const desiredFinalScore = finalRow.aggregateScore;
+  const desiredPlacement = Number.isFinite(finalRow.legacyPlacement)
+    ? finalRow.legacyPlacement
+    : null;
+  const desiredUserRank = desiredPlacement;
+  const hasFinalScoreSnapshot = hasOwnProperty(attachableSubmission, "finalScore");
+  const hasPlacementSnapshot = hasOwnProperty(attachableSubmission, "placement");
+  const hasUserRankSnapshot = hasOwnProperty(attachableSubmission, "userRank");
+  const finalScoreMatches =
+    hasFinalScoreSnapshot &&
+    parseNumericScore(attachableSubmission.finalScore) === desiredFinalScore;
+  const placementMatches =
+    hasPlacementSnapshot &&
+    parsePlacement(attachableSubmission.placement) === desiredPlacement;
+  const userRankMatches =
+    hasUserRankSnapshot &&
+    parsePlacement(attachableSubmission.userRank) === desiredUserRank;
+
+  const hasAnyScoreSummarySnapshot =
+    hasFinalScoreSnapshot || hasPlacementSnapshot || hasUserRankSnapshot;
+  const scoreSummarySnapshotMatches =
+    (!hasFinalScoreSnapshot || finalScoreMatches) &&
+    (!hasPlacementSnapshot || placementMatches) &&
+    (!hasUserRankSnapshot || userRankMatches);
+  if (hasAnyScoreSummarySnapshot && scoreSummarySnapshotMatches) {
+    return "already-matched";
+  }
+
+  const updated = await finalScoreStore.updateSubmissionFinalScoreSummary({
+    submissionId,
+    finalScore: desiredFinalScore,
+    placement: desiredPlacement,
+    userRank: desiredUserRank,
+  });
+  if (updated === false) {
+    return "unsupported";
+  }
+  attachableSubmission.finalScore = desiredFinalScore;
+  attachableSubmission.placement = desiredPlacement;
+  attachableSubmission.userRank = desiredUserRank;
+  return "updated";
+};
+
 const hasMatchingAggregateScore = (existingSummations = [], aggregateScore) =>
   existingSummations.every((summation) => summation.aggregateScore === aggregateScore);
 
@@ -618,9 +697,21 @@ const reconcileRoundFinalScores = async ({
   let createdFinalScores = 0;
   let alreadyPresentFinalScores = 0;
   let updatedFinalScores = 0;
+  let updatedSubmissionFinalScoreSummaries = 0;
+  let alreadyMatchedSubmissionFinalScoreSummaries = 0;
+  let unsupportedSubmissionFinalScoreSummaries = 0;
   let missingMemberSkippedFinalScores = 0;
   let explicitSkippedFinalScores = 0;
   const runtimeSkipRecords = [];
+  const recordSubmissionFinalScoreSummarySync = (status) => {
+    if (status === "updated") {
+      updatedSubmissionFinalScoreSummaries += 1;
+    } else if (status === "already-matched") {
+      alreadyMatchedSubmissionFinalScoreSummaries += 1;
+    } else if (status === "unsupported") {
+      unsupportedSubmissionFinalScoreSummaries += 1;
+    }
+  };
 
   for (const finalRow of legacyFinalRows) {
     const identity = resolveIdentityForCoderId(
@@ -722,6 +813,13 @@ const reconcileRoundFinalScores = async ({
           aggregateScore: finalRow.aggregateScore,
         }))
       );
+      recordSubmissionFinalScoreSummarySync(
+        await syncSubmissionFinalScoreSummary({
+          finalScoreStore,
+          attachableSubmission,
+          finalRow,
+        })
+      );
       updatedFinalScores += 1;
       continue;
     }
@@ -768,9 +866,23 @@ const reconcileRoundFinalScores = async ({
             aggregateScore: finalRow.aggregateScore,
           }))
         );
+        recordSubmissionFinalScoreSummarySync(
+          await syncSubmissionFinalScoreSummary({
+            finalScoreStore,
+            attachableSubmission,
+            finalRow,
+          })
+        );
         updatedFinalScores += 1;
         continue;
       }
+      recordSubmissionFinalScoreSummarySync(
+        await syncSubmissionFinalScoreSummary({
+          finalScoreStore,
+          attachableSubmission,
+          finalRow,
+        })
+      );
       alreadyPresentFinalScores += 1;
       continue;
     }
@@ -795,6 +907,13 @@ const reconcileRoundFinalScores = async ({
         rawLegacyPlacement: finalRow.rawLegacyPlacement,
       },
     });
+    recordSubmissionFinalScoreSummarySync(
+      await syncSubmissionFinalScoreSummary({
+        finalScoreStore,
+        attachableSubmission,
+        finalRow,
+      })
+    );
     existingFinalSummationsBySubmissionId.set(submissionId, [
       {
         submissionId,
@@ -815,6 +934,14 @@ const reconcileRoundFinalScores = async ({
   };
   if (updateExistingScores) {
     result.updatedFinalScores = updatedFinalScores;
+  }
+  if (typeof finalScoreStore.updateSubmissionFinalScoreSummary === "function") {
+    result.updatedSubmissionFinalScoreSummaries =
+      updatedSubmissionFinalScoreSummaries;
+    result.alreadyMatchedSubmissionFinalScoreSummaries =
+      alreadyMatchedSubmissionFinalScoreSummaries;
+    result.unsupportedSubmissionFinalScoreSummaries =
+      unsupportedSubmissionFinalScoreSummaries;
   }
   return result;
 };
@@ -881,6 +1008,15 @@ const createReviewFinalScoreStore = async ({
     if (submissionColumnsByName.has("isExample")) {
       selectedColumns.push(`"isExample"`);
     }
+    if (submissionColumnsByName.has("finalScore")) {
+      selectedColumns.push(`"finalScore"`);
+    }
+    if (submissionColumnsByName.has("placement")) {
+      selectedColumns.push(`"placement"`);
+    }
+    if (submissionColumnsByName.has("userRank")) {
+      selectedColumns.push(`"userRank"`);
+    }
 
     const whereClauses = [`"challengeId" = $1`, `"legacySubmissionId" IS NOT NULL`];
     if (submissionColumnsByName.has("isExample")) {
@@ -904,6 +1040,15 @@ const createReviewFinalScoreStore = async ({
         submittedDate: row && row.submittedDate ? row.submittedDate : null,
         createdAt: row && row.createdAt ? row.createdAt : null,
         isExample: Boolean(row && row.isExample),
+        ...(submissionColumnsByName.has("finalScore")
+          ? { finalScore: parseNumericScore(row && row.finalScore) }
+          : {}),
+        ...(submissionColumnsByName.has("placement")
+          ? { placement: parsePlacement(row && row.placement) }
+          : {}),
+        ...(submissionColumnsByName.has("userRank")
+          ? { userRank: parsePlacement(row && row.userRank) }
+          : {}),
       }))
       .filter(
         (row) => row.id && row.memberId && row.legacySubmissionId && row.isExample !== true
@@ -1004,6 +1149,66 @@ const createReviewFinalScoreStore = async ({
     );
   };
 
+  /**
+   * Updates denormalized score fields on `reviews.submission` so imported
+   * historical Marathon Match submissions show their final score, placement,
+   * and user rank in submission-list APIs.
+   *
+   * @param {Object} params update values
+   * @param {string} params.submissionId review submission id
+   * @param {number} params.finalScore final aggregate score from legacy results
+   * @param {number|null} params.placement legacy placement, or null when not authoritative
+   * @param {number|null} params.userRank legacy user rank, or null when not authoritative
+   * @returns {Promise<boolean>} true when at least one supported column was updated
+   * @throws {Error} when submissionId is blank
+   */
+  const updateSubmissionFinalScoreSummary = async ({
+    submissionId,
+    finalScore,
+    placement,
+    userRank,
+  }) => {
+    const normalizedSubmissionId = String(submissionId || "").trim();
+    if (!normalizedSubmissionId) {
+      throw new Error("updateSubmissionFinalScoreSummary requires submissionId.");
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      values.push(value);
+      assignments.push(`"${columnName}" = $${values.length}`);
+    };
+
+    if (submissionColumnsByName.has("finalScore")) {
+      pushAssignment("finalScore", finalScore);
+    }
+    if (submissionColumnsByName.has("placement")) {
+      pushAssignment("placement", placement);
+    }
+    if (submissionColumnsByName.has("userRank")) {
+      pushAssignment("userRank", userRank);
+    }
+    if (assignments.length === 0) {
+      return false;
+    }
+    if (submissionColumnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+    if (submissionColumnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", new Date());
+    }
+    values.push(normalizedSubmissionId);
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET ${assignments.join(", ")}
+        WHERE "id" = $${values.length}`,
+      ...values
+    );
+    return true;
+  };
+
   const updateFinalSummation = async ({
     reviewSummationId,
     submissionId,
@@ -1073,6 +1278,7 @@ const createReviewFinalScoreStore = async ({
     listExistingFinalSummationsBySubmissionId,
     createFinalSummation,
     updateFinalSummation,
+    updateSubmissionFinalScoreSummary,
   };
 };
 

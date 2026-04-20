@@ -56,6 +56,11 @@ const parseNumericScore = (value) => {
   return parsed;
 };
 
+const parsePlacement = (value) => {
+  const parsed = parsePositiveInteger(value);
+  return parsed || null;
+};
+
 const normalizeMemberId = (value) => {
   const parsed = parsePositiveInteger(value);
   if (!parsed) {
@@ -198,6 +203,33 @@ const formatImportedCountsByMemberId = (countsByMemberId) =>
 
 const hasMatchingAggregateScore = (existingSummations = [], aggregateScore) =>
   existingSummations.every((summation) => summation.aggregateScore === aggregateScore);
+
+const hasOwnProperty = (value, propertyName) =>
+  Boolean(value) && Object.prototype.hasOwnProperty.call(value, propertyName);
+
+const hasNonBlankScoreSummaryValue = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  return Boolean(normalized && normalized !== "null");
+};
+
+/**
+ * Checks whether an imported review submission still has denormalized final
+ * score summary fields populated. Targeted reruns use this as a cheap snapshot
+ * guard before clearing stale final-score display data from non-final MM rows.
+ *
+ * @param {object} submission imported review submission row
+ * @returns {boolean} true when finalScore, placement, or userRank is present
+ * @throws Does not throw.
+ */
+const hasSubmissionFinalScoreSummary = (submission) =>
+  ["finalScore", "placement", "userRank"].some(
+    (propertyName) =>
+      hasOwnProperty(submission, propertyName) &&
+      hasNonBlankScoreSummaryValue(submission[propertyName])
+  );
 
 const loadLegacyProvisionalRowsByRoundId = async ({
   dataDir,
@@ -399,6 +431,7 @@ const reconcileRoundProvisionalScores = async ({
   let alreadyPresentProvisionalScores = 0;
   let updatedProvisionalScores = 0;
   let demotedFinalScores = 0;
+  let clearedSubmissionFinalScoreSummaries = 0;
   let malformedSkippedProvisionalScores = 0;
   let missingMemberSkippedProvisionalScores = 0;
   const importedCountsByMemberId = new Map();
@@ -479,7 +512,73 @@ const reconcileRoundProvisionalScores = async ({
 
     const existingProvisionalSummations =
       existingProvisionalSummationsBySubmissionId.get(submissionId) || [];
+    const isExplicitFinalSubmission =
+      provisionalRow.isSyntheticExampleOnlyFinalist === true ||
+      finalLegacySubmissionIds.has(String(provisionalRow.legacySubmissionId || "").trim());
+    const misclassifiedFinalSummations =
+      canDemoteMisclassifiedFinalScores && !isExplicitFinalSubmission
+        ? existingFinalSummationsBySubmissionId.get(submissionId) || []
+        : [];
+    let demotedCurrentFinalScores = 0;
+    if (misclassifiedFinalSummations.length > 0) {
+      if (typeof provisionalScoreStore.updateProvisionalSummation !== "function") {
+        throw new Error(
+          "provisionalScoreStore must provide updateProvisionalSummation when updateExistingScores is enabled."
+        );
+      }
+      await Promise.all(
+        misclassifiedFinalSummations.map((misclassifiedFinalSummation) =>
+          provisionalScoreStore.updateProvisionalSummation({
+            reviewSummationId: misclassifiedFinalSummation.id,
+            submissionId,
+            aggregateScore: provisionalRow.aggregateScore,
+            isPassing: provisionalRow.aggregateScore > 0,
+            reviewedDate:
+              importedSubmission.submittedDate || importedSubmission.createdAt || null,
+            legacySubmissionId: provisionalRow.legacySubmissionId || null,
+            isFinal: false,
+            isExample: false,
+            metadata: {
+              legacyRoundId: roundId,
+              legacyCoderId: provisionalRow.coderId,
+            },
+          })
+        )
+      );
+      existingFinalSummationsBySubmissionId.set(submissionId, []);
+      demotedCurrentFinalScores = misclassifiedFinalSummations.length;
+      demotedFinalScores += demotedCurrentFinalScores;
+    }
+    const canClearSubmissionFinalScoreSummary =
+      updateExistingScores &&
+      finalLegacySubmissionIds.size > 0 &&
+      !isExplicitFinalSubmission &&
+      typeof provisionalScoreStore.clearSubmissionFinalScoreSummary === "function";
+    let clearedCurrentSubmissionFinalScoreSummary = false;
+    if (
+      canClearSubmissionFinalScoreSummary &&
+      (demotedCurrentFinalScores > 0 || hasSubmissionFinalScoreSummary(importedSubmission))
+    ) {
+      const cleared = await provisionalScoreStore.clearSubmissionFinalScoreSummary({
+        submissionId,
+      });
+      if (cleared) {
+        clearedCurrentSubmissionFinalScoreSummary = true;
+        clearedSubmissionFinalScoreSummaries += 1;
+        if (hasOwnProperty(importedSubmission, "finalScore")) {
+          importedSubmission.finalScore = null;
+        }
+        if (hasOwnProperty(importedSubmission, "placement")) {
+          importedSubmission.placement = null;
+        }
+        if (hasOwnProperty(importedSubmission, "userRank")) {
+          importedSubmission.userRank = null;
+        }
+      }
+    }
+
     if (existingProvisionalSummations.length > 0) {
+      let updatedExistingProvisionalScore = false;
       if (
         updateExistingScores &&
         !hasMatchingAggregateScore(existingProvisionalSummations, provisionalRow.aggregateScore)
@@ -515,48 +614,22 @@ const reconcileRoundProvisionalScores = async ({
             aggregateScore: provisionalRow.aggregateScore,
           }))
         );
-        updatedProvisionalScores += 1;
-        incrementImportedCount(memberId);
-        continue;
+        updatedExistingProvisionalScore = true;
       }
-      alreadyPresentProvisionalScores += 1;
+      if (
+        updatedExistingProvisionalScore ||
+        demotedCurrentFinalScores > 0 ||
+        clearedCurrentSubmissionFinalScoreSummary
+      ) {
+        updatedProvisionalScores += 1;
+      } else {
+        alreadyPresentProvisionalScores += 1;
+      }
       incrementImportedCount(memberId);
       continue;
     }
 
-    const isExplicitFinalSubmission = finalLegacySubmissionIds.has(
-      String(provisionalRow.legacySubmissionId || "").trim()
-    );
-    const misclassifiedFinalSummations =
-      canDemoteMisclassifiedFinalScores && !isExplicitFinalSubmission
-        ? existingFinalSummationsBySubmissionId.get(submissionId) || []
-        : [];
-    if (misclassifiedFinalSummations.length > 0) {
-      if (typeof provisionalScoreStore.updateProvisionalSummation !== "function") {
-        throw new Error(
-          "provisionalScoreStore must provide updateProvisionalSummation when updateExistingScores is enabled."
-        );
-      }
-      await Promise.all(
-        misclassifiedFinalSummations.map((misclassifiedFinalSummation) =>
-          provisionalScoreStore.updateProvisionalSummation({
-            reviewSummationId: misclassifiedFinalSummation.id,
-            submissionId,
-            aggregateScore: provisionalRow.aggregateScore,
-            isPassing: provisionalRow.aggregateScore > 0,
-            reviewedDate:
-              importedSubmission.submittedDate || importedSubmission.createdAt || null,
-            legacySubmissionId: provisionalRow.legacySubmissionId || null,
-            isFinal: false,
-            isExample: false,
-            metadata: {
-              legacyRoundId: roundId,
-              legacyCoderId: provisionalRow.coderId,
-            },
-          })
-        )
-      );
-      existingFinalSummationsBySubmissionId.set(submissionId, []);
+    if (demotedCurrentFinalScores > 0) {
       existingProvisionalSummationsBySubmissionId.set(
         submissionId,
         misclassifiedFinalSummations.map((misclassifiedFinalSummation) => ({
@@ -565,7 +638,6 @@ const reconcileRoundProvisionalScores = async ({
         }))
       );
       updatedProvisionalScores += 1;
-      demotedFinalScores += misclassifiedFinalSummations.length;
       incrementImportedCount(memberId);
       continue;
     }
@@ -601,7 +673,13 @@ const reconcileRoundProvisionalScores = async ({
       createdProvisionalScores + updatedProvisionalScores + alreadyPresentProvisionalScores,
     alreadyPresentProvisionalScores,
     createdProvisionalScores,
-    ...(updateExistingScores ? { updatedProvisionalScores, demotedFinalScores } : {}),
+    ...(updateExistingScores
+      ? {
+        updatedProvisionalScores,
+        demotedFinalScores,
+        clearedSubmissionFinalScoreSummaries,
+      }
+      : {}),
     malformedSkippedProvisionalScores,
     missingMemberSkippedProvisionalScores,
     importedDistinctSubmitters: importedMemberIds.size,
@@ -681,6 +759,15 @@ const createReviewProvisionalScoreStore = async ({
     if (submissionColumnsByName.has("isExample")) {
       selectedColumns.push(`"isExample"`);
     }
+    if (submissionColumnsByName.has("finalScore")) {
+      selectedColumns.push(`"finalScore"`);
+    }
+    if (submissionColumnsByName.has("placement")) {
+      selectedColumns.push(`"placement"`);
+    }
+    if (submissionColumnsByName.has("userRank")) {
+      selectedColumns.push(`"userRank"`);
+    }
 
     const whereClauses = [`"challengeId" = $1`, `"legacySubmissionId" IS NOT NULL`];
     if (submissionColumnsByName.has("isExample")) {
@@ -713,6 +800,15 @@ const createReviewProvisionalScoreStore = async ({
         submittedDate: row && row.submittedDate ? row.submittedDate : null,
         createdAt: row && row.createdAt ? row.createdAt : null,
         isExample: Boolean(row && row.isExample),
+        ...(submissionColumnsByName.has("finalScore")
+          ? { finalScore: parseNumericScore(row && row.finalScore) }
+          : {}),
+        ...(submissionColumnsByName.has("placement")
+          ? { placement: parsePlacement(row && row.placement) }
+          : {}),
+        ...(submissionColumnsByName.has("userRank")
+          ? { userRank: parsePlacement(row && row.userRank) }
+          : {}),
       });
     });
     return byLegacySubmissionId;
@@ -852,6 +948,58 @@ const createReviewProvisionalScoreStore = async ({
     );
   };
 
+  /**
+   * Clears denormalized final score fields from a non-final imported Marathon
+   * Match submission. Provisional reruns call this after identifying a row whose
+   * legacy submission id is not the authoritative final submission for the member.
+   *
+   * @param {Object} params clear inputs
+   * @param {string} params.submissionId review submission id to repair
+   * @returns {Promise<boolean>} true when at least one supported summary column was cleared
+   * @throws {Error} when submissionId is blank
+   */
+  const clearSubmissionFinalScoreSummary = async ({ submissionId }) => {
+    const normalizedSubmissionId = String(submissionId || "").trim();
+    if (!normalizedSubmissionId) {
+      throw new Error("clearSubmissionFinalScoreSummary requires submissionId.");
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      values.push(value);
+      assignments.push(`"${columnName}" = $${values.length}`);
+    };
+
+    if (submissionColumnsByName.has("finalScore")) {
+      pushAssignment("finalScore", null);
+    }
+    if (submissionColumnsByName.has("placement")) {
+      pushAssignment("placement", null);
+    }
+    if (submissionColumnsByName.has("userRank")) {
+      pushAssignment("userRank", null);
+    }
+    if (assignments.length === 0) {
+      return false;
+    }
+    if (submissionColumnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+    if (submissionColumnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", new Date());
+    }
+    values.push(normalizedSubmissionId);
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET ${assignments.join(", ")}
+        WHERE "id" = $${values.length}`,
+      ...values
+    );
+    return true;
+  };
+
   const updateProvisionalSummation = async ({
     reviewSummationId,
     aggregateScore,
@@ -918,6 +1066,7 @@ const createReviewProvisionalScoreStore = async ({
     listExistingFinalSummationsBySubmissionId,
     createProvisionalSummation,
     updateProvisionalSummation,
+    clearSubmissionFinalScoreSummary,
   };
 };
 

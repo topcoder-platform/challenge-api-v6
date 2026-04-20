@@ -1595,6 +1595,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
               createdProvisionalScores: 0,
               updatedProvisionalScores: 1,
               demotedFinalScores: 0,
+              clearedSubmissionFinalScoreSummaries: 0,
               malformedSkippedProvisionalScores: 0,
               missingMemberSkippedProvisionalScores: 0,
               importedDistinctSubmitters: 1,
@@ -1723,12 +1724,24 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
         listImportedNonExampleSubmissionsByLegacySubmissionId: jest.fn().mockResolvedValue(
           new Map(importedSubmissions.map((submission) => [submission.legacySubmissionId, submission]))
         ),
-        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(new Map()),
+        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "prov-1", submissionId: "sub-1", aggregateScore: 9.5 }],
+            ],
+            [
+              "sub-2",
+              [{ id: "prov-2", submissionId: "sub-2", aggregateScore: 11.5 }],
+            ],
+          ])
+        ),
         listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
           existingFinalSummationsBySubmissionId
         ),
         createProvisionalSummation: jest.fn().mockResolvedValue(undefined),
         updateProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        clearSubmissionFinalScoreSummary: jest.fn().mockResolvedValue(true),
       };
 
       const result = await runTargetedRerunMode({
@@ -1782,20 +1795,18 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           isFinal: false,
         })
       );
-      expect(provisionalScoreStore.createProvisionalSummation).toHaveBeenCalledWith(
-        expect.objectContaining({
-          submissionId: "sub-2",
-          aggregateScore: 11.5,
-          legacySubmissionId: "10010002",
-          isFinal: false,
-        })
-      );
+      expect(provisionalScoreStore.clearSubmissionFinalScoreSummary).toHaveBeenCalledWith({
+        submissionId: "sub-1",
+      });
+      expect(provisionalScoreStore.createProvisionalSummation).not.toHaveBeenCalled();
       expect(result.records[0].provisionalScoreReconciliation).toEqual(
         expect.objectContaining({
           importedProvisionalScores: 2,
-          createdProvisionalScores: 1,
+          alreadyPresentProvisionalScores: 1,
+          createdProvisionalScores: 0,
           updatedProvisionalScores: 1,
           demotedFinalScores: 1,
+          clearedSubmissionFinalScoreSummaries: 1,
         })
       );
     } finally {

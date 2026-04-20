@@ -484,6 +484,78 @@ describe("importHistoricalMarathonMatches final score import", () => {
     ]);
   });
 
+  test("backfills submission final score summary when final summation already exists", async () => {
+    const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+    const alphaFinalRow = (rowsByRoundId.get("9892") || []).find(
+      (row) => row.coderId === "1"
+    );
+
+    const summaryUpdates = [];
+    const finalScoreStore = {
+      listImportedNonExampleSubmissionsByChallenge: async () => [
+        {
+          id: "sub-1",
+          memberId: "1",
+          legacySubmissionId: "10010001",
+          submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+          createdAt: new Date("2020-01-01T01:00:00.000Z"),
+          finalScore: null,
+          placement: null,
+          userRank: null,
+        },
+      ],
+      listExistingFinalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-1",
+            [{ id: "final-1", submissionId: "sub-1", aggregateScore: 100 }],
+          ],
+        ]),
+      createFinalSummation: async () => {
+        throw new Error("createFinalSummation should not be called for existing scores.");
+      },
+      updateSubmissionFinalScoreSummary: async (payload) => {
+        summaryUpdates.push(payload);
+      },
+    };
+
+    const result = await reconcileRoundFinalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      finalRowsByRoundId: new Map([["9892", [alphaFinalRow]]]),
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+      ]),
+      finalScoreStore,
+    });
+
+    expect(result).toEqual({
+      legacyFinalCandidates: 1,
+      importedFinalScores: 1,
+      alreadyPresentFinalScores: 1,
+      createdFinalScores: 0,
+      missingMemberSkippedFinalScores: 0,
+      explicitSkippedFinalScores: 0,
+      runtimeSkipRecords: [],
+      updatedSubmissionFinalScoreSummaries: 1,
+      alreadyMatchedSubmissionFinalScoreSummaries: 0,
+      unsupportedSubmissionFinalScoreSummaries: 0,
+    });
+    expect(summaryUpdates).toEqual([
+      {
+        submissionId: "sub-1",
+        finalScore: 100,
+        placement: 1,
+        userRank: 1,
+      },
+    ]);
+  });
+
   test("updates mismatched existing final scores when targeted rerun update mode is enabled", async () => {
     const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
       dataDir: fixtureDir,
