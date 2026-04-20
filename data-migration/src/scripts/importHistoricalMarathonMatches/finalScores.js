@@ -10,6 +10,9 @@ const {
   MISSING_MEMBER_REASON_CODE,
   FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
 } = require("./skippedArtifact");
+const {
+  deriveLegacySubmissionId,
+} = require("./submissionHistory");
 
 const DEFAULT_REVIEW_SCHEMA = "reviews";
 
@@ -103,6 +106,31 @@ const shouldUseFinalResultRow = ({ finalResultRow, hasRankingScore }) => {
   }
 
   return true;
+};
+
+/**
+ * Derives the deterministic review submission identifier for the final
+ * non-example submission recorded on a legacy `long_component_state` row.
+ *
+ * @param {object} params values from the legacy state row
+ * @param {string|number|null} params.longComponentStateId legacy state id
+ * @param {string|number|null} params.submissionNumber final submission number
+ * @returns {string|null} deterministic legacy submission id, or null when unavailable
+ * @throws Does not throw.
+ */
+const deriveFinalLegacySubmissionId = ({
+  longComponentStateId,
+  submissionNumber,
+}) => {
+  const normalizedStateId = String(longComponentStateId || "").trim();
+  const normalizedSubmissionNumber = parsePositiveInteger(submissionNumber);
+  if (!normalizedStateId || !normalizedSubmissionNumber) {
+    return null;
+  }
+  return deriveLegacySubmissionId({
+    longComponentStateId: normalizedStateId,
+    submissionNumber: normalizedSubmissionNumber,
+  });
 };
 
 const resolveIdentityForCoderId = (coderId, normalizedIdentityByCoderId = new Map()) => {
@@ -240,6 +268,7 @@ const loadLegacyFinalRowsByRoundId = async ({
   );
 
   const rankingScoreByRoundCoder = new Map();
+  const finalSubmissionByRoundCoder = new Map();
   const resultRowByRoundCoder = new Map();
   const roundCoderKeys = new Set();
   await streamJsonArray(longComponentStatePath, "long_component_state", (row) => {
@@ -257,6 +286,21 @@ const loadLegacyFinalRowsByRoundId = async ({
     }
     const roundCoderKey = `${roundId}:${coderId}`;
     rankingScoreByRoundCoder.set(roundCoderKey, points);
+    const longComponentStateId = String(
+      row && row.long_component_state_id ? row.long_component_state_id : ""
+    ).trim();
+    const submissionNumber = parsePositiveInteger(row && row.submission_number);
+    const legacySubmissionId = deriveFinalLegacySubmissionId({
+      longComponentStateId,
+      submissionNumber,
+    });
+    if (legacySubmissionId) {
+      finalSubmissionByRoundCoder.set(roundCoderKey, {
+        longComponentStateId,
+        submissionNumber,
+        legacySubmissionId,
+      });
+    }
     roundCoderKeys.add(roundCoderKey);
   });
 
@@ -303,6 +347,7 @@ const loadLegacyFinalRowsByRoundId = async ({
 
     const resultRow = resultRowByRoundCoder.get(roundCoderKey) || {};
     const rankingScore = rankingScoreByRoundCoder.get(roundCoderKey) ?? null;
+    const finalSubmission = finalSubmissionByRoundCoder.get(roundCoderKey) || {};
     const { aggregateScore, scoreSource } = deriveFinalScore({
       systemPointTotal: resultRow.systemPointTotal ?? null,
       pointTotal: resultRow.pointTotal ?? null,
@@ -318,6 +363,9 @@ const loadLegacyFinalRowsByRoundId = async ({
       systemPointTotal: resultRow.systemPointTotal ?? null,
       pointTotal: resultRow.pointTotal ?? null,
       rankingScore,
+      longComponentStateId: finalSubmission.longComponentStateId || null,
+      submissionNumber: finalSubmission.submissionNumber || null,
+      legacySubmissionId: finalSubmission.legacySubmissionId || null,
     });
   });
 
@@ -394,6 +442,130 @@ const buildLatestImportedSubmissionByMemberId = (submissions = []) => {
   return latestByMemberId;
 };
 
+/**
+ * Builds a lookup of imported review submissions by deterministic legacy
+ * submission id so final scores can attach to the exact legacy submission that
+ * produced the final marathon result.
+ *
+ * @param {Array<object>} submissions imported review submission rows
+ * @returns {Map<string, object>} imported submissions keyed by legacySubmissionId
+ * @throws Does not throw.
+ */
+const buildImportedSubmissionByLegacySubmissionId = (submissions = []) => {
+  const byLegacySubmissionId = new Map();
+
+  submissions.forEach((submission) => {
+    const legacySubmissionId = String(
+      submission && submission.legacySubmissionId ? submission.legacySubmissionId : ""
+    ).trim();
+    const submissionId = String(submission && submission.id ? submission.id : "").trim();
+    if (!legacySubmissionId || !submissionId) {
+      return;
+    }
+    byLegacySubmissionId.set(legacySubmissionId, submission);
+  });
+
+  return byLegacySubmissionId;
+};
+
+/**
+ * Builds a lookup from review submission id to imported submission rows for
+ * matching existing final summations back to their member.
+ *
+ * @param {Array<object>} submissions imported review submission rows
+ * @returns {Map<string, object>} imported submissions keyed by submission id
+ * @throws Does not throw.
+ */
+const buildImportedSubmissionById = (submissions = []) => {
+  const byId = new Map();
+
+  submissions.forEach((submission) => {
+    const submissionId = String(submission && submission.id ? submission.id : "").trim();
+    if (submissionId) {
+      byId.set(submissionId, submission);
+    }
+  });
+
+  return byId;
+};
+
+/**
+ * Finds existing final summations attached to any imported submission for a
+ * member. Targeted reruns use this to repair historical final scores that were
+ * previously attached to the latest submission guess instead of the explicit
+ * final legacy submission.
+ *
+ * @param {object} params lookup inputs
+ * @param {string} params.memberId normalized member id
+ * @param {Map<string, object>} params.importedSubmissionById submissions keyed by id
+ * @param {Map<string, Array<object>>} params.existingFinalSummationsBySubmissionId existing summations keyed by submission id
+ * @returns {Array<object>} existing summations with their submission context
+ * @throws Does not throw.
+ */
+const findExistingFinalSummationsForMember = ({
+  memberId,
+  importedSubmissionById,
+  existingFinalSummationsBySubmissionId,
+}) => {
+  const normalizedMemberId = normalizeMemberId(memberId);
+  if (!normalizedMemberId) {
+    return [];
+  }
+
+  const matches = [];
+  existingFinalSummationsBySubmissionId.forEach((summations, submissionId) => {
+    const importedSubmission = importedSubmissionById.get(submissionId);
+    if (normalizeMemberId(importedSubmission && importedSubmission.memberId) !== normalizedMemberId) {
+      return;
+    }
+    (summations || []).forEach((summation) => {
+      matches.push({
+        submissionId,
+        importedSubmission,
+        summation,
+      });
+    });
+  });
+  return matches;
+};
+
+/**
+ * Selects the review submission that should receive a legacy final score. The
+ * authoritative `long_component_state.submission_number` match wins; the latest
+ * imported non-example submission is retained as a fallback for exports that do
+ * not carry a final submission number.
+ *
+ * @param {object} params lookup inputs
+ * @param {object} params.finalRow normalized legacy final score row
+ * @param {string} params.memberId normalized member id
+ * @param {Map<string, object>} params.importedSubmissionByLegacySubmissionId submissions keyed by legacySubmissionId
+ * @param {Map<string, object>} params.latestImportedSubmissionByMemberId latest submissions keyed by member id
+ * @returns {object|null} imported submission to attach, or null
+ * @throws Does not throw.
+ */
+const selectAttachableFinalSubmission = ({
+  finalRow,
+  memberId,
+  importedSubmissionByLegacySubmissionId,
+  latestImportedSubmissionByMemberId,
+}) => {
+  const legacySubmissionId = String(
+    finalRow && finalRow.legacySubmissionId ? finalRow.legacySubmissionId : ""
+  ).trim();
+  if (legacySubmissionId) {
+    const exactSubmission =
+      importedSubmissionByLegacySubmissionId.get(legacySubmissionId);
+    if (
+      exactSubmission &&
+      normalizeMemberId(exactSubmission.memberId) === normalizeMemberId(memberId)
+    ) {
+      return exactSubmission;
+    }
+  }
+
+  return latestImportedSubmissionByMemberId.get(memberId) || null;
+};
+
 const hasMatchingAggregateScore = (existingSummations = [], aggregateScore) =>
   existingSummations.every((summation) => summation.aggregateScore === aggregateScore);
 
@@ -425,6 +597,9 @@ const reconcileRoundFinalScores = async ({
   const latestImportedSubmissionByMemberId = buildLatestImportedSubmissionByMemberId(
     importedSubmissions
   );
+  const importedSubmissionByLegacySubmissionId =
+    buildImportedSubmissionByLegacySubmissionId(importedSubmissions);
+  const importedSubmissionById = buildImportedSubmissionById(importedSubmissions);
   const existingFinalSummationsBySubmissionId =
     await finalScoreStore.listExistingFinalSummationsBySubmissionId({
       challengeId,
@@ -459,7 +634,12 @@ const reconcileRoundFinalScores = async ({
       continue;
     }
 
-    const attachableSubmission = latestImportedSubmissionByMemberId.get(memberId);
+    const attachableSubmission = selectAttachableFinalSubmission({
+      finalRow,
+      memberId,
+      importedSubmissionByLegacySubmissionId,
+      latestImportedSubmissionByMemberId,
+    });
     if (!attachableSubmission) {
       explicitSkippedFinalScores += 1;
       if (!plannedUnattachableMemberIds.has(memberId)) {
@@ -487,6 +667,65 @@ const reconcileRoundFinalScores = async ({
     const submissionId = String(attachableSubmission.id || "").trim();
     const existingFinalSummations =
       existingFinalSummationsBySubmissionId.get(submissionId) || [];
+    const misplacedExistingFinalSummations =
+      updateExistingScores && existingFinalSummations.length === 0 && finalRow.legacySubmissionId
+        ? findExistingFinalSummationsForMember({
+          memberId,
+          importedSubmissionById,
+          existingFinalSummationsBySubmissionId,
+        }).filter((entry) => entry.submissionId !== submissionId)
+        : [];
+    if (misplacedExistingFinalSummations.length > 0) {
+      if (typeof finalScoreStore.updateFinalSummation !== "function") {
+        throw new Error(
+          "finalScoreStore must provide updateFinalSummation when updateExistingScores is enabled."
+        );
+      }
+      await Promise.all(
+        misplacedExistingFinalSummations.map(({ summation }) =>
+          finalScoreStore.updateFinalSummation({
+            reviewSummationId: summation.id,
+            submissionId,
+            aggregateScore: finalRow.aggregateScore,
+            isPassing: finalRow.aggregateScore > 0,
+            reviewedDate:
+              attachableSubmission.submittedDate ||
+              attachableSubmission.createdAt ||
+              null,
+            legacySubmissionId:
+              attachableSubmission.legacySubmissionId || null,
+            isFinal: true,
+            isExample: false,
+            metadata: {
+              legacyRoundId: roundId,
+              legacyCoderId: finalRow.coderId,
+              scoreSource: finalRow.scoreSource,
+              legacyPlacement: finalRow.legacyPlacement,
+              rawLegacyPlacement: finalRow.rawLegacyPlacement,
+            },
+          })
+        )
+      );
+      misplacedExistingFinalSummations.forEach(({ submissionId: oldSubmissionId, summation }) => {
+        const existingForOldSubmission =
+          existingFinalSummationsBySubmissionId.get(oldSubmissionId) || [];
+        existingFinalSummationsBySubmissionId.set(
+          oldSubmissionId,
+          existingForOldSubmission.filter((existingSummation) => existingSummation !== summation)
+        );
+      });
+      existingFinalSummationsBySubmissionId.set(
+        submissionId,
+        misplacedExistingFinalSummations.map(({ summation }) => ({
+          ...summation,
+          submissionId,
+          aggregateScore: finalRow.aggregateScore,
+        }))
+      );
+      updatedFinalScores += 1;
+      continue;
+    }
+
     if (existingFinalSummations.length > 0) {
       if (
         updateExistingScores &&
@@ -767,6 +1006,7 @@ const createReviewFinalScoreStore = async ({
 
   const updateFinalSummation = async ({
     reviewSummationId,
+    submissionId,
     aggregateScore,
     isPassing,
     reviewedDate,
@@ -792,6 +1032,9 @@ const createReviewFinalScoreStore = async ({
       assignments.push(`"${columnName}" = $${values.length}`);
     };
 
+    if (submissionId) {
+      pushAssignment("submissionId", submissionId);
+    }
     pushAssignment("aggregateScore", aggregateScore);
     pushAssignment("isPassing", Boolean(isPassing));
     if (reviewSummationColumnsByName.has("isFinal")) {

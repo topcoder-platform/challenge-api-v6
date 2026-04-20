@@ -556,6 +556,126 @@ describe("importHistoricalMarathonMatches final score import", () => {
     ]);
   });
 
+  test("moves final scores to the explicit legacy final submission during targeted rerun", async () => {
+    const explicitFinalSubmissionFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-explicit-submission-fixture-")
+    );
+    try {
+      writeJson(
+        explicitFinalSubmissionFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [
+          {
+            long_component_state_id: "2664738",
+            round_id: "10015",
+            coder_id: "16064986",
+            points: "7186.79",
+            submission_number: "5",
+          },
+        ]
+      );
+      writeJson(
+        explicitFinalSubmissionFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10015",
+            coder_id: "16064986",
+            system_point_total: "7186.79",
+            point_total: "7186.79",
+            attended: "Y",
+            placed: "1",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: explicitFinalSubmissionFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10015"],
+      });
+      const updated = [];
+      const created = [];
+
+      const result = await reconcileRoundFinalScores({
+        roundId: "10015",
+        challengeId: "challenge-1",
+        finalRowsByRoundId: rowsByRoundId,
+        normalizedIdentityByCoderId: new Map([
+          ["16064986", { coderId: "16064986", memberId: 16064986, memberHandle: "ctrucza" }],
+        ]),
+        finalScoreStore: {
+          listImportedNonExampleSubmissionsByChallenge: async () => [
+            {
+              id: "sub-1",
+              memberId: "16064986",
+              legacySubmissionId: "26647380001",
+              submittedDate: new Date("2006-05-17T10:00:00.000Z"),
+              createdAt: new Date("2026-04-09T05:00:55.000Z"),
+            },
+            {
+              id: "sub-5",
+              memberId: "16064986",
+              legacySubmissionId: "26647380005",
+              submittedDate: new Date("2006-05-16T10:31:42.790Z"),
+              createdAt: new Date("2026-04-09T05:00:55.279Z"),
+            },
+          ],
+          listExistingFinalSummationsBySubmissionId: async () =>
+            new Map([
+              [
+                "sub-1",
+                [{ id: "final-wrong", submissionId: "sub-1", aggregateScore: 7186.79 }],
+              ],
+            ]),
+          createFinalSummation: async (payload) => {
+            created.push(payload);
+          },
+          updateFinalSummation: async (payload) => {
+            updated.push(payload);
+          },
+        },
+        updateExistingScores: true,
+      });
+
+      expect(rowsByRoundId.get("10015")).toEqual([
+        expect.objectContaining({
+          coderId: "16064986",
+          longComponentStateId: "2664738",
+          submissionNumber: 5,
+          legacySubmissionId: "26647380005",
+          aggregateScore: 7186.79,
+        }),
+      ]);
+      expect(result).toEqual({
+        legacyFinalCandidates: 1,
+        importedFinalScores: 1,
+        alreadyPresentFinalScores: 0,
+        createdFinalScores: 0,
+        updatedFinalScores: 1,
+        missingMemberSkippedFinalScores: 0,
+        explicitSkippedFinalScores: 0,
+        runtimeSkipRecords: [],
+      });
+      expect(created).toEqual([]);
+      expect(updated).toEqual([
+        expect.objectContaining({
+          reviewSummationId: "final-wrong",
+          submissionId: "sub-5",
+          aggregateScore: 7186.79,
+          legacySubmissionId: "26647380005",
+          isFinal: true,
+          isExample: false,
+        }),
+      ]);
+    } finally {
+      fs.rmSync(explicitFinalSubmissionFixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test("records runtime unattachable-finalist skip when no attachable submission exists unexpectedly", async () => {
     const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
       dataDir: fixtureDir,
