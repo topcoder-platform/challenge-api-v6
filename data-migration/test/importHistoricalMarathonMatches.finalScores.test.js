@@ -5,6 +5,7 @@ const path = require("path");
 const {
   loadLegacyFinalRowsByRoundId,
   reconcileRoundFinalScores,
+  createReviewFinalScoreStore,
 } = require("../src/scripts/importHistoricalMarathonMatches/finalScores");
 const {
   FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
@@ -807,5 +808,49 @@ describe("importHistoricalMarathonMatches final score import", () => {
         affectedSurfaces: ["final-score"],
       }),
     ]);
+  });
+
+  test("writes isProvisional false for final review summations", async () => {
+    const columnRows = [
+      { tableName: "submission", columnName: "id" },
+      { tableName: "submission", columnName: "challengeId" },
+      { tableName: "submission", columnName: "legacySubmissionId" },
+      { tableName: "reviewSummation", columnName: "id" },
+      { tableName: "reviewSummation", columnName: "submissionId" },
+      { tableName: "reviewSummation", columnName: "aggregateScore" },
+      { tableName: "reviewSummation", columnName: "isPassing" },
+      { tableName: "reviewSummation", columnName: "isFinal" },
+      { tableName: "reviewSummation", columnName: "isExample" },
+      { tableName: "reviewSummation", columnName: "isProvisional" },
+    ];
+    const reviewClient = {
+      $queryRawUnsafe: jest.fn().mockResolvedValueOnce(columnRows).mockResolvedValue([]),
+    };
+    const store = await createReviewFinalScoreStore({
+      reviewClient,
+      reviewSchema: "reviews",
+      actor: "importer",
+    });
+
+    await store.createFinalSummation({
+      submissionId: "sub-1",
+      aggregateScore: 100,
+      isPassing: true,
+      reviewedDate: new Date("2020-01-01T00:00:00.000Z"),
+      legacySubmissionId: "10010001",
+      isFinal: true,
+      isExample: false,
+    });
+
+    const insertCall = reviewClient.$queryRawUnsafe.mock.calls.find(([sql]) =>
+      sql.includes("INSERT INTO")
+    );
+    const insertColumns = insertCall[0]
+      .match(/INSERT INTO [^(]+\(([^)]+)\)/s)[1]
+      .split(",")
+      .map((column) => column.trim());
+    const insertProvisionalIndex = insertColumns.indexOf('"isProvisional"');
+    expect(insertProvisionalIndex).toBeGreaterThan(-1);
+    expect(insertCall[insertProvisionalIndex + 1]).toBe(false);
   });
 });

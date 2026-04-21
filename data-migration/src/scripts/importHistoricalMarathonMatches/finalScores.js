@@ -1116,6 +1116,9 @@ const createReviewFinalScoreStore = async ({
     if (reviewSummationColumnsByName.has("isFinal")) {
       pushColumn("isFinal", Boolean(isFinal));
     }
+    if (reviewSummationColumnsByName.has("isProvisional")) {
+      pushColumn("isProvisional", !isFinal && !isExample);
+    }
     if (reviewSummationColumnsByName.has("reviewedDate") && reviewedDate) {
       pushColumn("reviewedDate", reviewedDate);
     }
@@ -1244,6 +1247,9 @@ const createReviewFinalScoreStore = async ({
     pushAssignment("isPassing", Boolean(isPassing));
     if (reviewSummationColumnsByName.has("isFinal")) {
       pushAssignment("isFinal", Boolean(isFinal));
+    }
+    if (reviewSummationColumnsByName.has("isProvisional")) {
+      pushAssignment("isProvisional", !isFinal && !isExample);
     }
     if (reviewSummationColumnsByName.has("reviewedDate")) {
       pushAssignment("reviewedDate", reviewedDate || null);

@@ -5,6 +5,7 @@ const path = require("path");
 const {
   loadLegacyProvisionalRowsByRoundId,
   reconcileRoundProvisionalScores,
+  createReviewProvisionalScoreStore,
 } = require("../src/scripts/importHistoricalMarathonMatches/provisionalScores");
 
 const writeJson = (baseDir, fileName, rootKey, rows) => {
@@ -798,5 +799,71 @@ describe("importHistoricalMarathonMatches provisional score import", () => {
         isSyntheticExampleOnlyFinalist: true,
       }),
     ]);
+  });
+
+  test("writes isProvisional for non-final non-example review summations", async () => {
+    const columnRows = [
+      { tableName: "submission", columnName: "id" },
+      { tableName: "submission", columnName: "challengeId" },
+      { tableName: "submission", columnName: "legacySubmissionId" },
+      { tableName: "reviewSummation", columnName: "id" },
+      { tableName: "reviewSummation", columnName: "submissionId" },
+      { tableName: "reviewSummation", columnName: "aggregateScore" },
+      { tableName: "reviewSummation", columnName: "isPassing" },
+      { tableName: "reviewSummation", columnName: "isFinal" },
+      { tableName: "reviewSummation", columnName: "isExample" },
+      { tableName: "reviewSummation", columnName: "isProvisional" },
+    ];
+    const reviewClient = {
+      $queryRawUnsafe: jest.fn().mockResolvedValueOnce(columnRows).mockResolvedValue([]),
+    };
+    const store = await createReviewProvisionalScoreStore({
+      reviewClient,
+      reviewSchema: "reviews",
+      actor: "importer",
+    });
+
+    await store.createProvisionalSummation({
+      submissionId: "sub-1",
+      aggregateScore: 9.5,
+      isPassing: true,
+      reviewedDate: new Date("2020-01-01T00:00:00.000Z"),
+      legacySubmissionId: "10010001",
+      isFinal: false,
+      isExample: false,
+    });
+    await store.updateProvisionalSummation({
+      reviewSummationId: "summary-1",
+      aggregateScore: 8.25,
+      isPassing: true,
+      reviewedDate: new Date("2020-01-02T00:00:00.000Z"),
+      legacySubmissionId: "10010003",
+      isFinal: false,
+      isExample: false,
+    });
+
+    const insertCall = reviewClient.$queryRawUnsafe.mock.calls.find(([sql]) =>
+      sql.includes("INSERT INTO")
+    );
+    const insertColumns = insertCall[0]
+      .match(/INSERT INTO [^(]+\(([^)]+)\)/s)[1]
+      .split(",")
+      .map((column) => column.trim());
+    const insertProvisionalIndex = insertColumns.indexOf('"isProvisional"');
+    expect(insertProvisionalIndex).toBeGreaterThan(-1);
+    expect(insertCall[insertProvisionalIndex + 1]).toBe(true);
+
+    const updateCall = reviewClient.$queryRawUnsafe.mock.calls.find(([sql]) =>
+      sql.includes('UPDATE "reviews"."reviewSummation"')
+    );
+    const updateAssignments = updateCall[0]
+      .match(/SET ([\s\S]+?)\s+WHERE/)[1]
+      .split(",")
+      .map((assignment) => assignment.trim());
+    const updateProvisionalIndex = updateAssignments.findIndex((assignment) =>
+      assignment.startsWith('"isProvisional"')
+    );
+    expect(updateProvisionalIndex).toBeGreaterThan(-1);
+    expect(updateCall[updateProvisionalIndex + 1]).toBe(true);
   });
 });
