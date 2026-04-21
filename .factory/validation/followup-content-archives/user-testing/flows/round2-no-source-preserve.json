@@ -1,0 +1,52 @@
+{
+  "groupId": "round2-no-source-preserve",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-15T00:02:48.625204+00:00",
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-005",
+      "status": "blocked",
+      "reason": "No already-imported exported Marathon Match challenge currently satisfies the no-source preserve precondition in the shared environment/export set. Search across 23 imported MM/Data Science challenges found only five export-backed historical fixtures: 9874, 9892, 10815, 13897, and 17948. Rounds 9874, 10815, and 13897 all resolve usable converted component_text Markdown; 17948 resolves usable raw problem.problem_text HTML; and 9892 is round_type_id=15 rather than Marathon Match. Export-wide search still found 237 no-source Marathon Match rounds in /mnt/Informix, but zero of them are already imported in the shared environment, so there is no valid fixture to run the required targeted rerun against.",
+      "evidence": [
+        "followup-content-archives/round2/no-source-preserve/imported-mm-no-source-search.json",
+        "followup-content-archives/round2/no-source-preserve/export-mm-no-source-rounds.json",
+        "followup-content-archives/round2/no-source-preserve/search-analysis.json",
+        "followup-content-archives/round2/no-source-preserve/candidate-challenge-api-snapshots.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "node",
+    "python",
+    "challenge API"
+  ],
+  "commands": [
+    {
+      "command": "node legacy/source + challenge/review DB search -> imported-mm-no-source-search.json",
+      "exitCode": 0,
+      "observation": "Scanned 23 imported MM/Data Science challenges with legacyId values. Only five map to current /mnt/Informix historical rounds (9874, 9892, 10815, 13897, 17948), and none meet the no-source preserve precondition."
+    },
+    {
+      "command": "node export-wide MM no-source scan -> export-mm-no-source-rounds.json",
+      "exitCode": 0,
+      "observation": "Scanned 1107 exported Marathon Match rounds. Found 237 rounds with no usable problem_text and no usable converted component_text Markdown, but 0 of those rounds are already imported as MM/Data Science challenges in the shared environment."
+    },
+    {
+      "command": "python derive search-analysis.json from the two search artifacts",
+      "exitCode": 0,
+      "observation": "Summarized the export-backed imported historical fixtures: 9874/10815/13897 are XML-fallback candidates, 17948 is raw-problem HTML, and 9892 is not a Marathon Match round."
+    },
+    {
+      "command": "python fetch challenge API snapshots for legacyIds 9874, 9892, 10815, 13897, 17948 -> candidate-challenge-api-snapshots.json",
+      "exitCode": 0,
+      "observation": "Captured current public challenge API responses for the five export-backed imported fixtures to pair user-surface state with the legacy-source search evidence."
+    }
+  ],
+  "frictions": [
+    "Most imported MM/Data Science challenges in the shared environment use synthetic 30096xxx legacyIds that are absent from /mnt/Informix, so the search had to intersect imported challenges with export-backed rounds before evaluating description-source eligibility."
+  ],
+  "blockers": [
+    "Fixture availability blocker: the current shared environment/export set contains no already-imported exported Marathon Match round whose legacy description lookup produces neither usable problem.problem_text nor usable converted component.component_text Markdown. Without such a fixture, targeted rerun execution would not test VAL-FOLLOWUP-005 and was intentionally not run."
+  ],
+  "summary": "VAL-FOLLOWUP-005 is blocked because the current shared environment has no already-imported exported Marathon Match fixture that satisfies the preserve/no-source precondition."
+}

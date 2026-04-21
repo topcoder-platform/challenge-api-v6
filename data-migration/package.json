@@ -8,6 +8,7 @@
         "db:down": "docker compose -f local/docker-compose.yml down",
         "db:reset": "docker compose -f local/docker-compose.yml down -v && docker compose -f local/docker-compose.yml up -d",
         "migrate": "node src/index.js",
+        "export:mm:submissions": "node src/scripts/exportMarathonMatchSubmissions.js",
         "migrate:reset": "npx prisma migrate reset -f && npm run migrate",
         "test": "jest",
         "test:watch": "jest --watch",
@@ -36,7 +37,7 @@
         "node": "18.19.0",
         "yarn": "1.22.19"
     },
-   "overrides": {
-    "glob": "10.4.2" 
-  }
+    "overrides": {
+        "glob": "10.4.2"
+    }
 }

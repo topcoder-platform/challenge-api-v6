@@ -30,7 +30,10 @@ describe("challenge activation billing validation unit tests", () => {
         challenge: projectChallenge,
       });
     } catch (error) {
-      should.equal(error.message, "Cannot activate challenge because the project has no billing account.");
+      should.equal(
+        error.message,
+        "Cannot activate challenge because the project has no billing account.",
+      );
       return;
     }
 
@@ -47,7 +50,7 @@ describe("challenge activation billing validation unit tests", () => {
     } catch (error) {
       should.equal(
         error.message,
-        "Cannot activate challenge because the project billing account is inactive."
+        "Cannot activate challenge because the project billing account is inactive.",
       );
       return;
     }
@@ -66,7 +69,7 @@ describe("challenge activation billing validation unit tests", () => {
     } catch (error) {
       should.equal(
         error.message,
-        "Cannot activate challenge because the project billing account is expired."
+        "Cannot activate challenge because the project billing account is expired.",
       );
       return;
     }
@@ -93,7 +96,7 @@ describe("challenge activation billing validation unit tests", () => {
     } catch (error) {
       should.equal(
         error.message,
-        "Cannot activate challenge because the project billing account has insufficient remaining funds."
+        "Cannot activate challenge because the project billing account has insufficient remaining funds.",
       );
       return;
     }
@@ -115,6 +118,23 @@ describe("challenge activation billing validation unit tests", () => {
       billingAccountId: "80001061",
       challenge: projectChallenge,
       endDate: "2099-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("allows activation when an ignored billing account is expired and out of funds", async () => {
+    projectHelper.getBillingAccountDetails = async () => ({
+      active: true,
+      billingAccountId: "80000062",
+      endDate: "2000-01-01T00:00:00.000Z",
+      status: "ACTIVE",
+      totalBudgetRemaining: 0,
+    });
+
+    await validateChallengeActivationBillingAccount({
+      active: true,
+      billingAccountId: "80000062",
+      challenge: projectChallenge,
+      endDate: "2000-01-01T00:00:00.000Z",
     });
   });
 });

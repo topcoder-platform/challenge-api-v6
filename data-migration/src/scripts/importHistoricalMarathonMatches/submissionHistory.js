@@ -3,6 +3,9 @@
 const crypto = require("crypto");
 
 const {
+  buildSubmissionArchiveFileName,
+} = require("./submissionArchives");
+const {
   ensureFileExists,
   listFilesByPattern,
   resolveFilePath,
@@ -46,6 +49,41 @@ const normalizeReviewSchema = (value) => {
     throw new Error(`Invalid REVIEW_DB_SCHEMA "${normalized}"`);
   }
   return normalized;
+};
+
+const LEGACY_SUBMISSION_TEXT_FIELDS = [
+  "submission",
+  "submission_text",
+  "submissionText",
+  "text",
+  "body",
+  "source",
+  "source_code",
+  "sourceCode",
+  "code",
+  "content",
+  "contents",
+];
+
+const isUsableLegacySubmissionText = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.toLowerCase() !== "null";
+};
+
+const resolveLegacySubmissionText = (row) => {
+  const record = row && typeof row === "object" ? row : {};
+  for (const fieldName of LEGACY_SUBMISSION_TEXT_FIELDS) {
+    if (isUsableLegacySubmissionText(record[fieldName])) {
+      return String(record[fieldName]);
+    }
+  }
+  return "";
 };
 
 const buildQualifiedTableName = (schemaName, tableName) =>
@@ -233,6 +271,7 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
                   : null,
                 legacySubmissionId,
                 isSyntheticExampleOnlyFinalist: true,
+                submissionText: resolveLegacySubmissionText(row),
               }
             )
           );
@@ -261,6 +300,7 @@ const loadNonExampleLegacySubmissionRowsByRoundId = async ({
             : null,
           legacySubmissionId,
           isSyntheticExampleOnlyFinalist: false,
+          submissionText: resolveLegacySubmissionText(row),
         });
       })
     )
@@ -346,6 +386,18 @@ const createReviewSubmissionStore = async ({
     if (columnsByName.has("submitter")) {
       selectedColumns.push(`"submitter"`);
     }
+    if (columnsByName.has("systemFileName")) {
+      selectedColumns.push(`"systemFileName"`);
+    }
+    if (columnsByName.has("virusScan")) {
+      selectedColumns.push(`"virusScan"`);
+    }
+    if (columnsByName.has("isFileSubmission")) {
+      selectedColumns.push(`"isFileSubmission"`);
+    }
+    if (columnsByName.has("submittedDate")) {
+      selectedColumns.push(`"submittedDate"`);
+    }
 
     const rows = await reviewClient.$queryRawUnsafe(
       `SELECT ${selectedColumns.join(", ")}
@@ -365,6 +417,17 @@ const createReviewSubmissionStore = async ({
         legacySubmissionId,
         memberId: normalizeMemberId(row && row.memberId),
         submitter: row && row.submitter ? String(row.submitter) : null,
+        systemFileName:
+          row && row.systemFileName !== null && row.systemFileName !== undefined
+            ? String(row.systemFileName).trim()
+            : null,
+        virusScan:
+          row && (row.virusScan === true || row.virusScan === false) ? row.virusScan : null,
+        isFileSubmission:
+          row && (row.isFileSubmission === true || row.isFileSubmission === false)
+            ? row.isFileSubmission
+            : null,
+        submittedDate: row && row.submittedDate ? row.submittedDate : null,
       });
     });
     return byLegacyId;
@@ -381,6 +444,12 @@ const createReviewSubmissionStore = async ({
     if (!normalizedLegacySubmissionId) {
       throw new Error("createSubmission requires legacySubmissionId.");
     }
+    const archiveFileName = columnsByName.has("systemFileName")
+      ? buildSubmissionArchiveFileName({
+        challengeId,
+        legacySubmissionId: normalizedLegacySubmissionId,
+      })
+      : null;
 
     const derivedId = crypto
       .createHash("sha1")
@@ -410,6 +479,15 @@ const createReviewSubmissionStore = async ({
     }
     if (columnsByName.has("submittedDate") && submittedDate) {
       pushColumn("submittedDate", submittedDate);
+    }
+    if (columnsByName.has("systemFileName") && archiveFileName) {
+      pushColumn("systemFileName", archiveFileName);
+    }
+    if (columnsByName.has("virusScan")) {
+      pushColumn("virusScan", true);
+    }
+    if (columnsByName.has("isFileSubmission")) {
+      pushColumn("isFileSubmission", true);
     }
     if (columnsByName.has("isExample")) {
       pushColumn("isExample", false);
@@ -444,9 +522,210 @@ const createReviewSubmissionStore = async ({
     );
   };
 
+  /**
+   * Backfills file-submission metadata for an already imported review submission row.
+   *
+   * @param {Object} params reconciliation parameters
+   * @param {string} params.challengeId v6 challenge identifier for the submission row
+   * @param {string} params.legacySubmissionId deterministic legacy submission identifier
+   * @param {string|number} [params.memberId] expected member id for the submission row
+   * @param {string} [params.memberHandle] expected submitter handle for the submission row
+   * @param {Date|string} [params.submittedDate] expected submitted date for the row
+   * @param {Object} [params.existingSubmission] current row snapshot returned from
+   * listExistingSubmissionsByLegacyId
+   * @returns {Promise<boolean>} true when an UPDATE was issued, otherwise false
+   * @throws {Error} when legacySubmissionId is blank
+   */
+  const updateSubmissionMetadata = async ({
+    challengeId,
+    legacySubmissionId,
+    memberId = null,
+    memberHandle = null,
+    submittedDate = null,
+    existingSubmission = null,
+  }) => {
+    const normalizedLegacySubmissionId = String(legacySubmissionId || "").trim();
+    if (!normalizedLegacySubmissionId) {
+      throw new Error("updateSubmissionMetadata requires legacySubmissionId.");
+    }
+
+    const assignments = [];
+    const values = [];
+    const pushAssignment = (columnName, value) => {
+      assignments.push(`"${columnName}" = $${values.length + 1}`);
+      values.push(value);
+    };
+
+    const currentSystemFileName =
+      existingSubmission &&
+      existingSubmission.systemFileName !== null &&
+      existingSubmission.systemFileName !== undefined
+        ? String(existingSubmission.systemFileName).trim()
+        : null;
+    const expectedArchiveFileName = columnsByName.has("systemFileName")
+      ? buildSubmissionArchiveFileName({
+        challengeId,
+        legacySubmissionId: normalizedLegacySubmissionId,
+      })
+      : null;
+    if (
+      columnsByName.has("systemFileName") &&
+      expectedArchiveFileName &&
+      currentSystemFileName !== expectedArchiveFileName
+    ) {
+      pushAssignment("systemFileName", expectedArchiveFileName);
+    }
+    if (columnsByName.has("virusScan") && (!existingSubmission || existingSubmission.virusScan !== true)) {
+      pushAssignment("virusScan", true);
+    }
+    if (
+      columnsByName.has("isFileSubmission") &&
+      (!existingSubmission || existingSubmission.isFileSubmission !== true)
+    ) {
+      pushAssignment("isFileSubmission", true);
+    }
+    const normalizedMemberId = normalizeMemberId(memberId);
+    const currentMemberId = normalizeMemberId(existingSubmission && existingSubmission.memberId);
+    if (
+      columnsByName.has("memberId") &&
+      normalizedMemberId &&
+      currentMemberId !== normalizedMemberId
+    ) {
+      pushAssignment("memberId", normalizedMemberId);
+    }
+    const normalizedMemberHandle = String(memberHandle || "").trim();
+    const currentSubmitter = String(
+      existingSubmission && existingSubmission.submitter ? existingSubmission.submitter : ""
+    ).trim();
+    if (
+      columnsByName.has("submitter") &&
+      normalizedMemberHandle &&
+      currentSubmitter !== normalizedMemberHandle
+    ) {
+      pushAssignment("submitter", normalizedMemberHandle);
+    }
+    if (
+      columnsByName.has("submittedDate") &&
+      submittedDate &&
+      !(existingSubmission && existingSubmission.submittedDate)
+    ) {
+      pushAssignment("submittedDate", submittedDate);
+    }
+    if (assignments.length === 0) {
+      return false;
+    }
+    if (columnsByName.has("updatedBy")) {
+      pushAssignment("updatedBy", actor);
+    }
+    if (columnsByName.has("updatedAt")) {
+      pushAssignment("updatedAt", new Date());
+    }
+
+    values.push(challengeId);
+    values.push(normalizedLegacySubmissionId);
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET ${assignments.join(", ")}
+        WHERE "challengeId" = $${values.length - 1}
+          AND "legacySubmissionId" = $${values.length}`,
+      ...values
+    );
+    return true;
+  };
+
   return {
     listExistingSubmissionsByLegacyId,
     createSubmission,
+    updateSubmissionMetadata,
+  };
+};
+
+const createReviewSubmissionArchiveStore = async ({
+  reviewClient,
+  reviewSchema = DEFAULT_REVIEW_SCHEMA,
+}) => {
+  if (!reviewClient || typeof reviewClient.$queryRawUnsafe !== "function") {
+    throw new Error(
+      "Review DB client with $queryRawUnsafe is required for submission archive reconciliation."
+    );
+  }
+
+  const schema = normalizeReviewSchema(reviewSchema);
+  const submissionTable = buildQualifiedTableName(schema, "submission");
+  const columnRows = await reviewClient.$queryRawUnsafe(
+    `SELECT column_name AS "columnName"
+       FROM information_schema.columns
+      WHERE table_schema = $1
+        AND table_name = 'submission'`,
+    schema
+  );
+  const columnNames = new Set((columnRows || []).map((columnRow) => String(columnRow.columnName)));
+
+  if (!columnNames.has("challengeId") || !columnNames.has("legacySubmissionId")) {
+    throw new Error(
+      `Review submission table ${schema}.submission must expose challengeId and legacySubmissionId columns.`
+    );
+  }
+  if (!columnNames.has("url")) {
+    throw new Error(`Review submission table ${schema}.submission must expose url column.`);
+  }
+
+  const listSubmissionsByLegacyId = async ({ challengeId }) => {
+    const rows = await reviewClient.$queryRawUnsafe(
+      `SELECT "legacySubmissionId", "url"
+         FROM ${submissionTable}
+        WHERE "challengeId" = $1
+          AND "legacySubmissionId" IS NOT NULL`,
+      challengeId
+    );
+
+    const byLegacySubmissionId = new Map();
+    (rows || []).forEach((row) => {
+      const legacySubmissionId = String(
+        row && row.legacySubmissionId ? row.legacySubmissionId : ""
+      ).trim();
+      if (!legacySubmissionId) {
+        return;
+      }
+      if (byLegacySubmissionId.has(legacySubmissionId)) {
+        throw new Error(
+          `Challenge ${challengeId} has duplicate submission rows for legacySubmissionId "${legacySubmissionId}".`
+        );
+      }
+
+      byLegacySubmissionId.set(legacySubmissionId, {
+        legacySubmissionId,
+        url:
+          row && row.url !== null && row.url !== undefined ? String(row.url) : null,
+      });
+    });
+    return byLegacySubmissionId;
+  };
+
+  const updateSubmissionUrl = async ({ challengeId, legacySubmissionId, url }) => {
+    const normalizedLegacySubmissionId = String(legacySubmissionId || "").trim();
+    const normalizedUrl = String(url || "").trim();
+    if (!normalizedLegacySubmissionId) {
+      throw new Error("updateSubmissionUrl requires legacySubmissionId.");
+    }
+    if (!normalizedUrl) {
+      throw new Error("updateSubmissionUrl requires url.");
+    }
+
+    await reviewClient.$queryRawUnsafe(
+      `UPDATE ${submissionTable}
+          SET "url" = $1
+        WHERE "challengeId" = $2
+          AND "legacySubmissionId" = $3`,
+      normalizedUrl,
+      challengeId,
+      normalizedLegacySubmissionId
+    );
+  };
+
+  return {
+    listSubmissionsByLegacyId,
+    updateSubmissionUrl,
   };
 };
 
@@ -520,6 +799,16 @@ const reconcileRoundSubmissionHistory = async ({
           `Existing submission legacySubmissionId "${row.legacySubmissionId}" is linked to memberId ${existingMemberId} but legacy coder ${row.coderId} resolves to memberId ${memberId}.`
         );
       }
+      if (typeof submissionStore.updateSubmissionMetadata === "function") {
+        await submissionStore.updateSubmissionMetadata({
+          challengeId,
+          legacySubmissionId: row.legacySubmissionId,
+          memberId,
+          memberHandle,
+          submittedDate: row.submittedDate,
+          existingSubmission: existing,
+        });
+      }
       alreadyPresentSubmissions += 1;
       incrementImportedCount(memberId);
       continue;
@@ -562,5 +851,7 @@ module.exports = {
   deriveLegacySubmissionId,
   loadNonExampleLegacySubmissionRowsByRoundId,
   createReviewSubmissionStore,
+  createReviewSubmissionArchiveStore,
   reconcileRoundSubmissionHistory,
+  resolveLegacySubmissionText,
 };

@@ -17,9 +17,17 @@ The script can:
 - discover an existing v6 Marathon Match challenge and backfill missing data
 - create a new Marathon Match challenge and its standard phases when no safe
   match exists
+- backfill canonical `isRated` challenge metadata from legacy `round.rated_ind`
+  so member rerating can skip explicit unrated rounds
 - reconcile submitter resources through the Resources API
 - import submission history, final scores, and provisional scores into the
   review database
+- treat `long_component_state.points` as the authoritative public final score
+  when legacy `long_comp_result` score columns disagree with it
+
+When the review submission table exposes `systemFileName`, `virusScan`, and
+`isFileSubmission`, submission-history reconciliation sets or backfills those
+fields to the generated zip filename, `true`, and `true` respectively.
 
 The default mode is `--dry-run`. No writes happen unless `--apply` is provided.
 
@@ -65,6 +73,10 @@ MEMBER_DB_SCHEMA=members
 REVIEW_DB_URL=postgresql://user:password@host:5432/review_db
 REVIEW_DB_SCHEMA=reviews
 
+# optional; when set, standard apply and targeted rerun will write deterministic
+# submission zip archives locally and populate reviews.submission.url
+SUBMISSION_ARCHIVE_DIR=/tmp/mm-submission-archives
+
 # required for apply mode resource reconciliation
 RESOURCES_API_URL=https://api.topcoder-dev.com/v5/resources
 AUTH0_URL=https://topcoder-dev.auth0.com
@@ -98,6 +110,8 @@ For apply mode:
 
 - `DATABASE_URL`
 - `REVIEW_DB_URL`
+- `SUBMISSION_ARCHIVE_DIR` if you want standard apply or targeted rerun to
+  materialize submission archives and populate `reviews.submission.url`
 - `RESOURCES_API_URL`
 - `AUTH0_URL`
 - `AUTH0_AUDIENCE`
@@ -231,6 +245,109 @@ Expected apply result:
 - `APPLY_SUMMARY.unmatched` is `0`
 - rounds show `created` or `existing` status as expected
 
+## Rerun operator workflows
+
+### Standard full apply rerun
+
+Use this when you want to rerun full reconciliation for a round that was
+already imported/backfilled:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js \
+  --apply \
+  --round-id <legacyRoundId> \
+  --skipped-file data-migration/out/historical-mm-skipped-<legacyRoundId>.json
+```
+
+Expected rerun behavior:
+
+- reruns are idempotent: already-imported records are reconciled as existing
+  instead of duplicated
+- existing submissions are backfilled with deterministic `systemFileName`,
+  `virusScan=true`, and `isFileSubmission=true` when the review schema exposes
+  those columns
+- existing final summations also backfill the attached submission row's
+  `finalScore`, `placement`, and `userRank` summary fields when the review
+  schema exposes those columns, so imported Marathon Match leaders appear
+  correctly in the submissions tab
+- targeted reruns clear those same submission summary fields from non-final
+  Marathon Match submissions and demote any stray final summations, so rerunning
+  a previously imported round repairs provisional-vs-final display state
+- when `SUBMISSION_ARCHIVE_DIR` is configured, standard apply also writes
+  deterministic local submission zip archives and backfills
+  `reviews.submission.url`
+- if legacy provisional rows are malformed, they are skipped/reported (not
+  fatal) with `reasonCode=malformed-provisional-score` in the skipped artifact;
+  apply reruns continue and still complete successfully
+- existing `missing-member` skips remain deterministic and rerun-stable for
+  members still absent from the target environment
+
+### Targeted rerun patch mode (description + submission archive/url + score reconciliation)
+
+Targeted rerun is explicit patch mode for already-imported rounds. It requires:
+
+- `--apply --targeted-rerun --round-id <id> --challenge-id <challengeId>`
+- exactly one selected round
+- the selected round to resolve an existing imported v6 challenge; if full planning
+  is blocked only by `target-member-resolution-unavailable`, targeted rerun can
+  still proceed because it patches only description, submission archive/url data,
+  and existing review score rows
+- a writable `SUBMISSION_ARCHIVE_DIR` (used to generate local zip archives)
+
+Canonical command shape:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id <id> --challenge-id <challengeId>
+```
+
+1. Look up the existing challenge id by legacy round id:
+
+```bash
+curl -s "https://api.topcoder-dev.com/v6/challenges?legacyId=<legacyRoundId>" \
+  | jq -r '.[0].id'
+```
+
+2. Ensure `SUBMISSION_ARCHIVE_DIR` is configured and writable (export in-shell
+if needed, instead of editing committed env files):
+
+```bash
+export SUBMISSION_ARCHIVE_DIR=/tmp/mm-submission-archives
+mkdir -p "$SUBMISSION_ARCHIVE_DIR"
+```
+
+3. Run targeted rerun with explicit override:
+
+```bash
+node data-migration/src/scripts/importHistoricalMarathonMatches.js \
+  --apply \
+  --targeted-rerun \
+  --round-id <legacyRoundId> \
+  --challenge-id <challengeId> \
+  --skipped-file data-migration/out/historical-mm-skipped-<legacyRoundId>.json
+```
+
+Description source precedence in targeted rerun:
+
+1. use raw legacy `problem.problem_text` only when it contains renderable HTML
+2. otherwise use Markdown converted from legacy `component.component_text` XML
+3. if neither source is usable, preserve the existing description
+
+Description writes also set `descriptionFormat` deterministically:
+
+- `html` when raw legacy `problem.problem_text` HTML is used
+- `markdown` when converted `component.component_text` content is used or when
+  fallback importer text is stored
+
+Targeted rerun is patch-only and idempotent:
+
+- it may patch challenge `description`, submission archive/url data, and
+  existing final/provisional review summation scores
+- it demotes legacy provisional review summations that were previously imported
+  as final, using `long_component_state.submission_number` to preserve only the
+  explicit final submission for each coder as final
+- it must not mutate phases, resources, or review-summation identities
+- rerunning the same targeted patch converges without creating duplicates
+
 ## Recommended rollout sequence
 
 1. Run `--dry-run` for a single round.
@@ -252,3 +369,89 @@ Expected apply result:
   score, or provisional score import starts.
 - If `RESOURCES_API_URL` or Auth0 credentials are missing, apply mode will fail
   before participant reconciliation starts.
+
+## Export Marathon Match submissions
+
+`data-migration/src/scripts/exportMarathonMatchSubmissions.js` exports live
+Marathon Match challenge metadata, submission archives, and review summations
+through the v6 challenge and review APIs.
+
+The script expects a bearer token in the environment. It reads the first
+populated variable from:
+
+- `M2M_TOKEN`
+- `M2M_FULL_ACCESS_TOKEN`
+- `TOPCODER_M2M_TOKEN`
+
+### Required environment
+
+By default the exporter uses:
+
+- `CHALLENGE_API_URL=https://api.topcoder.com/v6/challenges`
+- `REVIEW_API_URL=https://api.topcoder.com/v6`
+
+Override those when you need to point at local/dev deployments.
+
+### Output layout
+
+Given `--output-dir /tmp/mm-export`, the exporter writes:
+
+- `/tmp/mm-export/metadata.json`
+- `/tmp/mm-export/submissions/coder_<memberId>/<submissionId>.zip`
+- `/tmp/mm-export/submissions/coder_<memberId>/<submissionId>.json`
+
+`metadata.json` is the raw response from:
+
+```text
+GET /challenges/{challengeId}
+```
+
+Each per-submission JSON file contains every review summation returned for that
+submission from:
+
+```text
+GET /reviewSummations?challengeId=<challengeId>&metadata=true
+```
+
+That means Marathon Match submissions with multiple rows, such as provisional
+and final summations, are exported as a JSON array in `{submissionId}.json`.
+
+Submissions that do not have any attached review summation rows are ignored and
+are not exported.
+
+If an individual submission archive download fails, for example because the
+submission is not available in clean storage after a failed virus scan, the
+script logs the error and continues exporting the remaining submissions.
+
+### Usage
+
+1. Change into the package folder and select the repo Node version.
+
+```bash
+cd challenge-api-v6/data-migration
+nvm use
+```
+
+2. Export the challenge.
+
+```bash
+M2M_TOKEN=your-token-here \
+pnpm run export:mm:submissions -- \
+  --challenge-id <challengeId> \
+  --output-dir ./out/mm-export-<challengeId>
+```
+
+You can also call the script directly:
+
+```bash
+node src/scripts/exportMarathonMatchSubmissions.js \
+  --challenge-id <challengeId> \
+  --output-dir ./out/mm-export-<challengeId>
+```
+
+Optional flags:
+
+- `--challenge-api-url <url>`: override the challenge collection base URL
+- `--review-api-url <url>`: override the review API root URL
+- `--page-size <n>`: pagination size for submissions and review summations
+- `--concurrency <n>`: number of concurrent submission downloads

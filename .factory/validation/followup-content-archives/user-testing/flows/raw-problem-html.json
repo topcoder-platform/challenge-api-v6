@@ -1,0 +1,118 @@
+{
+  "groupId": "raw-problem-html",
+  "surface": "importer CLI + API verification",
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-001",
+      "status": "blocked",
+      "reason": "The current persisted challenge description already exactly matches legacy problem.problem_text HTML for round 17948, but both valid targeted-rerun apply attempts failed before any importer apply logic because the session could not reach topcoder-services.ci8xwsszszsw.us-east-1.rds.amazonaws.com:5432. This session therefore could not prove the positive rerun path itself.",
+      "evidence": [
+        "legacy-problem-mapping-17948.json",
+        "legacy-problem-17948.html",
+        "pre-snapshot.json",
+        "positive-first-rerun.stderr.txt",
+        "positive-second-rerun.stderr.txt",
+        "analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-002",
+      "status": "blocked",
+      "reason": "Archive/url backfill could not be exercised because both valid targeted-rerun apply attempts failed before any writes. The assigned archive directory stayed empty, so no one-to-one zip/url mapping could be proven in this session. Legacy round 17948 submission text rows also show 0 non-empty texts, so the expected sample payload for this fixture would have been an empty text file if rerun execution were available.",
+      "evidence": [
+        "pre-snapshot.json",
+        "legacy-submission-sample-17948.json",
+        "positive-first-rerun.stderr.txt",
+        "positive-second-rerun.stderr.txt",
+        "post-positive-attempts-snapshot.json",
+        "analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-003",
+      "status": "pass",
+      "reason": "The missing --challenge-id invocation failed immediately with the explicit guardrail error, and the mismatched challenge-id invocation also exited non-zero. Pre vs post-negative snapshots matched exactly for target/control challenge, resource, submission, review, and archive surfaces, so the invalid targeted-rerun invocations failed closed with no writes.",
+      "evidence": [
+        "negative-missing-challenge-id.stderr.txt",
+        "negative-mismatched-challenge-id.stderr.txt",
+        "pre-snapshot.json",
+        "post-negative-snapshot.json",
+        "analysis.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-004",
+      "status": "blocked",
+      "reason": "Patch-only positive-path behavior could not be proven because both valid targeted-rerun apply attempts were blocked by direct database connectivity failures before any importer writes could execute. The post-attempt snapshot shows no target/control side effects, but successful patch-only mutation semantics were not exercisable in this session.",
+      "evidence": [
+        "pre-snapshot.json",
+        "post-positive-attempts-snapshot.json",
+        "positive-first-rerun.stderr.txt",
+        "positive-second-rerun.stderr.txt",
+        "analysis.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python"
+  ],
+  "commands": [
+    {
+      "command": "python3 /tmp/capture_raw_problem_html_snapshot.py --output .../pre-snapshot.json --archive-dir .../submission-archives --target-round-id 17948 --target-challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978 --control-round-id 10815 --control-challenge-id 5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+      "exitCode": 0,
+      "observation": "Captured pre-run API snapshots and empty archive-dir evidence (target: resources=47, submissions=370, reviewSummations=415; control: resources=828, submissions=1444, reviewSummations=1710)."
+    },
+    {
+      "command": "python3 legacy mapping extractor for round 17948 -> legacy-problem-mapping-17948.json + legacy-problem-17948.html",
+      "exitCode": 0,
+      "observation": "Resolved round 17948 to componentId 122638 / problemId 16094 with usable raw problem_text length 10267 (sha256 2e4120aea036844fc0a1cb03731a7d922e928c54576a822017af74b0243263e5)."
+    },
+    {
+      "command": "node loadNonExampleLegacySubmissionRowsByRoundId for round 17948 -> legacy-submission-sample-17948.json",
+      "exitCode": 0,
+      "observation": "Loaded 700 legacy submission rows for round 17948 and found 0 non-empty legacy submission texts; sample legacySubmissionId 108839490001 has expected empty payload length 0."
+    },
+    {
+      "command": "node src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17948",
+      "exitCode": 1,
+      "observation": "Failed fast with --targeted-rerun requires --challenge-id <id>."
+    },
+    {
+      "command": "node src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17948 --challenge-id 5fa76bd9-da55-422d-8d4c-4f0155dc62c5",
+      "exitCode": 1,
+      "observation": "Exited non-zero with no writes; current environment hit a direct challenge DB connectivity timeout before a mismatch-specific guardrail message could be emitted."
+    },
+    {
+      "command": "python3 /tmp/capture_raw_problem_html_snapshot.py --output .../post-negative-snapshot.json ...",
+      "exitCode": 0,
+      "observation": "Pre vs post-negative snapshots matched exactly for target/control challenge, resource, submission, review, and archive surfaces."
+    },
+    {
+      "command": "SUBMISSION_ARCHIVE_DIR=... node src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 17948 --challenge-id 8d6775ad-2235-4a4d-9daa-062bd4417978",
+      "exitCode": 1,
+      "observation": "Blocked before apply logic: prisma.challengeType.findMany could not reach topcoder-services.ci8xwsszszsw.us-east-1.rds.amazonaws.com:5432."
+    },
+    {
+      "command": "repeat positive targeted-rerun command with identical SUBMISSION_ARCHIVE_DIR override",
+      "exitCode": 1,
+      "observation": "Retry hit the same direct database connectivity timeout; no archives or API-visible writes occurred."
+    },
+    {
+      "command": "python3 /tmp/capture_raw_problem_html_snapshot.py --output .../post-positive-attempts-snapshot.json ...",
+      "exitCode": 0,
+      "observation": "Pre vs post-positive-attempt snapshots matched exactly, confirming that the blocked apply attempts produced no target/control or archive side effects."
+    },
+    {
+      "command": "python3 compare legacy-problem-17948.html vs pre-snapshot target challenge description",
+      "exitCode": 0,
+      "observation": "The current stored target challenge description already exactly matches the raw legacy HTML (length 10267; identical sha256)."
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    "Direct database access needed by apply-mode targeted reruns is unavailable from this session: challenge/importer Prisma calls to topcoder-services.ci8xwsszszsw.us-east-1.rds.amazonaws.com:5432 timed out, blocking successful positive rerun execution for VAL-FOLLOWUP-001/002/004.",
+    "The submissions API still does not expose persisted submission.url values in this environment, so URL/backfill validation depends on direct DB access or another equivalent surface; with the database timeout above, VAL-FOLLOWUP-002 could not be proven."
+  ]
+}

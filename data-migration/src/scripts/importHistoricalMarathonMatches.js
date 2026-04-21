@@ -8,6 +8,7 @@ const { parseArgs, usage } = require("./importHistoricalMarathonMatches/argParse
 const { buildDryRunPlan } = require("./importHistoricalMarathonMatches/planning");
 const {
   runApplyMode,
+  runTargetedRerunMode,
   DEFAULT_SUBMITTER_ROLE_ID,
   resolveMarathonTypeId,
   resolveDataScienceTrackId,
@@ -28,6 +29,7 @@ const {
 const {
   TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
   DEFAULT_MEMBER_SCHEMA,
+  createMemberIdentityResolver,
   createMemberPresenceResolver,
 } = require("./importHistoricalMarathonMatches/targetMemberResolution");
 
@@ -88,6 +90,7 @@ const run = async () => {
   let memberLookupPrisma = null;
   let reviewPrisma = null;
   let resolveMemberPresence = null;
+  let resolveMemberIdentities = null;
 
   if (shouldAttemptDatabaseDiscovery) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
@@ -221,6 +224,10 @@ const run = async () => {
           prisma: memberLookupPrisma,
           memberSchema: memberDbSchema,
         });
+        resolveMemberIdentities = createMemberIdentityResolver({
+          prisma: memberLookupPrisma,
+          memberSchema: memberDbSchema,
+        });
         planningPrerequisites.memberResolution = {
           available: true,
         };
@@ -257,6 +264,21 @@ const run = async () => {
       return;
     }
 
+    if (options.targetedRerun) {
+      const targetedRerunResult = await runTargetedRerunMode({
+        options,
+        plan,
+        prisma,
+        reviewClient: reviewPrisma,
+        reviewSchema: reviewDbSchema,
+        submissionArchiveDir: process.env.SUBMISSION_ARCHIVE_DIR,
+        actor: DEFAULT_ACTOR,
+        resolveMemberIdentities,
+      });
+      emitApplyReport(targetedRerunResult);
+      return;
+    }
+
     if (!String(process.env.RESOURCES_API_URL || "").trim()) {
       throw new Error("RESOURCES_API_URL must be set for apply mode participant reconciliation.");
     }
@@ -277,12 +299,14 @@ const run = async () => {
         resourceClient: createDefaultResourceClient(),
         reviewClient: reviewPrisma,
         reviewSchema: reviewDbSchema,
+        submissionArchiveDir: process.env.SUBMISSION_ARCHIVE_DIR,
         importSubmissions: true,
         importFinalScores: true,
         importProvisionalScores: true,
       },
       plan,
       actor: DEFAULT_ACTOR,
+      resolveMemberIdentities,
     });
     emitApplyReport(applyResult);
   } finally {

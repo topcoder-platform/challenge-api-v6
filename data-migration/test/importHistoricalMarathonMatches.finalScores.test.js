@@ -5,6 +5,7 @@ const path = require("path");
 const {
   loadLegacyFinalRowsByRoundId,
   reconcileRoundFinalScores,
+  createReviewFinalScoreStore,
 } = require("../src/scripts/importHistoricalMarathonMatches/finalScores");
 const {
   FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
@@ -136,6 +137,164 @@ describe("importHistoricalMarathonMatches final score import", () => {
       );
     } finally {
       fs.rmSync(zeroFallbackFixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("prefers long component state points when legacy final score fields disagree and keeps state-only finalists", async () => {
+    const mismatchFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-mismatch-fixture-")
+    );
+    try {
+      writeJson(
+        mismatchFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [
+          {
+            long_component_state_id: "2720455",
+            round_id: "10082",
+            coder_id: "10597114",
+            points: "867.31",
+          },
+          {
+            long_component_state_id: "2720629",
+            round_id: "10082",
+            coder_id: "274023",
+            points: "1131.96",
+          },
+        ]
+      );
+      writeJson(
+        mismatchFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10082",
+            coder_id: "10597114",
+            system_point_total: "310402.31",
+            point_total: "103.30",
+            placed: "1",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: mismatchFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10082"],
+      });
+
+      expect(rowsByRoundId.get("10082")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            legacyRoundId: "10082",
+            coderId: "10597114",
+            aggregateScore: 867.31,
+            scoreSource: "ranking_score",
+            systemPointTotal: 310402.31,
+            pointTotal: 103.3,
+          }),
+          expect.objectContaining({
+            legacyRoundId: "10082",
+            coderId: "274023",
+            aggregateScore: 1131.96,
+            scoreSource: "ranking_score",
+            legacyPlacement: null,
+            systemPointTotal: null,
+            pointTotal: null,
+          }),
+        ])
+      );
+    } finally {
+      fs.rmSync(mismatchFixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("ignores unattended result-only artifacts when loading final scores", async () => {
+    const unattendedArtifactFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-unattended-artifact-fixture-")
+    );
+    try {
+      writeJson(
+        unattendedArtifactFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [
+          {
+            long_component_state_id: "2664738",
+            round_id: "10015",
+            coder_id: "16064986",
+            points: "7186.79",
+          },
+          {
+            long_component_state_id: "2664602",
+            round_id: "10015",
+            coder_id: "21874802",
+            points: "7176.17",
+          },
+        ]
+      );
+      writeJson(
+        unattendedArtifactFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10015",
+            coder_id: "10597114",
+            system_point_total: "310402.31",
+            point_total: null,
+            attended: "N",
+            placed: "1",
+          },
+          {
+            round_id: "10015",
+            coder_id: "16064986",
+            system_point_total: "7186.79",
+            point_total: "7186.79",
+            attended: "Y",
+            placed: "1",
+          },
+          {
+            round_id: "10015",
+            coder_id: "21874802",
+            system_point_total: "7176.17",
+            point_total: "7176.17",
+            attended: "Y",
+            placed: "2",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: unattendedArtifactFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10015"],
+      });
+
+      expect(rowsByRoundId.get("10015")).toEqual([
+        expect.objectContaining({
+          legacyRoundId: "10015",
+          coderId: "16064986",
+          legacyPlacement: 1,
+          aggregateScore: 7186.79,
+          scoreSource: "system_point_total",
+          rawLegacyPlacement: 1,
+        }),
+        expect.objectContaining({
+          legacyRoundId: "10015",
+          coderId: "21874802",
+          legacyPlacement: 2,
+          aggregateScore: 7176.17,
+          scoreSource: "system_point_total",
+          rawLegacyPlacement: 2,
+        }),
+      ]);
+    } finally {
+      fs.rmSync(unattendedArtifactFixtureDir, { recursive: true, force: true });
     }
   });
 
@@ -326,6 +485,270 @@ describe("importHistoricalMarathonMatches final score import", () => {
     ]);
   });
 
+  test("backfills submission final score summary when final summation already exists", async () => {
+    const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+    const alphaFinalRow = (rowsByRoundId.get("9892") || []).find(
+      (row) => row.coderId === "1"
+    );
+
+    const summaryUpdates = [];
+    const finalScoreStore = {
+      listImportedNonExampleSubmissionsByChallenge: async () => [
+        {
+          id: "sub-1",
+          memberId: "1",
+          legacySubmissionId: "10010001",
+          submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+          createdAt: new Date("2020-01-01T01:00:00.000Z"),
+          finalScore: null,
+          placement: null,
+          userRank: null,
+        },
+      ],
+      listExistingFinalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-1",
+            [{ id: "final-1", submissionId: "sub-1", aggregateScore: 100 }],
+          ],
+        ]),
+      createFinalSummation: async () => {
+        throw new Error("createFinalSummation should not be called for existing scores.");
+      },
+      updateSubmissionFinalScoreSummary: async (payload) => {
+        summaryUpdates.push(payload);
+      },
+    };
+
+    const result = await reconcileRoundFinalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      finalRowsByRoundId: new Map([["9892", [alphaFinalRow]]]),
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+      ]),
+      finalScoreStore,
+    });
+
+    expect(result).toEqual({
+      legacyFinalCandidates: 1,
+      importedFinalScores: 1,
+      alreadyPresentFinalScores: 1,
+      createdFinalScores: 0,
+      missingMemberSkippedFinalScores: 0,
+      explicitSkippedFinalScores: 0,
+      runtimeSkipRecords: [],
+      updatedSubmissionFinalScoreSummaries: 1,
+      alreadyMatchedSubmissionFinalScoreSummaries: 0,
+      unsupportedSubmissionFinalScoreSummaries: 0,
+    });
+    expect(summaryUpdates).toEqual([
+      {
+        submissionId: "sub-1",
+        finalScore: 100,
+        placement: 1,
+        userRank: 1,
+      },
+    ]);
+  });
+
+  test("updates mismatched existing final scores when targeted rerun update mode is enabled", async () => {
+    const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+      dataDir: fixtureDir,
+      longComponentStateFile: "long_component_state_1.json",
+      longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+      roundIds: ["9892"],
+    });
+
+    const updated = [];
+    const finalScoreStore = {
+      listImportedNonExampleSubmissionsByChallenge: async () => [
+        {
+          id: "sub-1",
+          memberId: "1",
+          legacySubmissionId: "10010001",
+          submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+          createdAt: new Date("2020-01-01T01:00:00.000Z"),
+        },
+      ],
+      listExistingFinalSummationsBySubmissionId: async () =>
+        new Map([
+          [
+            "sub-1",
+            [{ id: "final-1", submissionId: "sub-1", aggregateScore: 999 }],
+          ],
+        ]),
+      createFinalSummation: async () => {
+        throw new Error("createFinalSummation should not be called");
+      },
+      updateFinalSummation: async (payload) => {
+        updated.push(payload);
+      },
+    };
+
+    const result = await reconcileRoundFinalScores({
+      roundId: "9892",
+      challengeId: "challenge-1",
+      finalRowsByRoundId: new Map([
+        [
+          "9892",
+          [(rowsByRoundId.get("9892") || []).find((row) => row.coderId === "1")],
+        ],
+      ]),
+      normalizedIdentityByCoderId: new Map([
+        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
+      ]),
+      finalScoreStore,
+      updateExistingScores: true,
+    });
+
+    expect(result).toEqual({
+      legacyFinalCandidates: 1,
+      importedFinalScores: 1,
+      alreadyPresentFinalScores: 0,
+      createdFinalScores: 0,
+      updatedFinalScores: 1,
+      missingMemberSkippedFinalScores: 0,
+      explicitSkippedFinalScores: 0,
+      runtimeSkipRecords: [],
+    });
+    expect(updated).toEqual([
+      expect.objectContaining({
+        reviewSummationId: "final-1",
+        submissionId: "sub-1",
+        aggregateScore: 100,
+        legacySubmissionId: "10010001",
+        isFinal: true,
+        isExample: false,
+      }),
+    ]);
+  });
+
+  test("moves final scores to the explicit legacy final submission during targeted rerun", async () => {
+    const explicitFinalSubmissionFixtureDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mm-final-scores-explicit-submission-fixture-")
+    );
+    try {
+      writeJson(
+        explicitFinalSubmissionFixtureDir,
+        "long_component_state_1.json",
+        "long_component_state",
+        [
+          {
+            long_component_state_id: "2664738",
+            round_id: "10015",
+            coder_id: "16064986",
+            points: "7186.79",
+            submission_number: "5",
+          },
+        ]
+      );
+      writeJson(
+        explicitFinalSubmissionFixtureDir,
+        "long_comp_result_1.json",
+        "long_comp_result",
+        [
+          {
+            round_id: "10015",
+            coder_id: "16064986",
+            system_point_total: "7186.79",
+            point_total: "7186.79",
+            attended: "Y",
+            placed: "1",
+          },
+        ]
+      );
+
+      const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
+        dataDir: explicitFinalSubmissionFixtureDir,
+        longComponentStateFile: "long_component_state_1.json",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["10015"],
+      });
+      const updated = [];
+      const created = [];
+
+      const result = await reconcileRoundFinalScores({
+        roundId: "10015",
+        challengeId: "challenge-1",
+        finalRowsByRoundId: rowsByRoundId,
+        normalizedIdentityByCoderId: new Map([
+          ["16064986", { coderId: "16064986", memberId: 16064986, memberHandle: "ctrucza" }],
+        ]),
+        finalScoreStore: {
+          listImportedNonExampleSubmissionsByChallenge: async () => [
+            {
+              id: "sub-1",
+              memberId: "16064986",
+              legacySubmissionId: "26647380001",
+              submittedDate: new Date("2006-05-17T10:00:00.000Z"),
+              createdAt: new Date("2026-04-09T05:00:55.000Z"),
+            },
+            {
+              id: "sub-5",
+              memberId: "16064986",
+              legacySubmissionId: "26647380005",
+              submittedDate: new Date("2006-05-16T10:31:42.790Z"),
+              createdAt: new Date("2026-04-09T05:00:55.279Z"),
+            },
+          ],
+          listExistingFinalSummationsBySubmissionId: async () =>
+            new Map([
+              [
+                "sub-1",
+                [{ id: "final-wrong", submissionId: "sub-1", aggregateScore: 7186.79 }],
+              ],
+            ]),
+          createFinalSummation: async (payload) => {
+            created.push(payload);
+          },
+          updateFinalSummation: async (payload) => {
+            updated.push(payload);
+          },
+        },
+        updateExistingScores: true,
+      });
+
+      expect(rowsByRoundId.get("10015")).toEqual([
+        expect.objectContaining({
+          coderId: "16064986",
+          longComponentStateId: "2664738",
+          submissionNumber: 5,
+          legacySubmissionId: "26647380005",
+          aggregateScore: 7186.79,
+        }),
+      ]);
+      expect(result).toEqual({
+        legacyFinalCandidates: 1,
+        importedFinalScores: 1,
+        alreadyPresentFinalScores: 0,
+        createdFinalScores: 0,
+        updatedFinalScores: 1,
+        missingMemberSkippedFinalScores: 0,
+        explicitSkippedFinalScores: 0,
+        runtimeSkipRecords: [],
+      });
+      expect(created).toEqual([]);
+      expect(updated).toEqual([
+        expect.objectContaining({
+          reviewSummationId: "final-wrong",
+          submissionId: "sub-5",
+          aggregateScore: 7186.79,
+          legacySubmissionId: "26647380005",
+          isFinal: true,
+          isExample: false,
+        }),
+      ]);
+    } finally {
+      fs.rmSync(explicitFinalSubmissionFixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test("records runtime unattachable-finalist skip when no attachable submission exists unexpectedly", async () => {
     const rowsByRoundId = await loadLegacyFinalRowsByRoundId({
       dataDir: fixtureDir,
@@ -385,5 +808,49 @@ describe("importHistoricalMarathonMatches final score import", () => {
         affectedSurfaces: ["final-score"],
       }),
     ]);
+  });
+
+  test("writes isProvisional false for final review summations", async () => {
+    const columnRows = [
+      { tableName: "submission", columnName: "id" },
+      { tableName: "submission", columnName: "challengeId" },
+      { tableName: "submission", columnName: "legacySubmissionId" },
+      { tableName: "reviewSummation", columnName: "id" },
+      { tableName: "reviewSummation", columnName: "submissionId" },
+      { tableName: "reviewSummation", columnName: "aggregateScore" },
+      { tableName: "reviewSummation", columnName: "isPassing" },
+      { tableName: "reviewSummation", columnName: "isFinal" },
+      { tableName: "reviewSummation", columnName: "isExample" },
+      { tableName: "reviewSummation", columnName: "isProvisional" },
+    ];
+    const reviewClient = {
+      $queryRawUnsafe: jest.fn().mockResolvedValueOnce(columnRows).mockResolvedValue([]),
+    };
+    const store = await createReviewFinalScoreStore({
+      reviewClient,
+      reviewSchema: "reviews",
+      actor: "importer",
+    });
+
+    await store.createFinalSummation({
+      submissionId: "sub-1",
+      aggregateScore: 100,
+      isPassing: true,
+      reviewedDate: new Date("2020-01-01T00:00:00.000Z"),
+      legacySubmissionId: "10010001",
+      isFinal: true,
+      isExample: false,
+    });
+
+    const insertCall = reviewClient.$queryRawUnsafe.mock.calls.find(([sql]) =>
+      sql.includes("INSERT INTO")
+    );
+    const insertColumns = insertCall[0]
+      .match(/INSERT INTO [^(]+\(([^)]+)\)/s)[1]
+      .split(",")
+      .map((column) => column.trim());
+    const insertProvisionalIndex = insertColumns.indexOf('"isProvisional"');
+    expect(insertProvisionalIndex).toBeGreaterThan(-1);
+    expect(insertCall[insertProvisionalIndex + 1]).toBe(false);
   });
 });

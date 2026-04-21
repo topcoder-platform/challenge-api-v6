@@ -5,6 +5,7 @@ const path = require("path");
 
 const SKIPPED_ARTIFACT_SCHEMA_VERSION = 1;
 const MISSING_MEMBER_REASON_CODE = "missing-member";
+const MALFORMED_PROVISIONAL_SCORE_REASON_CODE = "malformed-provisional-score";
 const FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE =
   "finalist-without-attachable-submission";
 
@@ -157,6 +158,7 @@ const writeSkippedArtifact = ({ filePath, selectedRoundIds = [], records = [] })
 module.exports = {
   SKIPPED_ARTIFACT_SCHEMA_VERSION,
   MISSING_MEMBER_REASON_CODE,
+  MALFORMED_PROVISIONAL_SCORE_REASON_CODE,
   FINALIST_WITHOUT_ATTACHABLE_SUBMISSION_REASON_CODE,
   resolveSkippedFilePath,
   normalizeSkipRecords,

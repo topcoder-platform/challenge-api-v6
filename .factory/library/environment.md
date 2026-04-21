@@ -18,6 +18,7 @@ Required values:
 - `MEMBER_DB_SCHEMA` — schema used for member lookup tables (default behavior is code-defined; validators should set it explicitly when member data is not reachable through the challenge schema)
 - `REVIEW_DB_URL` — review DB used for submissions and review summations
 - `RESOURCES_API_URL` — base URL for Resource API writes and reads
+- `SUBMISSION_ARCHIVE_DIR` — local directory where submission archive zip files are created during submission URL backfill / targeted reruns
 - `AUTH0_URL`
 - `AUTH0_AUDIENCE`
 - `AUTH0_CLIENT_ID`
@@ -27,6 +28,8 @@ Optional / useful values:
 
 - `DATA_DIRECTORY=/mnt/Informix`
 - importer-scoped attribution values such as `CREATED_BY` / `UPDATED_BY`
+
+`SUBMISSION_ARCHIVE_DIR` must point at a writable local folder. Generated archives are local-only for this mission; workers must not upload them or assume the S3 path in `submission.url` is live.
 
 ## Canonical API Endpoints For Validation
 
@@ -39,6 +42,7 @@ Workers and validators should use these canonical endpoints rather than probing 
 
 - `/mnt/Informix` is a read-only legacy data source.
 - Existing v6 marathon matches are backfill-only at the challenge level.
+- Follow-up targeted rerun mode may overwrite only challenge descriptions plus submission archive/url data, and only when explicitly invoked with an existing challenge-id override.
 - Do not commit secrets from `.env.importer.local`.
 - The validation target is the existing dev environment referenced by the env file; workers should not assume they are allowed to start replacement local services.
 
@@ -61,5 +65,8 @@ These are informational boundaries for worker safety:
 
 - Marathon matches come from legacy `round` rows with `round_type_id='13'`.
 - Primary join path: `round -> long_component_state -> long_submission -> long_comp_result`.
+- Challenge description backfill uses the legacy `round -> round_component -> component -> problem` mapping.
+- Description-source precedence is: raw `problem.problem_text` HTML first, then best-effort Markdown converted from `component.component_text` XML, then placeholder/preserve behavior only when neither source is usable.
 - `round_registration_*.json` is the source of submitter resources.
+- Submission archive content comes from legacy submission text fields associated with the imported non-example submissions.
 - `user_*.json` resolves `coder_id` identities.

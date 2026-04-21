@@ -1,3 +1,4 @@
+const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
@@ -7,6 +8,7 @@ const {
   applyCreateRound,
   reconcileSubmitterResourcesForRound,
   runApplyMode,
+  runTargetedRerunMode,
 } = require("../src/scripts/importHistoricalMarathonMatches/apply");
 
 const buildSkippedFilePath = (suffix) =>
@@ -14,6 +16,67 @@ const buildSkippedFilePath = (suffix) =>
     os.tmpdir(),
     `mm-apply-skipped-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
   );
+
+const buildArchiveDirPath = (suffix) =>
+  fs.mkdtempSync(
+    path.join(
+      os.tmpdir(),
+      `mm-targeted-archive-${suffix}-${Date.now()}-${Math.random().toString(16).slice(2)}-`
+    )
+  );
+
+const writeJson = (baseDir, fileName, rootKey, rows) => {
+  fs.writeFileSync(
+    path.join(baseDir, fileName),
+    `${JSON.stringify({ [rootKey]: rows }, null, 2)}\n`,
+    "utf8"
+  );
+};
+
+const createTargetedScoreFixtureDataDirectory = () => {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-targeted-score-fixture-"));
+
+  writeJson(baseDir, "long_component_state_1.json", "long_component_state", [
+    { long_component_state_id: "1001", round_id: "9892", coder_id: "1", points: "100.0" },
+  ]);
+  writeJson(baseDir, "long_comp_result_1.json", "long_comp_result", [
+    { round_id: "9892", coder_id: "1", system_point_total: "100.0", point_total: "95.0", placed: "1" },
+  ]);
+  writeJson(baseDir, "long_submission_1.json", "long_submission", [
+    {
+      long_component_state_id: "1001",
+      submission_number: "1",
+      example: "0",
+      submit_time: "1000",
+      submission_points: "9.5",
+    },
+  ]);
+
+  return baseDir;
+};
+
+const readSingleEntryStoredZip = (zipPath) => {
+  const zipBuffer = fs.readFileSync(zipPath);
+  expect(zipBuffer.readUInt32LE(0)).toBe(0x04034b50);
+  const fileNameLength = zipBuffer.readUInt16LE(26);
+  const extraFieldLength = zipBuffer.readUInt16LE(28);
+  const compressedSize = zipBuffer.readUInt32LE(18);
+  const localFileDataOffset = 30 + fileNameLength + extraFieldLength;
+  const fileName = zipBuffer
+    .slice(30, 30 + fileNameLength)
+    .toString("utf8");
+  const contents = zipBuffer
+    .slice(localFileDataOffset, localFileDataOffset + compressedSize)
+    .toString("utf8");
+
+  const centralDirectoryOffset = localFileDataOffset + compressedSize;
+  expect(zipBuffer.readUInt32LE(centralDirectoryOffset)).toBe(0x02014b50);
+  const endRecordOffset = zipBuffer.length - 22;
+  expect(zipBuffer.readUInt32LE(endRecordOffset)).toBe(0x06054b50);
+  expect(zipBuffer.readUInt16LE(endRecordOffset + 8)).toBe(1);
+
+  return { fileName, contents };
+};
 
 describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   test("derives coherent closed MM phase windows from legacy activity", () => {
@@ -76,7 +139,11 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
   });
 
   test("apply create-path inserts one completed challenge and phase trio for missing rounds", async () => {
-    const calls = { createdChallenge: null, createdPhases: null };
+    const calls = {
+      createdChallenge: null,
+      createdPhases: null,
+      createdMetadata: null,
+    };
     const tx = {
       challenge: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -91,6 +158,13 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
           return { count: data.length };
         }),
       },
+      challengeMetadata: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdMetadata = data;
+          return { id: "metadata-1" };
+        }),
+      },
     };
 
     const prisma = {
@@ -100,7 +174,12 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     const result = await applyCreateRound({
       prisma,
       roundId: "9892",
-      round: { round_id: "9892", name: "Intel Multi-Threading Competition 2", short_name: "Intel 2" },
+      round: {
+        round_id: "9892",
+        name: "Intel Multi-Threading Competition 2",
+        short_name: "Intel 2",
+        rated_ind: "0",
+      },
       counters: {
         registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
         registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
@@ -131,10 +210,19 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       typeId: "type-mm",
       trackId: "track-ds",
       timelineTemplateId: "timeline-mm",
+      description: "Imported historical Marathon Match from legacy round 9892",
+      descriptionFormat: "markdown",
       status: "COMPLETED",
       currentPhaseNames: [],
       numOfRegistrants: 2,
       numOfSubmissions: 3,
+    });
+    expect(calls.createdMetadata).toEqual({
+      challengeId: "challenge-1",
+      name: "isRated",
+      value: "false",
+      createdBy: "importer",
+      updatedBy: "importer",
     });
     expect(calls.createdPhases).toHaveLength(3);
     expect(calls.createdPhases.map((row) => row.name)).toEqual([
@@ -142,6 +230,105 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       "Submission",
       "Review",
     ]);
+  });
+
+  test("apply create-path uses mapped raw legacy problem HTML when available", async () => {
+    const calls = { createdChallenge: null };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdChallenge = data;
+          return { id: "challenge-1" };
+        }),
+      },
+      challengePhase: {
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    };
+
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const rawProblemHtml = "<p><strong>Legacy</strong> description</p>";
+    await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", name: "MM 9892" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+        descriptionProblemText: rawProblemHtml,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(calls.createdChallenge.description).toBe(rawProblemHtml);
+    expect(calls.createdChallenge.descriptionFormat).toBe("html");
+  });
+
+  test("apply create-path falls back to mapped component_text markdown when problem text is unusable", async () => {
+    const calls = { createdChallenge: null };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdChallenge = data;
+          return { id: "challenge-1" };
+        }),
+      },
+      challengePhase: {
+        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+      },
+    };
+
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const markdownFallback = "## Robot Routing\n\nPublic example only.";
+    await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", name: "MM 9892" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+        descriptionProblemText: "   ",
+        descriptionComponentTextMarkdown: markdownFallback,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(calls.createdChallenge.description).toBe(markdownFallback);
+    expect(calls.createdChallenge.descriptionFormat).toBe("markdown");
   });
 
   test("apply create-path is idempotent when challenge already exists", async () => {
@@ -254,6 +441,88 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     });
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("reuse path canonicalizes legacy rating metadata into one isRated flag", async () => {
+    const calls = {
+      updatedMetadata: null,
+      deletedMetadata: null,
+    };
+    const tx = {
+      challenge: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "existing-challenge-1", typeId: "type-mm", trackId: "track-ds" },
+        ]),
+        create: jest.fn(),
+      },
+      challengePhase: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "cp-1", name: "Registration", isOpen: false },
+          { id: "cp-2", name: "Submission", isOpen: false },
+          { id: "cp-3", name: "Review", isOpen: false },
+        ]),
+        createMany: jest.fn(),
+      },
+      challengeMetadata: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: "metadata-rated", name: "rated", value: "true" },
+          { id: "metadata-unrated", name: "unrated", value: "false" },
+        ]),
+        create: jest.fn(),
+        update: jest.fn().mockImplementation(async ({ data }) => {
+          calls.updatedMetadata = data;
+          return { id: "metadata-rated" };
+        }),
+        deleteMany: jest.fn().mockImplementation(async ({ where }) => {
+          calls.deletedMetadata = where;
+          return { count: 1 };
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: async (callback) => callback(tx),
+    };
+
+    const result = await applyCreateRound({
+      prisma,
+      roundId: "9892",
+      round: { round_id: "9892", rated_ind: "0" },
+      counters: {
+        registrationStartMs: Date.parse("2020-01-01T00:00:00.000Z"),
+        registrationEndMs: Date.parse("2020-01-01T12:00:00.000Z"),
+        earliestSubmissionOpenMs: Date.parse("2020-01-01T01:00:00.000Z"),
+        earliestNonExampleSubmitMs: Date.parse("2020-01-01T02:00:00.000Z"),
+        latestNonExampleSubmitMs: Date.parse("2020-01-02T00:00:00.000Z"),
+        eligibleRegistrants: new Set(["1", "2"]),
+        nonExampleSubmissions: 3,
+      },
+      actor: "importer",
+      marathonTypeId: "type-mm",
+      dataScienceTrackId: "track-ds",
+      timelineTemplateId: "timeline-mm",
+      phaseIdsByName: {
+        Registration: "phase-registration",
+        Submission: "phase-submission",
+        Review: "phase-review",
+      },
+    });
+
+    expect(result).toEqual({
+      status: "existing",
+      challengeId: "existing-challenge-1",
+      legacyRoundId: "9892",
+    });
+    expect(tx.challengeMetadata.create).not.toHaveBeenCalled();
+    expect(calls.updatedMetadata).toEqual({
+      name: "isRated",
+      value: "false",
+      updatedBy: "importer",
+    });
+    expect(calls.deletedMetadata).toEqual({
+      id: {
+        in: ["metadata-unrated"],
+      },
+    });
   });
 
   test("apply-mode reruns converge create decisions by backfilling missing standard phases", async () => {
@@ -622,6 +891,1300 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
     );
     expect(tx.challenge.create).not.toHaveBeenCalled();
     expect(tx.challengePhase.createMany).not.toHaveBeenCalled();
+  });
+
+  test("targeted rerun mode fails closed when challenge-id override is missing", async () => {
+    await expect(
+      runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow("--targeted-rerun requires --challenge-id");
+  });
+
+  test("targeted rerun mode fails closed when challenge-id override mismatches selected round", async () => {
+    await expect(
+      runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-2",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow(
+      'Targeted rerun challenge-id override "challenge-2" does not match selected round 9892 target challenge "challenge-1".'
+    );
+  });
+
+  test("targeted rerun mode accepts matched rounds that are unresolved only because member resolution is unavailable", async () => {
+    const archiveDir = buildArchiveDirPath("member-resolution-unavailable");
+    try {
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "unresolved",
+              reason: "target-member-resolution-unavailable",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([["9892", {}]]),
+        },
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map(),
+      });
+
+      expect(submissionArchiveStore.listSubmissionsByLegacyId).toHaveBeenCalledWith({
+        challengeId: "challenge-1",
+      });
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+            legacyProblemId: null,
+            reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode backfills deterministic submission archives and URLs while applying mapped raw problem HTML", async () => {
+    const archiveDir = buildArchiveDirPath("description-and-archives");
+    try {
+      const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: "Old description",
+            descriptionFormat: "markdown",
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([
+            ["50010001", { legacySubmissionId: "50010001", url: null }],
+            ["50010002", { legacySubmissionId: "50010002", url: "https://example.com/old.zip" }],
+          ])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: rawProblemHtml,
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [
+              { legacySubmissionId: "50010001", submissionText: "first legacy submission text" },
+              { legacySubmissionId: "50010002", submissionText: "second legacy submission text" },
+            ],
+          ],
+        ]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          description: rawProblemHtml,
+          descriptionFormat: "html",
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(submissionArchiveStore.listSubmissionsByLegacyId).toHaveBeenCalledWith({
+        challengeId: "challenge-1",
+      });
+      expect(submissionArchiveStore.updateSubmissionUrl).toHaveBeenCalledTimes(2);
+      const updatedUrlsByLegacyId = Object.fromEntries(
+        submissionArchiveStore.updateSubmissionUrl.mock.calls.map(([call]) => [
+          call.legacySubmissionId,
+          call.url,
+        ])
+      );
+      expect(Object.keys(updatedUrlsByLegacyId).sort()).toEqual(["50010001", "50010002"]);
+      Object.values(updatedUrlsByLegacyId).forEach((url) => {
+        expect(url.startsWith("https://s3.amazonaws.com/topcoder-submissions/")).toBe(true);
+        expect(url.endsWith(".zip")).toBe(true);
+      });
+      expect(updatedUrlsByLegacyId["50010001"]).not.toBe(updatedUrlsByLegacyId["50010002"]);
+
+      const archiveFiles = fs.readdirSync(archiveDir).filter((entry) => entry.endsWith(".zip")).sort();
+      expect(archiveFiles).toHaveLength(2);
+      const entryInfo = readSingleEntryStoredZip(path.join(archiveDir, archiveFiles[0]));
+      expect(entryInfo.fileName.endsWith(".txt")).toBe(true);
+      expect(entryInfo.contents.length).toBeGreaterThan(0);
+
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-applied",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: true,
+            descriptionUpdated: true,
+            descriptionSource: "legacy-problem-text",
+            legacyProblemId: "9001",
+            reason: "targeted-rerun-description-updated-from-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 2,
+              archivesWritten: 2,
+              urlsUpdated: 2,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 1,
+          targetedRerunDescriptionPreserved: 0,
+          targetedRerunSubmissionArchivesWritten: 2,
+          targetedRerunSubmissionUrlsUpdated: 2,
+          targetedRerunWritesAttempted: 1,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode backfills component_text markdown when problem text is unusable", async () => {
+    const archiveDir = buildArchiveDirPath("component-markdown-fallback");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: "Old description",
+            descriptionFormat: "html",
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([["50010001", { legacySubmissionId: "50010001", url: null }]])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [{ legacySubmissionId: "50010001", submissionText: "single legacy submission text" }],
+          ],
+        ]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          description: componentMarkdown,
+          descriptionFormat: "markdown",
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(result.records).toEqual([
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-applied",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-component-text-markdown",
+          legacyProblemId: null,
+          legacyComponentId: "5503",
+          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 1,
+            archivesWritten: 1,
+            urlsUpdated: 1,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
+        },
+      ]);
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode updates description format even when the description text already matches", async () => {
+    const archiveDir = buildArchiveDirPath("description-format-only");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: componentMarkdown,
+            descriptionFormat: null,
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          description: componentMarkdown,
+          descriptionFormat: "markdown",
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(result.records).toEqual([
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-applied",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: true,
+          descriptionSource: "legacy-component-text-markdown",
+          legacyProblemId: null,
+          legacyComponentId: "5503",
+          reason: "targeted-rerun-description-updated-from-legacy-component-text-markdown",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 0,
+            archivesWritten: 0,
+            urlsUpdated: 0,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
+        },
+      ]);
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode preserves existing description but still backfills submission archive URLs", async () => {
+    const archiveDir = buildArchiveDirPath("preserve-description");
+    try {
+      const prisma = {
+        challenge: {
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([["50010001", { legacySubmissionId: "50010001", url: null }]])
+        ),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([
+          [
+            "9892",
+            [{ legacySubmissionId: "50010001", submissionText: "single legacy submission text" }],
+          ],
+        ]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(submissionArchiveStore.updateSubmissionUrl).toHaveBeenCalledTimes(1);
+      expect(result.records).toEqual([
+        {
+          recordType: "apply-record",
+          legacyRoundId: "9892",
+          status: "targeted-rerun-preserved",
+          challengeId: "challenge-1",
+          mode: "targeted-rerun",
+          writesAttempted: true,
+          descriptionUpdated: false,
+          descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+          legacyProblemId: null,
+          reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+          submissionArchiveReconciliation: {
+            targetedSubmissions: 1,
+            archivesWritten: 1,
+            urlsUpdated: 1,
+            urlsAlreadyMatched: 0,
+            archiveDirectory: archiveDir,
+          },
+        },
+      ]);
+      expect(result.summary).toEqual({
+        recordType: "apply-summary",
+        created: 0,
+        existing: 0,
+        unmatched: 0,
+        unresolved: 0,
+        errors: 0,
+        targetedRerunValidated: 1,
+        targetedRerunDescriptionUpdated: 0,
+        targetedRerunDescriptionPreserved: 1,
+        targetedRerunSubmissionArchivesWritten: 1,
+        targetedRerunSubmissionUrlsUpdated: 1,
+        targetedRerunWritesAttempted: 1,
+        skippedFileArtifact: null,
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode updates existing final and provisional scores", async () => {
+    const archiveDir = buildArchiveDirPath("score-reconciliation");
+    const fixtureDir = createTargetedScoreFixtureDataDirectory();
+    try {
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            winners: [],
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+      const finalScoreStore = {
+        listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue([
+          {
+            id: "sub-1",
+            memberId: "101",
+            legacySubmissionId: "10010001",
+            submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+            createdAt: new Date("2020-01-01T01:00:00.000Z"),
+          },
+        ]),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "final-1", submissionId: "sub-1", aggregateScore: 1 }],
+            ],
+          ])
+        ),
+        createFinalSummation: jest.fn().mockResolvedValue(undefined),
+        updateFinalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+      const provisionalScoreStore = {
+        listImportedNonExampleSubmissionsByLegacySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "10010001",
+              {
+                id: "sub-1",
+                memberId: "101",
+                legacySubmissionId: "10010001",
+                submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+                createdAt: new Date("2020-01-01T01:00:00.000Z"),
+              },
+            ],
+          ])
+        ),
+        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "prov-1", submissionId: "sub-1", aggregateScore: 2 }],
+            ],
+          ])
+        ),
+        createProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        updateProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+          dataDir: fixtureDir,
+          longComponentStateFile: "long_component_state_1.json",
+          longSubmissionPattern: "^long_submission_\\d+\\.json$",
+          longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                finalCandidateCoderIds: new Set(["1"]),
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        finalScoreStore,
+        provisionalScoreStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+        normalizedIdentityByCoderId: new Map([
+          ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
+        ]),
+      });
+
+      expect(finalScoreStore.updateFinalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "final-1",
+          submissionId: "sub-1",
+          aggregateScore: 100,
+          legacySubmissionId: "10010001",
+          isFinal: true,
+        })
+      );
+      expect(provisionalScoreStore.updateProvisionalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "prov-1",
+          submissionId: "sub-1",
+          aggregateScore: 9.5,
+          legacySubmissionId: "10010001",
+          isFinal: false,
+        })
+      );
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          winners: {
+            deleteMany: {
+              type: "PLACEMENT",
+            },
+            create: [
+              {
+                userId: 101,
+                handle: "alpha",
+                placement: 1,
+                type: "PLACEMENT",
+                createdBy: "importer",
+                updatedBy: "importer",
+              },
+            ],
+          },
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-applied",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: true,
+            descriptionUpdated: false,
+            descriptionSource: "existing-description-preserved-no-usable-legacy-problem-text",
+            legacyProblemId: null,
+            reason: "targeted-rerun-description-preserved-no-usable-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+            finalScoreReconciliation: {
+              legacyFinalCandidates: 1,
+              importedFinalScores: 1,
+              alreadyPresentFinalScores: 0,
+              createdFinalScores: 0,
+              updatedFinalScores: 1,
+              missingMemberSkippedFinalScores: 0,
+              explicitSkippedFinalScores: 0,
+              runtimeSkipRecords: [],
+            },
+            provisionalScoreReconciliation: {
+              legacyNonExampleProvisionalScores: 1,
+              legacyExampleOnlyFinalistProvisionalScores: 0,
+              importedProvisionalScores: 1,
+              alreadyPresentProvisionalScores: 0,
+              createdProvisionalScores: 0,
+              updatedProvisionalScores: 1,
+              demotedFinalScores: 0,
+              clearedSubmissionFinalScoreSummaries: 0,
+              malformedSkippedProvisionalScores: 0,
+              missingMemberSkippedProvisionalScores: 0,
+              importedDistinctSubmitters: 1,
+              missingMemberDistinctSubmitters: 0,
+              importedProvisionalCountsByMemberId: {
+                101: 1,
+              },
+              skippedProvisionalRecords: [],
+            },
+            winnerReconciliation: {
+              updated: true,
+              winnerCount: 1,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunFinalScoresCreated: 0,
+          targetedRerunFinalScoresUpdated: 1,
+          targetedRerunProvisionalScoresCreated: 0,
+          targetedRerunProvisionalScoresUpdated: 1,
+          targetedRerunWinnerCount: 1,
+          targetedRerunWinnersUpdated: 1,
+          targetedRerunWritesAttempted: 1,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode demotes final scores from non-final legacy submissions", async () => {
+    const archiveDir = buildArchiveDirPath("score-demotion");
+    const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-targeted-score-demotion-"));
+    try {
+      writeJson(fixtureDir, "long_component_state_1.json", "long_component_state", [
+        {
+          long_component_state_id: "1001",
+          round_id: "9892",
+          coder_id: "1",
+          points: "100.0",
+          submission_number: "2",
+        },
+      ]);
+      writeJson(fixtureDir, "long_comp_result_1.json", "long_comp_result", [
+        {
+          round_id: "9892",
+          coder_id: "1",
+          system_point_total: "100.0",
+          point_total: "95.0",
+          placed: "1",
+        },
+      ]);
+      writeJson(fixtureDir, "long_submission_1.json", "long_submission", [
+        {
+          long_component_state_id: "1001",
+          submission_number: "1",
+          example: "0",
+          submit_time: "1000",
+          submission_points: "9.5",
+        },
+        {
+          long_component_state_id: "1001",
+          submission_number: "2",
+          example: "0",
+          submit_time: "2000",
+          submission_points: "11.5",
+        },
+      ]);
+
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            winners: [],
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const importedSubmissions = [
+        {
+          id: "sub-1",
+          memberId: "101",
+          legacySubmissionId: "10010001",
+          submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+          createdAt: new Date("2020-01-01T01:00:00.000Z"),
+        },
+        {
+          id: "sub-2",
+          memberId: "101",
+          legacySubmissionId: "10010002",
+          submittedDate: new Date("2020-01-01T02:00:00.000Z"),
+          createdAt: new Date("2020-01-01T02:00:00.000Z"),
+        },
+      ];
+      const existingFinalSummationsBySubmissionId = new Map([
+        [
+          "sub-1",
+          [{ id: "final-misclassified", submissionId: "sub-1", aggregateScore: 9.5 }],
+        ],
+        [
+          "sub-2",
+          [{ id: "final-correct", submissionId: "sub-2", aggregateScore: 100 }],
+        ],
+      ]);
+      const finalScoreStore = {
+        listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue(importedSubmissions),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          existingFinalSummationsBySubmissionId
+        ),
+        createFinalSummation: jest.fn().mockResolvedValue(undefined),
+        updateFinalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+      const provisionalScoreStore = {
+        listImportedNonExampleSubmissionsByLegacySubmissionId: jest.fn().mockResolvedValue(
+          new Map(importedSubmissions.map((submission) => [submission.legacySubmissionId, submission]))
+        ),
+        listExistingProvisionalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "prov-1", submissionId: "sub-1", aggregateScore: 9.5 }],
+            ],
+            [
+              "sub-2",
+              [{ id: "prov-2", submissionId: "sub-2", aggregateScore: 11.5 }],
+            ],
+          ])
+        ),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          existingFinalSummationsBySubmissionId
+        ),
+        createProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        updateProvisionalSummation: jest.fn().mockResolvedValue(undefined),
+        clearSubmissionFinalScoreSummary: jest.fn().mockResolvedValue(true),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+          dataDir: fixtureDir,
+          longComponentStateFile: "long_component_state_1.json",
+          longSubmissionPattern: "^long_submission_\\d+\\.json$",
+          longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                finalCandidateCoderIds: new Set(["1"]),
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore: {
+          listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+          updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+        },
+        finalScoreStore,
+        provisionalScoreStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+        normalizedIdentityByCoderId: new Map([
+          ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
+        ]),
+      });
+
+      expect(finalScoreStore.updateFinalSummation).not.toHaveBeenCalled();
+      expect(provisionalScoreStore.updateProvisionalSummation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reviewSummationId: "final-misclassified",
+          submissionId: "sub-1",
+          aggregateScore: 9.5,
+          legacySubmissionId: "10010001",
+          isFinal: false,
+        })
+      );
+      expect(provisionalScoreStore.clearSubmissionFinalScoreSummary).toHaveBeenCalledWith({
+        submissionId: "sub-1",
+      });
+      expect(provisionalScoreStore.createProvisionalSummation).not.toHaveBeenCalled();
+      expect(result.records[0].provisionalScoreReconciliation).toEqual(
+        expect.objectContaining({
+          importedProvisionalScores: 2,
+          alreadyPresentProvisionalScores: 1,
+          createdProvisionalScores: 0,
+          updatedProvisionalScores: 1,
+          demotedFinalScores: 1,
+          clearedSubmissionFinalScoreSummaries: 1,
+        })
+      );
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode repairs winners when scores already match", async () => {
+    const archiveDir = buildArchiveDirPath("winner-reconciliation-existing-scores");
+    const fixtureDir = createTargetedScoreFixtureDataDirectory();
+    try {
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            winners: [],
+          }),
+          update: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+      const submissionStore = {
+        listExistingSubmissionsByLegacyId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "10010001",
+              {
+                legacySubmissionId: "10010001",
+                memberId: "101",
+                submitter: "101",
+                systemFileName: null,
+                virusScan: null,
+                isFileSubmission: null,
+              },
+            ],
+          ])
+        ),
+        createSubmission: jest.fn().mockResolvedValue(undefined),
+        updateSubmissionMetadata: jest.fn().mockResolvedValue(true),
+      };
+      const finalScoreStore = {
+        listImportedNonExampleSubmissionsByChallenge: jest.fn().mockResolvedValue([
+          {
+            id: "sub-1",
+            memberId: "101",
+            legacySubmissionId: "10010001",
+            submittedDate: new Date("2020-01-01T01:00:00.000Z"),
+            createdAt: new Date("2020-01-01T01:00:00.000Z"),
+          },
+        ]),
+        listExistingFinalSummationsBySubmissionId: jest.fn().mockResolvedValue(
+          new Map([
+            [
+              "sub-1",
+              [{ id: "final-1", submissionId: "sub-1", aggregateScore: 100 }],
+            ],
+          ])
+        ),
+        createFinalSummation: jest.fn().mockResolvedValue(undefined),
+        updateFinalSummation: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+          dataDir: fixtureDir,
+          longComponentStateFile: "long_component_state_1.json",
+          longSubmissionPattern: "^long_submission_\\d+\\.json$",
+          longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                finalCandidateCoderIds: new Set(["1"]),
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionStore,
+        submissionArchiveStore,
+        finalScoreStore,
+        submissionArchiveDir: archiveDir,
+        actor: "importer",
+        normalizedIdentityByCoderId: new Map([
+          ["1", { coderId: "1", memberId: 101, memberHandle: null }],
+        ]),
+        resolveMemberIdentities: jest.fn().mockResolvedValue(
+          new Map([["101", { memberId: "101", memberHandle: "alpha" }]])
+        ),
+      });
+
+      expect(finalScoreStore.updateFinalSummation).not.toHaveBeenCalled();
+      expect(submissionStore.updateSubmissionMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({
+          challengeId: "challenge-1",
+          legacySubmissionId: "10010001",
+          memberId: "101",
+          memberHandle: "alpha",
+        })
+      );
+      expect(prisma.challenge.update).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        data: {
+          winners: {
+            deleteMany: {
+              type: "PLACEMENT",
+            },
+            create: [
+              {
+                userId: 101,
+                handle: "alpha",
+                placement: 1,
+                type: "PLACEMENT",
+                createdBy: "importer",
+                updatedBy: "importer",
+              },
+            ],
+          },
+          updatedBy: "importer",
+        },
+        select: { id: true },
+      });
+      expect(result.records[0]).toEqual(
+        expect.objectContaining({
+          status: "targeted-rerun-applied",
+          finalScoreReconciliation: {
+            legacyFinalCandidates: 1,
+            importedFinalScores: 1,
+            alreadyPresentFinalScores: 1,
+            createdFinalScores: 0,
+            updatedFinalScores: 0,
+            missingMemberSkippedFinalScores: 0,
+            explicitSkippedFinalScores: 0,
+            runtimeSkipRecords: [],
+          },
+          submissionReconciliation: {
+            legacyNonExampleSubmissions: 1,
+            legacyExampleOnlyFinalistSubmissions: 0,
+            importedSubmissions: 1,
+            alreadyPresentSubmissions: 1,
+            createdSubmissions: 0,
+            missingMemberSkippedSubmissions: 0,
+            importedDistinctSubmitters: 1,
+            missingMemberDistinctSubmitters: 0,
+            importedSubmissionCountsByMemberId: {
+              101: 1,
+            },
+            skippedSubmissionRecords: [],
+          },
+          winnerReconciliation: {
+            updated: true,
+            winnerCount: 1,
+          },
+        })
+      );
+      expect(result.summary).toEqual(
+        expect.objectContaining({
+          targetedRerunSubmissionsCreated: 0,
+          targetedRerunSubmissionsAlreadyPresent: 1,
+          targetedRerunFinalScoresUpdated: 0,
+          targetedRerunWinnerCount: 1,
+          targetedRerunWinnersUpdated: 1,
+          targetedRerunWritesAttempted: 1,
+        })
+      );
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode skips challenge description write when legacy problem HTML already matches", async () => {
+    const archiveDir = buildArchiveDirPath("problem-text-already-matched");
+    try {
+      const rawProblemHtml = "<div><em>Legacy</em> HTML</div>";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: rawProblemHtml,
+            descriptionFormat: "html",
+          }),
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: rawProblemHtml,
+                descriptionProblemId: "9001",
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        select: { description: true, descriptionFormat: true },
+      });
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "legacy-problem-text",
+            legacyProblemId: "9001",
+            reason: "targeted-rerun-description-already-matched-legacy-problem-text",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
+  });
+
+  test("targeted rerun mode skips challenge description write when component markdown already matches", async () => {
+    const archiveDir = buildArchiveDirPath("component-markdown-already-matched");
+    try {
+      const componentMarkdown = "## Robot Routing\n\nPublic example only.";
+      const prisma = {
+        challenge: {
+          findUnique: jest.fn().mockResolvedValue({
+            description: componentMarkdown,
+            descriptionFormat: "markdown",
+          }),
+          update: jest.fn(),
+        },
+      };
+      const submissionArchiveStore = {
+        listSubmissionsByLegacyId: jest.fn().mockResolvedValue(new Map()),
+        updateSubmissionUrl: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const result = await runTargetedRerunMode({
+        options: {
+          roundIds: ["9892"],
+          challengeId: "challenge-1",
+        },
+        plan: {
+          records: [
+            {
+              legacyRoundId: "9892",
+              decision: "reuse/backfill-only",
+              matchedChallengeId: "challenge-1",
+            },
+          ],
+          roundDataById: new Map([
+            [
+              "9892",
+              {
+                descriptionProblemText: "   ",
+                descriptionProblemId: "9001",
+                descriptionComponentId: "5503",
+                descriptionComponentTextMarkdown: componentMarkdown,
+              },
+            ],
+          ]),
+        },
+        prisma,
+        submissionArchiveStore,
+        submissionArchiveDir: archiveDir,
+        legacySubmissionRowsByRoundId: new Map([["9892", []]]),
+        actor: "importer",
+      });
+
+      expect(prisma.challenge.findUnique).toHaveBeenCalledWith({
+        where: { id: "challenge-1" },
+        select: { description: true, descriptionFormat: true },
+      });
+      expect(prisma.challenge.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        records: [
+          {
+            recordType: "apply-record",
+            legacyRoundId: "9892",
+            status: "targeted-rerun-preserved",
+            challengeId: "challenge-1",
+            mode: "targeted-rerun",
+            writesAttempted: false,
+            descriptionUpdated: false,
+            descriptionSource: "legacy-component-text-markdown",
+            legacyProblemId: null,
+            legacyComponentId: "5503",
+            reason: "targeted-rerun-description-already-matched-legacy-component-text-markdown",
+            submissionArchiveReconciliation: {
+              targetedSubmissions: 0,
+              archivesWritten: 0,
+              urlsUpdated: 0,
+              urlsAlreadyMatched: 0,
+              archiveDirectory: archiveDir,
+            },
+          },
+        ],
+        summary: {
+          recordType: "apply-summary",
+          created: 0,
+          existing: 0,
+          unmatched: 0,
+          unresolved: 0,
+          errors: 0,
+          targetedRerunValidated: 1,
+          targetedRerunDescriptionUpdated: 0,
+          targetedRerunDescriptionPreserved: 1,
+          targetedRerunSubmissionArchivesWritten: 0,
+          targetedRerunSubmissionUrlsUpdated: 0,
+          targetedRerunWritesAttempted: 0,
+          skippedFileArtifact: null,
+        },
+      });
+    } finally {
+      fs.rmSync(archiveDir, { recursive: true, force: true });
+    }
   });
 
   test("apply mode reconciles submitter resources from eligible registrations", async () => {

@@ -37,10 +37,16 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
   });
 
   test("apply-mode imports final scores and appends runtime unattachable-finalist skips", async () => {
+    const calls = {
+      createdChallenge: null,
+    };
     const tx = {
       challenge: {
         findMany: jest.fn().mockResolvedValue([]),
-        create: jest.fn().mockResolvedValue({ id: "challenge-1" }),
+        create: jest.fn().mockImplementation(async ({ data }) => {
+          calls.createdChallenge = data;
+          return { id: "challenge-1" };
+        }),
       },
       challengePhase: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -162,8 +168,8 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
       },
       actor: "importer",
       normalizedIdentityByCoderId: new Map([
-        ["1", { coderId: "1", memberId: 1, memberHandle: "alpha" }],
-        ["3", { coderId: "3", memberId: 3, memberHandle: "charlie" }],
+        ["1", { coderId: "1", memberId: 101, memberHandle: "alpha" }],
+        ["3", { coderId: "3", memberId: 303, memberHandle: "charlie" }],
       ]),
     });
 
@@ -173,6 +179,30 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
         submissionId: "sub-10010001",
         aggregateScore: 10,
         legacySubmissionId: "10010001",
+      })
+    );
+    expect(calls.createdChallenge).toEqual(
+      expect.objectContaining({
+        winners: {
+          create: [
+            expect.objectContaining({
+              userId: 101,
+              handle: "alpha",
+              placement: 1,
+              type: "PLACEMENT",
+              createdBy: "importer",
+              updatedBy: "importer",
+            }),
+            expect.objectContaining({
+              userId: 303,
+              handle: "charlie",
+              placement: 2,
+              type: "PLACEMENT",
+              createdBy: "importer",
+              updatedBy: "importer",
+            }),
+          ],
+        },
       })
     );
     expect(result.records).toEqual([
@@ -191,7 +221,7 @@ describe("importHistoricalMarathonMatches apply mode final-score wiring", () => 
           runtimeSkipRecords: [
             expect.objectContaining({
               reasonCode: "finalist-without-attachable-submission",
-              memberId: "3",
+              memberId: "303",
             }),
           ],
         },

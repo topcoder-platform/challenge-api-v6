@@ -55,6 +55,8 @@ None.
 
 - use dry-run for planning features
 - use apply-mode only when the env file and target round selection are ready
+- for targeted-rerun archive validation, confirm `SUBMISSION_ARCHIVE_DIR` is set first; if the env file lacks it, export a writable override in the same shell command instead of editing or committing the env file
+- if a live validation needs persisted submission `url` evidence and the submissions API does not expose it in this environment, use the approved read-only review DB snapshot path or other authoritative read-only evidence instead of guessing from incomplete API payloads
 - verify the exact API-visible data that corresponds to the feature's `fulfills` assertions
 
 11. End with a precise handoff. Be explicit about what was implemented, which assertions became testable, what commands ran, what manual checks were performed, whether this was a resume-validation case, and any tech debt or unresolved ambiguity.

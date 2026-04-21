@@ -1,0 +1,34 @@
+{
+  "milestone": "misc-importer-hardening",
+  "round": 2,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "notes": [
+    "No validation-contract assertion IDs are mapped to misc-importer-hardening, so validation-state.json remains unchanged.",
+    "Validation for round 2 used synthetic smoke flow MISC-HARDENING-SMOKE-001 against shared fixture round 17391."
+  ],
+  "manualChecks": [
+    {
+      "id": "MISC-HARDENING-SMOKE-001",
+      "status": "pass",
+      "flowReport": ".factory/validation/misc-importer-hardening/user-testing/flows/round-17391-malformed-provisional.json",
+      "summary": "Both standard apply runs for round 17391 exited 0; submission -403380560001 for coder 22836077 was reported with reasonCode malformed-provisional-score; 437 provisional rows reconciled as 152 imported/reconciled, 96 malformed-provisional skips, and 189 missing-member skips; second-run challenge/phase/resource/submission/review identity sets remained stable."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Recorded that round 17391 now serves as a shared malformed-provisional-score smoke fixture: standard apply reruns exit 0, the malformed row is reported with reasonCode malformed-provisional-score, and the current provisional partition is 152 imported/reconciled, 96 malformed-provisional skips, and 189 missing-member skips.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/misc-importer-hardening/user-testing/synthesis.round1.json"
+}

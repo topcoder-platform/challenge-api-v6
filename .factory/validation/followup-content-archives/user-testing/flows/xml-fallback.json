@@ -1,0 +1,104 @@
+{
+  "groupId": "xml-fallback",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-14T04:49:55.945595+00:00",
+  "assertions": [
+    {
+      "id": "VAL-FOLLOWUP-005",
+      "status": "blocked",
+      "reason": "Assigned preserve fixture 13897 no longer meets the assertion precondition: current legacy lookup resolves usable component_text Markdown for component 9378 while problem.problem_text remains empty, and the targeted rerun could not be exercised because importer apply-mode could not reach the configured challenge database.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-pre-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-post-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-targeted-rerun.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/comparison-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-006",
+      "status": "blocked",
+      "reason": "Round 10758 remained absent before and after the validation attempts. Legacy evidence confirms empty problem_text plus usable component_text Markdown fallback, but both create-path apply attempts failed before writes because the importer could not reach the configured challenge database.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/10758-pre-challenges.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/10758-post-challenges.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/10758-apply.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/10758-apply-retry.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/comparison-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-007",
+      "status": "blocked",
+      "reason": "A valid already-imported XML-fallback candidate did exist in the current environment (13897, plus 9874 and 9892), with a placeholder description instead of converted Markdown. However, the targeted rerun could not be executed because importer apply-mode could not reach the configured challenge database, so no description backfill could be observed.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-pre-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-post-challenge.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-targeted-rerun.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/comparison-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FOLLOWUP-008",
+      "status": "blocked",
+      "reason": "Current legacy-to-Markdown conversion evidence for 10758 and 13897 is user-facing and strips XML wrappers plus hidden/internal indicators, but persisted XML-fallback descriptions could not be validated end-to-end because both create-path and targeted-rerun apply-mode were blocked by challenge database connectivity.",
+      "evidence": [
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/preprobe.json",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/10758-apply.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/13897-targeted-rerun.log",
+        "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/followup-content-archives/xml-fallback/comparison-summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "node",
+    "curl",
+    "python"
+  ],
+  "commands": [
+    {
+      "command": "curl -sS \"https://api.topcoder-dev.com/v6/challenges?legacyId=10758\" && curl -sS \"https://api.topcoder-dev.com/v6/challenges/a15cbb04-a0d3-4647-85bd-23d8d11e9f3f\"",
+      "exitCode": 0,
+      "observation": "Captured pre-run challenge API snapshots: round 10758 had no existing v6 challenge and challenge a15cbb04-a0d3-4647-85bd-23d8d11e9f3f still had the placeholder description."
+    },
+    {
+      "command": "node <inline legacy/API probe script writing preprobe.json>",
+      "exitCode": 0,
+      "observation": "Verified 10758 resolves to component_text Markdown fallback, 13897 also currently resolves to component_text Markdown (not preserve-with-no-source), and found three already-imported mismatch candidates: 9874, 9892, and 13897."
+    },
+    {
+      "command": "node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 10758",
+      "exitCode": 1,
+      "observation": "Create-path apply failed before writes: Prisma could not reach topcoder-services.ci8xwsszszsw.us-east-1.rds.amazonaws.com:5432 while resolving challenge type metadata."
+    },
+    {
+      "command": "node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 10758  # retry",
+      "exitCode": 1,
+      "observation": "Single non-disruptive retry failed with the same unreachable challenge database error; 10758 remained absent afterward."
+    },
+    {
+      "command": "node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --targeted-rerun --round-id 13897 --challenge-id a15cbb04-a0d3-4647-85bd-23d8d11e9f3f",
+      "exitCode": 1,
+      "observation": "Targeted rerun failed before any patch/archive work for the same unreachable challenge database reason; 13897 description remained unchanged."
+    },
+    {
+      "command": "curl -sS \"https://api.topcoder-dev.com/v6/challenges?legacyId=10758\" && curl -sS \"https://api.topcoder-dev.com/v6/challenges/a15cbb04-a0d3-4647-85bd-23d8d11e9f3f\"",
+      "exitCode": 0,
+      "observation": "Post-attempt snapshots confirmed no challenge was created for 10758 and 13897 still exposed the same placeholder description."
+    },
+    {
+      "command": "python3 <comparison-summary writer>",
+      "exitCode": 0,
+      "observation": "Wrote comparison-summary.json showing 10758 absent before/after, 13897 unchanged before/after, archive directory still empty, and the same database-connectivity blocker on all apply-mode attempts."
+    }
+  ],
+  "frictions": [
+    "The assigned preserve fixture assumption for round 13897 was stale in the current export set: component 9378 now converts to usable Markdown, so 13897 behaves like a fallback-update candidate rather than a preserve-no-source fixture.",
+    "Public challenge listing only surfaced the imported legacy fixtures once the search was constrained to status=COMPLETED; the default list response did not expose the needed historical legacyId rows."
+  ],
+  "blockers": [
+    "Importer apply-mode could not reach the configured challenge database at topcoder-services.ci8xwsszszsw.us-east-1.rds.amazonaws.com:5432. This blocked both the 10758 create-path apply and the 13897 targeted rerun before any writes or archive generation could occur."
+  ]
+}

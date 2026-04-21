@@ -1,0 +1,127 @@
+{
+  "groupId": "round-17391-malformed-provisional",
+  "surface": "importer CLI + API verification",
+  "testedAt": "2026-04-15T05:47:00.778319+00:00",
+  "isolation": {
+    "missionDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1",
+    "repoRoot": "/home/jmgasper/Documents/Git/v6/challenge-api-v6",
+    "flowReportPath": "/home/jmgasper/Documents/Git/v6/challenge-api-v6/.factory/validation/misc-importer-hardening/user-testing/flows/round-17391-malformed-provisional.json",
+    "evidenceDir": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-importer-hardening/round-17391-malformed-provisional",
+    "legacyRoundId": "17391",
+    "challengeId": "b983de6f-cc7f-463e-867c-87e54f3b72f1",
+    "surface": "importer CLI + API verification",
+    "validationStateUpdate": "do-not-update-validation-state-json",
+    "syntheticAssertionId": "MISC-HARDENING-SMOKE-001",
+    "firstSkippedFile": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-importer-hardening/round-17391-malformed-provisional/first-apply-skipped.json",
+    "secondSkippedFile": "/home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-importer-hardening/round-17391-malformed-provisional/second-apply-skipped.json"
+  },
+  "toolsUsed": [
+    "node",
+    "python3",
+    "challenge-api",
+    "review-api"
+  ],
+  "commandsRun": [
+    "source \"$HOME/.config/nvm/nvm.sh\" && cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6\" && set -a && source .env.importer.local && set +a && nvm use >/dev/null && REVIEW_TOKEN=$(node get_token.js | tail -n 1) && python3 <capture pre-apply round 17391 challenge/resource/submission/review snapshots>",
+    "source \"$HOME/.config/nvm/nvm.sh\" && cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6\" && set -a && source .env.importer.local && set +a && nvm use 18.19.0 >/dev/null && node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 17391 --skipped-file /home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-importer-hardening/round-17391-malformed-provisional/first-apply-skipped.json",
+    "source \"$HOME/.config/nvm/nvm.sh\" && cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6\" && set -a && source .env.importer.local && set +a && nvm use >/dev/null && REVIEW_TOKEN=$(node get_token.js | tail -n 1) && python3 <capture post-first-apply round 17391 challenge/resource/submission/review snapshots>",
+    "source \"$HOME/.config/nvm/nvm.sh\" && cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6\" && set -a && source .env.importer.local && set +a && nvm use 18.19.0 >/dev/null && node data-migration/src/scripts/importHistoricalMarathonMatches.js --apply --round-id 17391 --skipped-file /home/jmgasper/.factory/missions/6a38fff2-4c64-45c7-b2ae-b705da0ac3d1/evidence/misc-importer-hardening/round-17391-malformed-provisional/second-apply-skipped.json",
+    "source \"$HOME/.config/nvm/nvm.sh\" && cd \"/home/jmgasper/Documents/Git/v6/challenge-api-v6\" && set -a && source .env.importer.local && set +a && nvm use >/dev/null && REVIEW_TOKEN=$(node get_token.js | tail -n 1) && python3 <capture post-second-apply round 17391 challenge/resource/submission/review snapshots>",
+    "python3 <parse APPLY_RECORD/APPLY_SUMMARY, skipped artifacts, and compare post-first vs post-second identity sets>"
+  ],
+  "assertions": [
+    {
+      "id": "MISC-HARDENING-SMOKE-001",
+      "title": "Round 17391 malformed provisional-score hardening survives apply, reports skips, and stays rerun-stable",
+      "status": "pass",
+      "contractAssertionIds": [],
+      "validationStateUpdate": "do-not-update-validation-state-json",
+      "steps": [
+        {
+          "action": "Capture pre-apply API snapshots for challenge, phases, resources, submissions, and review summations on challenge b983de6f-cc7f-463e-867c-87e54f3b72f1.",
+          "expected": "Baseline identity sets are readable before rerun comparison.",
+          "observed": "Challenge lookup returned exactly one challenge with stable three-phase roster; API snapshots showed 112 submitter resources, 248 submissions, and 168 review summations (16 final, 152 provisional) with zero duplicate identity signals."
+        },
+        {
+          "action": "Run standard apply for round 17391 with Node 18.19.0 and an isolated skipped-file path.",
+          "expected": "Apply completes successfully instead of aborting on malformed provisional-score data.",
+          "observed": "First apply exited 0 with APPLY_RECORD status=existing and APPLY_SUMMARY errors=0."
+        },
+        {
+          "action": "Inspect APPLY_RECORD / APPLY_SUMMARY and the first skipped artifact for malformed provisional-score handling.",
+          "expected": "The malformed row for submission -403380560001 / coder 22836077 is explicitly skipped with the importer's exact reason code rather than crashing the run.",
+          "observed": "The skipped artifact recorded round 17391 / member 22836077 / legacySubmissionId -403380560001 with reasonCode=malformed-provisional-score; first-run skipped artifact reason codes were ['finalist-without-attachable-submission', 'malformed-provisional-score', 'missing-member'] with 645 total records."
+        },
+        {
+          "action": "Verify that well-formed provisional-score rows still reconcile during the same apply.",
+          "expected": "Well-formed provisional rows are still imported or reconciled normally while malformed rows are reported separately.",
+          "observed": "First apply provisional reconciliation balanced exactly to 437 legacy non-example provisional rows: imported/reconciled=152 (alreadyPresent=152, created=0), malformedSkipped=96, missingMemberSkipped=189."
+        },
+        {
+          "action": "Capture post-first snapshots, rerun standard apply with a second isolated skipped-file path, and compare post-first vs post-second identity sets.",
+          "expected": "Second apply exits successfully and challenge/phase/resource/submission/review identity sets stay stable without duplicates.",
+          "observed": "Second apply exited 0 with the same reconciliation totals, the two skipped artifacts were byte-for-byte equivalent as JSON content, and post-first vs post-second challenge ids / phase ids / resource tuples / submission legacy ids / review ids / final review keys / provisional review keys were all stable (sha256s identical in verification-summary.json)."
+        }
+      ],
+      "evidence": {
+        "preSnapshots": [
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-challenge-list.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-challenge-detail.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-resources.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-submissions.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-review-summations.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/pre-snapshot-summary.json"
+        ],
+        "firstApply": {
+          "stdout": "misc-importer-hardening/round-17391-malformed-provisional/first-apply.stdout.log",
+          "stderr": "misc-importer-hardening/round-17391-malformed-provisional/first-apply.stderr.log",
+          "exitCode": "misc-importer-hardening/round-17391-malformed-provisional/first-apply.exitcode.txt",
+          "skippedArtifact": "misc-importer-hardening/round-17391-malformed-provisional/first-apply-skipped.json"
+        },
+        "postFirstSnapshots": [
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-challenge-list.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-challenge-detail.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-resources.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-submissions.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-review-summations.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-first-snapshot-summary.json"
+        ],
+        "secondApply": {
+          "stdout": "misc-importer-hardening/round-17391-malformed-provisional/second-apply.stdout.log",
+          "stderr": "misc-importer-hardening/round-17391-malformed-provisional/second-apply.stderr.log",
+          "exitCode": "misc-importer-hardening/round-17391-malformed-provisional/second-apply.exitcode.txt",
+          "skippedArtifact": "misc-importer-hardening/round-17391-malformed-provisional/second-apply-skipped.json"
+        },
+        "postSecondSnapshots": [
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-challenge-list.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-challenge-detail.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-resources.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-submissions.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-review-summations.json",
+          "misc-importer-hardening/round-17391-malformed-provisional/post-second-snapshot-summary.json"
+        ],
+        "verificationSummary": "misc-importer-hardening/round-17391-malformed-provisional/verification-summary.json",
+        "network": [
+          "GET https://api.topcoder-dev.com/v6/challenges?legacyId=17391&perPage=100 -> 200",
+          "GET https://api.topcoder-dev.com/v6/challenges/b983de6f-cc7f-463e-867c-87e54f3b72f1 -> 200",
+          "GET https://api.topcoder-dev.com/v6/resources?challengeId=b983de6f-cc7f-463e-867c-87e54f3b72f1&perPage=3000 -> 200",
+          "GET https://api.topcoder-dev.com/v6/submissions?challengeId=b983de6f-cc7f-463e-867c-87e54f3b72f1&perPage=3000 -> 200",
+          "GET https://api.topcoder-dev.com/v6/reviewSummations?challengeId=b983de6f-cc7f-463e-867c-87e54f3b72f1&perPage=3000 -> 200 (bearer token)"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Round 17391 was already partially imported in the shared environment before this smoke test, so the standard apply validation exercised the existing/reconciliation path rather than a pristine create path.",
+      "resolved": true,
+      "resolution": "Captured pre/post API snapshots and relied on APPLY_RECORD reconciliation counters plus rerun identity-set diffs to validate the hardening on the live shared fixture.",
+      "affectedAssertions": [
+        "MISC-HARDENING-SMOKE-001"
+      ]
+    }
+  ],
+  "blockers": [],
+  "summary": "MISC-HARDENING-SMOKE-001 passed. Both standard apply runs for round 17391 exited 0, the malformed provisional row for submission -403380560001 / coder 22836077 was explicitly reported with reasonCode `malformed-provisional-score`, well-formed provisional rows still reconciled successfully in the same run, and the second rerun preserved stable challenge/phase/resource/submission/review identity sets; validation-state.json should not be updated from this synthetic smoke flow."
+}

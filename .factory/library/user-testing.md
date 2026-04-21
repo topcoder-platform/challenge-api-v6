@@ -25,9 +25,10 @@ There is no browser or TUI surface for this mission.
 2. Capture per-round decision records and deltas.
 3. Run apply for the same selected round set.
 4. Verify challenge/resource/submission/review state through API responses.
-5. Inspect the skipped-file artifact for any missing-member records reported by the run.
-6. Compare imported data plus skipped-member reporting to legacy data using read-only Python scripts.
-7. Re-run apply or dry-run to prove idempotency.
+5. For follow-up patch validation, inspect local archive files under `SUBMISSION_ARCHIVE_DIR` and compare their contents to legacy submission text.
+6. Inspect the skipped-file artifact for any missing-member records reported by the run.
+7. Compare imported data plus skipped-member reporting to legacy data using read-only Python scripts.
+8. Re-run apply or dry-run to prove idempotency / patch-only behavior.
 
 Canonical live validation endpoints:
 
@@ -41,6 +42,8 @@ If the approved missing-member policy is exercised, validators should reconcile 
 
 - `10815` — primary create-path round during planning-challenge; in the shared dev environment it is now a post-create/backfill fixture
 - one score-rich Marathon Match round selected during score-feature work for final-ranking validation
+- `10015` when available — already-imported description-backfill / targeted-rerun fixture
+- `10758` — create-path XML-to-Markdown description-fallback fixture (`problem_text` empty, `component_text` present)
 - `14272` — second round for multi-round filter checks
 - one existing-v6 round chosen from dry-run output in the validation environment
 - one Marathon Match round with unattachable finalists selected during score-feature work for explicit skip/report validation
@@ -57,6 +60,14 @@ If the approved missing-member policy is exercised, validators should reconcile 
 
 - Validation uses the existing dev environment referenced by `.env.importer.local`.
 - `.env.importer.local` is populated, so live end-to-end apply-mode validation can proceed on the selected dev environment.
+- `SUBMISSION_ARCHIVE_DIR` must point at a writable local directory before follow-up targeted rerun validation can pass.
+- If `SUBMISSION_ARCHIVE_DIR` is missing from `.env.importer.local`, validators may export a writable override in the same shell command for live targeted-rerun validation instead of editing the env file.
+- Follow-up user-testing round 2 on `2026-04-15` confirmed that apply-mode importer connectivity to the configured challenge/review databases is restored: positive targeted reruns succeeded for round `17948`, create-path XML-fallback validation succeeded for round `10758`, and targeted-rerun XML-fallback validation succeeded for round `13897`.
+- Round `10015` is not currently imported in the shared dev environment, so successful raw-HTML targeted-rerun validation now uses round `17948` as the live fallback fixture.
+- Follow-up user-testing round 3 on `2026-04-15` resolved the no-source preserve gap by importing round `17391` as challenge `b983de6f-cc7f-463e-867c-87e54f3b72f1`, then proving targeted rerun preserved the existing description exactly while writing `248` local archives and updating `248` submission URLs.
+- Round `17391` / challenge `b983de6f-cc7f-463e-867c-87e54f3b72f1` is now the shared-environment preserve/no-source fixture for `VAL-FOLLOWUP-005`; current legacy lookup resolves neither usable `problem.problem_text` nor usable converted `component.component_text` Markdown there.
+- The initial create apply for round `17391` surfaced a non-blocking data issue after challenge creation: legacy submission `-403380560001` (coder `22836077`) is missing numeric `submission_points`.
+- Misc-importer-hardening user-testing on `2026-04-15` confirmed the hardening fix on the shared round `17391` fixture: standard apply reruns now exit `0`, the malformed row is recorded with `reasonCode=malformed-provisional-score`, and the current provisional partition is `152` imported/reconciled, `96` malformed-provisional skips, and `189` missing-member skips.
 - Pre-existing repo-wide `standard-lint` noise in `challenge-api-v6` should not be mistaken for importer regressions; validators should focus on mission-owned surfaces.
 - The shared dev environment does not necessarily contain every historical legacy member id, so member-owned validation must account for approved `missing-member` skips rather than assuming full one-to-one import coverage.
 - If dry-run/apply returns `target-member-resolution-unavailable`, the validation environment still lacks reachable member lookup configuration. Provide `MEMBER_DB_URL` (or a `DATABASE_URL` that can resolve members) plus a valid `MEMBER_DB_SCHEMA` before expecting populated missing-member partitions or skipped-file records from live runs.
@@ -66,12 +77,21 @@ If the approved missing-member policy is exercised, validators should reconcile 
 - Treat `legacyId=13897` / challenge `a15cbb04-a0d3-4647-85bd-23d8d11e9f3f` as an already-imported shared-environment fixture. Use it for reuse/rerun and post-import property checks only; do not attempt destructive cleanup or concurrent apply-mode validation against it.
 - Round `10815` was imported during planning-challenge user-testing round 2 as challenge `5fa76bd9-da55-422d-8d4c-4f0155dc62c5`. In the shared dev environment it is now a post-create fixture rather than a pristine missing-historical round, so future validators should not expect pre-apply create-path evidence there unless they use a clean/reset environment.
 - Immediate rerun dry-run on `10815` now reports `reuse/backfill-only` with `phases.toCreate=0`, but still classifies the round as `partial-backfill` because resources/submissions/finalScores/provisionalScores remain pending later-milestone work. Use it to verify challenge/phase reuse only, not full-surface no-op reruns.
-- In the current shared dev environment, `13897` is a partial-backfill fixture: the challenge and standard phases already exist, while linked resources/submissions/review-summation surfaces still read as empty. That means no-op rerun assertions for a fully imported round cannot be proven here without a separately completed fixture.
+- In the current shared dev environment, `13897` is now a fully imported rerun fixture whose description was updated to converted `component_text` Markdown during follow-up user-testing round 2. Use it for rerun/idempotency/archive checks, not as a placeholder-description candidate.
 - `GET https://api.topcoder-dev.com/v6/challenges` and `GET https://api.topcoder-dev.com/v6/challenges/<id>` work without auth in this environment. `GET https://api.topcoder-dev.com/v6/resources?challengeId=<id>` and `GET https://api.topcoder-dev.com/v6/submissions?challengeId=<id>` are also readable without auth.
+- Follow-up description validation should read `GET /v6/challenges/<id>` before and after the targeted rerun and compare the raw HTML `description` field directly.
 - `GET https://api.topcoder-dev.com/v6/reviewSummations?challengeId=<id>` requires an M2M bearer token. Source `.env.importer.local`, run `node get_token.js`, and use the final stdout line as the token value.
 - Response shapes are mixed: challenge/resource lookups return arrays directly, while `submissions` and authenticated `reviewSummations` return paginated objects with `data` and `meta`. Validators should count rows from the `data` array and set a large `perPage` value (for example `1000` or higher) before reconciling totals.
+- Follow-up submission-archive validation should read submissions before and after the rerun, record URL deltas, and inspect at least one generated zip file locally to confirm it contains the expected legacy submission text. In this environment the submissions API does not reliably expose the persisted `url`, so URL-specific assertions should use review DB snapshots or equivalent read-only DB evidence.
+- XML-fallback description validation should use round `10758` only when a clean create-path fixture is available. In the current shared environment, round `10758` has already been imported as challenge `324a7cf2-f967-4578-9012-55be2730e2b0` with converted Markdown, so future create-path checks must use saved evidence or another clean fixture.
+- Round `13897` should no longer be treated as a preserve-with-no-source follow-up fixture and no longer has the placeholder description in the shared environment; round-2 targeted rerun validation updated it to usable converted `component_text` Markdown.
+- Current export-backed already-imported XML-fallback placeholder candidate is `9874`; `9892` is `round_type_id=15` and should not be used as a Marathon Match follow-up fixture.
+- Round `17391` / challenge `b983de6f-cc7f-463e-867c-87e54f3b72f1` is now the preserve/no-source fixture for `VAL-FOLLOWUP-005`; targeted rerun preserves `Imported historical Marathon Match from legacy round 17391` because legacy lookup resolves neither usable `problem.problem_text` nor usable converted `component.component_text` Markdown.
+- Round `17391` is now also the shared malformed-provisional-score smoke fixture for the misc hardening milestone. Its initial create apply originally exited after challenge creation because submission `-403380560001` / coder `22836077` lacked numeric `submission_points`, but current standard apply reruns exit `0`, report that row with `reasonCode=malformed-provisional-score`, and keep second-run challenge/phase/resource/submission/review identity sets stable. This validation exercises the existing/reconciliation path rather than a pristine create path.
+- Patch-only rerun validation must capture resource / submission-count / review-count snapshots before and after the rerun and show that only description plus submission URL/archive surfaces changed.
 - When participant backfill encounters legacy members absent from the dev environment, validators should expect a skipped-file artifact and should confirm that the skipped member ids plus the imported member-owned records reconcile back to the legacy totals for the round.
 - Round `14272` currently dry-runs as `decision=unresolved` with reason `selected-round-round-type-is-not-marathon-match`; it remains useful for exact-filter and unresolved-path validation but should not be treated as an importable Marathon Match fixture.
+- The approved follow-up rerun mode must fail closed without an explicit challenge-id override; validators should include one negative-path run that omits the override and confirm no writes occur.
 - Previously considered score candidates such as `10089` and `10722` should not be assumed valid Marathon Match fixtures in the current validation environment unless a later score-feature investigation reconfirms them.
 - Dry-run planning against `/mnt/Informix` can take several minutes; use generous timeouts (roughly 360-480s) for evidence-capture runs to avoid false timeout failures.
 - Do not run apply-mode validators concurrently on the same round or shared dev database. Read-only dry-run/API checks may run concurrently only when they avoid rounds being mutated by another validator.

@@ -23,11 +23,18 @@ const {
 const {
   TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
 } = require("./targetMemberResolution");
+const {
+  resolveDescriptionFromMappedLegacySources,
+} = require("./descriptionSourcing");
 
 const createEmptyCounters = () => ({
   round: null,
   componentIds: new Set(),
   problemIds: new Set(),
+  descriptionProblemId: null,
+  descriptionProblemText: null,
+  descriptionComponentId: null,
+  descriptionComponentTextMarkdown: null,
   eligibleRegistrants: new Set(),
   nonExampleSubmissions: 0,
   exampleSubmissions: 0,
@@ -1055,6 +1062,10 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
 
   const selectedRoundIdSet = new Set(roundDataById.keys());
   const selectedComponentIds = new Set();
+  const selectedProblemIds = new Set();
+  const componentProblemIdById = new Map();
+  const componentTextByComponentId = new Map();
+  const problemTextByProblemId = new Map();
   const longComponentStateById = new Map();
   const stateSubmissionSummaryById = new Map();
 
@@ -1085,15 +1096,52 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       return;
     }
     const problemId = String(row && row.problem_id ? row.problem_id : "").trim();
+    const componentText =
+      row && Object.prototype.hasOwnProperty.call(row, "component_text")
+        ? row.component_text
+        : null;
+    componentTextByComponentId.set(componentId, componentText);
     if (!problemId) {
       return;
     }
+    componentProblemIdById.set(componentId, problemId);
+    selectedProblemIds.add(problemId);
     for (const counters of roundDataById.values()) {
       if (counters.componentIds.has(componentId)) {
         counters.problemIds.add(problemId);
       }
     }
   });
+
+  await streamJsonArray(fixedFiles.problem, "problem", (row) => {
+    const problemId = String(row && row.problem_id ? row.problem_id : "").trim();
+    if (!selectedProblemIds.has(problemId)) {
+      return;
+    }
+    const rawProblemText =
+      row && Object.prototype.hasOwnProperty.call(row, "problem_text")
+        ? row.problem_text
+        : null;
+    problemTextByProblemId.set(problemId, rawProblemText);
+  });
+
+  for (const counters of roundDataById.values()) {
+    counters.descriptionProblemId = null;
+    counters.descriptionProblemText = null;
+    counters.descriptionComponentId = null;
+    counters.descriptionComponentTextMarkdown = null;
+
+    const descriptionSource = resolveDescriptionFromMappedLegacySources({
+      componentIds: sortIds(counters.componentIds),
+      componentProblemIdById,
+      problemTextByProblemId,
+      componentTextByComponentId,
+    });
+    counters.descriptionProblemId = descriptionSource.problemId;
+    counters.descriptionProblemText = descriptionSource.problemText;
+    counters.descriptionComponentId = descriptionSource.componentId;
+    counters.descriptionComponentTextMarkdown = descriptionSource.componentTextMarkdown;
+  }
 
   await Promise.all(
     roundRegistrationFiles.map((filePath) =>
@@ -1136,6 +1184,10 @@ const readLegacyPlanningInputs = async (options, roundDataById) => {
       roundId,
       coderId,
     });
+    const rankingScore = Number.parseFloat(String(row && row.points ? row.points : "").trim());
+    if (coderId && Number.isFinite(rankingScore)) {
+      roundDataById.get(roundId).finalCandidateCoderIds.add(coderId);
+    }
     stateSubmissionSummaryById.set(longComponentStateId, {
       roundId,
       coderId,

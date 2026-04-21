@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-targeted-rerun-guardrails",
+  "reviewedAt": "2026-04-14T04:16:01Z",
+  "commitId": "ee7db41a1219fbfe4a5591f427a9eeb20c681504",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The guardrail feature cleanly adds an explicit targeted-rerun mode, requires an explicit challenge-id override, and rejects mismatched or non-reuse selections before any apply-path writes run.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the handoff, transcript skeleton, and commit `ee7db41a1219fbfe4a5591f427a9eeb20c681504` for `mm-importer-targeted-rerun-guardrails`. Result: pass. The CLI/parser/apply changes consistently fail closed for missing or mismatched overrides and stay separate from the standard backfill flow."
+}

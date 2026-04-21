@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-missing-submission-points-hardening",
+  "reviewedAt": "2026-04-15T04:56:42Z",
+  "commitId": "f3b0a88a188e4a7d8bb151eace6ee7a7d494b2a5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The malformed provisional-score hardening is appropriately scoped: it converts missing/non-numeric legacy `submission_points` values into deterministic skipped-artifact records while continuing to import valid provisional scores and preserving rerun safety for already-imported submissions.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the worker handoff, transcript skeleton, and malformed provisional-score hardening changes for `mm-importer-missing-submission-points-hardening` at commit `f3b0a88a188e4a7d8bb151eace6ee7a7d494b2a5`. Result: pass. The feature replaces the previous crash path with explicit `malformed-provisional-score` skip reporting without weakening valid provisional-score imports or rerun behavior."
+}

@@ -1,0 +1,29 @@
+{
+  "milestone": "followup-content-archives",
+  "round": 3,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-FOLLOWUP-005"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Recorded that follow-up round 3 resolved the no-source preserve gap by creating round 17391 as challenge b983de6f-cc7f-463e-867c-87e54f3b72f1 and then proving targeted rerun preserves its placeholder description while backfilling 248 local archives and submission URLs.",
+      "source": "flow-report"
+    },
+    {
+      "target": "user-testing.md",
+      "description": "Documented round 17391 as the shared-environment no-source preserve fixture for VAL-FOLLOWUP-005 and noted the non-blocking provisional-score data issue encountered during its initial create apply.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": ".factory/validation/followup-content-archives/user-testing/synthesis.round2.json"
+}

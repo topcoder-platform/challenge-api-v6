@@ -2,6 +2,12 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const {
+  buildDryRunPlan,
+} = require("../src/scripts/importHistoricalMarathonMatches/planning");
+const {
+  TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+} = require("../src/scripts/importHistoricalMarathonMatches/targetMemberResolution");
 
 const scriptPath = path.resolve(
   __dirname,
@@ -152,6 +158,17 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(result.stderr).toContain("Invalid round id value \"abc\"");
   });
 
+  test("targeted rerun mode requires an explicit challenge-id override", () => {
+    const result = runImporter(
+      ["--data-dir", fixtureDir, "--apply", "--targeted-rerun", "--round-id", "9892"],
+      fixtureDir
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("--targeted-rerun requires --challenge-id");
+    expect(result.stderr).not.toContain("RESOURCES_API_URL must be set");
+  });
+
   test("dry-run emits one deterministic parseable record per selected round including unmatched", () => {
     const args = [
       "--data-dir",
@@ -218,6 +235,52 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(record.createPathPhasePlan).toBe(null);
   });
 
+  test("round data tracks finalists from long component state points even when long_comp_result omits them", async () => {
+    writeJson(fixtureDir, "long_component_state_1.json", "long_component_state", [
+      {
+        long_component_state_id: "lcs-1",
+        round_id: "9892",
+        coder_id: "1",
+        component_id: "5503",
+        points: "98.1",
+      },
+      {
+        long_component_state_id: "lcs-2",
+        round_id: "9892",
+        coder_id: "2",
+        component_id: "5504",
+        points: "91.5",
+      },
+      { long_component_state_id: "lcs-3", round_id: "7000", coder_id: "8", component_id: "7777" },
+    ]);
+    writeJson(fixtureDir, "long_comp_result_1.json", "long_comp_result", [
+      { round_id: "9892", coder_id: "1", system_point_total: "98.1", point_total: null, placed: "1" },
+      { round_id: "7000", coder_id: "8", system_point_total: "77.0", point_total: null, placed: "1" },
+    ]);
+
+    const plan = await buildDryRunPlan(
+      {
+        dataDir: fixtureDir,
+        roundFile: "round_1.json",
+        roundComponentFile: "round_component_1.json",
+        componentFile: "component_1.json",
+        problemFile: "problem_1.json",
+        longComponentStateFile: "long_component_state_1.json",
+        roundRegistrationPattern: "^round_registration_\\d+\\.json$",
+        userPattern: "^user_\\d+\\.json$",
+        longSubmissionPattern: "^long_submission_\\d+\\.json$",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+        roundIds: ["9892"],
+        cwd: fixtureDir,
+      },
+      new Map()
+    );
+
+    expect(plan.roundDataById.get("9892").finalCandidateCoderIds).toEqual(
+      new Set(["1", "2"])
+    );
+  });
+
   test("dry-run with broken DATABASE_URL still emits unresolved instead of create", () => {
     const result = runImporter(
       [
@@ -277,5 +340,58 @@ describe("importHistoricalMarathonMatches CLI planning behavior", () => {
     expect(record.decision).toBe("unresolved");
     expect(record.reason).toBe("authoritative-existing-v6-discovery-unavailable");
     expect(record.matchedChallengeId).toBe(null);
+  });
+
+  test("matched existing challenges stay traceable when only member resolution is unavailable", async () => {
+    const plan = await buildDryRunPlan(
+      {
+        dataDir: fixtureDir,
+        cwd: fixtureDir,
+        roundIds: ["9892"],
+        roundFile: "round_1.json",
+        roundComponentFile: "round_component_1.json",
+        componentFile: "component_1.json",
+        problemFile: "problem_1.json",
+        longComponentStateFile: "long_component_state_1.json",
+        roundRegistrationPattern: "^round_registration_\\d+\\.json$",
+        userPattern: "^user_\\d+\\.json$",
+        longSubmissionPattern: "^long_submission_\\d+\\.json$",
+        longCompResultPattern: "^long_comp_result_\\d+\\.json$",
+      },
+      new Map([
+        [
+          "9892",
+          {
+            legacyRoundId: "9892",
+            matchStatus: "safe",
+            reason: "existing-v6-challenge-found",
+            challengeId: "challenge-1",
+            existing: {
+              phases: 3,
+              resources: 0,
+              submissions: 0,
+              finalScores: 0,
+              provisionalScores: 0,
+            },
+          },
+        ],
+      ]),
+      {
+        authoritativeDiscovery: { available: true },
+        canonicalTimelineTemplate: {
+          resolved: true,
+          timelineTemplateId: "timeline-1",
+        },
+        memberResolution: {
+          available: false,
+          reason: TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON,
+        },
+      }
+    );
+
+    const [record] = plan.records;
+    expect(record.decision).toBe("unresolved");
+    expect(record.reason).toBe(TARGET_MEMBER_RESOLUTION_UNAVAILABLE_REASON);
+    expect(record.matchedChallengeId).toBe("challenge-1");
   });
 });

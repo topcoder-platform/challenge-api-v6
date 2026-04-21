@@ -1,0 +1,15 @@
+{
+  "featureId": "mm-importer-readme-rerun-steps",
+  "reviewedAt": "2026-04-15T23:00:08Z",
+  "commitId": "a745e8854e3b1fa6f1b4fbd48a2b0ee2dbac28e6",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": false,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The README rerun guidance on HEAD is complete and correctly scoped for this docs-only feature: it documents both standard full apply reruns and targeted rerun patch mode, includes the explicit `--apply --targeted-rerun --round-id <id> --challenge-id <challengeId>` invocation, explains `SUBMISSION_ARCHIVE_DIR` setup and challenge-id lookup by `legacyId`, preserves the approved description-source precedence, and calls out idempotent rerun behavior plus `reasonCode=malformed-provisional-score` handling.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Reviewed the latest feature handoff/transcript evidence and the current `data-migration/MARATHON_README.md` content at commit `a745e8854e3b1fa6f1b4fbd48a2b0ee2dbac28e6`. Result: pass. The current README satisfies the required rerun/operator guidance for the historical Marathon Match importer. Direct `git diff` review was unavailable in this worker session because git CLI reads are confirmation-blocked, so the review used current file state plus worker handoff evidence."
+}
