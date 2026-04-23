@@ -147,7 +147,23 @@ const createResourceApiClient = ({
     return results;
   };
 
-  const createSubmitterResource = async ({ challengeId, memberId, roleId = submitterRoleId }) => {
+  /**
+   * Creates a submitter resource in the Resource API.
+   * Historical MM imports can set `sendEmail` to false so backfilled registrations
+   * do not emit registration notifications for already-completed challenges.
+   * @param {Object} params request payload
+   * @param {string} params.challengeId v6 challenge id
+   * @param {string|number} params.memberId target member id
+   * @param {string} [params.roleId] resource role id, defaults to the configured submitter role
+   * @param {boolean} [params.sendEmail] optional Resource API email toggle
+   * @returns {Promise<Object|null>} created resource payload when the API returns JSON
+   */
+  const createSubmitterResource = async ({
+    challengeId,
+    memberId,
+    roleId = submitterRoleId,
+    sendEmail,
+  }) => {
     const token = await getAccessToken();
     const response = await fetchImpl(normalizedBaseUrl, {
       method: "POST",
@@ -159,6 +175,7 @@ const createResourceApiClient = ({
         challengeId,
         memberId,
         roleId,
+        ...(typeof sendEmail === "boolean" ? { sendEmail } : {}),
       }),
     });
 
