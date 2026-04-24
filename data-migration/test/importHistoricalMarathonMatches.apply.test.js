@@ -2292,11 +2292,13 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       challengeId: "challenge-1",
       memberId: "2",
       roleId: "submitter-role",
+      sendEmail: false,
     });
     expect(resourceClient.createSubmitterResource).toHaveBeenCalledWith({
       challengeId: "challenge-1",
       memberId: "3",
       roleId: "submitter-role",
+      sendEmail: false,
     });
     expect(result.records).toEqual([
       {
@@ -2425,6 +2427,7 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       challengeId: "challenge-1",
       memberId: "1",
       roleId: "submitter-role",
+      sendEmail: false,
     });
     expect(result.records).toEqual([
       {
@@ -2486,6 +2489,18 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       "COMPLETED"
     );
     expect(resourceClient.createSubmitterResource).toHaveBeenCalledTimes(2);
+    expect(resourceClient.createSubmitterResource).toHaveBeenNthCalledWith(1, {
+      challengeId: "challenge-1",
+      memberId: "2",
+      roleId: "submitter-role",
+      sendEmail: false,
+    });
+    expect(resourceClient.createSubmitterResource).toHaveBeenNthCalledWith(2, {
+      challengeId: "challenge-1",
+      memberId: "2",
+      roleId: "submitter-role",
+      sendEmail: false,
+    });
     expect(result).toEqual({
       targetEligibleRegistrants: 1,
       existingSubmitterResources: 0,
@@ -2542,5 +2557,17 @@ describe("importHistoricalMarathonMatches apply create-path behavior", () => {
       "challenge-1",
       "COMPLETED"
     );
+    expect(resourceClient.createSubmitterResource).toHaveBeenNthCalledWith(1, {
+      challengeId: "challenge-1",
+      memberId: "2",
+      roleId: "submitter-role",
+      sendEmail: false,
+    });
+    expect(resourceClient.createSubmitterResource).toHaveBeenNthCalledWith(2, {
+      challengeId: "challenge-1",
+      memberId: "2",
+      roleId: "submitter-role",
+      sendEmail: false,
+    });
   });
 });

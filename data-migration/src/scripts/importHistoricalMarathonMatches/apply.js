@@ -2381,6 +2381,7 @@ const reconcileSubmitterResourcesForRound = async ({
         challengeId,
         memberId: String(identity.memberId),
         roleId: submitterRoleId,
+        sendEmail: false,
       };
 
       try {
