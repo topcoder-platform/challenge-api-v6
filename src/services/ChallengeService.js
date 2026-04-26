@@ -36,6 +36,17 @@ const {
 } = require("../common/prisma");
 const prisma = getClient();
 
+const BILLING_MARKUP_COPILOT_ROLES = new Set(["copilot", "connect copilot"]);
+const BILLING_MARKUP_VISIBLE_ROLES = new Set([
+  "administrator",
+  "connect admin",
+  "connect manager",
+  "project manager",
+  "topcoder project manager",
+  "talent manager",
+  "topcoder talent manager",
+]);
+
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
   updated: constants.validChallengeParams.Updated,
@@ -76,6 +87,77 @@ function compareStatusSortValues(aStatusValue, bStatusValue) {
   }
 
   return normalizedA.localeCompare(normalizedB);
+}
+
+/**
+ * Returns normalized role names from the authenticated user payload.
+ * @param {Object} currentUser the authenticated user
+ * @returns {Set<String>} lower-cased role names
+ */
+function getNormalizedUserRoles(currentUser) {
+  const roles = _.get(currentUser, "roles", []);
+  const roleValues = Array.isArray(roles)
+    ? roles
+    : _.toString(roles)
+        .split(",")
+        .map((role) => role.trim());
+
+  return new Set(
+    _.map(roleValues, (role) => _.toString(role).trim().toLowerCase()).filter(Boolean),
+  );
+}
+
+/**
+ * Determines whether challenge billing markup should be hidden from the caller.
+ * @param {Object} currentUser the authenticated user
+ * @returns {Boolean} true when the caller is copilot-only and should not see markup
+ */
+function shouldHideBillingMarkupForCopilot(currentUser) {
+  if (!currentUser || _.get(currentUser, "isMachine", false)) {
+    return false;
+  }
+
+  const roles = getNormalizedUserRoles(currentUser);
+  const hasCopilotRole = [...BILLING_MARKUP_COPILOT_ROLES].some((role) => roles.has(role));
+
+  if (!hasCopilotRole) {
+    return false;
+  }
+
+  return ![...BILLING_MARKUP_VISIBLE_ROLES].some((role) => roles.has(role));
+}
+
+/**
+ * Removes raw billing markup from challenge response data for copilot-only callers.
+ * @param {Object} currentUser the authenticated user
+ * @param {Object} challenge the challenge response object to sanitize
+ * @returns {Object} the same challenge object after response sanitization
+ */
+function sanitizeBillingMarkupForCaller(currentUser, challenge) {
+  if (shouldHideBillingMarkupForCopilot(currentUser)) {
+    _.unset(challenge, "billing.markup");
+  }
+
+  return challenge;
+}
+
+/**
+ * Keeps persisted billing markup intact when copilot-only callers submit billing data.
+ * @param {Object} currentUser the authenticated user
+ * @param {Object} data incoming update payload
+ * @param {Object} challenge persisted challenge response shape
+ * @returns {Object} the update payload with protected billing markup restored
+ */
+function preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge) {
+  if (
+    shouldHideBillingMarkupForCopilot(currentUser) &&
+    _.has(data, "billing") &&
+    _.has(challenge, "billing.markup")
+  ) {
+    _.set(data, "billing.markup", _.get(challenge, "billing.markup"));
+  }
+
+  return data;
 }
 
 // Minimal domain adapter for PhaseAdvancer to fetch phase-specific facts.
@@ -782,7 +864,10 @@ async function searchChallenges(currentUser, criteria) {
   }
   if (!_.isUndefined(criteria.legacyId)) {
     const result = await searchByLegacyId(currentUser, criteria.legacyId, page, perPage);
-    return { total: result.length, page, perPage, result };
+    const sanitizedResult = result.map((challenge) =>
+      helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge)),
+    );
+    return { total: sanitizedResult.length, page, perPage, result: sanitizedResult };
   }
 
   const prismaFilter = {
@@ -1564,7 +1649,9 @@ async function searchChallenges(currentUser, criteria) {
     }
   });
 
-  const sanitizedResult = result.map((challenge) => helper.removeNullProperties(challenge));
+  const sanitizedResult = result.map((challenge) =>
+    helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge)),
+  );
 
   if (searchTimingEnabled) {
     logger.info(
@@ -1987,7 +2074,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     }) ${buildLogContext()}`,
   );
 
-  return helper.removeNullProperties(ret);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, ret));
 }
 createChallenge.schema = {
   currentUser: Joi.any(),
@@ -2235,7 +2322,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
 
   // Note: numOfRegistrants and numOfSubmissions are no longer calculated here.
 
-  return helper.removeNullProperties(challenge);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge));
 }
 getChallenge.schema = {
   currentUser: Joi.any(),
@@ -2754,6 +2841,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
     delete data.reviews;
   }
+
+  data = preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge);
 
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
@@ -3527,7 +3616,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  return helper.removeNullProperties(updatedChallenge);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, updatedChallenge));
 }
 
 updateChallenge.schema = {

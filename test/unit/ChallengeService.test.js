@@ -544,6 +544,24 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("get challenge hides billing markup for copilot-only project write users", async () => {
+      const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess;
+
+      helper.userHasProjectWriteAccess = async () => true;
+
+      try {
+        const result = await service.getChallenge(
+          { handle: "writer", roles: ["copilot"], userId: "testuser" },
+          createdChallengeData.id,
+        );
+
+        should.equal(result.billing.billingAccountId, createdChallengeData.billing.billingAccountId);
+        should.equal(_.isUndefined(result.billing.markup), true);
+      } finally {
+        helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess;
+      }
+    });
+
     it("get challenge hides billing for users without project write access", async () => {
       const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess;
       const originalListResourcesByMemberAndChallenge = helper.listResourcesByMemberAndChallenge;
