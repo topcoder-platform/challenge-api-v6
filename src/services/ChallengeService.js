@@ -673,13 +673,28 @@ setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
  * @returns {Array} the search result
  */
 async function searchByLegacyId(currentUser, legacyId, page, perPage) {
+  const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
+  const where = { legacyId };
+  if (whitelistFilter) {
+    where.AND = [whitelistFilter];
+  }
+
   // Do not take nested objects, query will be faster
-  const challenges = await prisma.challenge.findMany({
-    take: perPage,
-    skip: (page - 1) * perPage,
-    where: { legacyId },
-    include: includeReturnFields,
-  });
+  let challenges;
+  try {
+    challenges = await prisma.challenge.findMany({
+      take: perPage,
+      skip: (page - 1) * perPage,
+      where,
+      include: includeReturnFields,
+    });
+  } catch (err) {
+    if (helper.shouldApplyChallengeWhitelist(currentUser)) {
+      logger.warn(`searchByLegacyId whitelist-filtered query failed: ${err.message}`);
+      return [];
+    }
+    throw err;
+  }
 
   _.forEach(challenges, (c) => {
     prismaHelper.convertModelToResponse(c);
@@ -887,6 +902,10 @@ async function searchChallenges(currentUser, criteria) {
 
   const _hasAdminRole = hasAdminRole(currentUser);
   const _isMachineToken = _.get(currentUser, "isMachine", false);
+  const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
+  if (whitelistFilter) {
+    prismaFilter.where.AND.push(whitelistFilter);
+  }
 
   const normalizeGroupIdValue = (value) => {
     if (_.isNil(value)) {
@@ -2266,6 +2285,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge of id ${id} is not found.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   if (checkIfExists) {
     return _.pick(challenge, ["id", "legacyId"]);
   }
@@ -2334,9 +2354,18 @@ getChallenge.schema = {
  * Get challenge statistics
  * @param {Object} currentUser the user who perform operation
  * @param {String} id the challenge id
- * @returns {Object} the challenge with given id
+ * @returns {Object} the challenge statistics for the given challenge
+ * @throws {NotFoundError} when the challenge does not exist
+ * @throws {ForbiddenError} when the current user cannot view the challenge
  */
 async function getChallengeStatistics(currentUser, id) {
+  const challenge = await prisma.challenge.findUnique({
+    where: { id },
+  });
+  if (_.isNil(challenge) || _.isNil(challenge.id)) {
+    throw new errors.NotFoundError(`Challenge of id ${id} is not found.`);
+  }
+  await helper.ensureUserCanViewChallenge(currentUser, challenge);
   // get submissions
   console.log("Getting challenge submissions for challenge ID: " + id);
   const submissions = await helper.getChallengeSubmissions(id);
@@ -2785,6 +2814,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   if (!challenge || !challenge.id) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   enrichChallengeForResponse(challenge);
   prismaHelper.convertModelToResponse(challenge);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
@@ -4454,6 +4484,7 @@ async function advancePhase(currentUser, challengeId, data) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
@@ -4593,6 +4624,7 @@ async function closeMarathonMatch(currentUser, challengeId) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
 
   if (!challenge.type || challenge.type.name !== "Marathon Match") {
     throw new errors.BadRequestError(

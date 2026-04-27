@@ -9,7 +9,7 @@ const service = require("../services/ChallengePhaseService");
  * @param {Object} res the response
  */
 async function getAllChallengePhases(req, res) {
-  const result = await service.getAllChallengePhases(req.params.challengeId);
+  const result = await service.getAllChallengePhases(req.params.challengeId, req.authUser);
   res.send(result);
 }
 
@@ -19,7 +19,11 @@ async function getAllChallengePhases(req, res) {
  * @param {Object} res the response
  */
 async function getChallengePhase(req, res) {
-  const result = await service.getChallengePhase(req.params.challengeId, req.params.id);
+  const result = await service.getChallengePhase(
+    req.params.challengeId,
+    req.params.id,
+    req.authUser,
+  );
   res.send(result);
 }
 
@@ -33,7 +37,7 @@ async function partiallyUpdateChallengePhase(req, res) {
     req.authUser,
     req.params.challengeId,
     req.params.id,
-    req.body
+    req.body,
   );
   res.send(result);
 }
@@ -47,7 +51,7 @@ async function deleteChallengePhase(req, res) {
   const result = await service.deleteChallengePhase(
     req.authUser,
     req.params.challengeId,
-    req.params.id
+    req.params.id,
   );
   res.send(result);
 }

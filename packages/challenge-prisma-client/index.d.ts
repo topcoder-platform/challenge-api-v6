@@ -19,6 +19,11 @@ export type PrismaPromise<T> = $Public.PrismaPromise<T>
  */
 export type Challenge = $Result.DefaultSelection<Prisma.$ChallengePayload>
 /**
+ * Model ChallengeUserWhitelist
+ * 
+ */
+export type ChallengeUserWhitelist = $Result.DefaultSelection<Prisma.$ChallengeUserWhitelistPayload>
+/**
  * Model ChallengeType
  * 
  */
@@ -373,6 +378,16 @@ export class PrismaClient<
     * ```
     */
   get challenge(): Prisma.ChallengeDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.challengeUserWhitelist`: Exposes CRUD operations for the **ChallengeUserWhitelist** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more ChallengeUserWhitelists
+    * const challengeUserWhitelists = await prisma.challengeUserWhitelist.findMany()
+    * ```
+    */
+  get challengeUserWhitelist(): Prisma.ChallengeUserWhitelistDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.challengeType`: Exposes CRUD operations for the **ChallengeType** model.
@@ -1065,6 +1080,7 @@ export namespace Prisma {
 
   export const ModelName: {
     Challenge: 'Challenge',
+    ChallengeUserWhitelist: 'ChallengeUserWhitelist',
     ChallengeType: 'ChallengeType',
     ChallengeTrack: 'ChallengeTrack',
     ChallengeTimelineTemplate: 'ChallengeTimelineTemplate',
@@ -1108,7 +1124,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "challenge" | "challengeType" | "challengeTrack" | "challengeTimelineTemplate" | "auditLog" | "attachment" | "challengeMetadata" | "prize" | "challengeWinner" | "challengeTerm" | "challengeSkill" | "challengeBilling" | "challengeLegacy" | "challengeEvent" | "challengeDiscussion" | "challengeDiscussionOption" | "challengeConstraint" | "phase" | "challengePhase" | "challengePhaseConstraint" | "challengePrizeSet" | "challengeReviewer" | "defaultChallengeReviewer" | "timelineTemplate" | "timelineTemplatePhase" | "memberChallengeAccess"
+      modelProps: "challenge" | "challengeUserWhitelist" | "challengeType" | "challengeTrack" | "challengeTimelineTemplate" | "auditLog" | "attachment" | "challengeMetadata" | "prize" | "challengeWinner" | "challengeTerm" | "challengeSkill" | "challengeBilling" | "challengeLegacy" | "challengeEvent" | "challengeDiscussion" | "challengeDiscussionOption" | "challengeConstraint" | "phase" | "challengePhase" | "challengePhaseConstraint" | "challengePrizeSet" | "challengeReviewer" | "defaultChallengeReviewer" | "timelineTemplate" | "timelineTemplatePhase" | "memberChallengeAccess"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1183,6 +1199,80 @@ export namespace Prisma {
           count: {
             args: Prisma.ChallengeCountArgs<ExtArgs>
             result: $Utils.Optional<ChallengeCountAggregateOutputType> | number
+          }
+        }
+      }
+      ChallengeUserWhitelist: {
+        payload: Prisma.$ChallengeUserWhitelistPayload<ExtArgs>
+        fields: Prisma.ChallengeUserWhitelistFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.ChallengeUserWhitelistFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.ChallengeUserWhitelistFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          findFirst: {
+            args: Prisma.ChallengeUserWhitelistFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.ChallengeUserWhitelistFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          findMany: {
+            args: Prisma.ChallengeUserWhitelistFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>[]
+          }
+          create: {
+            args: Prisma.ChallengeUserWhitelistCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          createMany: {
+            args: Prisma.ChallengeUserWhitelistCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.ChallengeUserWhitelistCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>[]
+          }
+          delete: {
+            args: Prisma.ChallengeUserWhitelistDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          update: {
+            args: Prisma.ChallengeUserWhitelistUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          deleteMany: {
+            args: Prisma.ChallengeUserWhitelistDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.ChallengeUserWhitelistUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.ChallengeUserWhitelistUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>[]
+          }
+          upsert: {
+            args: Prisma.ChallengeUserWhitelistUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$ChallengeUserWhitelistPayload>
+          }
+          aggregate: {
+            args: Prisma.ChallengeUserWhitelistAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateChallengeUserWhitelist>
+          }
+          groupBy: {
+            args: Prisma.ChallengeUserWhitelistGroupByArgs<ExtArgs>
+            result: $Utils.Optional<ChallengeUserWhitelistGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.ChallengeUserWhitelistCountArgs<ExtArgs>
+            result: $Utils.Optional<ChallengeUserWhitelistCountAggregateOutputType> | number
           }
         }
       }
@@ -3089,6 +3179,7 @@ export namespace Prisma {
   }
   export type GlobalOmitConfig = {
     challenge?: ChallengeOmit
+    challengeUserWhitelist?: ChallengeUserWhitelistOmit
     challengeType?: ChallengeTypeOmit
     challengeTrack?: ChallengeTrackOmit
     challengeTimelineTemplate?: ChallengeTimelineTemplateOmit
@@ -3206,6 +3297,7 @@ export namespace Prisma {
     skills: number
     auditLogs: number
     memberAccesses: number
+    userWhitelist: number
   }
 
   export type ChallengeCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -3221,6 +3313,7 @@ export namespace Prisma {
     skills?: boolean | ChallengeCountOutputTypeCountSkillsArgs
     auditLogs?: boolean | ChallengeCountOutputTypeCountAuditLogsArgs
     memberAccesses?: boolean | ChallengeCountOutputTypeCountMemberAccessesArgs
+    userWhitelist?: boolean | ChallengeCountOutputTypeCountUserWhitelistArgs
   }
 
   // Custom InputTypes
@@ -3316,6 +3409,13 @@ export namespace Prisma {
    */
   export type ChallengeCountOutputTypeCountMemberAccessesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: MemberChallengeAccessWhereInput
+  }
+
+  /**
+   * ChallengeCountOutputType without action
+   */
+  export type ChallengeCountOutputTypeCountUserWhitelistArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ChallengeUserWhitelistWhereInput
   }
 
 
@@ -4074,6 +4174,7 @@ export namespace Prisma {
     skills?: boolean | Challenge$skillsArgs<ExtArgs>
     auditLogs?: boolean | Challenge$auditLogsArgs<ExtArgs>
     memberAccesses?: boolean | Challenge$memberAccessesArgs<ExtArgs>
+    userWhitelist?: boolean | Challenge$userWhitelistArgs<ExtArgs>
     type?: boolean | ChallengeTypeDefaultArgs<ExtArgs>
     track?: boolean | ChallengeTrackDefaultArgs<ExtArgs>
     timelineTemplate?: boolean | Challenge$timelineTemplateArgs<ExtArgs>
@@ -4214,6 +4315,7 @@ export namespace Prisma {
     skills?: boolean | Challenge$skillsArgs<ExtArgs>
     auditLogs?: boolean | Challenge$auditLogsArgs<ExtArgs>
     memberAccesses?: boolean | Challenge$memberAccessesArgs<ExtArgs>
+    userWhitelist?: boolean | Challenge$userWhitelistArgs<ExtArgs>
     type?: boolean | ChallengeTypeDefaultArgs<ExtArgs>
     track?: boolean | ChallengeTrackDefaultArgs<ExtArgs>
     timelineTemplate?: boolean | Challenge$timelineTemplateArgs<ExtArgs>
@@ -4248,6 +4350,7 @@ export namespace Prisma {
       skills: Prisma.$ChallengeSkillPayload<ExtArgs>[]
       auditLogs: Prisma.$AuditLogPayload<ExtArgs>[]
       memberAccesses: Prisma.$MemberChallengeAccessPayload<ExtArgs>[]
+      userWhitelist: Prisma.$ChallengeUserWhitelistPayload<ExtArgs>[]
       type: Prisma.$ChallengeTypePayload<ExtArgs>
       track: Prisma.$ChallengeTrackPayload<ExtArgs>
       timelineTemplate: Prisma.$TimelineTemplatePayload<ExtArgs> | null
@@ -4696,6 +4799,7 @@ export namespace Prisma {
     skills<T extends Challenge$skillsArgs<ExtArgs> = {}>(args?: Subset<T, Challenge$skillsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ChallengeSkillPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     auditLogs<T extends Challenge$auditLogsArgs<ExtArgs> = {}>(args?: Subset<T, Challenge$auditLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AuditLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     memberAccesses<T extends Challenge$memberAccessesArgs<ExtArgs> = {}>(args?: Subset<T, Challenge$memberAccessesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MemberChallengeAccessPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    userWhitelist<T extends Challenge$userWhitelistArgs<ExtArgs> = {}>(args?: Subset<T, Challenge$userWhitelistArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     type<T extends ChallengeTypeDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ChallengeTypeDefaultArgs<ExtArgs>>): Prisma__ChallengeTypeClient<$Result.GetResult<Prisma.$ChallengeTypePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     track<T extends ChallengeTrackDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ChallengeTrackDefaultArgs<ExtArgs>>): Prisma__ChallengeTrackClient<$Result.GetResult<Prisma.$ChallengeTrackPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     timelineTemplate<T extends Challenge$timelineTemplateArgs<ExtArgs> = {}>(args?: Subset<T, Challenge$timelineTemplateArgs<ExtArgs>>): Prisma__TimelineTemplateClient<$Result.GetResult<Prisma.$TimelineTemplatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
@@ -5502,6 +5606,30 @@ export namespace Prisma {
   }
 
   /**
+   * Challenge.userWhitelist
+   */
+  export type Challenge$userWhitelistArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    where?: ChallengeUserWhitelistWhereInput
+    orderBy?: ChallengeUserWhitelistOrderByWithRelationInput | ChallengeUserWhitelistOrderByWithRelationInput[]
+    cursor?: ChallengeUserWhitelistWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: ChallengeUserWhitelistScalarFieldEnum | ChallengeUserWhitelistScalarFieldEnum[]
+  }
+
+  /**
    * Challenge.timelineTemplate
    */
   export type Challenge$timelineTemplateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -5536,6 +5664,1025 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: ChallengeInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model ChallengeUserWhitelist
+   */
+
+  export type AggregateChallengeUserWhitelist = {
+    _count: ChallengeUserWhitelistCountAggregateOutputType | null
+    _min: ChallengeUserWhitelistMinAggregateOutputType | null
+    _max: ChallengeUserWhitelistMaxAggregateOutputType | null
+  }
+
+  export type ChallengeUserWhitelistMinAggregateOutputType = {
+    challengeId: string | null
+    userId: string | null
+  }
+
+  export type ChallengeUserWhitelistMaxAggregateOutputType = {
+    challengeId: string | null
+    userId: string | null
+  }
+
+  export type ChallengeUserWhitelistCountAggregateOutputType = {
+    challengeId: number
+    userId: number
+    _all: number
+  }
+
+
+  export type ChallengeUserWhitelistMinAggregateInputType = {
+    challengeId?: true
+    userId?: true
+  }
+
+  export type ChallengeUserWhitelistMaxAggregateInputType = {
+    challengeId?: true
+    userId?: true
+  }
+
+  export type ChallengeUserWhitelistCountAggregateInputType = {
+    challengeId?: true
+    userId?: true
+    _all?: true
+  }
+
+  export type ChallengeUserWhitelistAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ChallengeUserWhitelist to aggregate.
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ChallengeUserWhitelists to fetch.
+     */
+    orderBy?: ChallengeUserWhitelistOrderByWithRelationInput | ChallengeUserWhitelistOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: ChallengeUserWhitelistWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ChallengeUserWhitelists from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ChallengeUserWhitelists.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned ChallengeUserWhitelists
+    **/
+    _count?: true | ChallengeUserWhitelistCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: ChallengeUserWhitelistMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: ChallengeUserWhitelistMaxAggregateInputType
+  }
+
+  export type GetChallengeUserWhitelistAggregateType<T extends ChallengeUserWhitelistAggregateArgs> = {
+        [P in keyof T & keyof AggregateChallengeUserWhitelist]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateChallengeUserWhitelist[P]>
+      : GetScalarType<T[P], AggregateChallengeUserWhitelist[P]>
+  }
+
+
+
+
+  export type ChallengeUserWhitelistGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: ChallengeUserWhitelistWhereInput
+    orderBy?: ChallengeUserWhitelistOrderByWithAggregationInput | ChallengeUserWhitelistOrderByWithAggregationInput[]
+    by: ChallengeUserWhitelistScalarFieldEnum[] | ChallengeUserWhitelistScalarFieldEnum
+    having?: ChallengeUserWhitelistScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: ChallengeUserWhitelistCountAggregateInputType | true
+    _min?: ChallengeUserWhitelistMinAggregateInputType
+    _max?: ChallengeUserWhitelistMaxAggregateInputType
+  }
+
+  export type ChallengeUserWhitelistGroupByOutputType = {
+    challengeId: string
+    userId: string
+    _count: ChallengeUserWhitelistCountAggregateOutputType | null
+    _min: ChallengeUserWhitelistMinAggregateOutputType | null
+    _max: ChallengeUserWhitelistMaxAggregateOutputType | null
+  }
+
+  type GetChallengeUserWhitelistGroupByPayload<T extends ChallengeUserWhitelistGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<ChallengeUserWhitelistGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof ChallengeUserWhitelistGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], ChallengeUserWhitelistGroupByOutputType[P]>
+            : GetScalarType<T[P], ChallengeUserWhitelistGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type ChallengeUserWhitelistSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    challengeId?: boolean
+    userId?: boolean
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["challengeUserWhitelist"]>
+
+  export type ChallengeUserWhitelistSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    challengeId?: boolean
+    userId?: boolean
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["challengeUserWhitelist"]>
+
+  export type ChallengeUserWhitelistSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    challengeId?: boolean
+    userId?: boolean
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["challengeUserWhitelist"]>
+
+  export type ChallengeUserWhitelistSelectScalar = {
+    challengeId?: boolean
+    userId?: boolean
+  }
+
+  export type ChallengeUserWhitelistOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"challengeId" | "userId", ExtArgs["result"]["challengeUserWhitelist"]>
+  export type ChallengeUserWhitelistInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }
+  export type ChallengeUserWhitelistIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }
+  export type ChallengeUserWhitelistIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
+  }
+
+  export type $ChallengeUserWhitelistPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "ChallengeUserWhitelist"
+    objects: {
+      challenge: Prisma.$ChallengePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      challengeId: string
+      userId: string
+    }, ExtArgs["result"]["challengeUserWhitelist"]>
+    composites: {}
+  }
+
+  type ChallengeUserWhitelistGetPayload<S extends boolean | null | undefined | ChallengeUserWhitelistDefaultArgs> = $Result.GetResult<Prisma.$ChallengeUserWhitelistPayload, S>
+
+  type ChallengeUserWhitelistCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<ChallengeUserWhitelistFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: ChallengeUserWhitelistCountAggregateInputType | true
+    }
+
+  export interface ChallengeUserWhitelistDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['ChallengeUserWhitelist'], meta: { name: 'ChallengeUserWhitelist' } }
+    /**
+     * Find zero or one ChallengeUserWhitelist that matches the filter.
+     * @param {ChallengeUserWhitelistFindUniqueArgs} args - Arguments to find a ChallengeUserWhitelist
+     * @example
+     * // Get one ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends ChallengeUserWhitelistFindUniqueArgs>(args: SelectSubset<T, ChallengeUserWhitelistFindUniqueArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one ChallengeUserWhitelist that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {ChallengeUserWhitelistFindUniqueOrThrowArgs} args - Arguments to find a ChallengeUserWhitelist
+     * @example
+     * // Get one ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends ChallengeUserWhitelistFindUniqueOrThrowArgs>(args: SelectSubset<T, ChallengeUserWhitelistFindUniqueOrThrowArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ChallengeUserWhitelist that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistFindFirstArgs} args - Arguments to find a ChallengeUserWhitelist
+     * @example
+     * // Get one ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends ChallengeUserWhitelistFindFirstArgs>(args?: SelectSubset<T, ChallengeUserWhitelistFindFirstArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first ChallengeUserWhitelist that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistFindFirstOrThrowArgs} args - Arguments to find a ChallengeUserWhitelist
+     * @example
+     * // Get one ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends ChallengeUserWhitelistFindFirstOrThrowArgs>(args?: SelectSubset<T, ChallengeUserWhitelistFindFirstOrThrowArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more ChallengeUserWhitelists that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all ChallengeUserWhitelists
+     * const challengeUserWhitelists = await prisma.challengeUserWhitelist.findMany()
+     * 
+     * // Get first 10 ChallengeUserWhitelists
+     * const challengeUserWhitelists = await prisma.challengeUserWhitelist.findMany({ take: 10 })
+     * 
+     * // Only select the `challengeId`
+     * const challengeUserWhitelistWithChallengeIdOnly = await prisma.challengeUserWhitelist.findMany({ select: { challengeId: true } })
+     * 
+     */
+    findMany<T extends ChallengeUserWhitelistFindManyArgs>(args?: SelectSubset<T, ChallengeUserWhitelistFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a ChallengeUserWhitelist.
+     * @param {ChallengeUserWhitelistCreateArgs} args - Arguments to create a ChallengeUserWhitelist.
+     * @example
+     * // Create one ChallengeUserWhitelist
+     * const ChallengeUserWhitelist = await prisma.challengeUserWhitelist.create({
+     *   data: {
+     *     // ... data to create a ChallengeUserWhitelist
+     *   }
+     * })
+     * 
+     */
+    create<T extends ChallengeUserWhitelistCreateArgs>(args: SelectSubset<T, ChallengeUserWhitelistCreateArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many ChallengeUserWhitelists.
+     * @param {ChallengeUserWhitelistCreateManyArgs} args - Arguments to create many ChallengeUserWhitelists.
+     * @example
+     * // Create many ChallengeUserWhitelists
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends ChallengeUserWhitelistCreateManyArgs>(args?: SelectSubset<T, ChallengeUserWhitelistCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many ChallengeUserWhitelists and returns the data saved in the database.
+     * @param {ChallengeUserWhitelistCreateManyAndReturnArgs} args - Arguments to create many ChallengeUserWhitelists.
+     * @example
+     * // Create many ChallengeUserWhitelists
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many ChallengeUserWhitelists and only return the `challengeId`
+     * const challengeUserWhitelistWithChallengeIdOnly = await prisma.challengeUserWhitelist.createManyAndReturn({
+     *   select: { challengeId: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends ChallengeUserWhitelistCreateManyAndReturnArgs>(args?: SelectSubset<T, ChallengeUserWhitelistCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a ChallengeUserWhitelist.
+     * @param {ChallengeUserWhitelistDeleteArgs} args - Arguments to delete one ChallengeUserWhitelist.
+     * @example
+     * // Delete one ChallengeUserWhitelist
+     * const ChallengeUserWhitelist = await prisma.challengeUserWhitelist.delete({
+     *   where: {
+     *     // ... filter to delete one ChallengeUserWhitelist
+     *   }
+     * })
+     * 
+     */
+    delete<T extends ChallengeUserWhitelistDeleteArgs>(args: SelectSubset<T, ChallengeUserWhitelistDeleteArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one ChallengeUserWhitelist.
+     * @param {ChallengeUserWhitelistUpdateArgs} args - Arguments to update one ChallengeUserWhitelist.
+     * @example
+     * // Update one ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends ChallengeUserWhitelistUpdateArgs>(args: SelectSubset<T, ChallengeUserWhitelistUpdateArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more ChallengeUserWhitelists.
+     * @param {ChallengeUserWhitelistDeleteManyArgs} args - Arguments to filter ChallengeUserWhitelists to delete.
+     * @example
+     * // Delete a few ChallengeUserWhitelists
+     * const { count } = await prisma.challengeUserWhitelist.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends ChallengeUserWhitelistDeleteManyArgs>(args?: SelectSubset<T, ChallengeUserWhitelistDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ChallengeUserWhitelists.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many ChallengeUserWhitelists
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends ChallengeUserWhitelistUpdateManyArgs>(args: SelectSubset<T, ChallengeUserWhitelistUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more ChallengeUserWhitelists and returns the data updated in the database.
+     * @param {ChallengeUserWhitelistUpdateManyAndReturnArgs} args - Arguments to update many ChallengeUserWhitelists.
+     * @example
+     * // Update many ChallengeUserWhitelists
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more ChallengeUserWhitelists and only return the `challengeId`
+     * const challengeUserWhitelistWithChallengeIdOnly = await prisma.challengeUserWhitelist.updateManyAndReturn({
+     *   select: { challengeId: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends ChallengeUserWhitelistUpdateManyAndReturnArgs>(args: SelectSubset<T, ChallengeUserWhitelistUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one ChallengeUserWhitelist.
+     * @param {ChallengeUserWhitelistUpsertArgs} args - Arguments to update or create a ChallengeUserWhitelist.
+     * @example
+     * // Update or create a ChallengeUserWhitelist
+     * const challengeUserWhitelist = await prisma.challengeUserWhitelist.upsert({
+     *   create: {
+     *     // ... data to create a ChallengeUserWhitelist
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the ChallengeUserWhitelist we want to update
+     *   }
+     * })
+     */
+    upsert<T extends ChallengeUserWhitelistUpsertArgs>(args: SelectSubset<T, ChallengeUserWhitelistUpsertArgs<ExtArgs>>): Prisma__ChallengeUserWhitelistClient<$Result.GetResult<Prisma.$ChallengeUserWhitelistPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of ChallengeUserWhitelists.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistCountArgs} args - Arguments to filter ChallengeUserWhitelists to count.
+     * @example
+     * // Count the number of ChallengeUserWhitelists
+     * const count = await prisma.challengeUserWhitelist.count({
+     *   where: {
+     *     // ... the filter for the ChallengeUserWhitelists we want to count
+     *   }
+     * })
+    **/
+    count<T extends ChallengeUserWhitelistCountArgs>(
+      args?: Subset<T, ChallengeUserWhitelistCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], ChallengeUserWhitelistCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a ChallengeUserWhitelist.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends ChallengeUserWhitelistAggregateArgs>(args: Subset<T, ChallengeUserWhitelistAggregateArgs>): Prisma.PrismaPromise<GetChallengeUserWhitelistAggregateType<T>>
+
+    /**
+     * Group by ChallengeUserWhitelist.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {ChallengeUserWhitelistGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends ChallengeUserWhitelistGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: ChallengeUserWhitelistGroupByArgs['orderBy'] }
+        : { orderBy?: ChallengeUserWhitelistGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, ChallengeUserWhitelistGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetChallengeUserWhitelistGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the ChallengeUserWhitelist model
+   */
+  readonly fields: ChallengeUserWhitelistFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for ChallengeUserWhitelist.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__ChallengeUserWhitelistClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    challenge<T extends ChallengeDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ChallengeDefaultArgs<ExtArgs>>): Prisma__ChallengeClient<$Result.GetResult<Prisma.$ChallengePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the ChallengeUserWhitelist model
+   */
+  interface ChallengeUserWhitelistFieldRefs {
+    readonly challengeId: FieldRef<"ChallengeUserWhitelist", 'String'>
+    readonly userId: FieldRef<"ChallengeUserWhitelist", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * ChallengeUserWhitelist findUnique
+   */
+  export type ChallengeUserWhitelistFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter, which ChallengeUserWhitelist to fetch.
+     */
+    where: ChallengeUserWhitelistWhereUniqueInput
+  }
+
+  /**
+   * ChallengeUserWhitelist findUniqueOrThrow
+   */
+  export type ChallengeUserWhitelistFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter, which ChallengeUserWhitelist to fetch.
+     */
+    where: ChallengeUserWhitelistWhereUniqueInput
+  }
+
+  /**
+   * ChallengeUserWhitelist findFirst
+   */
+  export type ChallengeUserWhitelistFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter, which ChallengeUserWhitelist to fetch.
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ChallengeUserWhitelists to fetch.
+     */
+    orderBy?: ChallengeUserWhitelistOrderByWithRelationInput | ChallengeUserWhitelistOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ChallengeUserWhitelists.
+     */
+    cursor?: ChallengeUserWhitelistWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ChallengeUserWhitelists from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ChallengeUserWhitelists.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ChallengeUserWhitelists.
+     */
+    distinct?: ChallengeUserWhitelistScalarFieldEnum | ChallengeUserWhitelistScalarFieldEnum[]
+  }
+
+  /**
+   * ChallengeUserWhitelist findFirstOrThrow
+   */
+  export type ChallengeUserWhitelistFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter, which ChallengeUserWhitelist to fetch.
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ChallengeUserWhitelists to fetch.
+     */
+    orderBy?: ChallengeUserWhitelistOrderByWithRelationInput | ChallengeUserWhitelistOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for ChallengeUserWhitelists.
+     */
+    cursor?: ChallengeUserWhitelistWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ChallengeUserWhitelists from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ChallengeUserWhitelists.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of ChallengeUserWhitelists.
+     */
+    distinct?: ChallengeUserWhitelistScalarFieldEnum | ChallengeUserWhitelistScalarFieldEnum[]
+  }
+
+  /**
+   * ChallengeUserWhitelist findMany
+   */
+  export type ChallengeUserWhitelistFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter, which ChallengeUserWhitelists to fetch.
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of ChallengeUserWhitelists to fetch.
+     */
+    orderBy?: ChallengeUserWhitelistOrderByWithRelationInput | ChallengeUserWhitelistOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing ChallengeUserWhitelists.
+     */
+    cursor?: ChallengeUserWhitelistWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` ChallengeUserWhitelists from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` ChallengeUserWhitelists.
+     */
+    skip?: number
+    distinct?: ChallengeUserWhitelistScalarFieldEnum | ChallengeUserWhitelistScalarFieldEnum[]
+  }
+
+  /**
+   * ChallengeUserWhitelist create
+   */
+  export type ChallengeUserWhitelistCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * The data needed to create a ChallengeUserWhitelist.
+     */
+    data: XOR<ChallengeUserWhitelistCreateInput, ChallengeUserWhitelistUncheckedCreateInput>
+  }
+
+  /**
+   * ChallengeUserWhitelist createMany
+   */
+  export type ChallengeUserWhitelistCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many ChallengeUserWhitelists.
+     */
+    data: ChallengeUserWhitelistCreateManyInput | ChallengeUserWhitelistCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * ChallengeUserWhitelist createManyAndReturn
+   */
+  export type ChallengeUserWhitelistCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * The data used to create many ChallengeUserWhitelists.
+     */
+    data: ChallengeUserWhitelistCreateManyInput | ChallengeUserWhitelistCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ChallengeUserWhitelist update
+   */
+  export type ChallengeUserWhitelistUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * The data needed to update a ChallengeUserWhitelist.
+     */
+    data: XOR<ChallengeUserWhitelistUpdateInput, ChallengeUserWhitelistUncheckedUpdateInput>
+    /**
+     * Choose, which ChallengeUserWhitelist to update.
+     */
+    where: ChallengeUserWhitelistWhereUniqueInput
+  }
+
+  /**
+   * ChallengeUserWhitelist updateMany
+   */
+  export type ChallengeUserWhitelistUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update ChallengeUserWhitelists.
+     */
+    data: XOR<ChallengeUserWhitelistUpdateManyMutationInput, ChallengeUserWhitelistUncheckedUpdateManyInput>
+    /**
+     * Filter which ChallengeUserWhitelists to update
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * Limit how many ChallengeUserWhitelists to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * ChallengeUserWhitelist updateManyAndReturn
+   */
+  export type ChallengeUserWhitelistUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * The data used to update ChallengeUserWhitelists.
+     */
+    data: XOR<ChallengeUserWhitelistUpdateManyMutationInput, ChallengeUserWhitelistUncheckedUpdateManyInput>
+    /**
+     * Filter which ChallengeUserWhitelists to update
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * Limit how many ChallengeUserWhitelists to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * ChallengeUserWhitelist upsert
+   */
+  export type ChallengeUserWhitelistUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * The filter to search for the ChallengeUserWhitelist to update in case it exists.
+     */
+    where: ChallengeUserWhitelistWhereUniqueInput
+    /**
+     * In case the ChallengeUserWhitelist found by the `where` argument doesn't exist, create a new ChallengeUserWhitelist with this data.
+     */
+    create: XOR<ChallengeUserWhitelistCreateInput, ChallengeUserWhitelistUncheckedCreateInput>
+    /**
+     * In case the ChallengeUserWhitelist was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<ChallengeUserWhitelistUpdateInput, ChallengeUserWhitelistUncheckedUpdateInput>
+  }
+
+  /**
+   * ChallengeUserWhitelist delete
+   */
+  export type ChallengeUserWhitelistDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
+    /**
+     * Filter which ChallengeUserWhitelist to delete.
+     */
+    where: ChallengeUserWhitelistWhereUniqueInput
+  }
+
+  /**
+   * ChallengeUserWhitelist deleteMany
+   */
+  export type ChallengeUserWhitelistDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which ChallengeUserWhitelists to delete
+     */
+    where?: ChallengeUserWhitelistWhereInput
+    /**
+     * Limit how many ChallengeUserWhitelists to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * ChallengeUserWhitelist without action
+   */
+  export type ChallengeUserWhitelistDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the ChallengeUserWhitelist
+     */
+    select?: ChallengeUserWhitelistSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the ChallengeUserWhitelist
+     */
+    omit?: ChallengeUserWhitelistOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: ChallengeUserWhitelistInclude<ExtArgs> | null
   }
 
 
@@ -34270,6 +35417,14 @@ export namespace Prisma {
   export type ChallengeScalarFieldEnum = (typeof ChallengeScalarFieldEnum)[keyof typeof ChallengeScalarFieldEnum]
 
 
+  export const ChallengeUserWhitelistScalarFieldEnum: {
+    challengeId: 'challengeId',
+    userId: 'userId'
+  };
+
+  export type ChallengeUserWhitelistScalarFieldEnum = (typeof ChallengeUserWhitelistScalarFieldEnum)[keyof typeof ChallengeUserWhitelistScalarFieldEnum]
+
+
   export const ChallengeTypeScalarFieldEnum: {
     id: 'id',
     name: 'name',
@@ -34716,6 +35871,14 @@ export namespace Prisma {
   };
 
   export type ChallengeOrderByRelevanceFieldEnum = (typeof ChallengeOrderByRelevanceFieldEnum)[keyof typeof ChallengeOrderByRelevanceFieldEnum]
+
+
+  export const ChallengeUserWhitelistOrderByRelevanceFieldEnum: {
+    challengeId: 'challengeId',
+    userId: 'userId'
+  };
+
+  export type ChallengeUserWhitelistOrderByRelevanceFieldEnum = (typeof ChallengeUserWhitelistOrderByRelevanceFieldEnum)[keyof typeof ChallengeUserWhitelistOrderByRelevanceFieldEnum]
 
 
   export const ChallengeTypeOrderByRelevanceFieldEnum: {
@@ -35227,6 +36390,7 @@ export namespace Prisma {
     skills?: ChallengeSkillListRelationFilter
     auditLogs?: AuditLogListRelationFilter
     memberAccesses?: MemberChallengeAccessListRelationFilter
+    userWhitelist?: ChallengeUserWhitelistListRelationFilter
     type?: XOR<ChallengeTypeScalarRelationFilter, ChallengeTypeWhereInput>
     track?: XOR<ChallengeTrackScalarRelationFilter, ChallengeTrackWhereInput>
     timelineTemplate?: XOR<TimelineTemplateNullableScalarRelationFilter, TimelineTemplateWhereInput> | null
@@ -35282,6 +36446,7 @@ export namespace Prisma {
     skills?: ChallengeSkillOrderByRelationAggregateInput
     auditLogs?: AuditLogOrderByRelationAggregateInput
     memberAccesses?: MemberChallengeAccessOrderByRelationAggregateInput
+    userWhitelist?: ChallengeUserWhitelistOrderByRelationAggregateInput
     type?: ChallengeTypeOrderByWithRelationInput
     track?: ChallengeTrackOrderByWithRelationInput
     timelineTemplate?: TimelineTemplateOrderByWithRelationInput
@@ -35341,6 +36506,7 @@ export namespace Prisma {
     skills?: ChallengeSkillListRelationFilter
     auditLogs?: AuditLogListRelationFilter
     memberAccesses?: MemberChallengeAccessListRelationFilter
+    userWhitelist?: ChallengeUserWhitelistListRelationFilter
     type?: XOR<ChallengeTypeScalarRelationFilter, ChallengeTypeWhereInput>
     track?: XOR<ChallengeTrackScalarRelationFilter, ChallengeTrackWhereInput>
     timelineTemplate?: XOR<TimelineTemplateNullableScalarRelationFilter, TimelineTemplateWhereInput> | null
@@ -35426,6 +36592,48 @@ export namespace Prisma {
     createdBy?: StringWithAggregatesFilter<"Challenge"> | string
     updatedAt?: DateTimeWithAggregatesFilter<"Challenge"> | Date | string
     updatedBy?: StringWithAggregatesFilter<"Challenge"> | string
+  }
+
+  export type ChallengeUserWhitelistWhereInput = {
+    AND?: ChallengeUserWhitelistWhereInput | ChallengeUserWhitelistWhereInput[]
+    OR?: ChallengeUserWhitelistWhereInput[]
+    NOT?: ChallengeUserWhitelistWhereInput | ChallengeUserWhitelistWhereInput[]
+    challengeId?: StringFilter<"ChallengeUserWhitelist"> | string
+    userId?: StringFilter<"ChallengeUserWhitelist"> | string
+    challenge?: XOR<ChallengeScalarRelationFilter, ChallengeWhereInput>
+  }
+
+  export type ChallengeUserWhitelistOrderByWithRelationInput = {
+    challengeId?: SortOrder
+    userId?: SortOrder
+    challenge?: ChallengeOrderByWithRelationInput
+    _relevance?: ChallengeUserWhitelistOrderByRelevanceInput
+  }
+
+  export type ChallengeUserWhitelistWhereUniqueInput = Prisma.AtLeast<{
+    challengeId_userId?: ChallengeUserWhitelistChallengeIdUserIdCompoundUniqueInput
+    AND?: ChallengeUserWhitelistWhereInput | ChallengeUserWhitelistWhereInput[]
+    OR?: ChallengeUserWhitelistWhereInput[]
+    NOT?: ChallengeUserWhitelistWhereInput | ChallengeUserWhitelistWhereInput[]
+    challengeId?: StringFilter<"ChallengeUserWhitelist"> | string
+    userId?: StringFilter<"ChallengeUserWhitelist"> | string
+    challenge?: XOR<ChallengeScalarRelationFilter, ChallengeWhereInput>
+  }, "challengeId_userId">
+
+  export type ChallengeUserWhitelistOrderByWithAggregationInput = {
+    challengeId?: SortOrder
+    userId?: SortOrder
+    _count?: ChallengeUserWhitelistCountOrderByAggregateInput
+    _max?: ChallengeUserWhitelistMaxOrderByAggregateInput
+    _min?: ChallengeUserWhitelistMinOrderByAggregateInput
+  }
+
+  export type ChallengeUserWhitelistScalarWhereWithAggregatesInput = {
+    AND?: ChallengeUserWhitelistScalarWhereWithAggregatesInput | ChallengeUserWhitelistScalarWhereWithAggregatesInput[]
+    OR?: ChallengeUserWhitelistScalarWhereWithAggregatesInput[]
+    NOT?: ChallengeUserWhitelistScalarWhereWithAggregatesInput | ChallengeUserWhitelistScalarWhereWithAggregatesInput[]
+    challengeId?: StringWithAggregatesFilter<"ChallengeUserWhitelist"> | string
+    userId?: StringWithAggregatesFilter<"ChallengeUserWhitelist"> | string
   }
 
   export type ChallengeTypeWhereInput = {
@@ -37591,6 +38799,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -37646,6 +38855,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeUpdateInput = {
@@ -37695,6 +38905,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -37750,6 +38961,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateManyInput = {
@@ -37858,6 +39070,40 @@ export namespace Prisma {
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedBy?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type ChallengeUserWhitelistCreateInput = {
+    userId: string
+    challenge: ChallengeCreateNestedOneWithoutUserWhitelistInput
+  }
+
+  export type ChallengeUserWhitelistUncheckedCreateInput = {
+    challengeId: string
+    userId: string
+  }
+
+  export type ChallengeUserWhitelistUpdateInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+    challenge?: ChallengeUpdateOneRequiredWithoutUserWhitelistNestedInput
+  }
+
+  export type ChallengeUserWhitelistUncheckedUpdateInput = {
+    challengeId?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type ChallengeUserWhitelistCreateManyInput = {
+    challengeId: string
+    userId: string
+  }
+
+  export type ChallengeUserWhitelistUpdateManyMutationInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type ChallengeUserWhitelistUncheckedUpdateManyInput = {
+    challengeId?: StringFieldUpdateOperationsInput | string
+    userId?: StringFieldUpdateOperationsInput | string
   }
 
   export type ChallengeTypeCreateInput = {
@@ -40352,6 +41598,12 @@ export namespace Prisma {
     none?: MemberChallengeAccessWhereInput
   }
 
+  export type ChallengeUserWhitelistListRelationFilter = {
+    every?: ChallengeUserWhitelistWhereInput
+    some?: ChallengeUserWhitelistWhereInput
+    none?: ChallengeUserWhitelistWhereInput
+  }
+
   export type ChallengeTypeScalarRelationFilter = {
     is?: ChallengeTypeWhereInput
     isNot?: ChallengeTypeWhereInput
@@ -40417,6 +41669,10 @@ export namespace Prisma {
   }
 
   export type MemberChallengeAccessOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type ChallengeUserWhitelistOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -40681,6 +41937,37 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
+  export type ChallengeScalarRelationFilter = {
+    is?: ChallengeWhereInput
+    isNot?: ChallengeWhereInput
+  }
+
+  export type ChallengeUserWhitelistOrderByRelevanceInput = {
+    fields: ChallengeUserWhitelistOrderByRelevanceFieldEnum | ChallengeUserWhitelistOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type ChallengeUserWhitelistChallengeIdUserIdCompoundUniqueInput = {
+    challengeId: string
+    userId: string
+  }
+
+  export type ChallengeUserWhitelistCountOrderByAggregateInput = {
+    challengeId?: SortOrder
+    userId?: SortOrder
+  }
+
+  export type ChallengeUserWhitelistMaxOrderByAggregateInput = {
+    challengeId?: SortOrder
+    userId?: SortOrder
+  }
+
+  export type ChallengeUserWhitelistMinOrderByAggregateInput = {
+    challengeId?: SortOrder
+    userId?: SortOrder
+  }
+
   export type ChallengeListRelationFilter = {
     every?: ChallengeWhereInput
     some?: ChallengeWhereInput
@@ -40935,11 +42222,6 @@ export namespace Prisma {
     createdAt?: SortOrder
     createdBy?: SortOrder
     memberId?: SortOrder
-  }
-
-  export type ChallengeScalarRelationFilter = {
-    is?: ChallengeWhereInput
-    isNot?: ChallengeWhereInput
   }
 
   export type AttachmentOrderByRelevanceInput = {
@@ -42295,6 +43577,13 @@ export namespace Prisma {
     connect?: MemberChallengeAccessWhereUniqueInput | MemberChallengeAccessWhereUniqueInput[]
   }
 
+  export type ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput = {
+    create?: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput> | ChallengeUserWhitelistCreateWithoutChallengeInput[] | ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput[]
+    connectOrCreate?: ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput | ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput[]
+    createMany?: ChallengeUserWhitelistCreateManyChallengeInputEnvelope
+    connect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+  }
+
   export type ChallengeTypeCreateNestedOneWithoutChallengesInput = {
     create?: XOR<ChallengeTypeCreateWithoutChallengesInput, ChallengeTypeUncheckedCreateWithoutChallengesInput>
     connectOrCreate?: ChallengeTypeCreateOrConnectWithoutChallengesInput
@@ -42410,6 +43699,13 @@ export namespace Prisma {
 
   export type MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput = {
     connect?: MemberChallengeAccessWhereUniqueInput | MemberChallengeAccessWhereUniqueInput[]
+  }
+
+  export type ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput = {
+    create?: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput> | ChallengeUserWhitelistCreateWithoutChallengeInput[] | ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput[]
+    connectOrCreate?: ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput | ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput[]
+    createMany?: ChallengeUserWhitelistCreateManyChallengeInputEnvelope
+    connect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -42669,6 +43965,20 @@ export namespace Prisma {
     deleteMany?: MemberChallengeAccessScalarWhereInput | MemberChallengeAccessScalarWhereInput[]
   }
 
+  export type ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput = {
+    create?: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput> | ChallengeUserWhitelistCreateWithoutChallengeInput[] | ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput[]
+    connectOrCreate?: ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput | ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput[]
+    upsert?: ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput | ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput[]
+    createMany?: ChallengeUserWhitelistCreateManyChallengeInputEnvelope
+    set?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    disconnect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    delete?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    connect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    update?: ChallengeUserWhitelistUpdateWithWhereUniqueWithoutChallengeInput | ChallengeUserWhitelistUpdateWithWhereUniqueWithoutChallengeInput[]
+    updateMany?: ChallengeUserWhitelistUpdateManyWithWhereWithoutChallengeInput | ChallengeUserWhitelistUpdateManyWithWhereWithoutChallengeInput[]
+    deleteMany?: ChallengeUserWhitelistScalarWhereInput | ChallengeUserWhitelistScalarWhereInput[]
+  }
+
   export type ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput = {
     create?: XOR<ChallengeTypeCreateWithoutChallengesInput, ChallengeTypeUncheckedCreateWithoutChallengesInput>
     connectOrCreate?: ChallengeTypeCreateOrConnectWithoutChallengesInput
@@ -42887,6 +44197,34 @@ export namespace Prisma {
     update?: MemberChallengeAccessUpdateWithWhereUniqueWithoutChallengeInput | MemberChallengeAccessUpdateWithWhereUniqueWithoutChallengeInput[]
     updateMany?: MemberChallengeAccessUpdateManyWithWhereWithoutChallengeInput | MemberChallengeAccessUpdateManyWithWhereWithoutChallengeInput[]
     deleteMany?: MemberChallengeAccessScalarWhereInput | MemberChallengeAccessScalarWhereInput[]
+  }
+
+  export type ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput = {
+    create?: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput> | ChallengeUserWhitelistCreateWithoutChallengeInput[] | ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput[]
+    connectOrCreate?: ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput | ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput[]
+    upsert?: ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput | ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput[]
+    createMany?: ChallengeUserWhitelistCreateManyChallengeInputEnvelope
+    set?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    disconnect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    delete?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    connect?: ChallengeUserWhitelistWhereUniqueInput | ChallengeUserWhitelistWhereUniqueInput[]
+    update?: ChallengeUserWhitelistUpdateWithWhereUniqueWithoutChallengeInput | ChallengeUserWhitelistUpdateWithWhereUniqueWithoutChallengeInput[]
+    updateMany?: ChallengeUserWhitelistUpdateManyWithWhereWithoutChallengeInput | ChallengeUserWhitelistUpdateManyWithWhereWithoutChallengeInput[]
+    deleteMany?: ChallengeUserWhitelistScalarWhereInput | ChallengeUserWhitelistScalarWhereInput[]
+  }
+
+  export type ChallengeCreateNestedOneWithoutUserWhitelistInput = {
+    create?: XOR<ChallengeCreateWithoutUserWhitelistInput, ChallengeUncheckedCreateWithoutUserWhitelistInput>
+    connectOrCreate?: ChallengeCreateOrConnectWithoutUserWhitelistInput
+    connect?: ChallengeWhereUniqueInput
+  }
+
+  export type ChallengeUpdateOneRequiredWithoutUserWhitelistNestedInput = {
+    create?: XOR<ChallengeCreateWithoutUserWhitelistInput, ChallengeUncheckedCreateWithoutUserWhitelistInput>
+    connectOrCreate?: ChallengeCreateOrConnectWithoutUserWhitelistInput
+    upsert?: ChallengeUpsertWithoutUserWhitelistInput
+    connect?: ChallengeWhereUniqueInput
+    update?: XOR<XOR<ChallengeUpdateToOneWithWhereWithoutUserWhitelistInput, ChallengeUpdateWithoutUserWhitelistInput>, ChallengeUncheckedUpdateWithoutUserWhitelistInput>
   }
 
   export type ChallengeCreateNestedManyWithoutTypeInput = {
@@ -44830,6 +46168,24 @@ export namespace Prisma {
     challenge?: XOR<ChallengeScalarRelationFilter, ChallengeWhereInput>
   }
 
+  export type ChallengeUserWhitelistCreateWithoutChallengeInput = {
+    userId: string
+  }
+
+  export type ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput = {
+    userId: string
+  }
+
+  export type ChallengeUserWhitelistCreateOrConnectWithoutChallengeInput = {
+    where: ChallengeUserWhitelistWhereUniqueInput
+    create: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput>
+  }
+
+  export type ChallengeUserWhitelistCreateManyChallengeInputEnvelope = {
+    data: ChallengeUserWhitelistCreateManyChallengeInput | ChallengeUserWhitelistCreateManyChallengeInput[]
+    skipDuplicates?: boolean
+  }
+
   export type ChallengeTypeCreateWithoutChallengesInput = {
     id?: string
     name: string
@@ -45431,6 +46787,30 @@ export namespace Prisma {
     memberId?: StringFilter<"MemberChallengeAccess"> | string
   }
 
+  export type ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput = {
+    where: ChallengeUserWhitelistWhereUniqueInput
+    update: XOR<ChallengeUserWhitelistUpdateWithoutChallengeInput, ChallengeUserWhitelistUncheckedUpdateWithoutChallengeInput>
+    create: XOR<ChallengeUserWhitelistCreateWithoutChallengeInput, ChallengeUserWhitelistUncheckedCreateWithoutChallengeInput>
+  }
+
+  export type ChallengeUserWhitelistUpdateWithWhereUniqueWithoutChallengeInput = {
+    where: ChallengeUserWhitelistWhereUniqueInput
+    data: XOR<ChallengeUserWhitelistUpdateWithoutChallengeInput, ChallengeUserWhitelistUncheckedUpdateWithoutChallengeInput>
+  }
+
+  export type ChallengeUserWhitelistUpdateManyWithWhereWithoutChallengeInput = {
+    where: ChallengeUserWhitelistScalarWhereInput
+    data: XOR<ChallengeUserWhitelistUpdateManyMutationInput, ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeInput>
+  }
+
+  export type ChallengeUserWhitelistScalarWhereInput = {
+    AND?: ChallengeUserWhitelistScalarWhereInput | ChallengeUserWhitelistScalarWhereInput[]
+    OR?: ChallengeUserWhitelistScalarWhereInput[]
+    NOT?: ChallengeUserWhitelistScalarWhereInput | ChallengeUserWhitelistScalarWhereInput[]
+    challengeId?: StringFilter<"ChallengeUserWhitelist"> | string
+    userId?: StringFilter<"ChallengeUserWhitelist"> | string
+  }
+
   export type ChallengeTypeUpsertWithoutChallengesInput = {
     update: XOR<ChallengeTypeUpdateWithoutChallengesInput, ChallengeTypeUncheckedUpdateWithoutChallengesInput>
     create: XOR<ChallengeTypeCreateWithoutChallengesInput, ChallengeTypeUncheckedCreateWithoutChallengesInput>
@@ -45560,6 +46940,230 @@ export namespace Prisma {
     DefaultChallengeReviewer?: DefaultChallengeReviewerUncheckedUpdateManyWithoutTimelineTemplateNestedInput
   }
 
+  export type ChallengeCreateWithoutUserWhitelistInput = {
+    id?: string
+    name: string
+    description?: string | null
+    privateDescription?: string | null
+    challengeSource?: string | null
+    descriptionFormat?: string | null
+    projectId?: number | null
+    overviewTotalPrizes?: number | null
+    numOfRegistrants?: number
+    numOfSubmissions?: number
+    numOfCheckpointSubmissions?: number
+    currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
+    wiproAllowed?: boolean
+    funChallenge?: boolean
+    tags?: ChallengeCreatetagsInput | string[]
+    groups?: ChallengeCreategroupsInput | string[]
+    taskIsTask?: boolean
+    taskIsAssigned?: boolean
+    taskMemberId?: string | null
+    submissionStartDate?: Date | string | null
+    submissionEndDate?: Date | string | null
+    registrationStartDate?: Date | string | null
+    registrationEndDate?: Date | string | null
+    startDate?: Date | string | null
+    endDate?: Date | string | null
+    legacyId?: number | null
+    status?: $Enums.ChallengeStatusEnum
+    createdAt?: Date | string
+    createdBy: string
+    updatedAt?: Date | string
+    updatedBy: string
+    billingRecord?: ChallengeBillingCreateNestedOneWithoutChallengeInput
+    legacyRecord?: ChallengeLegacyCreateNestedOneWithoutChallengeInput
+    constraintRecord?: ChallengeConstraintCreateNestedOneWithoutChallengeInput
+    events?: ChallengeEventCreateNestedManyWithoutChallengeInput
+    discussions?: ChallengeDiscussionCreateNestedManyWithoutChallengeInput
+    metadata?: ChallengeMetadataCreateNestedManyWithoutChallengeInput
+    phases?: ChallengePhaseCreateNestedManyWithoutChallengeInput
+    prizeSets?: ChallengePrizeSetCreateNestedManyWithoutChallengeInput
+    reviewers?: ChallengeReviewerCreateNestedManyWithoutChallengeInput
+    winners?: ChallengeWinnerCreateNestedManyWithoutChallengeInput
+    attachments?: AttachmentCreateNestedManyWithoutChallengeInput
+    terms?: ChallengeTermCreateNestedManyWithoutChallengeInput
+    skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
+    auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
+    memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    type: ChallengeTypeCreateNestedOneWithoutChallengesInput
+    track: ChallengeTrackCreateNestedOneWithoutChallengesInput
+    timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
+  }
+
+  export type ChallengeUncheckedCreateWithoutUserWhitelistInput = {
+    id?: string
+    name: string
+    description?: string | null
+    privateDescription?: string | null
+    challengeSource?: string | null
+    descriptionFormat?: string | null
+    projectId?: number | null
+    typeId: string
+    trackId: string
+    timelineTemplateId?: string | null
+    overviewTotalPrizes?: number | null
+    numOfRegistrants?: number
+    numOfSubmissions?: number
+    numOfCheckpointSubmissions?: number
+    currentPhaseNames?: ChallengeCreatecurrentPhaseNamesInput | string[]
+    wiproAllowed?: boolean
+    funChallenge?: boolean
+    tags?: ChallengeCreatetagsInput | string[]
+    groups?: ChallengeCreategroupsInput | string[]
+    taskIsTask?: boolean
+    taskIsAssigned?: boolean
+    taskMemberId?: string | null
+    submissionStartDate?: Date | string | null
+    submissionEndDate?: Date | string | null
+    registrationStartDate?: Date | string | null
+    registrationEndDate?: Date | string | null
+    startDate?: Date | string | null
+    endDate?: Date | string | null
+    legacyId?: number | null
+    status?: $Enums.ChallengeStatusEnum
+    createdAt?: Date | string
+    createdBy: string
+    updatedAt?: Date | string
+    updatedBy: string
+    billingRecord?: ChallengeBillingUncheckedCreateNestedOneWithoutChallengeInput
+    legacyRecord?: ChallengeLegacyUncheckedCreateNestedOneWithoutChallengeInput
+    constraintRecord?: ChallengeConstraintUncheckedCreateNestedOneWithoutChallengeInput
+    events?: ChallengeEventUncheckedCreateNestedManyWithoutChallengeInput
+    discussions?: ChallengeDiscussionUncheckedCreateNestedManyWithoutChallengeInput
+    metadata?: ChallengeMetadataUncheckedCreateNestedManyWithoutChallengeInput
+    phases?: ChallengePhaseUncheckedCreateNestedManyWithoutChallengeInput
+    prizeSets?: ChallengePrizeSetUncheckedCreateNestedManyWithoutChallengeInput
+    reviewers?: ChallengeReviewerUncheckedCreateNestedManyWithoutChallengeInput
+    winners?: ChallengeWinnerUncheckedCreateNestedManyWithoutChallengeInput
+    attachments?: AttachmentUncheckedCreateNestedManyWithoutChallengeInput
+    terms?: ChallengeTermUncheckedCreateNestedManyWithoutChallengeInput
+    skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
+    auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
+    memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+  }
+
+  export type ChallengeCreateOrConnectWithoutUserWhitelistInput = {
+    where: ChallengeWhereUniqueInput
+    create: XOR<ChallengeCreateWithoutUserWhitelistInput, ChallengeUncheckedCreateWithoutUserWhitelistInput>
+  }
+
+  export type ChallengeUpsertWithoutUserWhitelistInput = {
+    update: XOR<ChallengeUpdateWithoutUserWhitelistInput, ChallengeUncheckedUpdateWithoutUserWhitelistInput>
+    create: XOR<ChallengeCreateWithoutUserWhitelistInput, ChallengeUncheckedCreateWithoutUserWhitelistInput>
+    where?: ChallengeWhereInput
+  }
+
+  export type ChallengeUpdateToOneWithWhereWithoutUserWhitelistInput = {
+    where?: ChallengeWhereInput
+    data: XOR<ChallengeUpdateWithoutUserWhitelistInput, ChallengeUncheckedUpdateWithoutUserWhitelistInput>
+  }
+
+  export type ChallengeUpdateWithoutUserWhitelistInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    privateDescription?: NullableStringFieldUpdateOperationsInput | string | null
+    challengeSource?: NullableStringFieldUpdateOperationsInput | string | null
+    descriptionFormat?: NullableStringFieldUpdateOperationsInput | string | null
+    projectId?: NullableIntFieldUpdateOperationsInput | number | null
+    overviewTotalPrizes?: NullableFloatFieldUpdateOperationsInput | number | null
+    numOfRegistrants?: IntFieldUpdateOperationsInput | number
+    numOfSubmissions?: IntFieldUpdateOperationsInput | number
+    numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
+    currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
+    wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
+    tags?: ChallengeUpdatetagsInput | string[]
+    groups?: ChallengeUpdategroupsInput | string[]
+    taskIsTask?: BoolFieldUpdateOperationsInput | boolean
+    taskIsAssigned?: BoolFieldUpdateOperationsInput | boolean
+    taskMemberId?: NullableStringFieldUpdateOperationsInput | string | null
+    submissionStartDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    submissionEndDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    registrationStartDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    registrationEndDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    startDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdBy?: StringFieldUpdateOperationsInput | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedBy?: StringFieldUpdateOperationsInput | string
+    billingRecord?: ChallengeBillingUpdateOneWithoutChallengeNestedInput
+    legacyRecord?: ChallengeLegacyUpdateOneWithoutChallengeNestedInput
+    constraintRecord?: ChallengeConstraintUpdateOneWithoutChallengeNestedInput
+    events?: ChallengeEventUpdateManyWithoutChallengeNestedInput
+    discussions?: ChallengeDiscussionUpdateManyWithoutChallengeNestedInput
+    metadata?: ChallengeMetadataUpdateManyWithoutChallengeNestedInput
+    phases?: ChallengePhaseUpdateManyWithoutChallengeNestedInput
+    prizeSets?: ChallengePrizeSetUpdateManyWithoutChallengeNestedInput
+    reviewers?: ChallengeReviewerUpdateManyWithoutChallengeNestedInput
+    winners?: ChallengeWinnerUpdateManyWithoutChallengeNestedInput
+    attachments?: AttachmentUpdateManyWithoutChallengeNestedInput
+    terms?: ChallengeTermUpdateManyWithoutChallengeNestedInput
+    skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
+    auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
+    memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
+    track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
+    timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
+  }
+
+  export type ChallengeUncheckedUpdateWithoutUserWhitelistInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    privateDescription?: NullableStringFieldUpdateOperationsInput | string | null
+    challengeSource?: NullableStringFieldUpdateOperationsInput | string | null
+    descriptionFormat?: NullableStringFieldUpdateOperationsInput | string | null
+    projectId?: NullableIntFieldUpdateOperationsInput | number | null
+    typeId?: StringFieldUpdateOperationsInput | string
+    trackId?: StringFieldUpdateOperationsInput | string
+    timelineTemplateId?: NullableStringFieldUpdateOperationsInput | string | null
+    overviewTotalPrizes?: NullableFloatFieldUpdateOperationsInput | number | null
+    numOfRegistrants?: IntFieldUpdateOperationsInput | number
+    numOfSubmissions?: IntFieldUpdateOperationsInput | number
+    numOfCheckpointSubmissions?: IntFieldUpdateOperationsInput | number
+    currentPhaseNames?: ChallengeUpdatecurrentPhaseNamesInput | string[]
+    wiproAllowed?: BoolFieldUpdateOperationsInput | boolean
+    funChallenge?: BoolFieldUpdateOperationsInput | boolean
+    tags?: ChallengeUpdatetagsInput | string[]
+    groups?: ChallengeUpdategroupsInput | string[]
+    taskIsTask?: BoolFieldUpdateOperationsInput | boolean
+    taskIsAssigned?: BoolFieldUpdateOperationsInput | boolean
+    taskMemberId?: NullableStringFieldUpdateOperationsInput | string | null
+    submissionStartDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    submissionEndDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    registrationStartDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    registrationEndDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    startDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    legacyId?: NullableIntFieldUpdateOperationsInput | number | null
+    status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdBy?: StringFieldUpdateOperationsInput | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedBy?: StringFieldUpdateOperationsInput | string
+    billingRecord?: ChallengeBillingUncheckedUpdateOneWithoutChallengeNestedInput
+    legacyRecord?: ChallengeLegacyUncheckedUpdateOneWithoutChallengeNestedInput
+    constraintRecord?: ChallengeConstraintUncheckedUpdateOneWithoutChallengeNestedInput
+    events?: ChallengeEventUncheckedUpdateManyWithoutChallengeNestedInput
+    discussions?: ChallengeDiscussionUncheckedUpdateManyWithoutChallengeNestedInput
+    metadata?: ChallengeMetadataUncheckedUpdateManyWithoutChallengeNestedInput
+    phases?: ChallengePhaseUncheckedUpdateManyWithoutChallengeNestedInput
+    prizeSets?: ChallengePrizeSetUncheckedUpdateManyWithoutChallengeNestedInput
+    reviewers?: ChallengeReviewerUncheckedUpdateManyWithoutChallengeNestedInput
+    winners?: ChallengeWinnerUncheckedUpdateManyWithoutChallengeNestedInput
+    attachments?: AttachmentUncheckedUpdateManyWithoutChallengeNestedInput
+    terms?: ChallengeTermUncheckedUpdateManyWithoutChallengeNestedInput
+    skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
+    auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
+    memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+  }
+
   export type ChallengeCreateWithoutTypeInput = {
     id?: string
     name: string
@@ -45607,6 +47211,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
   }
@@ -45660,6 +47265,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutTypeInput = {
@@ -45931,6 +47537,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
   }
@@ -45984,6 +47591,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutTrackInput = {
@@ -46414,6 +48022,7 @@ export namespace Prisma {
     terms?: ChallengeTermCreateNestedManyWithoutChallengeInput
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -46468,6 +48077,7 @@ export namespace Prisma {
     terms?: ChallengeTermUncheckedCreateNestedManyWithoutChallengeInput
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutAuditLogsInput = {
@@ -46532,6 +48142,7 @@ export namespace Prisma {
     terms?: ChallengeTermUpdateManyWithoutChallengeNestedInput
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -46586,6 +48197,7 @@ export namespace Prisma {
     terms?: ChallengeTermUncheckedUpdateManyWithoutChallengeNestedInput
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutAttachmentsInput = {
@@ -46634,6 +48246,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -46688,6 +48301,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutAttachmentsInput = {
@@ -46752,6 +48366,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -46806,6 +48421,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutMetadataInput = {
@@ -46854,6 +48470,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -46908,6 +48525,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutMetadataInput = {
@@ -46972,6 +48590,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -47026,6 +48645,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengePrizeSetCreateWithoutPrizesInput = {
@@ -47134,6 +48754,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -47188,6 +48809,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutWinnersInput = {
@@ -47252,6 +48874,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -47306,6 +48929,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutTermsInput = {
@@ -47354,6 +48978,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -47408,6 +49033,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutTermsInput = {
@@ -47472,6 +49098,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -47526,6 +49153,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutSkillsInput = {
@@ -47574,6 +49202,7 @@ export namespace Prisma {
     terms?: ChallengeTermCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -47628,6 +49257,7 @@ export namespace Prisma {
     terms?: ChallengeTermUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutSkillsInput = {
@@ -47692,6 +49322,7 @@ export namespace Prisma {
     terms?: ChallengeTermUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -47746,6 +49377,7 @@ export namespace Prisma {
     terms?: ChallengeTermUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutBillingRecordInput = {
@@ -47794,6 +49426,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -47848,6 +49481,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutBillingRecordInput = {
@@ -47912,6 +49546,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -47966,6 +49601,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutLegacyRecordInput = {
@@ -48014,6 +49650,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -48068,6 +49705,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutLegacyRecordInput = {
@@ -48132,6 +49770,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -48186,6 +49825,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutEventsInput = {
@@ -48234,6 +49874,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -48288,6 +49929,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutEventsInput = {
@@ -48352,6 +49994,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -48406,6 +50049,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutDiscussionsInput = {
@@ -48454,6 +50098,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -48508,6 +50153,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutDiscussionsInput = {
@@ -48602,6 +50248,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -48656,6 +50303,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeDiscussionOptionUpsertWithWhereUniqueWithoutDiscussionInput = {
@@ -48806,6 +50454,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -48860,6 +50509,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutConstraintRecordInput = {
@@ -48924,6 +50574,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -48978,6 +50629,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengePhaseCreateWithoutPhaseInput = {
@@ -49250,6 +50902,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -49304,6 +50957,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutPhasesInput = {
@@ -49431,6 +51085,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -49485,6 +51140,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type PhaseUpsertWithoutChallengePhasesInput = {
@@ -49696,6 +51352,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -49750,6 +51407,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutPrizeSetsInput = {
@@ -49845,6 +51503,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -49899,6 +51558,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeCreateWithoutReviewersInput = {
@@ -49947,6 +51607,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
     timelineTemplate?: TimelineTemplateCreateNestedOneWithoutChallengesInput
@@ -50001,6 +51662,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutReviewersInput = {
@@ -50098,6 +51760,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
@@ -50152,6 +51815,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type PhaseUpsertWithoutChallengeReviewerInput = {
@@ -50616,6 +52280,7 @@ export namespace Prisma {
     skills?: ChallengeSkillCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistCreateNestedManyWithoutChallengeInput
     type: ChallengeTypeCreateNestedOneWithoutChallengesInput
     track: ChallengeTrackCreateNestedOneWithoutChallengesInput
   }
@@ -50669,6 +52334,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedCreateNestedManyWithoutChallengeInput
     auditLogs?: AuditLogUncheckedCreateNestedManyWithoutChallengeInput
     memberAccesses?: MemberChallengeAccessUncheckedCreateNestedManyWithoutChallengeInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedCreateNestedManyWithoutChallengeInput
   }
 
   export type ChallengeCreateOrConnectWithoutTimelineTemplateInput = {
@@ -51015,6 +52681,10 @@ export namespace Prisma {
     createdAt?: Date | string
     createdBy: string
     memberId?: string | null
+  }
+
+  export type ChallengeUserWhitelistCreateManyChallengeInput = {
+    userId: string
   }
 
   export type ChallengeEventUpdateWithoutChallengeInput = {
@@ -51438,6 +53108,18 @@ export namespace Prisma {
     memberId?: StringFieldUpdateOperationsInput | string
   }
 
+  export type ChallengeUserWhitelistUpdateWithoutChallengeInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type ChallengeUserWhitelistUncheckedUpdateWithoutChallengeInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeInput = {
+    userId?: StringFieldUpdateOperationsInput | string
+  }
+
   export type ChallengeCreateManyTypeInput = {
     id?: string
     name: string
@@ -51553,6 +53235,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
   }
@@ -51606,6 +53289,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeUncheckedUpdateManyWithoutTypeInput = {
@@ -51855,6 +53539,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     timelineTemplate?: TimelineTemplateUpdateOneWithoutChallengesNestedInput
   }
@@ -51908,6 +53593,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeUncheckedUpdateManyWithoutTrackInput = {
@@ -52588,6 +54274,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUpdateManyWithoutChallengeNestedInput
     type?: ChallengeTypeUpdateOneRequiredWithoutChallengesNestedInput
     track?: ChallengeTrackUpdateOneRequiredWithoutChallengesNestedInput
   }
@@ -52641,6 +54328,7 @@ export namespace Prisma {
     skills?: ChallengeSkillUncheckedUpdateManyWithoutChallengeNestedInput
     auditLogs?: AuditLogUncheckedUpdateManyWithoutChallengeNestedInput
     memberAccesses?: MemberChallengeAccessUncheckedUpdateManyWithoutChallengeNestedInput
+    userWhitelist?: ChallengeUserWhitelistUncheckedUpdateManyWithoutChallengeNestedInput
   }
 
   export type ChallengeUncheckedUpdateManyWithoutTimelineTemplateInput = {

@@ -78,6 +78,40 @@ describe('attachment service unit tests', () => {
       should.equal(attachmentContent.compare(result.data), 0)
     })
 
+    it('download attachment enforces challenge user whitelist for interactive users', async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: 'allowed-user'
+        }
+      })
+
+      try {
+        try {
+          await service.downloadAttachment(
+            { roles: ['administrator'], userId: 'blocked-user' },
+            data.challenge.id,
+            id
+          )
+        } catch (e) {
+          should.equal(e.name, 'ForbiddenError')
+
+          const result = await service.downloadAttachment(
+            { isMachine: true, userId: 'machine-user' },
+            data.challenge.id,
+            id
+          )
+          should.equal(result.fileName, 'attachment.txt')
+          return
+        }
+        throw new Error('should not reach here')
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id }
+        })
+      }
+    })
+
     it('download attachment - forbidden', async () => {
       try {
         await service.downloadAttachment({ roles: ['user'], userId: 678678 }, data.taskChallenge.id, id2)

@@ -137,6 +137,7 @@ model Challenge {
   skills         ChallengeSkill[]
   auditLogs      AuditLog[]
   memberAccesses MemberChallengeAccess[]
+  userWhitelist  ChallengeUserWhitelist[]
 
   // Relation to ChallengeType (FK: typeId)
   type  ChallengeType  @relation(fields: [typeId], references: [id])
@@ -169,6 +170,21 @@ model Challenge {
   @@index([status, typeId, trackId, createdAt(sort: Desc)], map: "challenge_status_type_track_created_at_idx")
   @@index([legacyId])
   @@index([projectId, status])
+}
+
+//////////////////////////////////////////
+// Challenge user whitelist - member/challenge pairs allowed to access restricted challenges
+//////////////////////////////////////////
+
+model ChallengeUserWhitelist {
+  challengeId String
+  userId      String
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@id([challengeId, userId])
+  @@index([challengeId])
+  @@index([userId])
 }
 
 //////////////////////////////////////////

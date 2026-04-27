@@ -8,12 +8,14 @@ if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
 
 require("../../app-bootstrap");
 const _ = require("lodash");
+const axios = require("axios");
 const config = require("config");
 const { v4: uuid } = require("uuid");
 const chai = require("chai");
 const constants = require("../../app-constants");
 const service = require("../../src/services/ChallengeService");
 const helper = require("../../src/common/helper");
+const m2mHelper = require("../../src/common/m2m-helper");
 const challengeHelper = require("../../src/common/challenge-helper");
 const projectHelper = require("../../src/common/project-helper");
 const testHelper = require("../testHelper");
@@ -582,6 +584,158 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("get challenge enforces challenge user whitelist for interactive users", async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: createdChallengeData.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        const allowed = await service.getChallenge(
+          { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+          createdChallengeData.id,
+        );
+        should.equal(allowed.id, createdChallengeData.id);
+
+        const machine = await service.getChallenge(
+          { isMachine: true, userId: "machine-user" },
+          createdChallengeData.id,
+        );
+        should.equal(machine.id, createdChallengeData.id);
+
+        try {
+          await service.getChallenge(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            createdChallengeData.id,
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: createdChallengeData.id },
+        });
+      }
+    });
+
+    it("get challenge statistics enforces challenge user whitelist before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        try {
+          await service.getChallengeStatistics(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            data.challenge.id,
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          should.equal(loadedSubmissions, false);
+
+          const allowed = await service.getChallengeStatistics(
+            { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+            data.challenge.id,
+          );
+          should.deepEqual(allowed, []);
+
+          const machine = await service.getChallengeStatistics(
+            { isMachine: true, userId: "machine-user" },
+            data.challenge.id,
+          );
+          should.deepEqual(machine, []);
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
+    });
+
+    it("get challenge statistics returns not found before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+
+      try {
+        await service.getChallengeStatistics({ isMachine: true }, notFoundId);
+      } catch (e) {
+        should.equal(e.name, "NotFoundError");
+        should.equal(e.message, `Challenge of id ${notFoundId} is not found.`);
+        should.equal(loadedSubmissions, false);
+        return;
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+      }
+      throw new Error("should not reach here");
+    });
+
+    it("get challenge statistics enforces challenge group view rules before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      const originalAxiosGet = axios.get;
+      const originalGetM2MToken = m2mHelper.getM2MToken;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+      m2mHelper.getM2MToken = async () => "test-token";
+      axios.get = async (url, options) => {
+        if (_.toString(url).includes("/memberGroups/")) {
+          return { data: [], status: 200, headers: {} };
+        }
+        return originalAxiosGet(url, options);
+      };
+
+      await prisma.challenge.update({
+        where: { id: data.challenge.id },
+        data: { groups: [uuid()] },
+      });
+
+      try {
+        await service.getChallengeStatistics(
+          { handle: "blocked", roles: ["Topcoder User"], userId: "blocked-user" },
+          data.challenge.id,
+        );
+      } catch (e) {
+        should.equal(e.name, "ForbiddenError");
+        should.equal(loadedSubmissions, false);
+        return;
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+        axios.get = originalAxiosGet;
+        m2mHelper.getM2MToken = originalGetM2MToken;
+        await prisma.challenge.update({
+          where: { id: data.challenge.id },
+          data: { groups: [] },
+        });
+      }
+      throw new Error("should not reach here");
+    });
+
     it("get challenge - not found", async () => {
       try {
         await service.getChallenge({ isMachine: true }, notFoundId);
@@ -871,6 +1025,42 @@ describe("challenge service unit tests", () => {
       should.exist(result.created);
       should.equal(result.numOfSubmissions, 0);
       should.equal(result.numOfRegistrants, 0);
+    });
+
+    it("search challenges hides whitelisted challenges from blocked interactive users", async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        const blocked = await service.searchChallenges(
+          { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(blocked.total, 0);
+        should.equal(blocked.result.length, 0);
+
+        const allowed = await service.searchChallenges(
+          { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(allowed.total, 1);
+        should.equal(allowed.result[0].id, data.challenge.id);
+
+        const machine = await service.searchChallenges(
+          { isMachine: true, userId: "machine-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(machine.total, 1);
+        should.equal(machine.result[0].id, data.challenge.id);
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
     });
 
     it("search challenges successfully 2", async () => {
@@ -1295,6 +1485,43 @@ describe("challenge service unit tests", () => {
         aiWorkflowId: "workflow-123",
       },
     ];
+
+    it("update challenge enforces challenge user whitelist before downstream validation", async () => {
+      const originalGetChallengeResources = helper.getChallengeResources;
+      let loadedResources = false;
+
+      helper.getChallengeResources = async () => {
+        loadedResources = true;
+        return [];
+      };
+
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        try {
+          await service.updateChallenge(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            data.challenge.id,
+            { description: "blocked update" },
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          should.equal(loadedResources, false);
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources;
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
+    });
 
     it("update challenge successfully 1", async () => {
       const challengeData = testChallengeData;
