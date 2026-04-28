@@ -248,6 +248,75 @@ class ProjectHelper {
       throw err;
     }
   }
+
+  /**
+   * Locks the current challenge member-payment budget against a billing account.
+   *
+   * The billing-account ledger stores amounts after markup is applied. This
+   * helper accepts the member-payment amount from challenge persistence,
+   * applies the billing markup, and writes one CHALLENGE lock row keyed by the
+   * challenge id.
+   *
+   * @param {object} params Lock request parameters.
+   * @param {string|number} params.billingAccountId Billing-account identifier.
+   * @param {string} params.challengeId Challenge id to use as the external reference.
+   * @param {number|string} params.memberPaymentAmount Challenge member-payment amount before markup.
+   * @param {number|string|null|undefined} params.markup Billing-account markup as a decimal or percentage.
+   * @returns {Promise<object>} Billing Accounts API lock response.
+   * @throws {errors.BadRequestError} When required values are missing or invalid.
+   * @throws {Error} When the Billing Accounts API rejects the lock request.
+   */
+  async lockChallengeBillingAccountAmount({
+    billingAccountId,
+    challengeId,
+    memberPaymentAmount,
+    markup,
+  }) {
+    const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
+    const normalizedChallengeId = normalizeOptionalString(challengeId);
+    const amount = normalizeOptionalNumber(memberPaymentAmount);
+    const normalizedMarkup = normalizeBillingMarkup(markup) || 0;
+
+    if (!normalizedBillingAccountId) {
+      throw new errors.BadRequestError("Cannot lock challenge budget without a billing account.");
+    }
+
+    if (!normalizedChallengeId) {
+      throw new errors.BadRequestError("Cannot lock challenge budget without a challenge id.");
+    }
+
+    if (_.isNil(amount) || amount < 0) {
+      throw new errors.BadRequestError("Cannot lock challenge budget with an invalid amount.");
+    }
+
+    if (normalizedMarkup < 0) {
+      throw new errors.BadRequestError("Cannot lock challenge budget with an invalid markup.");
+    }
+
+    const token = await m2mHelper.getM2MToken();
+    const lockAmount = Number((amount * (1 + normalizedMarkup)).toFixed(4));
+    const url = `${config.BILLING_ACCOUNTS_API_URL}/${encodeURIComponent(
+      normalizedBillingAccountId
+    )}/lock-amount`;
+    logger.debug(
+      `projectHelper.lockChallengeBillingAccountAmount: PATCH ${url} challengeId=${normalizedChallengeId}`
+    );
+
+    const res = await axios.patch(
+      url,
+      {
+        amount: lockAmount,
+        challengeId: normalizedChallengeId,
+        externalId: normalizedChallengeId,
+        externalType: "CHALLENGE",
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    return res.data;
+  }
 }
 
 module.exports = new ProjectHelper();

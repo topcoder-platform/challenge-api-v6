@@ -48,6 +48,8 @@ describe("challenge service unit tests", () => {
   let data;
   let testChallengeData;
   let createdChallengeData;
+  let billingLockRequests;
+  let originalLockChallengeBillingAccountAmount;
   const notFoundId = uuid();
   const authUser = {
     userId: "testuser",
@@ -158,6 +160,19 @@ describe("challenge service unit tests", () => {
     };
   });
 
+  beforeEach(() => {
+    billingLockRequests = [];
+    originalLockChallengeBillingAccountAmount = projectHelper.lockChallengeBillingAccountAmount;
+    projectHelper.lockChallengeBillingAccountAmount = async (request) => {
+      billingLockRequests.push(_.cloneDeep(request));
+      return { locked: true };
+    };
+  });
+
+  afterEach(() => {
+    projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
+  });
+
   after(async () => {
     const idsToDelete = _.compact([id, id2]);
     if (idsToDelete.length > 0) {
@@ -241,6 +256,42 @@ describe("challenge service unit tests", () => {
       should.exist(result.created);
       should.equal(result.numOfSubmissions, 0);
       should.equal(result.numOfRegistrants, 0);
+    });
+
+    it("locks draft challenge budget when the challenge is saved", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.status = ChallengeStatusEnum.DRAFT;
+      challengeData.prizeSets[0].type = PrizeSetTypeEnum.PLACEMENT;
+      challengeData.prizeSets[0].prizes[0].type = constants.prizeTypes.USD;
+      challengeData.prizeSets[0].prizes[0].value = 1000;
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        billingAccountId: "80001012",
+        markup: 0.1,
+      });
+
+      let result;
+      try {
+        result = await service.createChallenge(
+          { isMachine: true, sub: "sub", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: result.id,
+          markup: 0.1,
+          memberPaymentAmount: 1000,
+        });
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        if (result && result.id) {
+          await prisma.challenge.deleteMany({ where: { id: result.id } });
+        }
+      }
     });
 
     it("create challenge successfully when project directProjectId is a numeric string", async () => {
