@@ -58,6 +58,27 @@ const allowedSortByValues = _.uniq([
   ...Object.keys(sortByAliases),
 ]);
 
+const CANCELLED_CHALLENGE_STATUSES = new Set([
+  ChallengeStatusEnum.CANCELLED,
+  ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE,
+  ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
+  ChallengeStatusEnum.CANCELLED_FAILED_REVIEW,
+  ChallengeStatusEnum.CANCELLED_FAILED_SCREENING,
+  ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
+  ChallengeStatusEnum.CANCELLED_WINNER_UNRESPONSIVE,
+  ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+  ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
+]);
+
+/**
+ * Determines whether a challenge status is one of the terminal cancelled states.
+ * @param {String} status challenge status from the update payload or stored challenge
+ * @returns {Boolean} true when the status represents a cancelled challenge
+ */
+function isCancelledChallengeStatus(status) {
+  return CANCELLED_CHALLENGE_STATUSES.has(status);
+}
+
 function normalizeStatusSortValue(statusValue) {
   if (_.isNil(statusValue)) {
     return null;
@@ -2792,6 +2813,8 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
 
 /**
  * Update challenge.
+ * When a challenge transitions to completed task status or a cancelled status,
+ * payment generation is requested after the database update commits.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
@@ -3005,6 +3028,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
+  const isStatusChangingToCancelled =
+    isCancelledChallengeStatus(data.status) && !isCancelledChallengeStatus(challenge.status);
   if (data.status) {
     if (data.status === ChallengeStatusEnum.ACTIVE) {
       await validateChallengeActivationBillingAccount({
@@ -3015,22 +3040,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       });
     }
 
-    if (
-      _.includes(
-        [
-          ChallengeStatusEnum.CANCELLED,
-          ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE,
-          ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
-          ChallengeStatusEnum.CANCELLED_FAILED_REVIEW,
-          ChallengeStatusEnum.CANCELLED_FAILED_SCREENING,
-          ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
-          ChallengeStatusEnum.CANCELLED_WINNER_UNRESPONSIVE,
-          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
-          ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
-        ],
-        data.status,
-      )
-    ) {
+    if (isCancelledChallengeStatus(data.status)) {
       isChallengeBeingCancelled = true;
     }
 
@@ -3582,6 +3592,19 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       }
     } catch (err) {
       logger.error(`Error generating payments for Task challenge ${challengeId}: ${err.message}`);
+    }
+  }
+  if (isStatusChangingToCancelled) {
+    logger.info(`Triggering payment generation for cancelled challenge ${challengeId}`);
+    try {
+      const paymentSuccess = await helper.generateChallengePayments(challengeId);
+      if (!paymentSuccess) {
+        logger.warn(`Failed to generate payments for cancelled challenge ${challengeId}`);
+      }
+    } catch (err) {
+      logger.error(
+        `Error generating payments for cancelled challenge ${challengeId}: ${err.message}`,
+      );
     }
   }
   // Re-fetch the challenge outside the transaction to ensure we publish

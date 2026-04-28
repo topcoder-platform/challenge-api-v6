@@ -1800,6 +1800,37 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("update challenge - triggers payments when a challenge is cancelled", async () => {
+      const originalGetChallengeResources = helper.getChallengeResources;
+      const originalGenerateChallengePayments = helper.generateChallengePayments;
+      let generatedPaymentsChallengeId;
+      const cancelledChallenge = await createActivationChallenge(ChallengeStatusEnum.ACTIVE);
+
+      helper.getChallengeResources = async () => [];
+      helper.generateChallengePayments = async (challengeId) => {
+        generatedPaymentsChallengeId = challengeId;
+        return true;
+      };
+
+      try {
+        const result = await service.updateChallenge(
+          { isMachine: true, sub: "sub-cancel", userId: 22838965 },
+          cancelledChallenge.id,
+          {
+            status: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+            cancelReason: "QA cancellation coverage",
+          },
+        );
+
+        should.equal(result.status, ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST);
+        should.equal(generatedPaymentsChallengeId, cancelledChallenge.id);
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources;
+        helper.generateChallengePayments = originalGenerateChallengePayments;
+        await prisma.challenge.deleteMany({ where: { id: cancelledChallenge.id } });
+      }
+    });
+
     describe("reviewer scorecard changes", () => {
       const originalScorecardId = "sc-original";
       const newScorecardId = "sc-updated";
