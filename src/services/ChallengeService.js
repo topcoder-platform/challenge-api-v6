@@ -46,6 +46,11 @@ const BILLING_MARKUP_VISIBLE_ROLES = new Set([
   "talent manager",
   "topcoder talent manager",
 ]);
+const CHALLENGE_BILLING_LOCK_STATUSES = new Set([
+  ChallengeStatusEnum.DRAFT,
+  ChallengeStatusEnum.APPROVED,
+  ChallengeStatusEnum.ACTIVE,
+]);
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -108,6 +113,110 @@ function compareStatusSortValues(aStatusValue, bStatusValue) {
   }
 
   return normalizedA.localeCompare(normalizedB);
+}
+
+/**
+ * Determines whether the challenge budget should remain locked.
+ *
+ * @param {string|undefined|null} status Challenge status from the request or persistence.
+ * @returns {boolean} True when the challenge should reserve billing-account budget.
+ */
+function isChallengeBillingLockStatus(status) {
+  return CHALLENGE_BILLING_LOCK_STATUSES.has(normalizeStatusSortValue(status));
+}
+
+/**
+ * Calculates the billable USD prize-set total for a challenge.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} USD prize-set member-payment amount before markup,
+ * or `undefined` when prize sets are not loaded.
+ */
+function getChallengePrizeSetMemberPaymentAmount(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  return prizeSets.reduce((total, prizeSet) => {
+    const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+    return (
+      total +
+      prizes.reduce((prizeTotal, prize) => {
+        if (_.toString(_.get(prize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+          return prizeTotal;
+        }
+
+        const prizeValue = _.toNumber(_.get(prize, "value"));
+
+        return Number.isFinite(prizeValue) ? prizeTotal + prizeValue : prizeTotal;
+      }, 0)
+    );
+  }, 0);
+}
+
+/**
+ * Reads the currently persisted challenge member-payment total.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} Total USD member-payment amount before markup.
+ */
+function getChallengeMemberPaymentAmount(challenge) {
+  const prizeSetMemberPaymentAmount = getChallengePrizeSetMemberPaymentAmount(challenge);
+
+  if (!_.isNil(prizeSetMemberPaymentAmount)) {
+    return prizeSetMemberPaymentAmount;
+  }
+
+  const totalPrizes = _.get(
+    challenge,
+    "overview.totalPrizes",
+    _.get(challenge, "overviewTotalPrizes"),
+  );
+  const amount = _.toNumber(totalPrizes);
+
+  return Number.isFinite(amount) ? amount : undefined;
+}
+
+/**
+ * Synchronizes the draft/active challenge budget lock to billing accounts.
+ *
+ * The challenge service owns the current estimated member-payment amount while
+ * finance later consumes the finalized payment amount after payment generation.
+ * This keeps draft challenge rows visible as locked budget in billing-account
+ * details until finance moves the row to consumed.
+ *
+ * @param {object} challenge Challenge model or response object after persistence.
+ * @returns {Promise<void>} Resolves after the billing-account lock is written or skipped.
+ * @throws {Error} When the Billing Accounts API rejects the lock request.
+ */
+async function syncChallengeBillingAccountLock(challenge) {
+  if (!isChallengeBillingLockStatus(challenge && challenge.status)) {
+    return;
+  }
+
+  const billing = _.get(challenge, "billing", _.get(challenge, "billingRecord"));
+  const billingAccountId = _.get(billing, "billingAccountId");
+  const hasBillingAccountId = !_.isNil(billingAccountId) && _.toString(billingAccountId).trim();
+  const memberPaymentAmount = getChallengeMemberPaymentAmount(challenge);
+
+  if (!hasBillingAccountId || _.isNil(memberPaymentAmount)) {
+    logger.warn("Skipping challenge billing lock sync due to missing billing context", {
+      challengeId: _.get(challenge, "id"),
+      hasBillingAccountId: Boolean(hasBillingAccountId),
+      hasMemberPaymentAmount: !_.isNil(memberPaymentAmount),
+    });
+    return;
+  }
+
+  await projectHelper.lockChallengeBillingAccountAmount({
+    billingAccountId,
+    challengeId: challenge.id,
+    markup: _.get(billing, "clientBillingRate", _.get(billing, "markup")),
+    memberPaymentAmount,
+  });
 }
 
 /**
@@ -2067,6 +2176,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   prismaHelper.convertModelToResponse(ret);
   await enrichSkillsData(ret);
   enrichChallengeForResponse(ret, track, type);
+  await syncChallengeBillingAccountLock(ret);
 
   // If the challenge is self-service, add the creating user as the "client manager", *not* the manager
   // This is necessary for proper handling of the vanilla embed on the self-service work item dashboard
@@ -2867,14 +2977,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       })`,
     );
 
-    if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
-      // Ensure billingAccountId is a string or null to match Prisma schema
-      if (billingAccountId !== null && billingAccountId !== undefined) {
-        _.set(data, "billing.billingAccountId", String(billingAccountId));
-      } else {
-        _.set(data, "billing.billingAccountId", null);
-      }
-      _.set(data, "billing.markup", _.isNil(markup) ? 0 : markup);
+    const existingBillingAccountId = normalizeOptionalString(
+      _.get(challenge, "billing.billingAccountId"),
+    );
+    const projectBillingAccountId = normalizeOptionalString(billingAccountId);
+    if (projectBillingAccountId && !existingBillingAccountId) {
+      data.billing = {
+        ..._.get(challenge, "billing", {}),
+        ..._.get(data, "billing", {}),
+        billingAccountId: projectBillingAccountId,
+        markup: _.isNil(markup) ? 0 : markup,
+      };
     }
 
     // Make sure the user cannot change the direct project ID
@@ -3583,6 +3696,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       include: includeReturnFields,
     });
   });
+  await syncChallengeBillingAccountLock(updatedChallenge);
   if (taskCompletionInfo && taskCompletionInfo.shouldTriggerPayments) {
     logger.info(`Triggering payment generation for Task challenge ${challengeId}`);
     try {
@@ -4250,7 +4364,11 @@ function sanitizeChallenge(challenge) {
     ]);
   }
   if (challenge.billing) {
-    sanitized.billing = _.pick(challenge.billing, ["billingAccountId", "markup"]);
+    sanitized.billing = _.pick(challenge.billing, [
+      "billingAccountId",
+      "markup",
+      "clientBillingRate",
+    ]);
   }
   if (challenge.metadata) {
     sanitized.metadata = _.map(challenge.metadata, (meta) => _.pick(meta, ["name", "value"]));
