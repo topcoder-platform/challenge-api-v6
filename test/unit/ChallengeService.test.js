@@ -608,7 +608,10 @@ describe("challenge service unit tests", () => {
           createdChallengeData.id,
         );
 
-        should.equal(result.billing.billingAccountId, createdChallengeData.billing.billingAccountId);
+        should.equal(
+          result.billing.billingAccountId,
+          createdChallengeData.billing.billingAccountId,
+        );
         should.equal(_.isUndefined(result.billing.markup), true);
       } finally {
         helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess;
@@ -1655,6 +1658,118 @@ describe("challenge service unit tests", () => {
       should.exist(result.startDate);
       should.equal(testHelper.getDatesDiff(result.startDate, testChallengeData.startDate), 0);
     });
+
+    it("backfills missing billing and locks draft budget including copilot prizes", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.name = `${challengeData.name} Billing Lock ${Date.now()}`;
+      challengeData.legacyId = Math.floor(Math.random() * 1000000);
+      challengeData.status = ChallengeStatusEnum.NEW;
+      challengeData.prizeSets = [
+        {
+          type: PrizeSetTypeEnum.PLACEMENT,
+          description: "placement prizes",
+          prizes: [
+            {
+              description: "placement 1",
+              type: constants.prizeTypes.USD,
+              value: 1000,
+            },
+          ],
+        },
+        {
+          type: PrizeSetTypeEnum.COPILOT,
+          description: "copilot payment",
+          prizes: [
+            {
+              description: "copilot",
+              type: constants.prizeTypes.USD,
+              value: 150,
+            },
+          ],
+        },
+      ];
+
+      const originalGetProject = projectHelper.getProject;
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      let billingLookupCount = 0;
+      let createdChallengeId;
+
+      projectHelper.getProject = async () => ({ directProjectId: "33541" });
+      projectHelper.getProjectBillingInformation = async () => {
+        billingLookupCount += 1;
+
+        if (billingLookupCount === 1) {
+          return {
+            billingAccountId: null,
+            markup: null,
+          };
+        }
+
+        return {
+          billingAccountId: "80001012",
+          markup: 0.1,
+        };
+      };
+
+      try {
+        const created = await service.createChallenge(
+          { isMachine: true, sub: "sub-billing-lock-create", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+        createdChallengeId = created.id;
+        should.equal(billingLockRequests.length, 0);
+
+        const draft = await service.updateChallenge(
+          { isMachine: true, sub: "sub-billing-lock-update", userId: 22838965 },
+          created.id,
+          {
+            status: ChallengeStatusEnum.DRAFT,
+          },
+        );
+
+        should.equal(draft.billing.billingAccountId, "80001012");
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: created.id,
+          markup: 0.1,
+          memberPaymentAmount: 1150,
+        });
+
+        const updatedPrizeSets = _.cloneDeep(draft.prizeSets);
+        const copilotPrizeSet = _.find(
+          updatedPrizeSets,
+          (prizeSet) => _.toString(prizeSet.type).toUpperCase() === PrizeSetTypeEnum.COPILOT,
+        );
+        should.exist(copilotPrizeSet);
+        copilotPrizeSet.prizes[0].value = 225;
+        billingLockRequests = [];
+
+        await service.updateChallenge(
+          { isMachine: true, sub: "sub-billing-lock-prize-update", userId: 22838965 },
+          created.id,
+          {
+            prizeSets: updatedPrizeSets,
+          },
+        );
+
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: created.id,
+          markup: 0.1,
+          memberPaymentAmount: 1225,
+        });
+      } finally {
+        projectHelper.getProject = originalGetProject;
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+
+        if (createdChallengeId) {
+          await prisma.challenge.deleteMany({ where: { id: createdChallengeId } });
+        }
+      }
+    }).timeout(10000);
 
     it("preserves existing terms when update payload omits the terms field", async () => {
       const challengeData = _.cloneDeep(testChallengeData);

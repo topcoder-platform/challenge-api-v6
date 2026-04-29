@@ -105,12 +105,50 @@ function isChallengeBillingLockStatus(status) {
 }
 
 /**
- * Reads the currently persisted challenge prize total.
+ * Calculates the billable USD prize-set total for a challenge.
  *
  * @param {object} challenge Challenge model or response object.
- * @returns {number|undefined} Total member-payment amount before markup.
+ * @returns {number|undefined} USD prize-set member-payment amount before markup,
+ * or `undefined` when prize sets are not loaded.
+ */
+function getChallengePrizeSetMemberPaymentAmount(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  return prizeSets.reduce((total, prizeSet) => {
+    const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+    return (
+      total +
+      prizes.reduce((prizeTotal, prize) => {
+        if (_.toString(_.get(prize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+          return prizeTotal;
+        }
+
+        const prizeValue = _.toNumber(_.get(prize, "value"));
+
+        return Number.isFinite(prizeValue) ? prizeTotal + prizeValue : prizeTotal;
+      }, 0)
+    );
+  }, 0);
+}
+
+/**
+ * Reads the currently persisted challenge member-payment total.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} Total USD member-payment amount before markup.
  */
 function getChallengeMemberPaymentAmount(challenge) {
+  const prizeSetMemberPaymentAmount = getChallengePrizeSetMemberPaymentAmount(challenge);
+
+  if (!_.isNil(prizeSetMemberPaymentAmount)) {
+    return prizeSetMemberPaymentAmount;
+  }
+
   const totalPrizes = _.get(
     challenge,
     "overview.totalPrizes",
@@ -2916,14 +2954,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       })`,
     );
 
-    if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
-      // Ensure billingAccountId is a string or null to match Prisma schema
-      if (billingAccountId !== null && billingAccountId !== undefined) {
-        _.set(data, "billing.billingAccountId", String(billingAccountId));
-      } else {
-        _.set(data, "billing.billingAccountId", null);
-      }
-      _.set(data, "billing.markup", _.isNil(markup) ? 0 : markup);
+    const existingBillingAccountId = normalizeOptionalString(
+      _.get(challenge, "billing.billingAccountId"),
+    );
+    const projectBillingAccountId = normalizeOptionalString(billingAccountId);
+    if (projectBillingAccountId && !existingBillingAccountId) {
+      data.billing = {
+        ..._.get(challenge, "billing", {}),
+        ..._.get(data, "billing", {}),
+        billingAccountId: projectBillingAccountId,
+        markup: _.isNil(markup) ? 0 : markup,
+      };
     }
 
     // Make sure the user cannot change the direct project ID
@@ -4300,7 +4341,11 @@ function sanitizeChallenge(challenge) {
     ]);
   }
   if (challenge.billing) {
-    sanitized.billing = _.pick(challenge.billing, ["billingAccountId", "markup"]);
+    sanitized.billing = _.pick(challenge.billing, [
+      "billingAccountId",
+      "markup",
+      "clientBillingRate",
+    ]);
   }
   if (challenge.metadata) {
     sanitized.metadata = _.map(challenge.metadata, (meta) => _.pick(meta, ["name", "value"]));
