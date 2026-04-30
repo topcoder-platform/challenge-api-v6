@@ -3101,9 +3101,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const prizeSetsUpdated =
     Array.isArray(data.prizeSets) && isDifferentPrizeSets(data.prizeSets, challenge.prizeSets);
 
-  if (CHALLENGE_APPROVAL_ACTION_STATUSES.has(requestedApprovalStatus) && !canApproveChallengeBudget) {
+  if (
+    requestedApprovalStatus != null &&
+    requestedApprovalStatus !== challenge.approvalStatus &&
+    !canApproveChallengeBudget
+  ) {
     throw new errors.ForbiddenError(
-      "Only admins or project managers with full access can approve or reject challenge budgets.",
+      "Only admins or project managers with full access can change the challenge budget approval status.",
     );
   }
 
