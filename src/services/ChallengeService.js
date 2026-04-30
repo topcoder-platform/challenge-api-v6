@@ -3117,6 +3117,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
     data.approvalRejectionReason = null;
     data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
   }
 
   if (
