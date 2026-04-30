@@ -51,6 +51,15 @@ const CHALLENGE_BILLING_LOCK_STATUSES = new Set([
   ChallengeStatusEnum.APPROVED,
   ChallengeStatusEnum.ACTIVE,
 ]);
+const CHALLENGE_APPROVAL_STATUS = {
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+};
+const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
+  CHALLENGE_APPROVAL_STATUS.APPROVED,
+  CHALLENGE_APPROVAL_STATUS.REJECTED,
+]);
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -95,6 +104,39 @@ function normalizeStatusSortValue(statusValue) {
   }
 
   return normalizedStatus;
+}
+
+function normalizeApprovalStatus(value) {
+  if (_.isNil(value)) {
+    return null;
+  }
+
+  const normalized = _.toString(value).trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!Object.values(CHALLENGE_APPROVAL_STATUS).includes(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+async function userCanApproveChallengeBudget(currentUser, challengeOrProjectId) {
+  if (!currentUser) {
+    return false;
+  }
+
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+
+  const projectId = _.isObject(challengeOrProjectId)
+    ? _.get(challengeOrProjectId, "projectId")
+    : challengeOrProjectId;
+
+  return helper.userHasProjectManagerAccess(projectId, currentUser);
 }
 
 function compareStatusSortValues(aStatusValue, bStatusValue) {
@@ -1991,6 +2033,39 @@ async function createChallenge(currentUser, challenge, userToken) {
     _.set(challenge, "legacy.reviewType", _.toUpper(_.get(challenge, "legacy.reviewType")));
   }
 
+  const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+
+  if (!requestedApprovalStatus) {
+    challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+  } else {
+    challenge.approvalStatus = requestedApprovalStatus;
+  }
+
+  if (
+    CHALLENGE_APPROVAL_ACTION_STATUSES.has(challenge.approvalStatus) &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can approve or reject challenge budgets.",
+    );
+  }
+
+  if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = _.toString(challenge.approvalRejectionReason || "").trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    challenge.approvalRejectionReason = rejectionReason;
+    challenge.approvalApprovedBy = null;
+  } else if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = null;
+  }
+
   if (!challenge.status) {
     challenge.status = ChallengeStatusEnum.NEW;
   }
@@ -2370,6 +2445,11 @@ createChallenge.schema = {
         })
         .optional(),
       startDate: Joi.date().iso(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
@@ -3015,6 +3095,49 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const sanitizedIncludesTerms = Object.prototype.hasOwnProperty.call(data, "terms");
   const shouldReplaceTerms =
     sanitizedIncludesTerms || (payloadIncludesTerms && originalTermsValue === null);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+  const requestedApprovalStatus = normalizeApprovalStatus(data.approvalStatus);
+  const prizeSetsUpdated =
+    Array.isArray(data.prizeSets) && isDifferentPrizeSets(data.prizeSets, challenge.prizeSets);
+
+  if (CHALLENGE_APPROVAL_ACTION_STATUSES.has(requestedApprovalStatus) && !canApproveChallengeBudget) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can approve or reject challenge budgets.",
+    );
+  }
+
+  if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = _.toString(data.approvalRejectionReason || "").trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    data.approvalRejectionReason = rejectionReason;
+    data.approvalApprovedBy = null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  }
+
+  if (
+    challenge.status === ChallengeStatusEnum.ACTIVE &&
+    prizeSetsUpdated &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Prizes and copilot fee are locked after launch. Contact the Project Manager for updates.",
+    );
+  }
+
+  if (prizeSetsUpdated && challenge.status !== ChallengeStatusEnum.ACTIVE) {
+    data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
+  }
+
+  const resolvedApprovalStatus =
+    normalizeApprovalStatus(data.approvalStatus) ||
+    normalizeApprovalStatus(challenge.approvalStatus) ||
+    CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
 
   logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
@@ -3036,6 +3159,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   const isStatusChangingToActive =
     data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
+
+  if (isStatusChangingToActive && resolvedApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    throw new errors.BadRequestError("Challenge launch is blocked until budget approval is Approved.");
+  }
+
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -3962,6 +4090,11 @@ updateChallenge.schema = {
       status: Joi.string()
         .valid(..._.values(ChallengeStatusEnum))
         .insensitive(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -4324,6 +4457,9 @@ function sanitizeChallenge(challenge) {
     "legacyId",
     "startDate",
     "status",
+    "approvalStatus",
+    "approvalRejectionReason",
+    "approvalApprovedBy",
     "task",
     "groups",
     "cancelReason",
