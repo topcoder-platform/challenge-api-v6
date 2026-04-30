@@ -2449,7 +2449,7 @@ createChallenge.schema = {
         .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
         .insensitive(),
       approvalRejectionReason: Joi.string().allow(null, ""),
-      approvalApprovedBy: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.any().forbidden(),
       status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
@@ -3089,6 +3089,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   }
 
   data = preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge);
+  const rawApprovalRejectionReason = _.toString(_.get(data, "approvalRejectionReason", ""));
 
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
@@ -3107,7 +3108,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   }
 
   if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
-    const rejectionReason = _.toString(data.approvalRejectionReason || "").trim();
+    const rejectionReason = rawApprovalRejectionReason.trim();
     if (!rejectionReason) {
       throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
     }
@@ -4094,7 +4095,7 @@ updateChallenge.schema = {
         .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
         .insensitive(),
       approvalRejectionReason: Joi.string().allow(null, ""),
-      approvalApprovedBy: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.any().forbidden(),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -4458,8 +4459,6 @@ function sanitizeChallenge(challenge) {
     "startDate",
     "status",
     "approvalStatus",
-    "approvalRejectionReason",
-    "approvalApprovedBy",
     "task",
     "groups",
     "cancelReason",
