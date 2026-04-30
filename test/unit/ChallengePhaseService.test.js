@@ -1713,6 +1713,54 @@ describe('challenge phase service unit tests', () => {
       throw new Error('should not reach here')
     })
 
+    it('partially update challenge phase - opens marathon match review phase without reviewer resource', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.marathonMatchChallenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => [{ roleId: 'some-other-role-id' }]
+      helper.getResourceRoles = async () => {
+        throw new Error('resource role lookup should not be required for Marathon Match Review')
+      }
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.marathonMatchChallenge.id,
+          reviewChallengePhaseId,
+          { isOpen: true }
+        )
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
+    })
+
     it('partially update challenge phase - opens review phase when reviewer resource exists', async () => {
       const reviewPhase = await prisma.phase.create({
         data: {
