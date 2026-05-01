@@ -261,9 +261,46 @@ describe("challenge service unit tests", () => {
     it("locks draft challenge budget when the challenge is saved", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
       challengeData.status = ChallengeStatusEnum.DRAFT;
-      challengeData.prizeSets[0].type = PrizeSetTypeEnum.PLACEMENT;
-      challengeData.prizeSets[0].prizes[0].type = constants.prizeTypes.USD;
-      challengeData.prizeSets[0].prizes[0].value = 1000;
+      challengeData.prizeSets = [
+        {
+          type: PrizeSetTypeEnum.PLACEMENT,
+          description: "placement prizes",
+          prizes: [
+            {
+              description: "placement 1",
+              type: constants.prizeTypes.USD,
+              value: 35,
+            },
+            {
+              description: "placement 2",
+              type: constants.prizeTypes.USD,
+              value: 12,
+            },
+          ],
+        },
+        {
+          type: PrizeSetTypeEnum.COPILOT,
+          description: "copilot payment",
+          prizes: [
+            {
+              description: "copilot",
+              type: constants.prizeTypes.USD,
+              value: 10,
+            },
+          ],
+        },
+      ];
+      challengeData.reviewers = [
+        {
+          scorecardId: "scorecard-id",
+          isMemberReview: true,
+          memberReviewerCount: 1,
+          phaseId: data.phase.id,
+          fixedAmount: 16.1,
+          baseCoefficient: 0,
+          incrementalCoefficient: 0,
+        },
+      ];
       const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
 
       projectHelper.getProjectBillingInformation = async () => ({
@@ -284,7 +321,7 @@ describe("challenge service unit tests", () => {
           billingAccountId: "80001012",
           challengeId: result.id,
           markup: 0.1,
-          memberPaymentAmount: 1000,
+          memberPaymentAmount: 73.1,
         });
       } finally {
         projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;

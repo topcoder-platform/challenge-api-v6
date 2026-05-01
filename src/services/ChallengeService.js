@@ -51,6 +51,7 @@ const CHALLENGE_BILLING_LOCK_STATUSES = new Set([
   ChallengeStatusEnum.APPROVED,
   ChallengeStatusEnum.ACTIVE,
 ]);
+const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -158,16 +159,92 @@ function getChallengePrizeSetMemberPaymentAmount(challenge) {
 }
 
 /**
+ * Reads the first-place placement prize used by reviewer cost estimates.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} First-place USD placement prize amount, or undefined when unavailable.
+ */
+function getFirstPlacePrizeValue(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  const placementPrizeSet = _.find(
+    prizeSets,
+    (prizeSet) => _.toString(_.get(prizeSet, "type")).toUpperCase() === PrizeSetTypeEnum.PLACEMENT,
+  );
+  const firstPrize = _.get(placementPrizeSet, "prizes[0]");
+
+  if (_.toString(_.get(firstPrize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+    return undefined;
+  }
+
+  const prizeValue = _.toNumber(_.get(firstPrize, "value"));
+
+  return Number.isFinite(prizeValue) ? prizeValue : undefined;
+}
+
+/**
+ * Calculates the estimated member-review payment amount for billing locks.
+ *
+ * The work app shows review cost using a two-submission estimate, so draft
+ * budget locks need the same fixed and coefficient-based reviewer math.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number} Estimated member-review payment amount before markup.
+ */
+function getEstimatedReviewerPaymentAmount(challenge) {
+  const reviewers = _.get(challenge, "reviewers");
+
+  if (!Array.isArray(reviewers)) {
+    return 0;
+  }
+
+  const firstPlacePrizeValue = getFirstPlacePrizeValue(challenge);
+
+  if (_.isNil(firstPlacePrizeValue)) {
+    return 0;
+  }
+
+  return reviewers.reduce((total, reviewer) => {
+    if (_.get(reviewer, "isMemberReview") === false) {
+      return total;
+    }
+
+    const fixedAmount = _.toNumber(_.get(reviewer, "fixedAmount"));
+    const baseCoefficient = _.toNumber(_.get(reviewer, "baseCoefficient"));
+    const incrementalCoefficient = _.toNumber(_.get(reviewer, "incrementalCoefficient"));
+    const memberReviewerCount = Math.max(
+      1,
+      Math.trunc(_.toNumber(_.get(reviewer, "memberReviewerCount")) || 1),
+    );
+    const reviewerPayment =
+      (Number.isFinite(fixedAmount) ? fixedAmount : 0) +
+      ((Number.isFinite(baseCoefficient) ? baseCoefficient : 0) +
+        (Number.isFinite(incrementalCoefficient) ? incrementalCoefficient : 0) *
+          DEFAULT_ESTIMATED_SUBMISSIONS_COUNT) *
+        firstPlacePrizeValue;
+
+    return total + reviewerPayment * memberReviewerCount;
+  }, 0);
+}
+
+/**
  * Reads the currently persisted challenge member-payment total.
  *
  * @param {object} challenge Challenge model or response object.
- * @returns {number|undefined} Total USD member-payment amount before markup.
+ * @returns {number|undefined} Total USD member-payment amount before markup,
+ * including estimated member-review cost when prize sets are loaded.
  */
 function getChallengeMemberPaymentAmount(challenge) {
   const prizeSetMemberPaymentAmount = getChallengePrizeSetMemberPaymentAmount(challenge);
 
   if (!_.isNil(prizeSetMemberPaymentAmount)) {
-    return prizeSetMemberPaymentAmount;
+    return Number(
+      (prizeSetMemberPaymentAmount + getEstimatedReviewerPaymentAmount(challenge)).toFixed(2),
+    );
   }
 
   const totalPrizes = _.get(
