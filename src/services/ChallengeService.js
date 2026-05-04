@@ -4181,7 +4181,7 @@ updateChallenge.schema = {
         .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
         .insensitive(),
       approvalRejectionReason: Joi.string().allow(null, ""),
-      approvalApprovedBy: Joi.string().allow(null, ""),,
+      approvalApprovedBy: Joi.string().allow(null, ""),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
