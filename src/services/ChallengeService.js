@@ -2703,7 +2703,20 @@ getChallengeStatistics.schema = {
  * @returns {Boolean} true if different, false otherwise
  */
 function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
-  return !_.isEqual(_.sortBy(prizeSets, "type"), _.sortBy(otherPrizeSets, "type"));
+  const buildPrizeKeys = (sets) =>
+    _.sortBy(
+      _.flatMap(sets || [], (prizeSet) => {
+        const normalizedType = _.toString(_.get(prizeSet, "type", "")).trim().toUpperCase();
+        const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+        return prizes.map((prize) => {
+          const normalizedValue = _.toString(_.get(prize, "value", "")).trim();
+          return `${normalizedType}:${normalizedValue}`;
+        });
+      }),
+    );
+
+  return !_.isEqual(buildPrizeKeys(prizeSets), buildPrizeKeys(otherPrizeSets));
 }
 
 /**
