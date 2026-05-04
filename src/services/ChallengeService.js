@@ -3215,7 +3215,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     );
   }
 
-  if (prizeSetsUpdated && challenge.status !== ChallengeStatusEnum.ACTIVE) {
+  if (
+    prizeSetsUpdated &&
+    challenge.status !== ChallengeStatusEnum.ACTIVE &&
+    (requestedApprovalStatus == null || !canApproveChallengeBudget)
+  ) {
     data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
     data.approvalRejectionReason = null;
     data.approvalApprovedBy = null;
