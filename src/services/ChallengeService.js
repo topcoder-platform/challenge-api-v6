@@ -2528,7 +2528,7 @@ createChallenge.schema = {
         .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
         .insensitive(),
       approvalRejectionReason: Joi.string().allow(null, ""),
-      approvalApprovedBy: Joi.any().forbidden(),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
