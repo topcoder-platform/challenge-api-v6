@@ -2,6 +2,7 @@ const { expect } = require("chai");
 
 const PhaseAdvancer = require("../../../src/phase-management/PhaseAdvancer");
 const { getClient } = require("../../../src/common/prisma");
+const reviewPrisma = require("../../../src/common/review-prisma");
 
 const buildIterativeReviewPhase = () => ({
   id: "phase-iterative-review",
@@ -89,5 +90,82 @@ describe("PhaseAdvancer Iterative Review gating", () => {
 
     expect(result.success).to.be.true;
     expect(phases[0].isOpen).to.be.true;
+  });
+});
+
+describe("PhaseAdvancer review completion queries", () => {
+  const prisma = getClient();
+  const originalFindUnique = prisma.challenge.findUnique;
+  const originalGetReviewClient = reviewPrisma.getReviewClient;
+  const phaseAdvancerPath = require.resolve("../../../src/phase-management/PhaseAdvancer");
+
+  afterEach(() => {
+    prisma.challenge.findUnique = originalFindUnique;
+    reviewPrisma.getReviewClient = originalGetReviewClient;
+    delete require.cache[phaseAdvancerPath];
+  });
+
+  it("casts review status to text before comparing completed reviews", async () => {
+    const capturedQueries = [];
+
+    reviewPrisma.getReviewClient = () => ({
+      $queryRaw: async (query) => {
+        capturedQueries.push(query);
+        return [{ count: 2 }];
+      },
+    });
+
+    delete require.cache[phaseAdvancerPath];
+    const PhaseAdvancerWithMockedReviewClient = require("../../../src/phase-management/PhaseAdvancer");
+    const phaseAdvancer = new PhaseAdvancerWithMockedReviewClient({
+      async getPhaseFacts() {
+        return {};
+      },
+    });
+
+    prisma.challenge.findUnique = async () => ({
+      numOfSubmissions: 1,
+      reviewers: [{ isMemberReview: true, memberReviewerCount: 2 }],
+    });
+
+    const phases = [
+      {
+        id: "phase-review",
+        phaseId: "phase-review",
+        name: "Review",
+        description: "Review phase",
+        duration: 86400,
+        isOpen: true,
+        predecessor: null,
+        scheduledStartDate: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        scheduledEndDate: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        actualStartDate: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        actualEndDate: null,
+        constraints: [],
+      },
+    ];
+
+    const result = await phaseAdvancer.advancePhase(
+      "challenge-123",
+      null,
+      phases,
+      "close",
+      "Review"
+    );
+    const [reviewCompletionQuery] = capturedQueries;
+    const queryText = [
+      reviewCompletionQuery.sql,
+      reviewCompletionQuery.text,
+      reviewCompletionQuery.statement,
+      Array.isArray(reviewCompletionQuery.strings)
+        ? reviewCompletionQuery.strings.join("?")
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    expect(result.success).to.be.true;
+    expect(queryText).to.contain('r."status"::text =');
+    expect(reviewCompletionQuery.values).to.include("COMPLETED");
   });
 });

@@ -479,11 +479,14 @@ async function hasPendingEscalationRequestsForChallenge(challengeId) {
 /**
  * Load a challenge for challenge-scoped phase operations.
  * @param {String} challengeId the challenge id
- * @returns {Object} the challenge with the given id
+ * @returns {Object} the challenge with the given id and type metadata
  * @throws {NotFoundError} when the challenge does not exist
  */
 async function getChallengeForPhaseAccess(challengeId) {
-  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: { type: true },
+  });
   if (!challenge) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
   }
@@ -511,13 +514,34 @@ async function postChallengeUpdatedNotification(challengeId) {
   }
 }
 
-async function ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName) {
+/**
+ * Check whether a challenge is the Marathon Match challenge type.
+ * @param {Object} challenge challenge data loaded with its type relation
+ * @returns {Boolean} true when the challenge type name is Marathon Match
+ */
+function isMarathonMatchChallengeType(challenge) {
+  const typeName = _.get(challenge, "type.name");
+  return _.toLower(_.trim(typeName || "")) === "marathon match";
+}
+
+/**
+ * Ensure a challenge has the configured resource role before a phase opens.
+ * @param {Object} challenge challenge data loaded with its type relation
+ * @param {String} phaseName phase name being opened
+ * @throws {BadRequestError} when the challenge is missing the required resource role
+ */
+async function ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName) {
   const normalizedPhaseName = _.toLower(_.trim(phaseName || ""));
   const requiredRoleName = PHASE_RESOURCE_ROLE_REQUIREMENTS[normalizedPhaseName];
   if (!requiredRoleName) {
     return;
   }
 
+  if (normalizedPhaseName === "review" && isMarathonMatchChallengeType(challenge)) {
+    return;
+  }
+
+  const challengeId = challenge.id;
   const challengeResources = await helper.getChallengeResources(challengeId);
   const requiredRoleNameLower = _.toLower(requiredRoleName);
   const hasRequiredRoleByName = (challengeResources || []).some((resource) => {
@@ -693,7 +717,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
 
   if (isOpeningPhase) {
     const phaseName = data.name || challengePhase.name;
-    await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName);
+    await ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName);
 
     // Check if this is the Appeals phase
     const normalizedPhaseName = normalizePhaseName(phaseName);
