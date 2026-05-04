@@ -61,6 +61,12 @@ enum PrizeSetTypeEnum {
   CHECKPOINT
 }
 
+enum ChallengeApprovalStatusEnum {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 // Enum for review opportunity types on reviewers
 enum ReviewOpportunityTypeEnum {
   REGULAR_REVIEW
@@ -118,6 +124,9 @@ model Challenge {
 
   // Additional fields from createChallenge schema
   status           ChallengeStatusEnum  @default(NEW) // new challenges default to status "New"
+  approvalStatus   ChallengeApprovalStatusEnum @default(PENDING_APPROVAL)
+  approvalRejectionReason String?
+  approvalApprovedBy String?
   // Normalized top‑level constraints (e.g. allowedRegistrants) for a challenge
   constraintRecord ChallengeConstraint?
 
