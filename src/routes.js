@@ -11,6 +11,7 @@ const CHALLENGE_EDITOR_ACCESS_ROLES = [
   constants.UserRoles.Admin,
   constants.UserRoles.Copilot,
   constants.UserRoles.Manager,
+  constants.UserRoles.ProjectManager,
   constants.UserRoles.TalentManager,
 ];
 
@@ -19,6 +20,7 @@ const CHALLENGE_EDITOR_ACCESS_ROLES_WITH_SELF_SERVICE = [
   constants.UserRoles.SelfServiceCustomer,
   constants.UserRoles.Copilot,
   constants.UserRoles.Manager,
+  constants.UserRoles.ProjectManager,
   constants.UserRoles.TalentManager,
 ];
 
