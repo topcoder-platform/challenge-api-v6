@@ -52,6 +52,18 @@ const CHALLENGE_BILLING_LOCK_STATUSES = new Set([
   ChallengeStatusEnum.ACTIVE,
 ]);
 
+const CHALLENGE_APPROVAL_STATUS = {
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+};
+const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
+  CHALLENGE_APPROVAL_STATUS.APPROVED,
+  CHALLENGE_APPROVAL_STATUS.REJECTED,
+]);
+
+const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
+
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
   updated: constants.validChallengeParams.Updated,
@@ -95,6 +107,39 @@ function normalizeStatusSortValue(statusValue) {
   }
 
   return normalizedStatus;
+}
+
+function normalizeApprovalStatus(value) {
+  if (_.isNil(value)) {
+    return null;
+  }
+
+  const normalized = _.toString(value).trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!Object.values(CHALLENGE_APPROVAL_STATUS).includes(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+async function userCanApproveChallengeBudget(currentUser, challengeOrProjectId) {
+  if (!currentUser) {
+    return false;
+  }
+
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+
+  const projectId = _.isObject(challengeOrProjectId)
+    ? _.get(challengeOrProjectId, "projectId")
+    : challengeOrProjectId;
+
+  return helper.userHasProjectManagerAccess(projectId, currentUser);
 }
 
 function compareStatusSortValues(aStatusValue, bStatusValue) {
@@ -158,16 +203,92 @@ function getChallengePrizeSetMemberPaymentAmount(challenge) {
 }
 
 /**
+ * Reads the first-place placement prize used by reviewer cost estimates.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} First-place USD placement prize amount, or undefined when unavailable.
+ */
+function getFirstPlacePrizeValue(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  const placementPrizeSet = _.find(
+    prizeSets,
+    (prizeSet) => _.toString(_.get(prizeSet, "type")).toUpperCase() === PrizeSetTypeEnum.PLACEMENT,
+  );
+  const firstPrize = _.get(placementPrizeSet, "prizes[0]");
+
+  if (_.toString(_.get(firstPrize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+    return undefined;
+  }
+
+  const prizeValue = _.toNumber(_.get(firstPrize, "value"));
+
+  return Number.isFinite(prizeValue) ? prizeValue : undefined;
+}
+
+/**
+ * Calculates the estimated member-review payment amount for billing locks.
+ *
+ * The work app shows review cost using a two-submission estimate, so draft
+ * budget locks need the same fixed and coefficient-based reviewer math.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number} Estimated member-review payment amount before markup.
+ */
+function getEstimatedReviewerPaymentAmount(challenge) {
+  const reviewers = _.get(challenge, "reviewers");
+
+  if (!Array.isArray(reviewers)) {
+    return 0;
+  }
+
+  const firstPlacePrizeValue = getFirstPlacePrizeValue(challenge);
+
+  if (_.isNil(firstPlacePrizeValue)) {
+    return 0;
+  }
+
+  return reviewers.reduce((total, reviewer) => {
+    if (_.get(reviewer, "isMemberReview") === false) {
+      return total;
+    }
+
+    const fixedAmount = _.toNumber(_.get(reviewer, "fixedAmount"));
+    const baseCoefficient = _.toNumber(_.get(reviewer, "baseCoefficient"));
+    const incrementalCoefficient = _.toNumber(_.get(reviewer, "incrementalCoefficient"));
+    const memberReviewerCount = Math.max(
+      1,
+      Math.trunc(_.toNumber(_.get(reviewer, "memberReviewerCount")) || 1),
+    );
+    const reviewerPayment =
+      (Number.isFinite(fixedAmount) ? fixedAmount : 0) +
+      ((Number.isFinite(baseCoefficient) ? baseCoefficient : 0) +
+        (Number.isFinite(incrementalCoefficient) ? incrementalCoefficient : 0) *
+          DEFAULT_ESTIMATED_SUBMISSIONS_COUNT) *
+        firstPlacePrizeValue;
+
+    return total + reviewerPayment * memberReviewerCount;
+  }, 0);
+}
+
+/**
  * Reads the currently persisted challenge member-payment total.
  *
  * @param {object} challenge Challenge model or response object.
- * @returns {number|undefined} Total USD member-payment amount before markup.
+ * @returns {number|undefined} Total USD member-payment amount before markup,
+ * including estimated member-review cost when prize sets are loaded.
  */
 function getChallengeMemberPaymentAmount(challenge) {
   const prizeSetMemberPaymentAmount = getChallengePrizeSetMemberPaymentAmount(challenge);
 
   if (!_.isNil(prizeSetMemberPaymentAmount)) {
-    return prizeSetMemberPaymentAmount;
+    return Number(
+      (prizeSetMemberPaymentAmount + getEstimatedReviewerPaymentAmount(challenge)).toFixed(2),
+    );
   }
 
   const totalPrizes = _.get(
@@ -1991,6 +2112,39 @@ async function createChallenge(currentUser, challenge, userToken) {
     _.set(challenge, "legacy.reviewType", _.toUpper(_.get(challenge, "legacy.reviewType")));
   }
 
+  const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+
+  if (!requestedApprovalStatus) {
+    challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+  } else {
+    challenge.approvalStatus = requestedApprovalStatus;
+  }
+
+  if (
+    CHALLENGE_APPROVAL_ACTION_STATUSES.has(challenge.approvalStatus) &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can approve or reject challenge budgets.",
+    );
+  }
+
+  if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = _.toString(challenge.approvalRejectionReason || "").trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    challenge.approvalRejectionReason = rejectionReason;
+    challenge.approvalApprovedBy = null;
+  } else if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = null;
+  }
+
   if (!challenge.status) {
     challenge.status = ChallengeStatusEnum.NEW;
   }
@@ -2370,6 +2524,11 @@ createChallenge.schema = {
         })
         .optional(),
       startDate: Joi.date().iso(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
@@ -2544,7 +2703,20 @@ getChallengeStatistics.schema = {
  * @returns {Boolean} true if different, false otherwise
  */
 function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
-  return !_.isEqual(_.sortBy(prizeSets, "type"), _.sortBy(otherPrizeSets, "type"));
+  const buildPrizeKeys = (sets) =>
+    _.sortBy(
+      _.flatMap(sets || [], (prizeSet) => {
+        const normalizedType = _.toString(_.get(prizeSet, "type", "")).trim().toUpperCase();
+        const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+        return prizes.map((prize) => {
+          const normalizedValue = _.toString(_.get(prize, "value", "")).trim();
+          return `${normalizedType}:${normalizedValue}`;
+        });
+      }),
+    );
+
+  return !_.isEqual(buildPrizeKeys(prizeSets), buildPrizeKeys(otherPrizeSets));
 }
 
 /**
@@ -3009,12 +3181,67 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   }
 
   data = preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge);
+  const rawApprovalRejectionReason = _.toString(_.get(data, "approvalRejectionReason", ""));
 
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
   const sanitizedIncludesTerms = Object.prototype.hasOwnProperty.call(data, "terms");
   const shouldReplaceTerms =
     sanitizedIncludesTerms || (payloadIncludesTerms && originalTermsValue === null);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+  const requestedApprovalStatus = normalizeApprovalStatus(data.approvalStatus);
+  const prizeSetsUpdated =
+    Array.isArray(data.prizeSets) && isDifferentPrizeSets(data.prizeSets, challenge.prizeSets);
+
+  if (
+    requestedApprovalStatus != null &&
+    requestedApprovalStatus !== challenge.approvalStatus &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can change the challenge budget approval status.",
+    );
+  }
+
+  if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = rawApprovalRejectionReason.trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    data.approvalRejectionReason = rejectionReason;
+    data.approvalApprovedBy = null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
+  }
+
+  if (
+    challenge.status === ChallengeStatusEnum.ACTIVE &&
+    prizeSetsUpdated &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Prizes and copilot fee are locked after launch. Contact the Project Manager for updates.",
+    );
+  }
+
+  if (
+    prizeSetsUpdated &&
+    challenge.status !== ChallengeStatusEnum.ACTIVE &&
+    (requestedApprovalStatus == null || !canApproveChallengeBudget)
+  ) {
+    data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
+  }
+
+  const resolvedApprovalStatus =
+    normalizeApprovalStatus(data.approvalStatus) ||
+    normalizeApprovalStatus(challenge.approvalStatus) ||
+    CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
 
   logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
@@ -3039,6 +3266,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const isStatusChangingToCompleted =
     data.status === ChallengeStatusEnum.COMPLETED &&
     challenge.status !== ChallengeStatusEnum.COMPLETED;
+
+  if (isStatusChangingToActive && resolvedApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    throw new errors.BadRequestError("Challenge launch is blocked until budget approval is Approved.");
+  }
+
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -3689,9 +3921,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (shouldReplaceTerms) {
       await tx.challengeTerm.deleteMany({ where: { challengeId } });
     }
-    // if (_.isNil(updateData.skills)) {
-    //   await tx.challengeSkill.deleteMany({ where: { challengeId } });
-    // }
+    if (!_.isNil(updateData.skills)) {
+      await tx.challengeSkill.deleteMany({ where: { challengeId } });
+    }
 
     return await tx.challenge.update({
       data: updateData,
@@ -3970,6 +4202,11 @@ updateChallenge.schema = {
       status: Joi.string()
         .valid(..._.values(ChallengeStatusEnum))
         .insensitive(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -4332,6 +4569,7 @@ function sanitizeChallenge(challenge) {
     "legacyId",
     "startDate",
     "status",
+    "approvalStatus",
     "task",
     "groups",
     "cancelReason",
