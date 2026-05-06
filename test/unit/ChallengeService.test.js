@@ -1906,6 +1906,71 @@ describe("challenge service unit tests", () => {
       }
     }).timeout(5000);
 
+    it("replaces existing skills when update payload includes skills", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.name = `${challengeData.name} Skills ${Date.now()}`;
+      challengeData.legacyId = Math.floor(Math.random() * 1000000);
+      const originalGetStandSkills = helper.getStandSkills;
+      const skillId1 = uuid();
+      const skillId2 = uuid();
+      let challengeWithSkills;
+
+      helper.getStandSkills = async (ids) =>
+        ids.map((skillId) => ({
+          id: skillId,
+          name: `Skill ${skillId}`,
+        }));
+
+      try {
+        challengeWithSkills = await service.createChallenge(
+          { isMachine: true, sub: "sub-skills-create", userId: 22838965 },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+
+        await prisma.challengeSkill.createMany({
+          data: [
+            {
+              challengeId: challengeWithSkills.id,
+              skillId: skillId1,
+              createdBy: "unit-test",
+              updatedBy: "unit-test",
+            },
+            {
+              challengeId: challengeWithSkills.id,
+              skillId: skillId2,
+              createdBy: "unit-test",
+              updatedBy: "unit-test",
+            },
+          ],
+        });
+
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: "sub-skills-update", userId: 22838965 },
+          challengeWithSkills.id,
+          {
+            skills: [{ id: skillId2 }],
+          },
+        );
+
+        should.exist(updated.skills);
+        should.equal(updated.skills.length, 1);
+        should.equal(updated.skills[0].id, skillId2);
+        should.equal(updated.skills[0].name, `Skill ${skillId2}`);
+
+        const persistedSkills = await prisma.challengeSkill.findMany({
+          where: { challengeId: challengeWithSkills.id },
+        });
+        should.equal(persistedSkills.length, 1);
+        should.equal(persistedSkills[0].skillId, skillId2);
+      } finally {
+        helper.getStandSkills = originalGetStandSkills;
+        if (challengeWithSkills && challengeWithSkills.id) {
+          await prisma.challenge.delete({ where: { id: challengeWithSkills.id } });
+        }
+      }
+    }).timeout(5000);
+
     it("update challenge successfully with winners", async () => {
       const result = await service.updateChallenge(
         { isMachine: true, sub: "sub3", userId: 22838965 },
