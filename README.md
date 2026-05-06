@@ -52,6 +52,7 @@ The following parameters can be set in config files or in env variables:
 - AMAZON.AWS_REGION: The Amazon certificate region to use when connecting.
 - AMAZON.ATTACHMENT_S3_BUCKET: the AWS S3 bucket to store attachments
 - FILE_UPLOAD_SIZE_LIMIT: the file upload size limit in bytes
+- MEMBERS_API_URL: member-api members base URL; used to trigger challenge submitter rating updates after a challenge is completed
 - RESOURCES_API_URL: TC resources API base URL
 - GROUPS_API_URL: TC groups API base URL
 - PROJECTS_API_URL: TC projects API base URL

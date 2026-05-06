@@ -50,6 +50,7 @@ describe("challenge service unit tests", () => {
   let createdChallengeData;
   let billingLockRequests;
   let originalLockChallengeBillingAccountAmount;
+  let originalRerateChallengeSubmitterRatings;
   const notFoundId = uuid();
   const authUser = {
     userId: "testuser",
@@ -167,10 +168,13 @@ describe("challenge service unit tests", () => {
       billingLockRequests.push(_.cloneDeep(request));
       return { locked: true };
     };
+    originalRerateChallengeSubmitterRatings = helper.rerateChallengeSubmitterRatings;
+    helper.rerateChallengeSubmitterRatings = async () => true;
   });
 
   afterEach(() => {
     projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
+    helper.rerateChallengeSubmitterRatings = originalRerateChallengeSubmitterRatings;
   });
 
   after(async () => {

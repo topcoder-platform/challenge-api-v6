@@ -3036,6 +3036,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   const isStatusChangingToActive =
     data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
+  const isStatusChangingToCompleted =
+    data.status === ChallengeStatusEnum.COMPLETED &&
+    challenge.status !== ChallengeStatusEnum.COMPLETED;
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -3729,6 +3732,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       include: includeReturnFields,
     });
     await indexChallengeAndPostToKafka(committed, track, type);
+  }
+
+  if (isStatusChangingToCompleted) {
+    logger.info(`Triggering member rating updates for completed challenge ${challengeId}`);
+    void helper.rerateChallengeSubmitterRatings(challengeId);
   }
 
   // Convert to response shape before any business-logic checks that expect it

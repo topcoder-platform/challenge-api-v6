@@ -524,6 +524,48 @@ async function generateChallengePayments(challengeId) {
 }
 
 /**
+ * Trigger member-api to rerate all rating dimensions for submitters on a completed challenge.
+ * Member-api owns the rating dimension selection, including native track/type
+ * ratings and configured named rating paths such as AI.
+ * @param {String|Number} challengeId the completed challenge id
+ * @returns {Boolean} true if member-api accepted the request, false otherwise
+ */
+async function rerateChallengeSubmitterRatings(challengeId) {
+  if (!config.MEMBERS_API_URL) {
+    logger.warn("helper.rerateChallengeSubmitterRatings: MEMBERS_API_URL not configured");
+    return false;
+  }
+
+  const baseUrl = String(config.MEMBERS_API_URL).replace(/\/+$/, "");
+  const url = `${baseUrl}/stats/rerate-challenge`;
+  logger.debug(`helper.rerateChallengeSubmitterRatings: POST ${url}`);
+
+  try {
+    const token = await m2mHelper.getM2MToken();
+    const res = await axios.post(
+      url,
+      { challengeId },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    logger.debug(
+      `helper.rerateChallengeSubmitterRatings: response status ${res.status} for challenge ${challengeId}`,
+    );
+    return res.status >= 200 && res.status < 300;
+  } catch (err) {
+    logger.debug(
+      `helper.rerateChallengeSubmitterRatings: error for challenge ${challengeId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
+    );
+    return false;
+  }
+}
+
+/**
  * Cancel project
  * @param {String} projectId the project id
  * @param {String} cancelReason the cancel reasonn
@@ -1995,6 +2037,7 @@ module.exports = {
   capturePayment,
   cancelPayment,
   generateChallengePayments,
+  rerateChallengeSubmitterRatings,
   sendSelfServiceNotification,
   getMemberByHandle,
   getMembersByHandles,
