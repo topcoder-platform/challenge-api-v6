@@ -99,6 +99,9 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
     "numOfRegistrants",
     "numOfSubmissions",
     "numOfCheckpointSubmissions",
+    "approvalStatus",
+    "approvalRejectionReason",
+    "approvalApprovedBy",
   ]);
   // set legacy data
   if (!_.isNil(challenge.legacy)) {
@@ -207,6 +210,9 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
   // status
   if (challenge.status) {
     result.status = challenge.status.toUpperCase();
+  }
+  if (challenge.approvalStatus) {
+    result.approvalStatus = challenge.approvalStatus.toUpperCase();
   }
   // terms
   if (!_.isNil(challenge.terms)) {

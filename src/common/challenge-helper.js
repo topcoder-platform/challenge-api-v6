@@ -132,11 +132,13 @@ class ChallengeHelper {
 
   /**
    * Validate Challenge skills.
-   * @param {Object} challenge the challenge
-   * @param {oldChallenge} challenge the old challenge data
+   * @param {Object} challenge the challenge payload. When skills are omitted they are left
+   * unchanged.
+   * @param {Object} oldChallenge the old challenge data used to block skill edits on completed
+   * challenges
    */
   async validateSkills(challenge, oldChallenge) {
-    if (!challenge.skills || _.isEmpty(challenge.skills)) {
+    if (!challenge.skills) {
       return;
     }
 

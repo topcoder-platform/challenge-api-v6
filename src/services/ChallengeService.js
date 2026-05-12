@@ -36,6 +36,34 @@ const {
 } = require("../common/prisma");
 const prisma = getClient();
 
+const BILLING_MARKUP_COPILOT_ROLES = new Set(["copilot", "connect copilot"]);
+const BILLING_MARKUP_VISIBLE_ROLES = new Set([
+  "administrator",
+  "connect admin",
+  "connect manager",
+  "project manager",
+  "topcoder project manager",
+  "talent manager",
+  "topcoder talent manager",
+]);
+const CHALLENGE_BILLING_LOCK_STATUSES = new Set([
+  ChallengeStatusEnum.DRAFT,
+  ChallengeStatusEnum.APPROVED,
+  ChallengeStatusEnum.ACTIVE,
+]);
+
+const CHALLENGE_APPROVAL_STATUS = {
+  PENDING_APPROVAL: "PENDING_APPROVAL",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+};
+const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
+  CHALLENGE_APPROVAL_STATUS.APPROVED,
+  CHALLENGE_APPROVAL_STATUS.REJECTED,
+]);
+
+const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
+
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
   updated: constants.validChallengeParams.Updated,
@@ -46,6 +74,27 @@ const allowedSortByValues = _.uniq([
   ..._.values(constants.validChallengeParams),
   ...Object.keys(sortByAliases),
 ]);
+
+const CANCELLED_CHALLENGE_STATUSES = new Set([
+  ChallengeStatusEnum.CANCELLED,
+  ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE,
+  ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
+  ChallengeStatusEnum.CANCELLED_FAILED_REVIEW,
+  ChallengeStatusEnum.CANCELLED_FAILED_SCREENING,
+  ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
+  ChallengeStatusEnum.CANCELLED_WINNER_UNRESPONSIVE,
+  ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+  ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
+]);
+
+/**
+ * Determines whether a challenge status is one of the terminal cancelled states.
+ * @param {String} status challenge status from the update payload or stored challenge
+ * @returns {Boolean} true when the status represents a cancelled challenge
+ */
+function isCancelledChallengeStatus(status) {
+  return CANCELLED_CHALLENGE_STATUSES.has(status);
+}
 
 function normalizeStatusSortValue(statusValue) {
   if (_.isNil(statusValue)) {
@@ -58,6 +107,39 @@ function normalizeStatusSortValue(statusValue) {
   }
 
   return normalizedStatus;
+}
+
+function normalizeApprovalStatus(value) {
+  if (_.isNil(value)) {
+    return null;
+  }
+
+  const normalized = _.toString(value).trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!Object.values(CHALLENGE_APPROVAL_STATUS).includes(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+async function userCanApproveChallengeBudget(currentUser, challengeOrProjectId) {
+  if (!currentUser) {
+    return false;
+  }
+
+  if (currentUser.isMachine || hasAdminRole(currentUser)) {
+    return true;
+  }
+
+  const projectId = _.isObject(challengeOrProjectId)
+    ? _.get(challengeOrProjectId, "projectId")
+    : challengeOrProjectId;
+
+  return helper.userHasProjectManagerAccess(projectId, currentUser);
 }
 
 function compareStatusSortValues(aStatusValue, bStatusValue) {
@@ -76,6 +158,257 @@ function compareStatusSortValues(aStatusValue, bStatusValue) {
   }
 
   return normalizedA.localeCompare(normalizedB);
+}
+
+/**
+ * Determines whether the challenge budget should remain locked.
+ *
+ * @param {string|undefined|null} status Challenge status from the request or persistence.
+ * @returns {boolean} True when the challenge should reserve billing-account budget.
+ */
+function isChallengeBillingLockStatus(status) {
+  return CHALLENGE_BILLING_LOCK_STATUSES.has(normalizeStatusSortValue(status));
+}
+
+/**
+ * Calculates the billable USD prize-set total for a challenge.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} USD prize-set member-payment amount before markup,
+ * or `undefined` when prize sets are not loaded.
+ */
+function getChallengePrizeSetMemberPaymentAmount(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  return prizeSets.reduce((total, prizeSet) => {
+    const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+    return (
+      total +
+      prizes.reduce((prizeTotal, prize) => {
+        if (_.toString(_.get(prize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+          return prizeTotal;
+        }
+
+        const prizeValue = _.toNumber(_.get(prize, "value"));
+
+        return Number.isFinite(prizeValue) ? prizeTotal + prizeValue : prizeTotal;
+      }, 0)
+    );
+  }, 0);
+}
+
+/**
+ * Reads the first-place placement prize used by reviewer cost estimates.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} First-place USD placement prize amount, or undefined when unavailable.
+ */
+function getFirstPlacePrizeValue(challenge) {
+  const prizeSets = _.get(challenge, "prizeSets");
+
+  if (!Array.isArray(prizeSets)) {
+    return undefined;
+  }
+
+  const placementPrizeSet = _.find(
+    prizeSets,
+    (prizeSet) => _.toString(_.get(prizeSet, "type")).toUpperCase() === PrizeSetTypeEnum.PLACEMENT,
+  );
+  const firstPrize = _.get(placementPrizeSet, "prizes[0]");
+
+  if (_.toString(_.get(firstPrize, "type")).toUpperCase() !== constants.prizeTypes.USD) {
+    return undefined;
+  }
+
+  const prizeValue = _.toNumber(_.get(firstPrize, "value"));
+
+  return Number.isFinite(prizeValue) ? prizeValue : undefined;
+}
+
+/**
+ * Calculates the estimated member-review payment amount for billing locks.
+ *
+ * The work app shows review cost using a two-submission estimate, so draft
+ * budget locks need the same fixed and coefficient-based reviewer math.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number} Estimated member-review payment amount before markup.
+ */
+function getEstimatedReviewerPaymentAmount(challenge) {
+  const reviewers = _.get(challenge, "reviewers");
+
+  if (!Array.isArray(reviewers)) {
+    return 0;
+  }
+
+  const firstPlacePrizeValue = getFirstPlacePrizeValue(challenge);
+
+  if (_.isNil(firstPlacePrizeValue)) {
+    return 0;
+  }
+
+  return reviewers.reduce((total, reviewer) => {
+    if (_.get(reviewer, "isMemberReview") === false) {
+      return total;
+    }
+
+    const fixedAmount = _.toNumber(_.get(reviewer, "fixedAmount"));
+    const baseCoefficient = _.toNumber(_.get(reviewer, "baseCoefficient"));
+    const incrementalCoefficient = _.toNumber(_.get(reviewer, "incrementalCoefficient"));
+    const memberReviewerCount = Math.max(
+      1,
+      Math.trunc(_.toNumber(_.get(reviewer, "memberReviewerCount")) || 1),
+    );
+    const reviewerPayment =
+      (Number.isFinite(fixedAmount) ? fixedAmount : 0) +
+      ((Number.isFinite(baseCoefficient) ? baseCoefficient : 0) +
+        (Number.isFinite(incrementalCoefficient) ? incrementalCoefficient : 0) *
+          DEFAULT_ESTIMATED_SUBMISSIONS_COUNT) *
+        firstPlacePrizeValue;
+
+    return total + reviewerPayment * memberReviewerCount;
+  }, 0);
+}
+
+/**
+ * Reads the currently persisted challenge member-payment total.
+ *
+ * @param {object} challenge Challenge model or response object.
+ * @returns {number|undefined} Total USD member-payment amount before markup,
+ * including estimated member-review cost when prize sets are loaded.
+ */
+function getChallengeMemberPaymentAmount(challenge) {
+  const prizeSetMemberPaymentAmount = getChallengePrizeSetMemberPaymentAmount(challenge);
+
+  if (!_.isNil(prizeSetMemberPaymentAmount)) {
+    return Number(
+      (prizeSetMemberPaymentAmount + getEstimatedReviewerPaymentAmount(challenge)).toFixed(2),
+    );
+  }
+
+  const totalPrizes = _.get(
+    challenge,
+    "overview.totalPrizes",
+    _.get(challenge, "overviewTotalPrizes"),
+  );
+  const amount = _.toNumber(totalPrizes);
+
+  return Number.isFinite(amount) ? amount : undefined;
+}
+
+/**
+ * Synchronizes the draft/active challenge budget lock to billing accounts.
+ *
+ * The challenge service owns the current estimated member-payment amount while
+ * finance later consumes the finalized payment amount after payment generation.
+ * This keeps draft challenge rows visible as locked budget in billing-account
+ * details until finance moves the row to consumed.
+ *
+ * @param {object} challenge Challenge model or response object after persistence.
+ * @returns {Promise<void>} Resolves after the billing-account lock is written or skipped.
+ * @throws {Error} When the Billing Accounts API rejects the lock request.
+ */
+async function syncChallengeBillingAccountLock(challenge) {
+  if (!isChallengeBillingLockStatus(challenge && challenge.status)) {
+    return;
+  }
+
+  const billing = _.get(challenge, "billing", _.get(challenge, "billingRecord"));
+  const billingAccountId = _.get(billing, "billingAccountId");
+  const hasBillingAccountId = !_.isNil(billingAccountId) && _.toString(billingAccountId).trim();
+  const memberPaymentAmount = getChallengeMemberPaymentAmount(challenge);
+
+  if (!hasBillingAccountId || _.isNil(memberPaymentAmount)) {
+    logger.warn("Skipping challenge billing lock sync due to missing billing context", {
+      challengeId: _.get(challenge, "id"),
+      hasBillingAccountId: Boolean(hasBillingAccountId),
+      hasMemberPaymentAmount: !_.isNil(memberPaymentAmount),
+    });
+    return;
+  }
+
+  await projectHelper.lockChallengeBillingAccountAmount({
+    billingAccountId,
+    challengeId: challenge.id,
+    markup: _.get(billing, "clientBillingRate", _.get(billing, "markup")),
+    memberPaymentAmount,
+  });
+}
+
+/**
+ * Returns normalized role names from the authenticated user payload.
+ * @param {Object} currentUser the authenticated user
+ * @returns {Set<String>} lower-cased role names
+ */
+function getNormalizedUserRoles(currentUser) {
+  const roles = _.get(currentUser, "roles", []);
+  const roleValues = Array.isArray(roles)
+    ? roles
+    : _.toString(roles)
+        .split(",")
+        .map((role) => role.trim());
+
+  return new Set(
+    _.map(roleValues, (role) => _.toString(role).trim().toLowerCase()).filter(Boolean),
+  );
+}
+
+/**
+ * Determines whether challenge billing markup should be hidden from the caller.
+ * @param {Object} currentUser the authenticated user
+ * @returns {Boolean} true when the caller is copilot-only and should not see markup
+ */
+function shouldHideBillingMarkupForCopilot(currentUser) {
+  if (!currentUser || _.get(currentUser, "isMachine", false)) {
+    return false;
+  }
+
+  const roles = getNormalizedUserRoles(currentUser);
+  const hasCopilotRole = [...BILLING_MARKUP_COPILOT_ROLES].some((role) => roles.has(role));
+
+  if (!hasCopilotRole) {
+    return false;
+  }
+
+  return ![...BILLING_MARKUP_VISIBLE_ROLES].some((role) => roles.has(role));
+}
+
+/**
+ * Removes raw billing markup from challenge response data for copilot-only callers.
+ * @param {Object} currentUser the authenticated user
+ * @param {Object} challenge the challenge response object to sanitize
+ * @returns {Object} the same challenge object after response sanitization
+ */
+function sanitizeBillingMarkupForCaller(currentUser, challenge) {
+  if (shouldHideBillingMarkupForCopilot(currentUser)) {
+    _.unset(challenge, "billing.markup");
+  }
+
+  return challenge;
+}
+
+/**
+ * Keeps persisted billing markup intact when copilot-only callers submit billing data.
+ * @param {Object} currentUser the authenticated user
+ * @param {Object} data incoming update payload
+ * @param {Object} challenge persisted challenge response shape
+ * @returns {Object} the update payload with protected billing markup restored
+ */
+function preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge) {
+  if (
+    shouldHideBillingMarkupForCopilot(currentUser) &&
+    _.has(data, "billing") &&
+    _.has(challenge, "billing.markup")
+  ) {
+    _.set(data, "billing.markup", _.get(challenge, "billing.markup"));
+  }
+
+  return data;
 }
 
 // Minimal domain adapter for PhaseAdvancer to fetch phase-specific facts.
@@ -591,13 +924,28 @@ setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
  * @returns {Array} the search result
  */
 async function searchByLegacyId(currentUser, legacyId, page, perPage) {
+  const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
+  const where = { legacyId };
+  if (whitelistFilter) {
+    where.AND = [whitelistFilter];
+  }
+
   // Do not take nested objects, query will be faster
-  const challenges = await prisma.challenge.findMany({
-    take: perPage,
-    skip: (page - 1) * perPage,
-    where: { legacyId },
-    include: includeReturnFields,
-  });
+  let challenges;
+  try {
+    challenges = await prisma.challenge.findMany({
+      take: perPage,
+      skip: (page - 1) * perPage,
+      where,
+      include: includeReturnFields,
+    });
+  } catch (err) {
+    if (helper.shouldApplyChallengeWhitelist(currentUser)) {
+      logger.warn(`searchByLegacyId whitelist-filtered query failed: ${err.message}`);
+      return [];
+    }
+    throw err;
+  }
 
   _.forEach(challenges, (c) => {
     prismaHelper.convertModelToResponse(c);
@@ -782,7 +1130,10 @@ async function searchChallenges(currentUser, criteria) {
   }
   if (!_.isUndefined(criteria.legacyId)) {
     const result = await searchByLegacyId(currentUser, criteria.legacyId, page, perPage);
-    return { total: result.length, page, perPage, result };
+    const sanitizedResult = result.map((challenge) =>
+      helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge)),
+    );
+    return { total: sanitizedResult.length, page, perPage, result: sanitizedResult };
   }
 
   const prismaFilter = {
@@ -802,6 +1153,10 @@ async function searchChallenges(currentUser, criteria) {
 
   const _hasAdminRole = hasAdminRole(currentUser);
   const _isMachineToken = _.get(currentUser, "isMachine", false);
+  const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
+  if (whitelistFilter) {
+    prismaFilter.where.AND.push(whitelistFilter);
+  }
 
   const normalizeGroupIdValue = (value) => {
     if (_.isNil(value)) {
@@ -1564,7 +1919,9 @@ async function searchChallenges(currentUser, criteria) {
     }
   });
 
-  const sanitizedResult = result.map((challenge) => helper.removeNullProperties(challenge));
+  const sanitizedResult = result.map((challenge) =>
+    helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge)),
+  );
 
   if (searchTimingEnabled) {
     logger.info(
@@ -1755,6 +2112,39 @@ async function createChallenge(currentUser, challenge, userToken) {
     _.set(challenge, "legacy.reviewType", _.toUpper(_.get(challenge, "legacy.reviewType")));
   }
 
+  const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+
+  if (!requestedApprovalStatus) {
+    challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+  } else {
+    challenge.approvalStatus = requestedApprovalStatus;
+  }
+
+  if (
+    CHALLENGE_APPROVAL_ACTION_STATUSES.has(challenge.approvalStatus) &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can approve or reject challenge budgets.",
+    );
+  }
+
+  if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = _.toString(challenge.approvalRejectionReason || "").trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    challenge.approvalRejectionReason = rejectionReason;
+    challenge.approvalApprovedBy = null;
+  } else if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else {
+    challenge.approvalRejectionReason = null;
+    challenge.approvalApprovedBy = null;
+  }
+
   if (!challenge.status) {
     challenge.status = ChallengeStatusEnum.NEW;
   }
@@ -1940,6 +2330,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   prismaHelper.convertModelToResponse(ret);
   await enrichSkillsData(ret);
   enrichChallengeForResponse(ret, track, type);
+  await syncChallengeBillingAccountLock(ret);
 
   // If the challenge is self-service, add the creating user as the "client manager", *not* the manager
   // This is necessary for proper handling of the vanilla embed on the self-service work item dashboard
@@ -1987,7 +2378,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     }) ${buildLogContext()}`,
   );
 
-  return helper.removeNullProperties(ret);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, ret));
 }
 createChallenge.schema = {
   currentUser: Joi.any(),
@@ -2133,6 +2524,11 @@ createChallenge.schema = {
         })
         .optional(),
       startDate: Joi.date().iso(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       status: Joi.string().valid(
         ChallengeStatusEnum.ACTIVE,
         ChallengeStatusEnum.NEW,
@@ -2179,6 +2575,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge of id ${id} is not found.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   if (checkIfExists) {
     return _.pick(challenge, ["id", "legacyId"]);
   }
@@ -2235,7 +2632,7 @@ async function getChallenge(currentUser, id, checkIfExists) {
 
   // Note: numOfRegistrants and numOfSubmissions are no longer calculated here.
 
-  return helper.removeNullProperties(challenge);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge));
 }
 getChallenge.schema = {
   currentUser: Joi.any(),
@@ -2247,9 +2644,18 @@ getChallenge.schema = {
  * Get challenge statistics
  * @param {Object} currentUser the user who perform operation
  * @param {String} id the challenge id
- * @returns {Object} the challenge with given id
+ * @returns {Object} the challenge statistics for the given challenge
+ * @throws {NotFoundError} when the challenge does not exist
+ * @throws {ForbiddenError} when the current user cannot view the challenge
  */
 async function getChallengeStatistics(currentUser, id) {
+  const challenge = await prisma.challenge.findUnique({
+    where: { id },
+  });
+  if (_.isNil(challenge) || _.isNil(challenge.id)) {
+    throw new errors.NotFoundError(`Challenge of id ${id} is not found.`);
+  }
+  await helper.ensureUserCanViewChallenge(currentUser, challenge);
   // get submissions
   console.log("Getting challenge submissions for challenge ID: " + id);
   const submissions = await helper.getChallengeSubmissions(id);
@@ -2297,7 +2703,20 @@ getChallengeStatistics.schema = {
  * @returns {Boolean} true if different, false otherwise
  */
 function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
-  return !_.isEqual(_.sortBy(prizeSets, "type"), _.sortBy(otherPrizeSets, "type"));
+  const buildPrizeKeys = (sets) =>
+    _.sortBy(
+      _.flatMap(sets || [], (prizeSet) => {
+        const normalizedType = _.toString(_.get(prizeSet, "type", "")).trim().toUpperCase();
+        const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
+
+        return prizes.map((prize) => {
+          const normalizedValue = _.toString(_.get(prize, "value", "")).trim();
+          return `${normalizedType}:${normalizedValue}`;
+        });
+      }),
+    );
+
+  return !_.isEqual(buildPrizeKeys(prizeSets), buildPrizeKeys(otherPrizeSets));
 }
 
 /**
@@ -2676,6 +3095,8 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
 
 /**
  * Update challenge.
+ * When a challenge transitions to completed task status or a cancelled status,
+ * payment generation is requested after the database update commits.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
@@ -2698,6 +3119,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   if (!challenge || !challenge.id) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   enrichChallengeForResponse(challenge);
   prismaHelper.convertModelToResponse(challenge);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
@@ -2727,14 +3149,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       })`,
     );
 
-    if (billingAccountId && _.isUndefined(_.get(challenge, "billing.billingAccountId"))) {
-      // Ensure billingAccountId is a string or null to match Prisma schema
-      if (billingAccountId !== null && billingAccountId !== undefined) {
-        _.set(data, "billing.billingAccountId", String(billingAccountId));
-      } else {
-        _.set(data, "billing.billingAccountId", null);
-      }
-      _.set(data, "billing.markup", _.isNil(markup) ? 0 : markup);
+    const existingBillingAccountId = normalizeOptionalString(
+      _.get(challenge, "billing.billingAccountId"),
+    );
+    const projectBillingAccountId = normalizeOptionalString(billingAccountId);
+    if (projectBillingAccountId && !existingBillingAccountId) {
+      data.billing = {
+        ..._.get(challenge, "billing", {}),
+        ..._.get(data, "billing", {}),
+        billingAccountId: projectBillingAccountId,
+        markup: _.isNil(markup) ? 0 : markup,
+      };
     }
 
     // Make sure the user cannot change the direct project ID
@@ -2755,11 +3180,68 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     delete data.reviews;
   }
 
+  data = preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge);
+  const rawApprovalRejectionReason = _.toString(_.get(data, "approvalRejectionReason", ""));
+
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
   data = sanitizeData(sanitizeChallenge(data), challenge);
   const sanitizedIncludesTerms = Object.prototype.hasOwnProperty.call(data, "terms");
   const shouldReplaceTerms =
     sanitizedIncludesTerms || (payloadIncludesTerms && originalTermsValue === null);
+  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
+  const requestedApprovalStatus = normalizeApprovalStatus(data.approvalStatus);
+  const prizeSetsUpdated =
+    Array.isArray(data.prizeSets) && isDifferentPrizeSets(data.prizeSets, challenge.prizeSets);
+
+  if (
+    requestedApprovalStatus != null &&
+    requestedApprovalStatus !== challenge.approvalStatus &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Only admins or project managers with full access can change the challenge budget approval status.",
+    );
+  }
+
+  if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+    const rejectionReason = rawApprovalRejectionReason.trim();
+    if (!rejectionReason) {
+      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+    }
+    data.approvalRejectionReason = rejectionReason;
+    data.approvalApprovedBy = null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL) {
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
+  }
+
+  if (
+    challenge.status === ChallengeStatusEnum.ACTIVE &&
+    prizeSetsUpdated &&
+    !canApproveChallengeBudget
+  ) {
+    throw new errors.ForbiddenError(
+      "Prizes and copilot fee are locked after launch. Contact the Project Manager for updates.",
+    );
+  }
+
+  if (
+    prizeSetsUpdated &&
+    challenge.status !== ChallengeStatusEnum.ACTIVE &&
+    (requestedApprovalStatus == null || !canApproveChallengeBudget)
+  ) {
+    data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+    data.approvalRejectionReason = null;
+    data.approvalApprovedBy = null;
+  }
+
+  const resolvedApprovalStatus =
+    normalizeApprovalStatus(data.approvalStatus) ||
+    normalizeApprovalStatus(challenge.approvalStatus) ||
+    CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
   logger.debug(`Sanitized Data: ${JSON.stringify(data)}`);
 
   logger.debug(`updateChallenge(${challengeId}): fetching challenge resources`);
@@ -2781,6 +3263,14 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   const isStatusChangingToActive =
     data.status === ChallengeStatusEnum.ACTIVE && challenge.status !== ChallengeStatusEnum.ACTIVE;
+  const isStatusChangingToCompleted =
+    data.status === ChallengeStatusEnum.COMPLETED &&
+    challenge.status !== ChallengeStatusEnum.COMPLETED;
+
+  if (isStatusChangingToActive && resolvedApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED) {
+    throw new errors.BadRequestError("Challenge launch is blocked until budget approval is Approved.");
+  }
+
   let sendActivationEmail = false;
   let sendSubmittedEmail = false;
   let sendCompletedEmail = false;
@@ -2886,6 +3376,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
+  const isStatusChangingToCancelled =
+    isCancelledChallengeStatus(data.status) && !isCancelledChallengeStatus(challenge.status);
   if (data.status) {
     if (data.status === ChallengeStatusEnum.ACTIVE) {
       await validateChallengeActivationBillingAccount({
@@ -2896,22 +3388,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       });
     }
 
-    if (
-      _.includes(
-        [
-          ChallengeStatusEnum.CANCELLED,
-          ChallengeStatusEnum.CANCELLED_REQUIREMENTS_INFEASIBLE,
-          ChallengeStatusEnum.CANCELLED_PAYMENT_FAILED,
-          ChallengeStatusEnum.CANCELLED_FAILED_REVIEW,
-          ChallengeStatusEnum.CANCELLED_FAILED_SCREENING,
-          ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
-          ChallengeStatusEnum.CANCELLED_WINNER_UNRESPONSIVE,
-          ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
-          ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
-        ],
-        data.status,
-      )
-    ) {
+    if (isCancelledChallengeStatus(data.status)) {
       isChallengeBeingCancelled = true;
     }
 
@@ -3444,9 +3921,9 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (shouldReplaceTerms) {
       await tx.challengeTerm.deleteMany({ where: { challengeId } });
     }
-    // if (_.isNil(updateData.skills)) {
-    //   await tx.challengeSkill.deleteMany({ where: { challengeId } });
-    // }
+    if (!_.isNil(updateData.skills)) {
+      await tx.challengeSkill.deleteMany({ where: { challengeId } });
+    }
 
     return await tx.challenge.update({
       data: updateData,
@@ -3454,6 +3931,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       include: includeReturnFields,
     });
   });
+  await syncChallengeBillingAccountLock(updatedChallenge);
   if (taskCompletionInfo && taskCompletionInfo.shouldTriggerPayments) {
     logger.info(`Triggering payment generation for Task challenge ${challengeId}`);
     try {
@@ -3465,6 +3943,19 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       logger.error(`Error generating payments for Task challenge ${challengeId}: ${err.message}`);
     }
   }
+  if (isStatusChangingToCancelled) {
+    logger.info(`Triggering payment generation for cancelled challenge ${challengeId}`);
+    try {
+      const paymentSuccess = await helper.generateChallengePayments(challengeId);
+      if (!paymentSuccess) {
+        logger.warn(`Failed to generate payments for cancelled challenge ${challengeId}`);
+      }
+    } catch (err) {
+      logger.error(
+        `Error generating payments for cancelled challenge ${challengeId}: ${err.message}`,
+      );
+    }
+  }
   // Re-fetch the challenge outside the transaction to ensure we publish
   // only after the commit succeeds and using the committed snapshot.
   if (emitEvent) {
@@ -3473,6 +3964,11 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
       include: includeReturnFields,
     });
     await indexChallengeAndPostToKafka(committed, track, type);
+  }
+
+  if (isStatusChangingToCompleted) {
+    logger.info(`Triggering member rating updates for completed challenge ${challengeId}`);
+    void helper.rerateChallengeSubmitterRatings(challengeId);
   }
 
   // Convert to response shape before any business-logic checks that expect it
@@ -3527,7 +4023,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  return helper.removeNullProperties(updatedChallenge);
+  return helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, updatedChallenge));
 }
 
 updateChallenge.schema = {
@@ -3706,6 +4202,11 @@ updateChallenge.schema = {
       status: Joi.string()
         .valid(..._.values(ChallengeStatusEnum))
         .insensitive(),
+      approvalStatus: Joi.string()
+        .valid(...Object.values(CHALLENGE_APPROVAL_STATUS))
+        .insensitive(),
+      approvalRejectionReason: Joi.string().allow(null, ""),
+      approvalApprovedBy: Joi.string().allow(null, ""),
       attachments: Joi.array().items(
         Joi.object().keys({
           id: Joi.id(),
@@ -4068,6 +4569,7 @@ function sanitizeChallenge(challenge) {
     "legacyId",
     "startDate",
     "status",
+    "approvalStatus",
     "task",
     "groups",
     "cancelReason",
@@ -4108,7 +4610,11 @@ function sanitizeChallenge(challenge) {
     ]);
   }
   if (challenge.billing) {
-    sanitized.billing = _.pick(challenge.billing, ["billingAccountId", "markup"]);
+    sanitized.billing = _.pick(challenge.billing, [
+      "billingAccountId",
+      "markup",
+      "clientBillingRate",
+    ]);
   }
   if (challenge.metadata) {
     sanitized.metadata = _.map(challenge.metadata, (meta) => _.pick(meta, ["name", "value"]));
@@ -4365,6 +4871,7 @@ async function advancePhase(currentUser, challengeId, data) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
@@ -4504,6 +5011,7 @@ async function closeMarathonMatch(currentUser, challengeId) {
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist.`);
   }
+  await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
 
   if (!challenge.type || challenge.type.name !== "Marathon Match") {
     throw new errors.BadRequestError(

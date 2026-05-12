@@ -8,12 +8,14 @@ if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
 
 require("../../app-bootstrap");
 const _ = require("lodash");
+const axios = require("axios");
 const config = require("config");
 const { v4: uuid } = require("uuid");
 const chai = require("chai");
 const constants = require("../../app-constants");
 const service = require("../../src/services/ChallengeService");
 const helper = require("../../src/common/helper");
+const m2mHelper = require("../../src/common/m2m-helper");
 const challengeHelper = require("../../src/common/challenge-helper");
 const projectHelper = require("../../src/common/project-helper");
 const testHelper = require("../testHelper");
@@ -46,6 +48,9 @@ describe("challenge service unit tests", () => {
   let data;
   let testChallengeData;
   let createdChallengeData;
+  let billingLockRequests;
+  let originalLockChallengeBillingAccountAmount;
+  let originalRerateChallengeSubmitterRatings;
   const notFoundId = uuid();
   const authUser = {
     userId: "testuser",
@@ -156,6 +161,22 @@ describe("challenge service unit tests", () => {
     };
   });
 
+  beforeEach(() => {
+    billingLockRequests = [];
+    originalLockChallengeBillingAccountAmount = projectHelper.lockChallengeBillingAccountAmount;
+    projectHelper.lockChallengeBillingAccountAmount = async (request) => {
+      billingLockRequests.push(_.cloneDeep(request));
+      return { locked: true };
+    };
+    originalRerateChallengeSubmitterRatings = helper.rerateChallengeSubmitterRatings;
+    helper.rerateChallengeSubmitterRatings = async () => true;
+  });
+
+  afterEach(() => {
+    projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
+    helper.rerateChallengeSubmitterRatings = originalRerateChallengeSubmitterRatings;
+  });
+
   after(async () => {
     const idsToDelete = _.compact([id, id2]);
     if (idsToDelete.length > 0) {
@@ -239,6 +260,79 @@ describe("challenge service unit tests", () => {
       should.exist(result.created);
       should.equal(result.numOfSubmissions, 0);
       should.equal(result.numOfRegistrants, 0);
+    });
+
+    it("locks draft challenge budget when the challenge is saved", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.status = ChallengeStatusEnum.DRAFT;
+      challengeData.prizeSets = [
+        {
+          type: PrizeSetTypeEnum.PLACEMENT,
+          description: "placement prizes",
+          prizes: [
+            {
+              description: "placement 1",
+              type: constants.prizeTypes.USD,
+              value: 35,
+            },
+            {
+              description: "placement 2",
+              type: constants.prizeTypes.USD,
+              value: 12,
+            },
+          ],
+        },
+        {
+          type: PrizeSetTypeEnum.COPILOT,
+          description: "copilot payment",
+          prizes: [
+            {
+              description: "copilot",
+              type: constants.prizeTypes.USD,
+              value: 10,
+            },
+          ],
+        },
+      ];
+      challengeData.reviewers = [
+        {
+          scorecardId: "scorecard-id",
+          isMemberReview: true,
+          memberReviewerCount: 1,
+          phaseId: data.phase.id,
+          fixedAmount: 16.1,
+          baseCoefficient: 0,
+          incrementalCoefficient: 0,
+        },
+      ];
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+
+      projectHelper.getProjectBillingInformation = async () => ({
+        billingAccountId: "80001012",
+        markup: 0.1,
+      });
+
+      let result;
+      try {
+        result = await service.createChallenge(
+          { isMachine: true, sub: "sub", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: result.id,
+          markup: 0.1,
+          memberPaymentAmount: 73.1,
+        });
+      } finally {
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        if (result && result.id) {
+          await prisma.challenge.deleteMany({ where: { id: result.id } });
+        }
+      }
     });
 
     it("create challenge successfully when project directProjectId is a numeric string", async () => {
@@ -544,6 +638,27 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("get challenge hides billing markup for copilot-only project write users", async () => {
+      const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess;
+
+      helper.userHasProjectWriteAccess = async () => true;
+
+      try {
+        const result = await service.getChallenge(
+          { handle: "writer", roles: ["copilot"], userId: "testuser" },
+          createdChallengeData.id,
+        );
+
+        should.equal(
+          result.billing.billingAccountId,
+          createdChallengeData.billing.billingAccountId,
+        );
+        should.equal(_.isUndefined(result.billing.markup), true);
+      } finally {
+        helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess;
+      }
+    });
+
     it("get challenge hides billing for users without project write access", async () => {
       const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess;
       const originalListResourcesByMemberAndChallenge = helper.listResourcesByMemberAndChallenge;
@@ -562,6 +677,158 @@ describe("challenge service unit tests", () => {
         helper.userHasProjectWriteAccess = originalUserHasProjectWriteAccess;
         helper.listResourcesByMemberAndChallenge = originalListResourcesByMemberAndChallenge;
       }
+    });
+
+    it("get challenge enforces challenge user whitelist for interactive users", async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: createdChallengeData.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        const allowed = await service.getChallenge(
+          { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+          createdChallengeData.id,
+        );
+        should.equal(allowed.id, createdChallengeData.id);
+
+        const machine = await service.getChallenge(
+          { isMachine: true, userId: "machine-user" },
+          createdChallengeData.id,
+        );
+        should.equal(machine.id, createdChallengeData.id);
+
+        try {
+          await service.getChallenge(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            createdChallengeData.id,
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: createdChallengeData.id },
+        });
+      }
+    });
+
+    it("get challenge statistics enforces challenge user whitelist before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        try {
+          await service.getChallengeStatistics(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            data.challenge.id,
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          should.equal(loadedSubmissions, false);
+
+          const allowed = await service.getChallengeStatistics(
+            { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+            data.challenge.id,
+          );
+          should.deepEqual(allowed, []);
+
+          const machine = await service.getChallengeStatistics(
+            { isMachine: true, userId: "machine-user" },
+            data.challenge.id,
+          );
+          should.deepEqual(machine, []);
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
+    });
+
+    it("get challenge statistics returns not found before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+
+      try {
+        await service.getChallengeStatistics({ isMachine: true }, notFoundId);
+      } catch (e) {
+        should.equal(e.name, "NotFoundError");
+        should.equal(e.message, `Challenge of id ${notFoundId} is not found.`);
+        should.equal(loadedSubmissions, false);
+        return;
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+      }
+      throw new Error("should not reach here");
+    });
+
+    it("get challenge statistics enforces challenge group view rules before loading submissions", async () => {
+      const originalGetChallengeSubmissions = helper.getChallengeSubmissions;
+      const originalAxiosGet = axios.get;
+      const originalGetM2MToken = m2mHelper.getM2MToken;
+      let loadedSubmissions = false;
+
+      helper.getChallengeSubmissions = async () => {
+        loadedSubmissions = true;
+        return [];
+      };
+      m2mHelper.getM2MToken = async () => "test-token";
+      axios.get = async (url, options) => {
+        if (_.toString(url).includes("/memberGroups/")) {
+          return { data: [], status: 200, headers: {} };
+        }
+        return originalAxiosGet(url, options);
+      };
+
+      await prisma.challenge.update({
+        where: { id: data.challenge.id },
+        data: { groups: [uuid()] },
+      });
+
+      try {
+        await service.getChallengeStatistics(
+          { handle: "blocked", roles: ["Topcoder User"], userId: "blocked-user" },
+          data.challenge.id,
+        );
+      } catch (e) {
+        should.equal(e.name, "ForbiddenError");
+        should.equal(loadedSubmissions, false);
+        return;
+      } finally {
+        helper.getChallengeSubmissions = originalGetChallengeSubmissions;
+        axios.get = originalAxiosGet;
+        m2mHelper.getM2MToken = originalGetM2MToken;
+        await prisma.challenge.update({
+          where: { id: data.challenge.id },
+          data: { groups: [] },
+        });
+      }
+      throw new Error("should not reach here");
     });
 
     it("get challenge - not found", async () => {
@@ -853,6 +1120,42 @@ describe("challenge service unit tests", () => {
       should.exist(result.created);
       should.equal(result.numOfSubmissions, 0);
       should.equal(result.numOfRegistrants, 0);
+    });
+
+    it("search challenges hides whitelisted challenges from blocked interactive users", async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        const blocked = await service.searchChallenges(
+          { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(blocked.total, 0);
+        should.equal(blocked.result.length, 0);
+
+        const allowed = await service.searchChallenges(
+          { handle: "allowed", roles: ["administrator"], userId: "allowed-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(allowed.total, 1);
+        should.equal(allowed.result[0].id, data.challenge.id);
+
+        const machine = await service.searchChallenges(
+          { isMachine: true, userId: "machine-user" },
+          { id: data.challenge.id },
+        );
+        should.equal(machine.total, 1);
+        should.equal(machine.result[0].id, data.challenge.id);
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
     });
 
     it("search challenges successfully 2", async () => {
@@ -1278,6 +1581,43 @@ describe("challenge service unit tests", () => {
       },
     ];
 
+    it("update challenge enforces challenge user whitelist before downstream validation", async () => {
+      const originalGetChallengeResources = helper.getChallengeResources;
+      let loadedResources = false;
+
+      helper.getChallengeResources = async () => {
+        loadedResources = true;
+        return [];
+      };
+
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: "allowed-user",
+        },
+      });
+
+      try {
+        try {
+          await service.updateChallenge(
+            { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
+            data.challenge.id,
+            { description: "blocked update" },
+          );
+        } catch (e) {
+          should.equal(e.name, "ForbiddenError");
+          should.equal(loadedResources, false);
+          return;
+        }
+        throw new Error("should not reach here");
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources;
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id },
+        });
+      }
+    });
+
     it("update challenge successfully 1", async () => {
       const challengeData = testChallengeData;
       const result = await service.updateChallenge(
@@ -1359,6 +1699,118 @@ describe("challenge service unit tests", () => {
       should.exist(result.startDate);
       should.equal(testHelper.getDatesDiff(result.startDate, testChallengeData.startDate), 0);
     });
+
+    it("backfills missing billing and locks draft budget including copilot prizes", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.name = `${challengeData.name} Billing Lock ${Date.now()}`;
+      challengeData.legacyId = Math.floor(Math.random() * 1000000);
+      challengeData.status = ChallengeStatusEnum.NEW;
+      challengeData.prizeSets = [
+        {
+          type: PrizeSetTypeEnum.PLACEMENT,
+          description: "placement prizes",
+          prizes: [
+            {
+              description: "placement 1",
+              type: constants.prizeTypes.USD,
+              value: 1000,
+            },
+          ],
+        },
+        {
+          type: PrizeSetTypeEnum.COPILOT,
+          description: "copilot payment",
+          prizes: [
+            {
+              description: "copilot",
+              type: constants.prizeTypes.USD,
+              value: 150,
+            },
+          ],
+        },
+      ];
+
+      const originalGetProject = projectHelper.getProject;
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      let billingLookupCount = 0;
+      let createdChallengeId;
+
+      projectHelper.getProject = async () => ({ directProjectId: "33541" });
+      projectHelper.getProjectBillingInformation = async () => {
+        billingLookupCount += 1;
+
+        if (billingLookupCount === 1) {
+          return {
+            billingAccountId: null,
+            markup: null,
+          };
+        }
+
+        return {
+          billingAccountId: "80001012",
+          markup: 0.1,
+        };
+      };
+
+      try {
+        const created = await service.createChallenge(
+          { isMachine: true, sub: "sub-billing-lock-create", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+        createdChallengeId = created.id;
+        should.equal(billingLockRequests.length, 0);
+
+        const draft = await service.updateChallenge(
+          { isMachine: true, sub: "sub-billing-lock-update", userId: 22838965 },
+          created.id,
+          {
+            status: ChallengeStatusEnum.DRAFT,
+          },
+        );
+
+        should.equal(draft.billing.billingAccountId, "80001012");
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: created.id,
+          markup: 0.1,
+          memberPaymentAmount: 1150,
+        });
+
+        const updatedPrizeSets = _.cloneDeep(draft.prizeSets);
+        const copilotPrizeSet = _.find(
+          updatedPrizeSets,
+          (prizeSet) => _.toString(prizeSet.type).toUpperCase() === PrizeSetTypeEnum.COPILOT,
+        );
+        should.exist(copilotPrizeSet);
+        copilotPrizeSet.prizes[0].value = 225;
+        billingLockRequests = [];
+
+        await service.updateChallenge(
+          { isMachine: true, sub: "sub-billing-lock-prize-update", userId: 22838965 },
+          created.id,
+          {
+            prizeSets: updatedPrizeSets,
+          },
+        );
+
+        should.equal(billingLockRequests.length, 1);
+        billingLockRequests[0].should.deep.equal({
+          billingAccountId: "80001012",
+          challengeId: created.id,
+          markup: 0.1,
+          memberPaymentAmount: 1225,
+        });
+      } finally {
+        projectHelper.getProject = originalGetProject;
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+
+        if (createdChallengeId) {
+          await prisma.challenge.deleteMany({ where: { id: createdChallengeId } });
+        }
+      }
+    }).timeout(10000);
 
     it("preserves existing terms when update payload omits the terms field", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
@@ -1458,6 +1910,71 @@ describe("challenge service unit tests", () => {
       }
     }).timeout(5000);
 
+    it("replaces existing skills when update payload includes skills", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.name = `${challengeData.name} Skills ${Date.now()}`;
+      challengeData.legacyId = Math.floor(Math.random() * 1000000);
+      const originalGetStandSkills = helper.getStandSkills;
+      const skillId1 = uuid();
+      const skillId2 = uuid();
+      let challengeWithSkills;
+
+      helper.getStandSkills = async (ids) =>
+        ids.map((skillId) => ({
+          id: skillId,
+          name: `Skill ${skillId}`,
+        }));
+
+      try {
+        challengeWithSkills = await service.createChallenge(
+          { isMachine: true, sub: "sub-skills-create", userId: 22838965 },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN,
+        );
+
+        await prisma.challengeSkill.createMany({
+          data: [
+            {
+              challengeId: challengeWithSkills.id,
+              skillId: skillId1,
+              createdBy: "unit-test",
+              updatedBy: "unit-test",
+            },
+            {
+              challengeId: challengeWithSkills.id,
+              skillId: skillId2,
+              createdBy: "unit-test",
+              updatedBy: "unit-test",
+            },
+          ],
+        });
+
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: "sub-skills-update", userId: 22838965 },
+          challengeWithSkills.id,
+          {
+            skills: [{ id: skillId2 }],
+          },
+        );
+
+        should.exist(updated.skills);
+        should.equal(updated.skills.length, 1);
+        should.equal(updated.skills[0].id, skillId2);
+        should.equal(updated.skills[0].name, `Skill ${skillId2}`);
+
+        const persistedSkills = await prisma.challengeSkill.findMany({
+          where: { challengeId: challengeWithSkills.id },
+        });
+        should.equal(persistedSkills.length, 1);
+        should.equal(persistedSkills[0].skillId, skillId2);
+      } finally {
+        helper.getStandSkills = originalGetStandSkills;
+        if (challengeWithSkills && challengeWithSkills.id) {
+          await prisma.challenge.delete({ where: { id: challengeWithSkills.id } });
+        }
+      }
+    }).timeout(5000);
+
     it("update challenge successfully with winners", async () => {
       const result = await service.updateChallenge(
         { isMachine: true, sub: "sub3", userId: 22838965 },
@@ -1552,6 +2069,37 @@ describe("challenge service unit tests", () => {
       } finally {
         helper.getChallengeResources = originalGetChallengeResources;
         helper.generateChallengePayments = originalGenerateChallengePayments;
+      }
+    });
+
+    it("update challenge - triggers payments when a challenge is cancelled", async () => {
+      const originalGetChallengeResources = helper.getChallengeResources;
+      const originalGenerateChallengePayments = helper.generateChallengePayments;
+      let generatedPaymentsChallengeId;
+      const cancelledChallenge = await createActivationChallenge(ChallengeStatusEnum.ACTIVE);
+
+      helper.getChallengeResources = async () => [];
+      helper.generateChallengePayments = async (challengeId) => {
+        generatedPaymentsChallengeId = challengeId;
+        return true;
+      };
+
+      try {
+        const result = await service.updateChallenge(
+          { isMachine: true, sub: "sub-cancel", userId: 22838965 },
+          cancelledChallenge.id,
+          {
+            status: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+            cancelReason: "QA cancellation coverage",
+          },
+        );
+
+        should.equal(result.status, ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST);
+        should.equal(generatedPaymentsChallengeId, cancelledChallenge.id);
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources;
+        helper.generateChallengePayments = originalGenerateChallengePayments;
+        await prisma.challenge.deleteMany({ where: { id: cancelledChallenge.id } });
       }
     });
 

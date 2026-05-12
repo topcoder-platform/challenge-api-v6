@@ -158,6 +158,11 @@ exports.Prisma.ChallengeScalarFieldEnum = {
   updatedBy: 'updatedBy'
 };
 
+exports.Prisma.ChallengeUserWhitelistScalarFieldEnum = {
+  challengeId: 'challengeId',
+  userId: 'userId'
+};
+
 exports.Prisma.ChallengeTypeScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -519,6 +524,11 @@ exports.Prisma.ChallengeOrderByRelevanceFieldEnum = {
   updatedBy: 'updatedBy'
 };
 
+exports.Prisma.ChallengeUserWhitelistOrderByRelevanceFieldEnum = {
+  challengeId: 'challengeId',
+  userId: 'userId'
+};
+
 exports.Prisma.ChallengeTypeOrderByRelevanceFieldEnum = {
   id: 'id',
   name: 'name',
@@ -799,6 +809,7 @@ exports.ReviewOpportunityTypeEnum = exports.$Enums.ReviewOpportunityTypeEnum = {
 
 exports.Prisma.ModelName = {
   Challenge: 'Challenge',
+  ChallengeUserWhitelist: 'ChallengeUserWhitelist',
   ChallengeType: 'ChallengeType',
   ChallengeTrack: 'ChallengeTrack',
   ChallengeTimelineTemplate: 'ChallengeTimelineTemplate',

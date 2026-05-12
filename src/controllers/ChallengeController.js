@@ -23,7 +23,7 @@ async function searchChallenges(req, res) {
       logger.debug(`Staring to get mm challengeId`);
       const legacyId = await helper.getProjectIdByRoundId(req.query.legacyId);
       logger.debug(`Get mm challengeId successfully ${legacyId}`);
-      result = await service.searchChallenges(req, req.authUser, {
+      result = await service.searchChallenges(req.authUser, {
         ...req.query,
         ...req.body,
         legacyId,
@@ -48,7 +48,7 @@ async function searchChallenges(req, res) {
  */
 async function createChallenge(req, res) {
   logger.debug(
-    `createChallenge User: ${JSON.stringify(req.authUser)} - Body: ${JSON.stringify(req.body)}`
+    `createChallenge User: ${JSON.stringify(req.authUser)} - Body: ${JSON.stringify(req.body)}`,
   );
   const result = await service.createChallenge(req.authUser, req.body, req.userToken);
   res.status(HttpStatus.CREATED).send(result);
@@ -73,7 +73,7 @@ async function getChallenge(req, res) {
   const result = await service.getChallenge(
     req.authUser,
     req.params.challengeId,
-    req.query.checkIfExists
+    req.query.checkIfExists,
   );
   res.send(result);
 }
@@ -97,7 +97,7 @@ async function updateChallenge(req, res) {
   logger.debug(
     `updateChallenge User: ${JSON.stringify(req.authUser)} - ChallengeID: ${
       req.params.challengeId
-    } - Body: ${JSON.stringify(req.body)}`
+    } - Body: ${JSON.stringify(req.body)}`,
   );
   const result = await service.updateChallenge(req.authUser, req.params.challengeId, req.body);
   res.send(result);
@@ -110,7 +110,7 @@ async function updateChallenge(req, res) {
  */
 async function deleteChallenge(req, res) {
   logger.debug(
-    `deleteChallenge User: ${JSON.stringify(req.authUser)} - ChallengeID: ${req.params.challengeId}`
+    `deleteChallenge User: ${JSON.stringify(req.authUser)} - ChallengeID: ${req.params.challengeId}`,
   );
   const result = await service.deleteChallenge(req.authUser, req.params.challengeId);
   res.send(result);
@@ -132,7 +132,7 @@ async function advancePhase(req, res) {
  */
 async function closeMarathonMatch(req, res) {
   logger.debug(
-    `closeMarathonMatch User: ${JSON.stringify(req.authUser)} - ChallengeID: ${req.params.challengeId}`
+    `closeMarathonMatch User: ${JSON.stringify(req.authUser)} - ChallengeID: ${req.params.challengeId}`,
   );
   const result = await service.closeMarathonMatch(req.authUser, req.params.challengeId);
   res.send(result);

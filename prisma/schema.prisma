@@ -61,6 +61,12 @@ enum PrizeSetTypeEnum {
   CHECKPOINT
 }
 
+enum ChallengeApprovalStatusEnum {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 // Enum for review opportunity types on reviewers
 enum ReviewOpportunityTypeEnum {
   REGULAR_REVIEW
@@ -118,6 +124,9 @@ model Challenge {
 
   // Additional fields from createChallenge schema
   status           ChallengeStatusEnum  @default(NEW) // new challenges default to status "New"
+  approvalStatus   ChallengeApprovalStatusEnum @default(PENDING_APPROVAL)
+  approvalRejectionReason String?
+  approvalApprovedBy String?
   // Normalized top‑level constraints (e.g. allowedRegistrants) for a challenge
   constraintRecord ChallengeConstraint?
 
@@ -137,6 +146,7 @@ model Challenge {
   skills      ChallengeSkill[]
   auditLogs   AuditLog[]
   memberAccesses MemberChallengeAccess[]
+  userWhitelist ChallengeUserWhitelist[]
 
   // Relation to ChallengeType (FK: typeId)
   type  ChallengeType  @relation(fields: [typeId], references: [id])
@@ -169,6 +179,21 @@ model Challenge {
   @@index([status, typeId, trackId, createdAt(sort: Desc)], map: "challenge_status_type_track_created_at_idx")
   @@index([legacyId])
   @@index([projectId, status])
+}
+
+//////////////////////////////////////////
+// Challenge user whitelist - member/challenge pairs allowed to access restricted challenges
+//////////////////////////////////////////
+
+model ChallengeUserWhitelist {
+  challengeId String
+  userId      String
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@id([challengeId, userId])
+  @@index([challengeId])
+  @@index([userId])
 }
 
 //////////////////////////////////////////

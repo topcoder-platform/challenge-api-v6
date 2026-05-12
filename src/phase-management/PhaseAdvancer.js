@@ -395,7 +395,7 @@ class PhaseAdvancer {
             OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
           )
         WHERE s."challengeId" = ${challengeId}
-          AND r."status" = ${"COMPLETED"}
+          AND r."status"::text = ${"COMPLETED"}
       `
     );
 

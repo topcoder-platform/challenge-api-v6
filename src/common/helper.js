@@ -18,11 +18,13 @@ const logger = require("./logger");
 const projectHelper = require("./project-helper");
 const m2mHelper = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
+const { getClient } = require("./prisma");
 
 const DISABLED_TOPICS = new Set(constants.DisabledTopics || []);
 const PROJECT_WRITE_ACCESS_ROLES = new Set(["manager", "copilot", "customer", "write"]);
 const PROJECT_MANAGER_ACCESS_ROLES = new Set(["manager"]);
 const PROJECT_TASK_VIEW_ACCESS_ROLES = new Set(["manager", "copilot"]);
+const prisma = getClient();
 
 // Bus API Client
 let busApiClient;
@@ -110,7 +112,7 @@ function setResHeaders(req, res, result) {
   if (totalPages > 0) {
     let link = `<${getPageLink(req, 1)}>; rel="first", <${getPageLink(
       req,
-      totalPages
+      totalPages,
     )}>; rel="last"`;
     if (parseInt(result.page, 10) > 1) {
       link += `, <${getPageLink(req, parseInt(result.page, 10) - 1)}>; rel="prev"`;
@@ -136,7 +138,7 @@ function _sanitizeObject(obj) {
           return `Array(${value.length})`;
         }
         return value;
-      })
+      }),
     );
   } catch (e) {
     return obj;
@@ -207,14 +209,14 @@ async function downloadFromFileStack(url) {
 async function downloadFromS3(bucket, key) {
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   const response = await s3Client.send(command);
-  
+
   // Convert the readable stream to buffer
   const chunks = [];
   for await (const chunk of response.Body) {
     chunks.push(chunk);
   }
   const buffer = Buffer.concat(chunks);
-  
+
   return {
     data: buffer,
     mimetype: response.ContentType,
@@ -243,7 +245,7 @@ async function getChallengeResources(challengeId, roleId = null) {
   let page = 1;
   let result = [];
   logger.debug(
-    `helper.getChallengeResources: start challenge ${challengeId}${roleId ? ` role ${roleId}` : ""}`
+    `helper.getChallengeResources: start challenge ${challengeId}${roleId ? ` role ${roleId}` : ""}`,
   );
   while (true) {
     const url = `${
@@ -260,16 +262,18 @@ async function getChallengeResources(challengeId, roleId = null) {
       });
     } catch (err) {
       logger.debug(
-        `helper.getChallengeResources: error page ${page} for challenge ${challengeId} - status ${
-          _.get(err, "response.status", "n/a")
-        }: ${err.message}`
+        `helper.getChallengeResources: error page ${page} for challenge ${challengeId} - status ${_.get(
+          err,
+          "response.status",
+          "n/a",
+        )}: ${err.message}`,
       );
       throw err;
     }
     logger.debug(
       `helper.getChallengeResources: page ${page} -> status ${res.status}, items ${
         _.get(res, "data.length", 0) || 0
-      }`
+      }`,
     );
     if (!res.data || res.data.length === 0) {
       break;
@@ -299,14 +303,16 @@ async function getChallengeResourcesCount(challengeId, roleId = null) {
       headers: { Authorization: `Bearer ${token}` },
     });
     logger.debug(
-      `helper.getChallengeResourcesCount: response status ${res.status} for challenge ${challengeId}`
+      `helper.getChallengeResourcesCount: response status ${res.status} for challenge ${challengeId}`,
     );
     return res.data;
   } catch (err) {
     logger.debug(
-      `helper.getChallengeResourcesCount: error for challenge ${challengeId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.getChallengeResourcesCount: error for challenge ${challengeId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -350,7 +356,7 @@ axiosRetry(axios, {
   },
   onRetry: (retryCount, error, requestConfig) =>
     logger.info(
-      `${error.message} while calling: ${requestConfig.url} - retry count: ${retryCount}`
+      `${error.message} while calling: ${requestConfig.url} - retry count: ${retryCount}`,
     ),
   retryDelay: exponentialDelay,
 });
@@ -409,15 +415,17 @@ async function getProjectPayment(projectId) {
     logger.debug(
       `helper.getProjectPayment: response status ${res.status} (records=${
         _.get(res, "data.length", 0) || 0
-      })`
+      })`,
     );
     const [payment] = res.data;
     return payment;
   } catch (err) {
     logger.debug(
-      `helper.getProjectPayment: error for project ${projectId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.getProjectPayment: error for project ${projectId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -441,9 +449,11 @@ async function capturePayment(paymentId) {
     return res.data;
   } catch (err) {
     logger.debug(
-      `helper.capturePayment: error for payment ${paymentId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.capturePayment: error for payment ${paymentId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -466,9 +476,11 @@ async function cancelPayment(paymentId) {
     return res.data;
   } catch (err) {
     logger.debug(
-      `helper.cancelPayment: error for payment ${paymentId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.cancelPayment: error for payment ${paymentId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -495,15 +507,59 @@ async function generateChallengePayments(challengeId) {
       {},
       {
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
     logger.debug(`helper.generateChallengePayments: response status ${res.status}`);
     return res.status >= 200 && res.status < 300;
   } catch (err) {
     logger.debug(
-      `helper.generateChallengePayments: error for challenge ${challengeId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.generateChallengePayments: error for challenge ${challengeId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Trigger member-api to rerate all rating dimensions for submitters on a completed challenge.
+ * Member-api owns the rating dimension selection, including native track/type
+ * ratings and configured named rating paths such as AI.
+ * @param {String|Number} challengeId the completed challenge id
+ * @returns {Boolean} true if member-api accepted the request, false otherwise
+ */
+async function rerateChallengeSubmitterRatings(challengeId) {
+  if (!config.MEMBERS_API_URL) {
+    logger.warn("helper.rerateChallengeSubmitterRatings: MEMBERS_API_URL not configured");
+    return false;
+  }
+
+  const baseUrl = String(config.MEMBERS_API_URL).replace(/\/+$/, "");
+  const url = `${baseUrl}/stats/rerate-challenge`;
+  logger.debug(`helper.rerateChallengeSubmitterRatings: POST ${url}`);
+
+  try {
+    const token = await m2mHelper.getM2MToken();
+    const res = await axios.post(
+      url,
+      { challengeId },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    logger.debug(
+      `helper.rerateChallengeSubmitterRatings: response status ${res.status} for challenge ${challengeId}`,
+    );
+    return res.status >= 200 && res.status < 300;
+  } catch (err) {
+    logger.debug(
+      `helper.rerateChallengeSubmitterRatings: error for challenge ${challengeId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     return false;
   }
@@ -543,14 +599,16 @@ async function cancelProject(projectId, cancelReason, currentUser) {
           paymentStatus: payment.status,
         },
       },
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
     logger.debug(`helper.cancelProject: PATCH success for project ${projectId}`);
   } catch (err) {
     logger.debug(
-      `helper.cancelProject: error for project ${projectId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.cancelProject: error for project ${projectId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -576,7 +634,7 @@ async function activateProject(projectId, currentUser, name, description) {
     await cancelProject(
       projectId,
       `Failed to charge payment ${payment.id} with error: ${e.message}`,
-      currentUser
+      currentUser,
     );
     throw new Error(`Failed to charge payment ${payment.id} with error: ${e.message}`);
   }
@@ -601,13 +659,15 @@ async function activateProject(projectId, currentUser, name, description) {
           paymentStatus: payment.status,
         },
       },
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
   } catch (err) {
     logger.debug(
-      `helper.activateProject: error for project ${projectId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.activateProject: error for project ${projectId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -647,16 +707,16 @@ async function updateSelfServiceProjectInfo(projectId, workItemPlannedEndDate, c
           workItemPlannedEndDate,
         },
       },
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: { Authorization: `Bearer ${token}` } },
     );
-    logger.debug(
-      `helper.updateSelfServiceProjectInfo: PATCH success for project ${projectId}`
-    );
+    logger.debug(`helper.updateSelfServiceProjectInfo: PATCH success for project ${projectId}`);
   } catch (err) {
     logger.debug(
-      `helper.updateSelfServiceProjectInfo: error for project ${projectId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.updateSelfServiceProjectInfo: error for project ${projectId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -684,7 +744,7 @@ async function userHasFullAccess(challengeId, userId, challengeResources) {
   const resourceRoles = await getResourceRoles();
   const rolesWithFullAccess = _.map(
     _.filter(resourceRoles, (r) => r.fullWriteAccess),
-    "id"
+    "id",
   );
   if (!challengeResources) {
     challengeResources = await getChallengeResources(challengeId);
@@ -693,7 +753,7 @@ async function userHasFullAccess(challengeId, userId, challengeResources) {
     _.filter(
       challengeResources,
       (r) =>
-        _.toString(r.memberId) === _.toString(userId) && _.includes(rolesWithFullAccess, r.roleId)
+        _.toString(r.memberId) === _.toString(userId) && _.includes(rolesWithFullAccess, r.roleId),
     ).length > 0
   );
 }
@@ -715,7 +775,7 @@ async function userHasProjectWriteAccess(projectId, currentUser) {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
       _.get(project, "members", []),
-      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId),
     );
     const role = _.toLower(_.get(member, "role", ""));
     return PROJECT_WRITE_ACCESS_ROLES.has(role);
@@ -727,7 +787,7 @@ async function userHasProjectWriteAccess(projectId, currentUser) {
     logger.debug(
       `helper.userHasProjectWriteAccess: error for project ${projectId} - status ${
         status || "n/a"
-      }: ${err.message}`
+      }: ${err.message}`,
     );
     return false;
   }
@@ -750,7 +810,7 @@ async function userHasProjectManagerAccess(projectId, currentUser) {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
       _.get(project, "members", []),
-      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId),
     );
     const role = _.toLower(_.get(member, "role", ""));
     return PROJECT_MANAGER_ACCESS_ROLES.has(role);
@@ -762,7 +822,7 @@ async function userHasProjectManagerAccess(projectId, currentUser) {
     logger.debug(
       `helper.userHasProjectManagerAccess: error for project ${projectId} - status ${
         status || "n/a"
-      }: ${err.message}`
+      }: ${err.message}`,
     );
     return false;
   }
@@ -785,7 +845,7 @@ async function userHasProjectTaskViewAccess(projectId, currentUser) {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
       _.get(project, "members", []),
-      (m) => _.toString(m.userId) === _.toString(currentUser.userId)
+      (m) => _.toString(m.userId) === _.toString(currentUser.userId),
     );
     const role = _.toLower(_.get(member, "role", ""));
     return PROJECT_TASK_VIEW_ACCESS_ROLES.has(role);
@@ -797,7 +857,7 @@ async function userHasProjectTaskViewAccess(projectId, currentUser) {
     logger.debug(
       `helper.userHasProjectTaskViewAccess: error for project ${projectId} - status ${
         status || "n/a"
-      }: ${err.message}`
+      }: ${err.message}`,
     );
     return false;
   }
@@ -857,14 +917,16 @@ async function getCompleteUserGroupTreeIds(userId) {
     logger.debug(
       `helper.getCompleteUserGroupTreeIds: response status ${result.status} (groups=${
         normalizedGroupIds.length
-      })`
+      })`,
     );
     return normalizedGroupIds;
   } catch (err) {
     logger.debug(
-      `helper.getCompleteUserGroupTreeIds: error for user ${userId} - status ${
-        _.get(err, "response.status", "n/a")
-      }: ${err.message}`
+      `helper.getCompleteUserGroupTreeIds: error for user ${userId} - status ${_.get(
+        err,
+        "response.status",
+        "n/a",
+      )}: ${err.message}`,
     );
     throw err;
   }
@@ -1023,7 +1085,7 @@ function getBusApiClient() {
         "BUSAPI_URL",
         "KAFKA_ERROR_TOPIC",
         "AUTH0_PROXY_SERVER_URL",
-      ])
+      ]),
     );
   }
 
@@ -1053,15 +1115,13 @@ async function postBusEvent(topic, payload, options = {}) {
     message.key = options.key;
   }
   logger.debug(
-    `helper.postBusEvent: publishing topic ${topic}${options.key ? ` key ${options.key}` : ""}`
+    `helper.postBusEvent: publishing topic ${topic}${options.key ? ` key ${options.key}` : ""}`,
   );
   try {
     await client.postEvent(message);
     logger.debug(`helper.postBusEvent: publish complete for topic ${topic}`);
   } catch (err) {
-    logger.debug(
-      `helper.postBusEvent: error publishing topic ${topic} - ${err.message}`
-    );
+    logger.debug(`helper.postBusEvent: error publishing topic ${topic} - ${err.message}`);
     throw err;
   }
 }
@@ -1112,7 +1172,7 @@ async function listResourcesByMemberAndChallenge(memberId, challengeId) {
   } catch (e) {
     logger.debug(
       `Failed to get resources on challenge ${challengeId} that memberId ${memberId} has`,
-      e
+      e,
     );
   }
   const result = response.data || [];
@@ -1160,7 +1220,7 @@ function dedupeChallengeTerms(terms = []) {
       const idKey = _.toString(term.id).trim();
       const roleKey = _.isNil(term.roleId) ? "" : _.toString(term.roleId).trim();
       return `${idKey}:${roleKey}`;
-    }
+    },
   );
 }
 
@@ -1187,7 +1247,7 @@ async function validateChallengeTerms(terms = []) {
     } catch (e) {
       if (_.get(e, "response.status") === HttpStatus.NOT_FOUND) {
         throw new errors.BadRequestError(
-          `Terms of use identified by the id ${term.id} does not exist`
+          `Terms of use identified by the id ${term.id} does not exist`,
         );
       } else {
         // re-throw other error
@@ -1197,6 +1257,115 @@ async function validateChallengeTerms(terms = []) {
   }
 
   return listOfTerms;
+}
+
+/**
+ * Determine whether challenge whitelist checks apply for a request.
+ * Interactive users, including admins and anonymous callers, must be evaluated;
+ * M2M callers are allowed to bypass this user-facing access control.
+ *
+ * @param {Object} currentUser the user who performs the operation
+ * @returns {Boolean} true when whitelist rules should be applied
+ */
+function shouldApplyChallengeWhitelist(currentUser) {
+  return !_.get(currentUser, "isMachine", false);
+}
+
+/**
+ * Build a Prisma filter that hides restricted challenges from interactive
+ * challenge listing queries. Challenges with no whitelist rows stay visible.
+ *
+ * @param {Object} currentUser the user who performs the operation
+ * @returns {Object|null} Prisma where fragment, or null for M2M callers
+ */
+function getChallengeWhitelistAccessFilter(currentUser) {
+  if (!shouldApplyChallengeWhitelist(currentUser)) {
+    return null;
+  }
+
+  const userId = _.toString(_.get(currentUser, "userId", "")).trim();
+  if (!userId) {
+    return {
+      userWhitelist: {
+        none: {},
+      },
+    };
+  }
+
+  return {
+    OR: [
+      {
+        userWhitelist: {
+          none: {},
+        },
+      },
+      {
+        userWhitelist: {
+          some: { userId },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * Evaluate challenge whitelist access for a single direct challenge request.
+ * A challenge is unrestricted when it has no whitelist rows. Evaluation errors
+ * fail closed for interactive users.
+ *
+ * @param {Object} currentUser the user who performs the operation
+ * @param {String} challengeId the challenge id to evaluate
+ * @returns {Promise<Boolean>} true when the caller may access the challenge
+ */
+async function canAccessChallengeByWhitelist(currentUser, challengeId) {
+  if (!shouldApplyChallengeWhitelist(currentUser)) {
+    return true;
+  }
+
+  if (!challengeId) {
+    return false;
+  }
+
+  const userId = _.toString(_.get(currentUser, "userId", "")).trim();
+
+  try {
+    const totalRows = await prisma.challengeUserWhitelist.count({
+      where: { challengeId },
+    });
+
+    if (totalRows === 0) {
+      return true;
+    }
+
+    if (!userId) {
+      return false;
+    }
+
+    const matchingRows = await prisma.challengeUserWhitelist.count({
+      where: { challengeId, userId },
+    });
+    return matchingRows > 0;
+  } catch (err) {
+    logger.warn(
+      `helper.canAccessChallengeByWhitelist: failed for challenge ${challengeId}: ${err.message}`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Ensure an interactive caller is allowed by the challenge whitelist.
+ *
+ * @param {Object} currentUser the user who performs the operation
+ * @param {String} challengeId the challenge id to evaluate
+ * @returns {Promise<void>}
+ * @throws {ForbiddenError} when the whitelist blocks the caller or evaluation fails
+ */
+async function ensureChallengeWhitelistAccess(currentUser, challengeId) {
+  const allowed = await canAccessChallengeByWhitelist(currentUser, challengeId);
+  if (!allowed) {
+    throw new errors.ForbiddenError(`You don't have access to view this challenge`);
+  }
 }
 
 /**
@@ -1217,7 +1386,7 @@ async function _filterChallengesByGroupsAccess(currentUser, challenges) {
   for (const challenge of challenges) {
     challenge.groups = _.filter(
       challenge.groups,
-      (g) => !_.includes(["null", "undefined"], _.toString(g).toLowerCase())
+      (g) => !_.includes(["null", "undefined"], _.toString(g).toLowerCase()),
     );
     if (
       !challenge.groups ||
@@ -1247,7 +1416,7 @@ async function ensureAccessibleByGroupsAccess(currentUser, challenge) {
   const filtered = await _filterChallengesByGroupsAccess(currentUser, [challenge]);
   if (filtered.length === 0) {
     throw new errors.ForbiddenError(
-      "helper ensureAcessibilityToModifiedGroups :: You don't have access to this group!"
+      "helper ensureAcessibilityToModifiedGroups :: You don't have access to this group!",
     );
   }
 }
@@ -1282,10 +1451,7 @@ async function syncTaskAssignmentFromResources(challenge) {
   }
   let isAssigned = taskInfo.isAssigned || !_.isNil(taskInfo.memberId);
   if (!isAssigned) {
-    const counts = await getChallengeResourcesCount(
-      challenge.id,
-      config.SUBMITTER_ROLE_ID
-    );
+    const counts = await getChallengeResourcesCount(challenge.id, config.SUBMITTER_ROLE_ID);
     const submitterCount = _.get(counts, config.SUBMITTER_ROLE_ID, 0);
     if (submitterCount > 0) {
       isAssigned = true;
@@ -1323,18 +1489,17 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
     }
     const hasProjectTaskViewAccess = await userHasProjectTaskViewAccess(
       challenge.projectId,
-      currentUser
+      currentUser,
     );
     if (hasProjectTaskViewAccess) {
       return;
     }
     const memberResources = await listResourcesByMemberAndChallenge(
       currentUser.userId,
-      challenge.id
+      challenge.id,
     );
-    const copilotRoleIds = _.map(
-      [].concat(config.COPILOT_RESOURCE_ROLE_IDS || []),
-      (roleId) => _.toString(roleId)
+    const copilotRoleIds = _.map([].concat(config.COPILOT_RESOURCE_ROLE_IDS || []), (roleId) =>
+      _.toString(roleId),
     );
     const isCopilotResource = _.some(memberResources, (resource) => {
       const roleId = _.toString(resource.roleId);
@@ -1346,7 +1511,7 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
     }
     const isSubmitterResource = _.some(
       memberResources,
-      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID
+      (resource) => resource.roleId === config.SUBMITTER_ROLE_ID,
     );
     if (!isSubmitterResource) {
       throw new errors.ForbiddenError(`You don't have access to view this challenge`);
@@ -1361,6 +1526,7 @@ async function _ensureAccessibleForTaskChallenge(currentUser, challenge) {
  * @param {Object} challenge the challenge to check
  */
 async function ensureUserCanViewChallenge(currentUser, challenge) {
+  await ensureChallengeWhitelistAccess(currentUser, challenge.id);
   // check groups authorization
   await ensureAccessibleByGroupsAccess(currentUser, challenge);
   // check if user can access a challenge that is a task
@@ -1376,35 +1542,33 @@ async function ensureUserCanViewChallenge(currentUser, challenge) {
  * @returns {Promise}
  */
 async function ensureUserCanModifyChallenge(currentUser, challenge, challengeResources) {
+  await ensureChallengeWhitelistAccess(currentUser, challenge.id);
   // check groups authorization
   await ensureAccessibleByGroupsAccess(currentUser, challenge);
   // check full access
   const isUserHasFullAccess = await userHasFullAccess(
     challenge.id,
     currentUser.userId,
-    challengeResources
+    challengeResources,
   );
-  const challengeCreator = _.isNil(challenge.createdBy)
-    ? null
-    : _.toString(challenge.createdBy);
+  const challengeCreator = _.isNil(challenge.createdBy) ? null : _.toString(challenge.createdBy);
   const currentUserId = _.isNil(currentUser.userId) ? null : _.toString(currentUser.userId);
   const currentUserHandle = currentUser.handle ? _.toLower(currentUser.handle) : null;
   const isChallengeCreator =
     (!!challengeCreator && !!currentUserId && challengeCreator === currentUserId) ||
-    (!!challengeCreator && !!currentUserHandle && _.toLower(challengeCreator) === currentUserHandle);
+    (!!challengeCreator &&
+      !!currentUserHandle &&
+      _.toLower(challengeCreator) === currentUserHandle);
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
     !isChallengeCreator &&
     !isUserHasFullAccess
   ) {
-    const hasProjectWriteAccess = await userHasProjectWriteAccess(
-      challenge.projectId,
-      currentUser
-    );
+    const hasProjectWriteAccess = await userHasProjectWriteAccess(challenge.projectId, currentUser);
     if (!hasProjectWriteAccess) {
       throw new errors.ForbiddenError(
-        "Only M2M, admin, challenge's copilot, users with full access, or project members with write/full/copilot access can perform modification."
+        "Only M2M, admin, challenge's copilot, users with full access, or project members with write/full/copilot access can perform modification.",
       );
     }
   }
@@ -1441,9 +1605,12 @@ async function getGroupById(groupId) {
   const token = await m2mHelper.getM2MToken();
   const requestHeaders = { Authorization: `Bearer ${token}` };
   try {
-    const result = await axios.get(`${config.GROUPS_API_URL}/${encodeURIComponent(normalizedGroupId)}`, {
-      headers: requestHeaders,
-    });
+    const result = await axios.get(
+      `${config.GROUPS_API_URL}/${encodeURIComponent(normalizedGroupId)}`,
+      {
+        headers: requestHeaders,
+      },
+    );
     return result.data;
   } catch (err) {
     const status = _.get(err, "response.status");
@@ -1514,7 +1681,7 @@ async function getAIReviewConfigByChallengeId(challengeId) {
   const token = await m2mHelper.getM2MToken();
   const reviewsApiBaseUrl = _.trimEnd(
     config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
-    "/"
+    "/",
   );
 
   try {
@@ -1540,13 +1707,16 @@ async function getReviewSummations(challengeId) {
   let allReviewSummations = [];
   let page = 1;
   while (true) {
-    const result = await axios.get(`${config.REVIEW_SUMMATIONS_API_URL}?challengeId=${challengeId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      params: {
-        page,
-        perPage: 500,
+    const result = await axios.get(
+      `${config.REVIEW_SUMMATIONS_API_URL}?challengeId=${challengeId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          page,
+          perPage: 500,
+        },
       },
-    });
+    );
     const reviewSummations = result.data.data || [];
     if (reviewSummations.length === 0) {
       break;
@@ -1600,7 +1770,7 @@ async function getMembersByHandles(handles) {
     `${config.MEMBERS_API_URL}/?fields=handle&handlesLower=["${_.join(handles, '","')}"]`,
     {
       headers: { Authorization: `Bearer ${token}` },
-    }
+    },
   );
   return res.data;
 }
@@ -1638,18 +1808,20 @@ async function getStandSkills(ids) {
           logger.debug(
             `helper.getStandSkills: response status ${res.status} (items=${
               _.get(res, "data.length", 0) || 0
-            })`
+            })`,
           );
           return res.data;
         } catch (err) {
           logger.debug(
-            `helper.getStandSkills: error fetching skills batch - status ${
-              _.get(err, "response.status", "n/a")
-            }: ${err.message}`
+            `helper.getStandSkills: error fetching skills batch - status ${_.get(
+              err,
+              "response.status",
+              "n/a",
+            )}: ${err.message}`,
           );
           throw err;
         }
-      })()
+      })(),
     );
   }
 
@@ -1698,8 +1870,8 @@ async function sendSelfServiceNotification(type, recipients, data) {
  * @param {String|Date} at - The date/time when the phase opened/closed
  */
 function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, operation, at }) {
-  const isOpen = operation === 'open' || operation === 'reopen';
-  const isClose = operation === 'close';
+  const isOpen = operation === "open" || operation === "reopen";
+  const isClose = operation === "close";
 
   return {
     challengeURL: `${config.CHALLENGE_URL}/${challengeId}`,
@@ -1710,7 +1882,6 @@ function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, oper
     phaseCloseDate: isClose ? at : null,
   };
 }
-
 
 /**
  * Send phase change notification
@@ -1729,7 +1900,7 @@ async function sendPhaseChangeNotification(type, recipients, data) {
 
     if (!settings.sendgridTemplateId) {
       logger.debug(
-        `sendPhaseChangeNotification: sendgridTemplateId not configured for type ${type}`
+        `sendPhaseChangeNotification: sendgridTemplateId not configured for type ${type}`,
       );
       return;
     }
@@ -1740,16 +1911,14 @@ async function sendPhaseChangeNotification(type, recipients, data) {
       return;
     }
 
-    await postBusEvent('external.action.email', 
-      {
-        from: config.EMAIL_FROM,
-        replyTo: config.EMAIL_FROM,
-        recipients: safeRecipients,
-        data: data,
-        sendgrid_template_id: settings.sendgridTemplateId,
-        version: 'v3',
-      }, 
-    );
+    await postBusEvent("external.action.email", {
+      from: config.EMAIL_FROM,
+      replyTo: config.EMAIL_FROM,
+      recipients: safeRecipients,
+      data: data,
+      sendgrid_template_id: settings.sendgridTemplateId,
+      version: "v3",
+    });
   } catch (e) {
     logger.debug(`Failed to post notification ${type}: ${e.message}`);
   }
@@ -1773,7 +1942,7 @@ async function submitZendeskRequest(request) {
           username: `${request.requester.email}/token`,
           password: config.ZENDESK_API_TOKEN,
         },
-      }
+      },
     );
     return res.data || {};
   } catch (e) {
@@ -1842,6 +2011,10 @@ module.exports = {
   getCompleteUserGroupTreeIds,
   expandWithParentGroups,
   getResourceRoles,
+  shouldApplyChallengeWhitelist,
+  getChallengeWhitelistAccessFilter,
+  canAccessChallengeByWhitelist,
+  ensureChallengeWhitelistAccess,
   ensureAccessibleByGroupsAccess,
   getTaskInfo,
   syncTaskAssignmentFromResources,
@@ -1864,6 +2037,7 @@ module.exports = {
   capturePayment,
   cancelPayment,
   generateChallengePayments,
+  rerateChallengeSubmitterRatings,
   sendSelfServiceNotification,
   getMemberByHandle,
   getMembersByHandles,
@@ -1875,7 +2049,7 @@ module.exports = {
   flushInternalCache,
   removeNullProperties,
   buildPhaseChangeEmailData,
-  sendPhaseChangeNotification
+  sendPhaseChangeNotification,
 };
 
 logger.buildService(module.exports);

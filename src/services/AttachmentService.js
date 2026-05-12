@@ -13,7 +13,7 @@ const { enrichChallengeForResponse } = require("../common/challenge-helper");
 const prismaHelper = require("../common/prisma-helper");
 
 const bucketWhitelist = config.AMAZON.BUCKET_WHITELIST.split(",").map((bucketName) =>
-  bucketName.trim()
+  bucketName.trim(),
 );
 
 const prisma = require("../common/prisma").getClient();
@@ -46,7 +46,7 @@ async function _getChallengeAttachment(challengeId, attachmentId) {
   const attachment = await prisma.attachment.findUnique({ where: { id: attachmentId } });
   if (!challenge || !challenge.id || !attachment || attachment.challengeId !== challengeId) {
     throw new errors.NotFoundError(
-      `Attachment ${attachmentId} not found in challenge ${challengeId}`
+      `Attachment ${attachmentId} not found in challenge ${challengeId}`,
     );
   }
   // convert challenge data
@@ -91,7 +91,7 @@ createAttachment.schema = {
         url: Joi.string().uri().required(),
         fileSize: Joi.fileSize(),
         description: Joi.string(),
-      })
+      }),
     )
     .required()
     .min(1),
@@ -143,7 +143,7 @@ async function update(currentUser, challengeId, attachmentId, data, isFull) {
   // post bus event
   await helper.postBusEvent(
     constants.Topics.ChallengeAttachmentUpdated,
-    isFull ? ret : _.assignIn({ id: attachmentId }, data)
+    isFull ? ret : _.assignIn({ id: attachmentId }, data),
   );
   return ret;
 }

@@ -6,6 +6,8 @@ if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
 }
 
 require('../../app-bootstrap')
+const _ = require('lodash')
+const axios = require('axios')
 const chai = require('chai')
 const config = require('config')
 const { Prisma } = require('@prisma/client')
@@ -13,6 +15,7 @@ const { v4: uuid } = require('uuid')
 const challengeService = require('../../src/services/ChallengeService')
 const { getReviewClient } = require('../../src/common/review-prisma')
 const prisma = require('../../src/common/prisma').getClient()
+const m2mHelper = require('../../src/common/m2m-helper')
 const originalIndexChallengeAndPostToKafka = challengeService.indexChallengeAndPostToKafka
 challengeService.indexChallengeAndPostToKafka = async () => {}
 const service = require('../../src/services/ChallengePhaseService')
@@ -23,7 +26,7 @@ const should = chai.should()
 
 describe('challenge phase service unit tests', () => {
   let data
-  const authUser = { userId: 'testuser' }
+  const authUser = { userId: 'testuser', roles: ['administrator'] }
   const reviewSchema = config.get('REVIEW_DB_SCHEMA')
   const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
   const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
@@ -31,6 +34,8 @@ describe('challenge phase service unit tests', () => {
   const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`)
   const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
   let reviewClient
+  let originalAxiosGet
+  let originalGetM2MToken
   const shortId = () => uuid().replace(/-/g, '').slice(0, 14)
   const resetPrimaryChallengePhases = async () => {
     await prisma.challengePhaseConstraint.update({
@@ -94,6 +99,22 @@ describe('challenge phase service unit tests', () => {
     await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."submission"`)
   }
   before(async () => {
+    originalAxiosGet = axios.get
+    originalGetM2MToken = m2mHelper.getM2MToken
+    m2mHelper.getM2MToken = async () => 'test-token'
+    axios.get = async (url, options) => {
+      const requestUrl = _.toString(url)
+      if (
+        requestUrl === config.RESOURCE_ROLES_API_URL ||
+        requestUrl.startsWith(config.RESOURCES_API_URL) ||
+        requestUrl.startsWith(`${config.PROJECTS_API_URL}/`) ||
+        requestUrl.includes('/memberGroups/')
+      ) {
+        return { data: [], status: 200, headers: {} }
+      }
+      return originalAxiosGet(url, options)
+    }
+
     await testHelper.createData()
     data = testHelper.getData()
     reviewClient = getReviewClient()
@@ -155,6 +176,8 @@ describe('challenge phase service unit tests', () => {
 
   after(async () => {
     challengeService.indexChallengeAndPostToKafka = originalIndexChallengeAndPostToKafka
+    axios.get = originalAxiosGet
+    m2mHelper.getM2MToken = originalGetM2MToken
 
     if (reviewClient) {
       await reviewClient.$executeRawUnsafe(`TRUNCATE TABLE "${reviewSchema}"."appealResponse"`)
@@ -188,8 +211,69 @@ describe('challenge phase service unit tests', () => {
 
     it('get all challenge phases successfully 2', async () => {
       const challengeId = data.taskChallenge.id
-      const result = await service.getAllChallengePhases(challengeId)
+      const result = await service.getAllChallengePhases(challengeId, { isMachine: true })
       should.equal(result.length, 0)
+    })
+
+    it('get challenge phases enforces challenge user whitelist for interactive users', async () => {
+      await prisma.challengeUserWhitelist.create({
+        data: {
+          challengeId: data.challenge.id,
+          userId: 'allowed-user'
+        }
+      })
+
+      try {
+        try {
+          await service.getAllChallengePhases(data.challenge.id, {
+            roles: ['administrator'],
+            userId: 'blocked-user'
+          })
+        } catch (e) {
+          should.equal(e.name, 'ForbiddenError')
+
+          const allowedPhases = await service.getAllChallengePhases(data.challenge.id, {
+            roles: ['administrator'],
+            userId: 'allowed-user'
+          })
+          should.equal(allowedPhases.length, 2)
+
+          const machinePhases = await service.getAllChallengePhases(data.challenge.id, {
+            isMachine: true,
+            userId: 'machine-user'
+          })
+          should.equal(machinePhases.length, 2)
+          return
+        }
+        throw new Error('should not reach here')
+      } finally {
+        await prisma.challengeUserWhitelist.deleteMany({
+          where: { challengeId: data.challenge.id }
+        })
+      }
+    })
+
+    it('get all challenge phases enforces challenge group view rules', async () => {
+      await prisma.challenge.update({
+        where: { id: data.challenge.id },
+        data: { groups: [uuid()] }
+      })
+
+      try {
+        await service.getAllChallengePhases(data.challenge.id, {
+          roles: ['Topcoder User'],
+          userId: 'blocked-group-user'
+        })
+      } catch (e) {
+        should.equal(e.name, 'ForbiddenError')
+        return
+      } finally {
+        await prisma.challenge.update({
+          where: { id: data.challenge.id },
+          data: { groups: [] }
+        })
+      }
+      throw new Error('should not reach here')
     })
 
     it('get all challenge phases - invalid challengeId', async () => {
@@ -216,12 +300,28 @@ describe('challenge phase service unit tests', () => {
 
     it('get challenge phase - not found', async () => {
       try {
-        await service.getChallengePhase(data.taskChallenge.id, data.challengePhase2Id)
+        await service.getChallengePhase(data.taskChallenge.id, data.challengePhase2Id, {
+          isMachine: true
+        })
       } catch (e) {
         should.equal(
           e.message,
           `ChallengePhase with challengeId: ${data.taskChallenge.id},  phaseId: ${data.challengePhase2Id} doesn't exist`
         )
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
+    it('get challenge phase enforces task view rules before loading phase data', async () => {
+      try {
+        await service.getChallengePhase(data.taskChallenge.id, data.challengePhase1Id, {
+          roles: ['Topcoder User'],
+          userId: 'blocked-task-user'
+        })
+      } catch (e) {
+        should.equal(e.name, 'ForbiddenError')
+        should.equal(e.message, "You don't have access to view this challenge")
         return
       }
       throw new Error('should not reach here')
@@ -918,6 +1018,25 @@ describe('challenge phase service unit tests', () => {
       throw new Error('should not reach here')
     })
 
+    it('partially update challenge phase blocks editor without challenge modify access', async () => {
+      try {
+        await service.partiallyUpdateChallengePhase(
+          { handle: 'blocked-editor', roles: ['Connect Manager'], userId: 'blocked-editor' },
+          data.challenge.id,
+          data.challengePhase1Id,
+          { name: 'blocked update' }
+        )
+      } catch (e) {
+        should.equal(e.name, 'ForbiddenError')
+        const challengePhase = await prisma.challengePhase.findUnique({
+          where: { id: data.challengePhase1Id }
+        })
+        should.equal(challengePhase.name, 'Registration')
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
     it('partially update challenge phase - phaseId does not exist', async () => {
       try {
         await service.partiallyUpdateChallengePhase(
@@ -1594,6 +1713,54 @@ describe('challenge phase service unit tests', () => {
       throw new Error('should not reach here')
     })
 
+    it('partially update challenge phase - opens marathon match review phase without reviewer resource', async () => {
+      const reviewPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Review',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const reviewChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: reviewChallengePhaseId,
+          challengeId: data.marathonMatchChallenge.id,
+          phaseId: reviewPhase.id,
+          name: 'Review',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getChallengeResources = async () => [{ roleId: 'some-other-role-id' }]
+      helper.getResourceRoles = async () => {
+        throw new Error('resource role lookup should not be required for Marathon Match Review')
+      }
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.marathonMatchChallenge.id,
+          reviewChallengePhaseId,
+          { isOpen: true }
+        )
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: reviewChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: reviewPhase.id } })
+      }
+    })
+
     it('partially update challenge phase - opens review phase when reviewer resource exists', async () => {
       const reviewPhase = await prisma.phase.create({
         data: {
@@ -1647,7 +1814,29 @@ describe('challenge phase service unit tests', () => {
   })
 
   describe('delete challenge phase tests', () => {
+    it('delete challenge phase blocks editor without challenge modify access', async () => {
+      await resetPrimaryChallengePhases()
+
+      try {
+        await service.deleteChallengePhase(
+          { handle: 'blocked-editor', roles: ['Connect Manager'], userId: 'blocked-editor' },
+          data.challenge.id,
+          data.challengePhase1Id
+        )
+      } catch (e) {
+        should.equal(e.name, 'ForbiddenError')
+        const challengePhase = await prisma.challengePhase.findUnique({
+          where: { id: data.challengePhase1Id }
+        })
+        should.exist(challengePhase)
+        return
+      }
+      throw new Error('should not reach here')
+    })
+
     it('delete challenge phase successfully', async () => {
+      await resetPrimaryChallengePhases()
+
       const phases = await service.getAllChallengePhases(data.challenge.id)
       await service.deleteChallengePhase(authUser, data.challenge.id, data.challengePhase1Id)
       const remainingPhases = await service.getAllChallengePhases(data.challenge.id)

@@ -1,261 +1,261 @@
 /**
  * This service provides operations of challenge phases.
  */
-const _ = require('lodash')
-const Joi = require('joi')
-const moment = require('moment')
-const { Prisma } = require('@prisma/client')
-const config = require('config')
-const helper = require('../common/helper')
-const logger = require('../common/logger')
-const errors = require('../common/errors')
-const constants = require('../../app-constants')
-const { getReviewClient } = require('../common/review-prisma')
+const _ = require("lodash");
+const Joi = require("joi");
+const moment = require("moment");
+const { Prisma } = require("@prisma/client");
+const config = require("config");
+const helper = require("../common/helper");
+const logger = require("../common/logger");
+const errors = require("../common/errors");
+const constants = require("../../app-constants");
+const { getReviewClient } = require("../common/review-prisma");
 const {
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed
-} = require('./ChallengeService')
+  ensureAIScreeningCanBeClosed,
+} = require("./ChallengeService");
 
-const { getClient } = require('../common/prisma')
-const prisma = getClient()
-const PENDING_REVIEW_STATUSES = Object.freeze(['PENDING', 'IN_PROGRESS', 'DRAFT', 'SUBMITTED'])
+const { getClient } = require("../common/prisma");
+const prisma = getClient();
+const PENDING_REVIEW_STATUSES = Object.freeze(["PENDING", "IN_PROGRESS", "DRAFT", "SUBMITTED"]);
 const REVIEW_PHASE_NAMES = Object.freeze([
-  'checkpoint review',
-  'checkpoint screening',
-  'screening',
-  'review',
-  'approval'
-])
-const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()))
+  "checkpoint review",
+  "checkpoint screening",
+  "screening",
+  "review",
+  "approval",
+]);
+const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()));
 const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
-  'iterative review': 'Iterative Reviewer',
-  'checkpoint screening': 'Checkpoint Screener',
-  screening: 'Screener',
-  review: 'Reviewer',
-  approval: 'Approver',
-  'checkpoint review': 'Checkpoint Reviewer'
-})
+  "iterative review": "Iterative Reviewer",
+  "checkpoint screening": "Checkpoint Screener",
+  screening: "Screener",
+  review: "Reviewer",
+  approval: "Approver",
+  "checkpoint review": "Checkpoint Reviewer",
+});
 const normalizePhaseName = (name) =>
-  String(name || '')
+  String(name || "")
     .trim()
-    .toLowerCase()
+    .toLowerCase();
 
-function datesAreSame (dateA, dateB) {
+function datesAreSame(dateA, dateB) {
   if (_.isNil(dateA) && _.isNil(dateB)) {
-    return true
+    return true;
   }
   if (_.isNil(dateA) || _.isNil(dateB)) {
-    return false
+    return false;
   }
-  return new Date(dateA).getTime() === new Date(dateB).getTime()
+  return new Date(dateA).getTime() === new Date(dateB).getTime();
 }
 
-function dateIsAfter (dateA, dateB) {
+function dateIsAfter(dateA, dateB) {
   if (_.isNil(dateA) || _.isNil(dateB)) {
-    return false
+    return false;
   }
-  const timeA = new Date(dateA).getTime()
-  const timeB = new Date(dateB).getTime()
+  const timeA = new Date(dateA).getTime();
+  const timeB = new Date(dateB).getTime();
   if (Number.isNaN(timeA) || Number.isNaN(timeB)) {
-    return false
+    return false;
   }
-  return timeA > timeB
+  return timeA > timeB;
 }
 
-function buildPhaseIdentifiers (phase) {
-  const identifiers = []
+function buildPhaseIdentifiers(phase) {
+  const identifiers = [];
   if (phase && phase.id) {
-    identifiers.push(String(phase.id))
+    identifiers.push(String(phase.id));
   }
   if (phase && !_.isNil(phase.phaseId)) {
-    identifiers.push(String(phase.phaseId))
+    identifiers.push(String(phase.phaseId));
   }
-  return identifiers
+  return identifiers;
 }
 
-async function recalculateDependentPhaseDates (tx, challengeId, predecessorPhase, currentUserId) {
+async function recalculateDependentPhaseDates(tx, challengeId, predecessorPhase, currentUserId) {
   if (!predecessorPhase || _.isNil(predecessorPhase.scheduledEndDate)) {
-    return
+    return;
   }
 
   const phases = await tx.challengePhase.findMany({
-    where: { challengeId }
-  })
+    where: { challengeId },
+  });
 
-  const successorsByPredecessor = new Map()
+  const successorsByPredecessor = new Map();
   for (const phase of phases) {
     if (_.isNil(phase.predecessor)) {
-      continue
+      continue;
     }
-    const key = String(phase.predecessor)
+    const key = String(phase.predecessor);
     if (!successorsByPredecessor.has(key)) {
-      successorsByPredecessor.set(key, [])
+      successorsByPredecessor.set(key, []);
     }
-    successorsByPredecessor.get(key).push(phase)
+    successorsByPredecessor.get(key).push(phase);
   }
 
-  const queue = [predecessorPhase]
-  const visited = new Set()
+  const queue = [predecessorPhase];
+  const visited = new Set();
 
   while (queue.length > 0) {
-    const currentPhase = queue.shift()
-    const currentEndDate = currentPhase?.scheduledEndDate
+    const currentPhase = queue.shift();
+    const currentEndDate = currentPhase?.scheduledEndDate;
     if (_.isNil(currentEndDate)) {
-      continue
+      continue;
     }
-    const predecessorKeys = buildPhaseIdentifiers(currentPhase)
+    const predecessorKeys = buildPhaseIdentifiers(currentPhase);
 
     for (const predecessorKey of predecessorKeys) {
-      const successors = successorsByPredecessor.get(predecessorKey) || []
+      const successors = successorsByPredecessor.get(predecessorKey) || [];
       for (const successor of successors) {
         if (visited.has(successor.id)) {
-          continue
+          continue;
         }
 
-        let successorForQueue = successor
+        let successorForQueue = successor;
         if (_.isNil(successor.actualStartDate)) {
-          const alignToPredecessorStart = normalizePhaseName(successor.name) === 'iterative review'
+          const alignToPredecessorStart = normalizePhaseName(successor.name) === "iterative review";
           const desiredStartDate = new Date(
             alignToPredecessorStart && currentPhase.scheduledStartDate
               ? currentPhase.scheduledStartDate
-              : currentEndDate
-          )
-          const durationSeconds = Number(successor.duration)
+              : currentEndDate,
+          );
+          const durationSeconds = Number(successor.duration);
           if (!Number.isFinite(durationSeconds) || Number.isNaN(desiredStartDate.getTime())) {
-            visited.add(successor.id)
-            queue.push(successorForQueue)
-            continue
+            visited.add(successor.id);
+            queue.push(successorForQueue);
+            continue;
           }
-          const desiredEndDate = new Date(desiredStartDate.getTime() + durationSeconds * 1000)
-          const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate)
-          const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate)
+          const desiredEndDate = new Date(desiredStartDate.getTime() + durationSeconds * 1000);
+          const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate);
+          const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate);
 
           if (startChanged || endChanged) {
             successorForQueue = await tx.challengePhase.update({
               data: {
                 scheduledStartDate: desiredStartDate,
                 scheduledEndDate: desiredEndDate,
-                updatedBy: currentUserId
+                updatedBy: currentUserId,
               },
               where: {
-                id: successor.id
-              }
-            })
+                id: successor.id,
+              },
+            });
           } else {
             successorForQueue = {
               ...successor,
               scheduledStartDate: successor.scheduledStartDate,
-              scheduledEndDate: successor.scheduledEndDate
-            }
+              scheduledEndDate: successor.scheduledEndDate,
+            };
           }
         }
 
-        visited.add(successor.id)
-        queue.push(successorForQueue)
+        visited.add(successor.id);
+        queue.push(successorForQueue);
       }
     }
   }
 }
 
-async function shiftDependentPhaseDates (tx, challengeId, predecessorPhase, deltaMs, currentUserId) {
+async function shiftDependentPhaseDates(tx, challengeId, predecessorPhase, deltaMs, currentUserId) {
   if (!predecessorPhase || !Number.isFinite(deltaMs) || deltaMs === 0) {
-    return
+    return;
   }
 
   const phases = await tx.challengePhase.findMany({
-    where: { challengeId }
-  })
+    where: { challengeId },
+  });
 
-  const successorsByPredecessor = new Map()
+  const successorsByPredecessor = new Map();
   for (const phase of phases) {
     if (_.isNil(phase.predecessor)) {
-      continue
+      continue;
     }
-    const key = String(phase.predecessor)
+    const key = String(phase.predecessor);
     if (!successorsByPredecessor.has(key)) {
-      successorsByPredecessor.set(key, [])
+      successorsByPredecessor.set(key, []);
     }
-    successorsByPredecessor.get(key).push(phase)
+    successorsByPredecessor.get(key).push(phase);
   }
 
-  const queue = [predecessorPhase]
-  const visited = new Set()
+  const queue = [predecessorPhase];
+  const visited = new Set();
 
   while (queue.length > 0) {
-    const currentPhase = queue.shift()
-    const predecessorKeys = buildPhaseIdentifiers(currentPhase)
+    const currentPhase = queue.shift();
+    const predecessorKeys = buildPhaseIdentifiers(currentPhase);
 
     for (const predecessorKey of predecessorKeys) {
-      const successors = successorsByPredecessor.get(predecessorKey) || []
+      const successors = successorsByPredecessor.get(predecessorKey) || [];
       for (const successor of successors) {
         if (visited.has(successor.id)) {
-          continue
+          continue;
         }
 
-        let successorForQueue = successor
+        let successorForQueue = successor;
         if (_.isNil(successor.actualStartDate)) {
           const scheduledStartTime = successor.scheduledStartDate
             ? new Date(successor.scheduledStartDate).getTime()
-            : Number.NaN
+            : Number.NaN;
           const scheduledEndTime = successor.scheduledEndDate
             ? new Date(successor.scheduledEndDate).getTime()
-            : Number.NaN
+            : Number.NaN;
 
           if (Number.isFinite(scheduledStartTime) && Number.isFinite(scheduledEndTime)) {
-            const desiredStartDate = new Date(scheduledStartTime + deltaMs)
-            const desiredEndDate = new Date(scheduledEndTime + deltaMs)
-            const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate)
-            const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate)
+            const desiredStartDate = new Date(scheduledStartTime + deltaMs);
+            const desiredEndDate = new Date(scheduledEndTime + deltaMs);
+            const startChanged = !datesAreSame(successor.scheduledStartDate, desiredStartDate);
+            const endChanged = !datesAreSame(successor.scheduledEndDate, desiredEndDate);
 
             if (startChanged || endChanged) {
               successorForQueue = await tx.challengePhase.update({
                 data: {
                   scheduledStartDate: desiredStartDate,
                   scheduledEndDate: desiredEndDate,
-                  updatedBy: currentUserId
+                  updatedBy: currentUserId,
                 },
                 where: {
-                  id: successor.id
-                }
-              })
+                  id: successor.id,
+                },
+              });
             } else {
               successorForQueue = {
                 ...successor,
                 scheduledStartDate: successor.scheduledStartDate,
-                scheduledEndDate: successor.scheduledEndDate
-              }
+                scheduledEndDate: successor.scheduledEndDate,
+              };
             }
           }
         }
 
-        visited.add(successor.id)
-        queue.push(successorForQueue)
+        visited.add(successor.id);
+        queue.push(successorForQueue);
       }
     }
   }
 }
 
-async function hasPendingScorecardsForPhase (challengePhaseId) {
+async function hasPendingScorecardsForPhase(challengePhaseId) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping pending scorecard check for phase ${challengePhaseId} because REVIEW_DB_URL is not configured`
-    )
-    return false
+      `Skipping pending scorecard check for phase ${challengePhaseId} because REVIEW_DB_URL is not configured`,
+    );
+    return false;
   }
 
-  const reviewPrisma = getReviewClient()
-  const reviewSchema = config.REVIEW_DB_SCHEMA
-  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
-  const statusText = Prisma.raw('"status"::text')
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const statusText = Prisma.raw('"status"::text');
 
   const pendingStatusClause =
     PENDING_REVIEW_STATUSES.length > 0
       ? Prisma.sql`${statusText} IN (${Prisma.join(
-          PENDING_REVIEW_STATUSES.map((status) => Prisma.sql`${status}`)
+          PENDING_REVIEW_STATUSES.map((status) => Prisma.sql`${status}`),
         )})`
-      : Prisma.sql`FALSE`
+      : Prisma.sql`FALSE`;
 
-  let rows
+  let rows;
   try {
     rows = await reviewPrisma.$queryRaw(
       Prisma.sql`
@@ -266,54 +266,54 @@ async function hasPendingScorecardsForPhase (challengePhaseId) {
             "status" IS NULL
             OR ${pendingStatusClause}
           )
-      `
-    )
+      `,
+    );
   } catch (err) {
     logger.error(
       `Failed to check pending scorecards for phase ${challengePhaseId}: ${err.message}`,
-      err
-    )
-    throw err
+      err,
+    );
+    throw err;
   }
 
-  const [{ count = 0 } = {}] = rows || []
-  return Number(count) > 0
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
 }
 
-async function hasCompletedReviewsForPhase (challengePhaseIdOrIds) {
+async function hasCompletedReviewsForPhase(challengePhaseIdOrIds) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping completed review check for phase ${challengePhaseIdOrIds} because REVIEW_DB_URL is not configured`
-    )
-    return false
+      `Skipping completed review check for phase ${challengePhaseIdOrIds} because REVIEW_DB_URL is not configured`,
+    );
+    return false;
   }
 
   const phaseIds = Array.isArray(challengePhaseIdOrIds)
     ? challengePhaseIdOrIds.filter((id) => !_.isNil(id))
-    : [challengePhaseIdOrIds]
+    : [challengePhaseIdOrIds];
 
   if (phaseIds.length === 0) {
-    return false
+    return false;
   }
 
-  const reviewPrisma = getReviewClient()
-  const reviewSchema = config.REVIEW_DB_SCHEMA
-  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
-  const statusText = Prisma.raw('"status"::text')
-  const completedStatuses = ['IN_PROGRESS', 'COMPLETED']
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const statusText = Prisma.raw('"status"::text');
+  const completedStatuses = ["IN_PROGRESS", "COMPLETED"];
 
   const phaseIdClause =
     phaseIds.length === 1
       ? Prisma.sql`"phaseId" = ${phaseIds[0]}`
       : Prisma.sql`"phaseId" IN (${Prisma.join(
-          phaseIds.map((phaseId) => Prisma.sql`${phaseId}`)
-        )})`
+          phaseIds.map((phaseId) => Prisma.sql`${phaseId}`),
+        )})`;
 
   const completedStatusClause = Prisma.sql`${statusText} IN (${Prisma.join(
-    completedStatuses.map((status) => Prisma.sql`${status}`)
-  )})`
+    completedStatuses.map((status) => Prisma.sql`${status}`),
+  )})`;
 
-  let rows
+  let rows;
   try {
     rows = await reviewPrisma.$queryRaw(
       Prisma.sql`
@@ -321,37 +321,37 @@ async function hasCompletedReviewsForPhase (challengePhaseIdOrIds) {
         FROM ${reviewTable}
         WHERE ${phaseIdClause}
           AND ${completedStatusClause}
-      `
-    )
+      `,
+    );
   } catch (err) {
     logger.error(
-      `Failed to check completed reviews for phase(s) ${phaseIds.join(', ')}: ${err.message}`,
-      err
-    )
-    throw err
+      `Failed to check completed reviews for phase(s) ${phaseIds.join(", ")}: ${err.message}`,
+      err,
+    );
+    throw err;
   }
 
-  const [{ count = 0 } = {}] = rows || []
-  return Number(count) > 0
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
 }
 
-async function hasSubmittedAppealsForChallenge (challengeId) {
+async function hasSubmittedAppealsForChallenge(challengeId) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping submitted appeals check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
-    )
-    return false
+      `Skipping submitted appeals check for challenge ${challengeId} because REVIEW_DB_URL is not configured`,
+    );
+    return false;
   }
 
-  const reviewPrisma = getReviewClient()
-  const reviewSchema = config.REVIEW_DB_SCHEMA
-  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
-  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`)
-  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`)
-  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
-  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`);
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`);
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`);
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
 
-  let rows
+  let rows;
   try {
     rows = await reviewPrisma.$queryRaw(
       Prisma.sql`
@@ -369,38 +369,38 @@ async function hasSubmittedAppealsForChallenge (challengeId) {
               OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
             )
         )
-      `
-    )
+      `,
+    );
   } catch (err) {
     logger.error(
       `Failed to check submitted appeals for challenge ${challengeId}: ${err.message}`,
-      err
-    )
-    throw err
+      err,
+    );
+    throw err;
   }
 
-  const [{ count = 0 } = {}] = rows || []
-  return Number(count) > 0
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
 }
 
-async function hasPendingAppealResponsesForChallenge (challengeId) {
+async function hasPendingAppealResponsesForChallenge(challengeId) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping pending appeal response check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
-    )
-    return false
+      `Skipping pending appeal response check for challenge ${challengeId} because REVIEW_DB_URL is not configured`,
+    );
+    return false;
   }
 
-  const reviewPrisma = getReviewClient()
-  const reviewSchema = config.REVIEW_DB_SCHEMA
-  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`)
-  const appealResponseTable = Prisma.raw(`"${reviewSchema}"."appealResponse"`)
-  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`)
-  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`)
-  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`)
-  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const appealTable = Prisma.raw(`"${reviewSchema}"."appeal"`);
+  const appealResponseTable = Prisma.raw(`"${reviewSchema}"."appealResponse"`);
+  const reviewItemCommentTable = Prisma.raw(`"${reviewSchema}"."reviewItemComment"`);
+  const reviewItemTable = Prisma.raw(`"${reviewSchema}"."reviewItem"`);
+  const reviewTable = Prisma.raw(`"${reviewSchema}"."review"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
 
-  let rows
+  let rows;
   try {
     rows = await reviewPrisma.$queryRaw(
       Prisma.sql`
@@ -420,35 +420,35 @@ async function hasPendingAppealResponsesForChallenge (challengeId) {
                 OR (r."legacySubmissionId" IS NOT NULL AND s."legacySubmissionId" = r."legacySubmissionId")
               )
           )
-      `
-    )
+      `,
+    );
   } catch (err) {
     logger.error(
       `Failed to check pending appeal responses for challenge ${challengeId}: ${err.message}`,
-      err
-    )
-    throw err
+      err,
+    );
+    throw err;
   }
 
-  const [{ count = 0 } = {}] = rows || []
-  return Number(count) > 0
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
 }
 
-async function hasPendingEscalationRequestsForChallenge (challengeId) {
+async function hasPendingEscalationRequestsForChallenge(challengeId) {
   if (!config.REVIEW_DB_URL) {
     logger.debug(
-      `Skipping pending escalation request check for challenge ${challengeId} because REVIEW_DB_URL is not configured`
-    )
-    return false
+      `Skipping pending escalation request check for challenge ${challengeId} because REVIEW_DB_URL is not configured`,
+    );
+    return false;
   }
 
-  const reviewPrisma = getReviewClient()
-  const reviewSchema = config.REVIEW_DB_SCHEMA
-  const escalationTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecisionEscalation"`)
-  const decisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`)
-  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`)
+  const reviewPrisma = getReviewClient();
+  const reviewSchema = config.REVIEW_DB_SCHEMA;
+  const escalationTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecisionEscalation"`);
+  const decisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+  const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
 
-  let rows
+  let rows;
   try {
     rows = await reviewPrisma.$queryRaw(
       Prisma.sql`
@@ -462,178 +462,220 @@ async function hasPendingEscalationRequestsForChallenge (challengeId) {
             WHERE s."challengeId" = ${challengeId}
               AND s."id" = ard."submissionId"
           )
-      `
-    )
+      `,
+    );
   } catch (err) {
     logger.error(
       `Failed to check pending escalation requests for challenge ${challengeId}: ${err.message}`,
-      err
-    )
-    throw err
+      err,
+    );
+    throw err;
   }
 
-  const [{ count = 0 } = {}] = rows || []
-  return Number(count) > 0
+  const [{ count = 0 } = {}] = rows || [];
+  return Number(count) > 0;
 }
 
-async function checkChallengeExists (challengeId) {
-  const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } })
+/**
+ * Load a challenge for challenge-scoped phase operations.
+ * @param {String} challengeId the challenge id
+ * @returns {Object} the challenge with the given id and type metadata
+ * @throws {NotFoundError} when the challenge does not exist
+ */
+async function getChallengeForPhaseAccess(challengeId) {
+  const challenge = await prisma.challenge.findUnique({
+    where: { id: challengeId },
+    include: { type: true },
+  });
   if (!challenge) {
-    throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`)
+    throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
   }
+  return challenge;
 }
 
 /**
  * Publish a challenge update event with the latest challenge payload.
  * @param {String} challengeId the challenge id
  */
-async function postChallengeUpdatedNotification (challengeId) {
+async function postChallengeUpdatedNotification(challengeId) {
   try {
-    const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } })
+    const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
     if (!challenge) {
-      logger.error(`Failed to publish challenge update event: challenge ${challengeId} not found`)
-      return
+      logger.error(`Failed to publish challenge update event: challenge ${challengeId} not found`);
+      return;
     }
-    await indexChallengeAndPostToKafka(challenge)
+    await indexChallengeAndPostToKafka(challenge);
   } catch (error) {
     logger.error(
       `Failed to publish challenge update event for challenge ${challengeId}: ${error.message}`,
-      error
-    )
-    throw error
+      error,
+    );
+    throw error;
   }
 }
 
-async function ensureRequiredResourcesBeforeOpeningPhase (challengeId, phaseName) {
-  const normalizedPhaseName = _.toLower(_.trim(phaseName || ''))
-  const requiredRoleName = PHASE_RESOURCE_ROLE_REQUIREMENTS[normalizedPhaseName]
+/**
+ * Check whether a challenge is the Marathon Match challenge type.
+ * @param {Object} challenge challenge data loaded with its type relation
+ * @returns {Boolean} true when the challenge type name is Marathon Match
+ */
+function isMarathonMatchChallengeType(challenge) {
+  const typeName = _.get(challenge, "type.name");
+  return _.toLower(_.trim(typeName || "")) === "marathon match";
+}
+
+/**
+ * Ensure a challenge has the configured resource role before a phase opens.
+ * @param {Object} challenge challenge data loaded with its type relation
+ * @param {String} phaseName phase name being opened
+ * @throws {BadRequestError} when the challenge is missing the required resource role
+ */
+async function ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName) {
+  const normalizedPhaseName = _.toLower(_.trim(phaseName || ""));
+  const requiredRoleName = PHASE_RESOURCE_ROLE_REQUIREMENTS[normalizedPhaseName];
   if (!requiredRoleName) {
-    return
+    return;
   }
 
-  const challengeResources = await helper.getChallengeResources(challengeId)
-  const requiredRoleNameLower = _.toLower(requiredRoleName)
+  if (normalizedPhaseName === "review" && isMarathonMatchChallengeType(challenge)) {
+    return;
+  }
+
+  const challengeId = challenge.id;
+  const challengeResources = await helper.getChallengeResources(challengeId);
+  const requiredRoleNameLower = _.toLower(requiredRoleName);
   const hasRequiredRoleByName = (challengeResources || []).some((resource) => {
     const roleName =
       resource.roleName ||
       resource.role ||
-      _.get(resource, 'role.name') ||
-      _.get(resource, 'resourceRoleName') ||
-      _.get(resource, 'resourceRole.name')
-    return roleName && _.toLower(roleName) === requiredRoleNameLower
-  })
+      _.get(resource, "role.name") ||
+      _.get(resource, "resourceRoleName") ||
+      _.get(resource, "resourceRole.name");
+    return roleName && _.toLower(roleName) === requiredRoleNameLower;
+  });
 
-  let hasRequiredRole = hasRequiredRoleByName
+  let hasRequiredRole = hasRequiredRoleByName;
 
   if (!hasRequiredRole) {
-    const resourceRoles = await helper.getResourceRoles()
+    const resourceRoles = await helper.getResourceRoles();
     const requiredRoleIds = (resourceRoles || [])
       .filter((role) => role.name && _.toLower(role.name) === requiredRoleNameLower)
-      .map((role) => _.toString(role.id))
+      .map((role) => _.toString(role.id));
     if (requiredRoleIds.length > 0) {
-      const requiredRoleIdSet = new Set(requiredRoleIds)
+      const requiredRoleIdSet = new Set(requiredRoleIds);
       hasRequiredRole = (challengeResources || []).some(
-        (resource) => resource.roleId && requiredRoleIdSet.has(_.toString(resource.roleId))
-      )
+        (resource) => resource.roleId && requiredRoleIdSet.has(_.toString(resource.roleId)),
+      );
     }
   }
 
   if (!hasRequiredRole) {
-    const displayPhaseName = phaseName || 'phase'
+    const displayPhaseName = phaseName || "phase";
     throw new errors.BadRequestError(
-      `Cannot open ${displayPhaseName} phase because the challenge does not have any resource with the ${requiredRoleName} role`
-    )
+      `Cannot open ${displayPhaseName} phase because the challenge does not have any resource with the ${requiredRoleName} role`,
+    );
   }
 }
 
 /**
  * Get all phase information for that challenge
  * @param {String} challengeId the challenge id
+ * @param {Object} [currentUser] the user who performs the operation
  * @returns {[Object]} the list of challenge phase
+ * @throws {ForbiddenError} when the current user cannot view the challenge
  */
-async function getAllChallengePhases (challengeId) {
-  await checkChallengeExists(challengeId)
+async function getAllChallengePhases(challengeId, currentUser) {
+  const challenge = await getChallengeForPhaseAccess(challengeId);
+  await helper.ensureUserCanViewChallenge(currentUser, challenge);
   const result = await prisma.challengePhase.findMany({
     where: { challengeId },
-    include: { phase: true, constraints: true }
-  })
+    include: { phase: true, constraints: true },
+  });
 
   return _.map(result, (obj) => {
-    const ret = _.omit(obj, constants.auditFields)
-    ret.phase = _.omit(obj.phase, constants.auditFields)
+    const ret = _.omit(obj, constants.auditFields);
+    ret.phase = _.omit(obj.phase, constants.auditFields);
     ret.constraints = _.map(obj.constraints, (constraint) =>
-      _.omit(constraint, constants.auditFields)
-    )
-    return ret
-  })
+      _.omit(constraint, constants.auditFields),
+    );
+    return ret;
+  });
 }
 
 getAllChallengePhases.schema = {
-  challengeId: Joi.id()
-}
+  challengeId: Joi.id(),
+  currentUser: Joi.any(),
+};
 
 /**
  * Get challenge phase.
  * @param {String} challengeId the challenge id
  * @param {String} id the challenge phase id
+ * @param {Object} [currentUser] the user who performs the operation
  * @returns {Object} the challengePhase with given challengeId and id
+ * @throws {ForbiddenError} when the current user cannot view the challenge
  */
-async function getChallengePhase (challengeId, id) {
-  await checkChallengeExists(challengeId)
+async function getChallengePhase(challengeId, id, currentUser) {
+  const challenge = await getChallengeForPhaseAccess(challengeId);
+  await helper.ensureUserCanViewChallenge(currentUser, challenge);
   const result = await prisma.challengePhase.findFirst({
     where: { challengeId, id },
-    include: { phase: true, constraints: true }
-  })
+    include: { phase: true, constraints: true },
+  });
   if (!result) {
     throw new errors.NotFoundError(
-      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`
-    )
+      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`,
+    );
   }
-  const ret = _.omit(result, constants.auditFields)
-  ret.phase = _.omit(result.phase, constants.auditFields)
-  ret.constraints = _.map(result.constraints, (constraint) => _.omit(constraint))
-  return ret
+  const ret = _.omit(result, constants.auditFields);
+  ret.phase = _.omit(result.phase, constants.auditFields);
+  ret.constraints = _.map(result.constraints, (constraint) => _.omit(constraint));
+  return ret;
 }
 
 getChallengePhase.schema = {
   challengeId: Joi.id(),
-  id: Joi.id()
-}
+  id: Joi.id(),
+  currentUser: Joi.any(),
+};
 
 /**
  * Partially update challenge phase
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {String} id the phase id
+ * @param {Object} data the partial phase update
  * @returns {Object} the updated challengePhase
+ * @throws {ForbiddenError} when the current user cannot modify the challenge
  */
-async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data) {
-  await checkChallengeExists(challengeId)
+async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data) {
+  const challenge = await getChallengeForPhaseAccess(challengeId);
+  await helper.ensureUserCanModifyChallenge(currentUser, challenge);
   const challengePhase = await prisma.challengePhase.findFirst({
     where: { challengeId, id },
-    include: { constraints: true }
-  })
+    include: { constraints: true },
+  });
   if (!challengePhase) {
     throw new errors.NotFoundError(
-      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`
-    )
+      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`,
+    );
   }
-  const originalScheduledEndDate = challengePhase.scheduledEndDate
+  const originalScheduledEndDate = challengePhase.scheduledEndDate;
   const shouldAttemptSuccessorRecalc = Boolean(
-    data.duration || data.scheduledStartDate || data.scheduledEndDate
-  )
+    data.duration || data.scheduledStartDate || data.scheduledEndDate,
+  );
   // isOpen should be false if it's passed as null
-  if ('isOpen' in data) {
+  if ("isOpen" in data) {
     if (!data.isOpen) {
-      data.isOpen = false
+      data.isOpen = false;
     }
   }
 
   // check ChallengePhase data
   if (data.phaseId) {
-    const phase = await prisma.phase.findUnique({ where: { id: data.phaseId } })
+    const phase = await prisma.phase.findUnique({ where: { id: data.phaseId } });
     if (!phase) {
-      throw new errors.BadRequestError('phaseId should be a valid phase')
+      throw new errors.BadRequestError("phaseId should be a valid phase");
     }
   }
 
@@ -641,25 +683,25 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
     const predecessor = await prisma.challengePhase.findFirst({
       where: {
         challengeId,
-        OR: [{ id: data.predecessor }, { phaseId: data.predecessor }]
-      }
-    })
+        OR: [{ id: data.predecessor }, { phaseId: data.predecessor }],
+      },
+    });
     if (!predecessor) {
       throw new errors.BadRequestError(
-        `predecessor should be a valid challenge phase in the same challenge: ${challengeId}`
-      )
+        `predecessor should be a valid challenge phase in the same challenge: ${challengeId}`,
+      );
     }
   }
 
-  const isOpeningPhase = 'isOpen' in data && data.isOpen === true
-  const predecessorId = data.predecessor || challengePhase.predecessor
+  const isOpeningPhase = "isOpen" in data && data.isOpen === true;
+  const predecessorId = data.predecessor || challengePhase.predecessor;
   if (isOpeningPhase && predecessorId) {
     const predecessorPhase = await prisma.challengePhase.findFirst({
       where: {
         challengeId,
-        OR: [{ id: predecessorId }, { phaseId: predecessorId }]
-      }
-    })
+        OR: [{ id: predecessorId }, { phaseId: predecessorId }],
+      },
+    });
 
     if (
       !predecessorPhase ||
@@ -668,44 +710,44 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
       _.isNil(predecessorPhase.actualEndDate)
     ) {
       throw new errors.BadRequestError(
-        'Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set'
-      )
+        "Cannot open phase because predecessor phase must be closed with both actualStartDate and actualEndDate set",
+      );
     }
   }
 
   if (isOpeningPhase) {
-    const phaseName = data.name || challengePhase.name
-    await ensureRequiredResourcesBeforeOpeningPhase(challengeId, phaseName)
+    const phaseName = data.name || challengePhase.name;
+    await ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName);
 
     // Check if this is the Appeals phase
-    const normalizedPhaseName = normalizePhaseName(phaseName)
-    if (normalizedPhaseName === 'appeals') {
-      const hasPendingEscalations = await hasPendingEscalationRequestsForChallenge(challengeId)
+    const normalizedPhaseName = normalizePhaseName(phaseName);
+    if (normalizedPhaseName === "appeals") {
+      const hasPendingEscalations = await hasPendingEscalationRequestsForChallenge(challengeId);
       if (hasPendingEscalations) {
         throw new errors.BadRequestError(
-          'Cannot open Appeals phase because there are pending escalation requests that need to be resolved first'
-        )
+          "Cannot open Appeals phase because there are pending escalation requests that need to be resolved first",
+        );
       }
     }
   }
 
   if (data.scheduledStartDate || data.scheduledEndDate) {
-    const startDate = data.scheduledStartDate || challengePhase.scheduledStartDate
-    const endDate = data.scheduledEndDate || challengePhase.scheduledEndDate
+    const startDate = data.scheduledStartDate || challengePhase.scheduledStartDate;
+    const endDate = data.scheduledEndDate || challengePhase.scheduledEndDate;
     if (moment(startDate).isAfter(moment(endDate))) {
       throw new errors.BadRequestError(
-        `scheduledStartDate: ${startDate.toISOString()} should not be after scheduledEndDate: ${endDate.toISOString()}`
-      )
+        `scheduledStartDate: ${startDate.toISOString()} should not be after scheduledEndDate: ${endDate.toISOString()}`,
+      );
     }
   }
 
   if (data.actualStartDate || data.actualEndDate) {
-    const startDate = data.actualStartDate || challengePhase.actualStartDate
-    const endDate = data.actualEndDate || challengePhase.actualEndDate
+    const startDate = data.actualStartDate || challengePhase.actualStartDate;
+    const endDate = data.actualEndDate || challengePhase.actualEndDate;
     if (moment(startDate).isAfter(moment(endDate))) {
       throw new errors.BadRequestError(
-        `actualStartDate: ${startDate.toISOString()} should not be after actualEndDate: ${endDate.toISOString()}`
-      )
+        `actualStartDate: ${startDate.toISOString()} should not be after actualEndDate: ${endDate.toISOString()}`,
+      );
     }
   }
 
@@ -713,183 +755,183 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
     for (const constrain of data.constraints) {
       if (constrain.id && !challengePhase.constraints.some((cst) => cst.id === constrain.id)) {
         throw new errors.BadRequestError(
-          `constraint: ${constrain.id} is not exists for the ChallengePhase`
-        )
+          `constraint: ${constrain.id} is not exists for the ChallengePhase`,
+        );
       }
     }
   }
 
   const isClosingPhase =
-    'isOpen' in data && data.isOpen === false && Boolean(challengePhase.isOpen)
-  const isReopeningPhase = 'isOpen' in data && data.isOpen === true && !challengePhase.isOpen
+    "isOpen" in data && data.isOpen === false && Boolean(challengePhase.isOpen);
+  const isReopeningPhase = "isOpen" in data && data.isOpen === true && !challengePhase.isOpen;
   if (isClosingPhase) {
-    const closingPhaseName = data.name || challengePhase.name
-    const normalizedClosingPhaseName = normalizePhaseName(closingPhaseName)
-    const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id)
+    const closingPhaseName = data.name || challengePhase.name;
+    const normalizedClosingPhaseName = normalizePhaseName(closingPhaseName);
+    const pendingScorecards = await hasPendingScorecardsForPhase(challengePhase.id);
     if (pendingScorecards) {
-      const phaseName = closingPhaseName || 'phase'
+      const phaseName = closingPhaseName || "phase";
       throw new errors.ForbiddenError(
-        `Cannot close ${phaseName} because there are still pending scorecards`
-      )
+        `Cannot close ${phaseName} because there are still pending scorecards`,
+      );
     }
     if (
-      normalizedClosingPhaseName === 'review' &&
+      normalizedClosingPhaseName === "review" &&
       (await hasPendingEscalationRequestsForChallenge(challengePhase.challengeId))
     ) {
       throw new errors.BadRequestError(
-        'Cannot close Review phase because there are pending escalation requests that need to be resolved first'
-      )
+        "Cannot close Review phase because there are pending escalation requests that need to be resolved first",
+      );
     }
     if (
-      normalizedClosingPhaseName === 'appeals response' &&
+      normalizedClosingPhaseName === "appeals response" &&
       (await hasPendingAppealResponsesForChallenge(challengePhase.challengeId))
     ) {
       throw new errors.BadRequestError(
-        "Appeals Response phase can't be closed because there are still appeals that haven't been responded to"
-      )
+        "Appeals Response phase can't be closed because there are still appeals that haven't been responded to",
+      );
     }
 
-    if (normalizedClosingPhaseName === 'ai screening') {
-      await ensureAIScreeningCanBeClosed(challengePhase.challengeId)
+    if (normalizedClosingPhaseName === "ai screening") {
+      await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
     }
 
-    if (!('actualEndDate' in data) || _.isNil(data.actualEndDate)) {
-      data.actualEndDate = new Date()
+    if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
+      data.actualEndDate = new Date();
     }
   }
   if (isReopeningPhase) {
-    const phaseName = challengePhase.name
+    const phaseName = challengePhase.name;
     const openPhases = await prisma.challengePhase.findMany({
       where: {
         challengeId: challengePhase.challengeId,
-        isOpen: true
+        isOpen: true,
       },
       select: {
         id: true,
         phaseId: true,
         predecessor: true,
-        name: true
-      }
-    })
+        name: true,
+      },
+    });
     const activeReviewPhase = openPhases.find((phase) =>
-      REVIEW_PHASE_NAME_SET.has(String(phase?.name || '').toLowerCase())
-    )
+      REVIEW_PHASE_NAME_SET.has(String(phase?.name || "").toLowerCase()),
+    );
     if (activeReviewPhase) {
-      const hasActiveScorecards = await hasCompletedReviewsForPhase(activeReviewPhase.id)
+      const hasActiveScorecards = await hasCompletedReviewsForPhase(activeReviewPhase.id);
       if (hasActiveScorecards) {
         throw new errors.BadRequestError(
-          `Cannot reopen ${phaseName} because the currently open phase '${activeReviewPhase.name}' has reviews in progress or completed`
-        )
+          `Cannot reopen ${phaseName} because the currently open phase '${activeReviewPhase.name}' has reviews in progress or completed`,
+        );
       }
     }
-    if (phaseName === 'Submission' || phaseName === 'Registration') {
-      const hasCompletedReviews = await hasCompletedReviewsForPhase(challengePhase.id)
+    if (phaseName === "Submission" || phaseName === "Registration") {
+      const hasCompletedReviews = await hasCompletedReviewsForPhase(challengePhase.id);
       if (hasCompletedReviews) {
         throw new errors.ForbiddenError(
-          'Cannot reopen Submission/Registration phase because reviews are already in progress or completed'
-        )
+          "Cannot reopen Submission/Registration phase because reviews are already in progress or completed",
+        );
       }
     }
 
-    if (phaseName === 'Checkpoint Submission') {
+    if (phaseName === "Checkpoint Submission") {
       const checkpointPhases = await prisma.challengePhase.findMany({
         where: {
           challengeId: challengePhase.challengeId,
-          name: { in: ['Checkpoint Screening', 'Checkpoint Review'] }
+          name: { in: ["Checkpoint Screening", "Checkpoint Review"] },
         },
-        select: { id: true }
-      })
-      const checkpointPhaseIds = checkpointPhases.map((cp) => cp.id)
+        select: { id: true },
+      });
+      const checkpointPhaseIds = checkpointPhases.map((cp) => cp.id);
       if (checkpointPhaseIds.length > 0) {
-        const hasCheckpointReviews = await hasCompletedReviewsForPhase(checkpointPhaseIds)
+        const hasCheckpointReviews = await hasCompletedReviewsForPhase(checkpointPhaseIds);
         if (hasCheckpointReviews) {
           throw new errors.ForbiddenError(
-            'Cannot reopen Checkpoint Submission phase because Checkpoint Screening or Checkpoint Review reviews are already in progress or completed'
-          )
+            "Cannot reopen Checkpoint Submission phase because Checkpoint Screening or Checkpoint Review reviews are already in progress or completed",
+          );
         }
       }
     }
 
-    const hasActualStartDate = !_.isNil(challengePhase.actualStartDate)
-    const hasActualEndDate = !_.isNil(challengePhase.actualEndDate)
+    const hasActualStartDate = !_.isNil(challengePhase.actualStartDate);
+    const hasActualEndDate = !_.isNil(challengePhase.actualEndDate);
 
     if (hasActualStartDate && hasActualEndDate && openPhases.length > 0) {
-      const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)])
+      const reopenedPhaseIdentifiers = new Set([String(challengePhase.id)]);
       if (!_.isNil(challengePhase.phaseId)) {
-        reopenedPhaseIdentifiers.add(String(challengePhase.phaseId))
+        reopenedPhaseIdentifiers.add(String(challengePhase.phaseId));
       }
 
       const dependentOpenPhases = openPhases.filter((phase) => {
         if (!phase || _.isNil(phase.predecessor)) {
-          return false
+          return false;
         }
-        return reopenedPhaseIdentifiers.has(String(phase.predecessor))
-      })
+        return reopenedPhaseIdentifiers.has(String(phase.predecessor));
+      });
 
       if (dependentOpenPhases.length === 0) {
         throw new errors.ForbiddenError(
-          `Cannot reopen ${phaseName} because no currently open phase depends on it`
-        )
+          `Cannot reopen ${phaseName} because no currently open phase depends on it`,
+        );
       }
 
       const appealsDependentPhaseExists = dependentOpenPhases.some(
-        (phase) => String(phase.name || '').toLowerCase() === 'appeals'
-      )
+        (phase) => String(phase.name || "").toLowerCase() === "appeals",
+      );
       if (appealsDependentPhaseExists) {
         const hasSubmittedAppeals = await hasSubmittedAppealsForChallenge(
-          challengePhase.challengeId
-        )
+          challengePhase.challengeId,
+        );
         if (hasSubmittedAppeals) {
           throw new errors.ForbiddenError(
-            `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`
-          )
+            `Cannot reopen ${phaseName} because submitted appeals already exist in the Appeals phase`,
+          );
         }
       }
     }
 
     if (hasActualStartDate) {
-      data.actualStartDate = challengePhase.actualStartDate
-    } else if (!('actualStartDate' in data) || _.isNil(data.actualStartDate)) {
-      data.actualStartDate = new Date()
+      data.actualStartDate = challengePhase.actualStartDate;
+    } else if (!("actualStartDate" in data) || _.isNil(data.actualStartDate)) {
+      data.actualStartDate = new Date();
     }
-    data.actualEndDate = null
+    data.actualEndDate = null;
   }
 
   // Update ChallengePhase
-  const currentUserId = String(currentUser.userId)
-  data.updatedBy = currentUserId
+  const currentUserId = String(currentUser.userId);
+  data.updatedBy = currentUserId;
   if (!_.isNil(data.duration)) {
     const startInput = !_.isNil(data.scheduledStartDate)
       ? data.scheduledStartDate
       : !_.isNil(challengePhase.scheduledStartDate)
-          ? challengePhase.scheduledStartDate
-          : null
+        ? challengePhase.scheduledStartDate
+        : null;
     if (startInput) {
-      const startDate = new Date(startInput)
+      const startDate = new Date(startInput);
       if (!Number.isNaN(startDate.getTime())) {
         const recalculatedScheduledEndDate = new Date(
-          startDate.getTime() + Number(data.duration) * 1000
-        )
-        data.scheduledEndDate = recalculatedScheduledEndDate
+          startDate.getTime() + Number(data.duration) * 1000,
+        );
+        data.scheduledEndDate = recalculatedScheduledEndDate;
       }
     }
   }
-  const dataToUpdate = _.omit(data, 'constraints')
+  const dataToUpdate = _.omit(data, "constraints");
   const shouldRefreshPhaseNames =
-    Object.prototype.hasOwnProperty.call(data, 'isOpen') ||
-    Object.prototype.hasOwnProperty.call(data, 'name')
+    Object.prototype.hasOwnProperty.call(data, "isOpen") ||
+    Object.prototype.hasOwnProperty.call(data, "name");
   const result = await prisma.$transaction(async (tx) => {
     const updatedPhase = await tx.challengePhase.update({
       data: dataToUpdate,
       where: {
-        id: challengePhase.id
-      }
-    })
-    let scheduleExtended = false
+        id: challengePhase.id,
+      },
+    });
+    let scheduleExtended = false;
     if (shouldAttemptSuccessorRecalc) {
-      scheduleExtended = dateIsAfter(updatedPhase.scheduledEndDate, originalScheduledEndDate)
+      scheduleExtended = dateIsAfter(updatedPhase.scheduledEndDate, originalScheduledEndDate);
       if (scheduleExtended) {
-        await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId)
+        await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
       }
     }
     if (
@@ -900,9 +942,9 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
       const shiftBaselineScheduledEndDate =
         scheduleExtended && !_.isNil(updatedPhase.scheduledEndDate)
           ? updatedPhase.scheduledEndDate
-          : originalScheduledEndDate
-      const scheduledEndTime = new Date(shiftBaselineScheduledEndDate).getTime()
-      const actualEndTime = new Date(updatedPhase.actualEndDate).getTime()
+          : originalScheduledEndDate;
+      const scheduledEndTime = new Date(shiftBaselineScheduledEndDate).getTime();
+      const actualEndTime = new Date(updatedPhase.actualEndDate).getTime();
 
       if (Number.isFinite(scheduledEndTime) && Number.isFinite(actualEndTime)) {
         await shiftDependentPhaseDates(
@@ -910,8 +952,8 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
           challengeId,
           updatedPhase,
           actualEndTime - scheduledEndTime,
-          currentUserId
-        )
+          currentUserId,
+        );
       }
     }
     if (data.constraints) {
@@ -921,12 +963,12 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
             data: {
               name: constraint.name,
               value: constraint.value,
-              updatedBy: currentUserId
+              updatedBy: currentUserId,
             },
             where: {
-              id: constraint.id
-            }
-          })
+              id: constraint.id,
+            },
+          });
         } else {
           await tx.challengePhaseConstraint.create({
             data: {
@@ -934,100 +976,100 @@ async function partiallyUpdateChallengePhase (currentUser, challengeId, id, data
               value: constraint.value,
               challengePhaseId: updatedPhase.id,
               createdBy: currentUserId,
-              updatedBy: currentUserId
-            }
-          })
+              updatedBy: currentUserId,
+            },
+          });
         }
       }
     }
     if (shouldRefreshPhaseNames) {
       const openPhases = await tx.challengePhase.findMany({
         where: { challengeId, isOpen: true },
-        select: { name: true }
-      })
+        select: { name: true },
+      });
       const currentPhaseNames = _.uniq(
-        openPhases.map((phase) => phase.name).filter((name) => !_.isNil(name))
-      )
+        openPhases.map((phase) => phase.name).filter((name) => !_.isNil(name)),
+      );
       await tx.challenge.update({
         where: { id: challengeId },
         data: {
           currentPhaseNames,
-          updatedBy: currentUserId
-        }
-      })
+          updatedBy: currentUserId,
+        },
+      });
     }
-    return updatedPhase
-  })
-  helper.flushInternalCache()
+    return updatedPhase;
+  });
+  helper.flushInternalCache();
   // post bus event
   await helper.postBusEvent(
     constants.Topics.ChallengePhaseUpdated,
-    _.assignIn({ id: result.id }, data)
-  )
-  await postChallengeUpdatedNotification(challengeId)
+    _.assignIn({ id: result.id }, data),
+  );
+  await postChallengeUpdatedNotification(challengeId);
 
   // send notification logic
   try {
-    const shouldNotifyClose = Boolean(isClosingPhase)
-    const shouldNotifyOpen = Boolean(isOpeningPhase) // includes reopen
+    const shouldNotifyClose = Boolean(isClosingPhase);
+    const shouldNotifyOpen = Boolean(isOpeningPhase); // includes reopen
 
     if (shouldNotifyClose || shouldNotifyOpen) {
       // Single template - single type
-      const notificationType = 'PHASE_CHANGE'
+      const notificationType = "PHASE_CHANGE";
 
-      const operation = shouldNotifyClose ? 'close' : isReopeningPhase ? 'reopen' : 'open'
+      const operation = shouldNotifyClose ? "close" : isReopeningPhase ? "reopen" : "open";
 
       const at = shouldNotifyClose
         ? result.actualEndDate || new Date().toISOString()
-        : result.actualStartDate || new Date().toISOString()
+        : result.actualStartDate || new Date().toISOString();
 
       // fetch challenge name
       const challenge = await prisma.challenge.findUnique({
         where: { id: challengeId },
-        select: { name: true }
-      })
+        select: { name: true },
+      });
 
-      const challengeName = challenge?.name
+      const challengeName = challenge?.name;
 
       // build recipients
-      const resources = await helper.getChallengeResources(challengeId)
+      const resources = await helper.getChallengeResources(challengeId);
 
       const recipients = Array.from(
         new Set(
           (resources || [])
             .map((r) => r?.email || r?.memberEmail)
             .filter(Boolean)
-            .map((e) => String(e).trim().toLowerCase())
-        )
-      )
+            .map((e) => String(e).trim().toLowerCase()),
+        ),
+      );
 
       if (!recipients.length) {
         logger.debug(
-          `phase change notification skipped: no recipients for challenge ${challengeId}`
-        )
-        return _.omit(result, constants.auditFields)
+          `phase change notification skipped: no recipients for challenge ${challengeId}`,
+        );
+        return _.omit(result, constants.auditFields);
       }
 
       // build payload that matches the SendGrid HTML template
-      const phaseName = result.name || data.name || challengePhase.name
+      const phaseName = result.name || data.name || challengePhase.name;
 
       const payload = helper.buildPhaseChangeEmailData({
         challengeId,
         challengeName,
         phaseName,
         operation,
-        at
-      })
+        at,
+      });
 
-      await helper.sendPhaseChangeNotification(notificationType, recipients, payload)
+      await helper.sendPhaseChangeNotification(notificationType, recipients, payload);
     }
   } catch (e) {
     logger.debug(
-      `phase change notification failed for challenge ${challengeId}, phase ${id}: ${e.message}`
-    )
+      `phase change notification failed for challenge ${challengeId}, phase ${id}: ${e.message}`,
+    );
   }
 
-  return _.omit(result, constants.auditFields)
+  return _.omit(result, constants.auditFields);
 }
 
 partiallyUpdateChallengePhase.schema = {
@@ -1051,12 +1093,12 @@ partiallyUpdateChallengePhase.schema = {
         Joi.object({
           id: Joi.any().optional(),
           name: Joi.string().required(),
-          value: Joi.number().integer().min(0).required()
-        })
+          value: Joi.number().integer().min(0).required(),
+        }),
       )
-      .optional()
-  })
-}
+      .optional(),
+  }),
+};
 
 /**
  * Delete challenge phase.
@@ -1064,16 +1106,18 @@ partiallyUpdateChallengePhase.schema = {
  * @param {String} challengeId the challenge id
  * @param {String} id the phase id
  * @returns {Object} the deleted challenge phase
+ * @throws {ForbiddenError} when the current user cannot modify the challenge
  */
-async function deleteChallengePhase (currentUser, challengeId, id) {
-  await checkChallengeExists(challengeId)
+async function deleteChallengePhase(currentUser, challengeId, id) {
+  const challenge = await getChallengeForPhaseAccess(challengeId);
+  await helper.ensureUserCanModifyChallenge(currentUser, challenge);
   const result = await prisma.challengePhase.findFirst({
-    where: { challengeId, id }
-  })
+    where: { challengeId, id },
+  });
   if (!result) {
     throw new errors.NotFoundError(
-      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`
-    )
+      `ChallengePhase with challengeId: ${challengeId},  phaseId: ${id} doesn't exist`,
+    );
   }
   await prisma.$transaction(async (tx) => {
     // recalculates the predecessors
@@ -1082,45 +1126,45 @@ async function deleteChallengePhase (currentUser, challengeId, id) {
         // if result.predecessor exists, update successor's predecessor to predecessor of current challenge phase
         // otherwise update successor's predecessor to null
         predecessor: result.predecessor || null,
-        updatedBy: String(currentUser.userId)
+        updatedBy: String(currentUser.userId),
       },
       where: {
         challengeId,
-        predecessor: result.id
-      }
-    })
+        predecessor: result.id,
+      },
+    });
     // delete challengePhaseConstraint
     await tx.challengePhaseConstraint.deleteMany({
       where: {
-        challengePhaseId: result.id
-      }
-    })
+        challengePhaseId: result.id,
+      },
+    });
     // delete challengePhase
     await tx.challengePhase.delete({
       where: {
-        id: result.id
-      }
-    })
-  })
-  helper.flushInternalCache()
-  const ret = _.omit(result, constants.auditFields)
+        id: result.id,
+      },
+    });
+  });
+  helper.flushInternalCache();
+  const ret = _.omit(result, constants.auditFields);
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengePhaseDeleted, ret)
-  await postChallengeUpdatedNotification(challengeId)
-  return ret
+  await helper.postBusEvent(constants.Topics.ChallengePhaseDeleted, ret);
+  await postChallengeUpdatedNotification(challengeId);
+  return ret;
 }
 
 deleteChallengePhase.schema = {
   currentUser: Joi.any(),
   challengeId: Joi.id(),
-  id: Joi.id()
-}
+  id: Joi.id(),
+};
 
 module.exports = {
   getAllChallengePhases,
   getChallengePhase,
   partiallyUpdateChallengePhase,
-  deleteChallengePhase
-}
+  deleteChallengePhase,
+};
 
-logger.buildService(module.exports)
+logger.buildService(module.exports);
