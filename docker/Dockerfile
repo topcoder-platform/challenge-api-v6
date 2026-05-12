@@ -8,7 +8,7 @@ COPY . /challenge-api
 WORKDIR /challenge-api
 
 # Install the dependencies from package.json
-RUN npm i -g pnpm
+RUN npm i -g pnpm@9
 RUN pnpm install
 
 # Enable Node diagnostic reports and Prisma backtraces for deeper crash insights
