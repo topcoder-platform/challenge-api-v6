@@ -81,6 +81,8 @@ module.exports = {
   // topgear billing accounts
   TOPGEAR_BILLING_ACCOUNTS_ID: process.env.TOPGEAR_BILLING_ACCOUNTS_ID
     ? process.env.TOPGEAR_BILLING_ACCOUNTS_ID.split(",")
+        .map((billingAccountId) => billingAccountId.trim())
+        .filter(Boolean)
     : [],
 
   // billing accounts that can bypass challenge activation expiry/funds validation

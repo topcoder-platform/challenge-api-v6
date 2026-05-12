@@ -4,6 +4,7 @@ if (!process.env.REVIEW_DB_URL && process.env.DATABASE_URL) {
 
 require("../../app-bootstrap");
 const chai = require("chai");
+const config = require("config");
 const service = require("../../src/services/ChallengeService");
 const projectHelper = require("../../src/common/project-helper");
 const { ChallengeStatusEnum } = require("../../src/common/prisma");
@@ -13,14 +14,19 @@ const should = chai.should();
 describe("challenge activation billing validation unit tests", () => {
   const validateChallengeActivationBillingAccount =
     service.__testables.validateChallengeActivationBillingAccount;
+  const shouldBlockChallengeLaunchForApproval =
+    service.__testables.shouldBlockChallengeLaunchForApproval;
+  const shouldSkipChallengeApprovalFlow = service.__testables.shouldSkipChallengeApprovalFlow;
   const projectChallenge = {
     status: ChallengeStatusEnum.DRAFT,
     timelineTemplateId: "project-required-template",
   };
   const originalGetBillingAccountDetails = projectHelper.getBillingAccountDetails;
+  const originalTopgearBillingAccounts = config.TOPGEAR_BILLING_ACCOUNTS_ID;
 
   afterEach(() => {
     projectHelper.getBillingAccountDetails = originalGetBillingAccountDetails;
+    config.TOPGEAR_BILLING_ACCOUNTS_ID = originalTopgearBillingAccounts;
   });
 
   it("prevents activation when the project has no billing account", async () => {
@@ -136,5 +142,21 @@ describe("challenge activation billing validation unit tests", () => {
       challenge: projectChallenge,
       endDate: "2000-01-01T00:00:00.000Z",
     });
+  });
+
+  it("skips approval flow for configured Topgear billing accounts", () => {
+    config.TOPGEAR_BILLING_ACCOUNTS_ID = [" 80000062 ", 80000063];
+
+    should.equal(shouldSkipChallengeApprovalFlow("80000062"), true);
+    should.equal(shouldSkipChallengeApprovalFlow(80000063), true);
+    should.equal(shouldSkipChallengeApprovalFlow("80001061"), false);
+  });
+
+  it("does not block launch approval for configured Topgear billing accounts", () => {
+    config.TOPGEAR_BILLING_ACCOUNTS_ID = ["80000062"];
+
+    should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80000062"), false);
+    should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061"), true);
+    should.equal(shouldBlockChallengeLaunchForApproval("APPROVED", "80001061"), false);
   });
 });
