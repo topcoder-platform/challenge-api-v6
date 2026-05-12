@@ -17,15 +17,20 @@ describe("challenge activation billing validation unit tests", () => {
   const shouldBlockChallengeLaunchForApproval =
     service.__testables.shouldBlockChallengeLaunchForApproval;
   const shouldSkipChallengeApprovalFlow = service.__testables.shouldSkipChallengeApprovalFlow;
+  const syncChallengeBillingAccountLock = service.__testables.syncChallengeBillingAccountLock;
   const projectChallenge = {
     status: ChallengeStatusEnum.DRAFT,
     timelineTemplateId: "project-required-template",
   };
   const originalGetBillingAccountDetails = projectHelper.getBillingAccountDetails;
+  const originalLockChallengeBillingAccountAmount = projectHelper.lockChallengeBillingAccountAmount;
+  const originalIgnoredBillingAccounts = config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS;
   const originalTopgearBillingAccounts = config.TOPGEAR_BILLING_ACCOUNTS_ID;
 
   afterEach(() => {
     projectHelper.getBillingAccountDetails = originalGetBillingAccountDetails;
+    projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
+    config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS = originalIgnoredBillingAccounts;
     config.TOPGEAR_BILLING_ACCOUNTS_ID = originalTopgearBillingAccounts;
   });
 
@@ -158,5 +163,54 @@ describe("challenge activation billing validation unit tests", () => {
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80000062"), false);
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061"), true);
     should.equal(shouldBlockChallengeLaunchForApproval("APPROVED", "80001061"), false);
+  });
+
+  it("skips budget lock funds validation for ignored billing accounts", async () => {
+    config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS = ["80000062"];
+    let lockCalled = false;
+    projectHelper.lockChallengeBillingAccountAmount = async () => {
+      lockCalled = true;
+    };
+
+    await syncChallengeBillingAccountLock({
+      id: "challenge-id",
+      status: ChallengeStatusEnum.DRAFT,
+      billing: {
+        billingAccountId: "80000062",
+        markup: 0,
+      },
+      overview: {
+        totalPrizes: 100,
+      },
+    });
+
+    should.equal(lockCalled, false);
+  });
+
+  it("continues budget lock sync for non-ignored billing accounts", async () => {
+    config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS = ["80000062"];
+    let lockRequest;
+    projectHelper.lockChallengeBillingAccountAmount = async (request) => {
+      lockRequest = request;
+    };
+
+    await syncChallengeBillingAccountLock({
+      id: "challenge-id",
+      status: ChallengeStatusEnum.DRAFT,
+      billing: {
+        billingAccountId: "80001061",
+        markup: 0.1,
+      },
+      overview: {
+        totalPrizes: 100,
+      },
+    });
+
+    lockRequest.should.deep.equal({
+      billingAccountId: "80001061",
+      challengeId: "challenge-id",
+      markup: 0.1,
+      memberPaymentAmount: 100,
+    });
   });
 });

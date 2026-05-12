@@ -85,7 +85,7 @@ module.exports = {
         .filter(Boolean)
     : [],
 
-  // billing accounts that can bypass challenge activation expiry/funds validation
+  // billing accounts that can bypass challenge activation expiry/funds validation and budget locks
   IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS: process.env
     .IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS
     ? process.env.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS.split(",")

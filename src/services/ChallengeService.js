@@ -399,6 +399,9 @@ function getChallengeMemberPaymentAmount(challenge) {
  * finance later consumes the finalized payment amount after payment generation.
  * This keeps draft challenge rows visible as locked budget in billing-account
  * details until finance moves the row to consumed.
+ * Accounts configured to ignore challenge activation billing validation also
+ * skip this lock because the Billing Accounts API validates available funds
+ * when writing the lock.
  *
  * @param {object} challenge Challenge model or response object after persistence.
  * @returns {Promise<void>} Resolves after the billing-account lock is written or skipped.
@@ -413,6 +416,14 @@ async function syncChallengeBillingAccountLock(challenge) {
   const billingAccountId = _.get(billing, "billingAccountId");
   const hasBillingAccountId = !_.isNil(billingAccountId) && _.toString(billingAccountId).trim();
   const memberPaymentAmount = getChallengeMemberPaymentAmount(challenge);
+
+  if (shouldIgnoreChallengeActivationBillingValidation(billingAccountId)) {
+    logger.info("Skipping challenge billing lock sync for ignored billing account", {
+      billingAccountId,
+      challengeId: _.get(challenge, "id"),
+    });
+    return;
+  }
 
   if (!hasBillingAccountId || _.isNil(memberPaymentAmount)) {
     logger.warn("Skipping challenge billing lock sync due to missing billing context", {
@@ -3029,12 +3040,13 @@ function isBillingAccountExpired(active, endDate) {
 }
 
 /**
- * Determines whether challenge activation should skip expiry/funds validation
- * for a billing account.
+ * Determines whether challenge billing funds checks should be skipped for a
+ * billing account.
  *
  * Missing, inactive, and not-found checks still apply. The bypass is intended
  * for specific accounts that must remain launchable despite expired dates or
- * depleted remaining budget.
+ * depleted remaining budget, and that should not call the budget-lock endpoint
+ * because it enforces the same remaining-funds constraint.
  *
  * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
  * @returns {boolean} `true` when expiry/funds validation should be skipped.
@@ -5265,6 +5277,7 @@ module.exports = {
   __testables: {
     shouldBlockChallengeLaunchForApproval,
     shouldSkipChallengeApprovalFlow,
+    syncChallengeBillingAccountLock,
     validateChallengeActivationBillingAccount,
   },
   searchChallenges,
