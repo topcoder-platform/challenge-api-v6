@@ -1759,23 +1759,30 @@ describe("challenge service unit tests", () => {
           config.M2M_FULL_ACCESS_TOKEN,
         );
         createdChallengeId = created.id;
+        should.equal(created.approvalStatus, "APPROVED");
         should.equal(billingLockRequests.length, 0);
+
+        const draftPrizeSets = _.cloneDeep(challengeData.prizeSets);
+        draftPrizeSets[0].prizes[0].value = 1005;
 
         const draft = await service.updateChallenge(
           { isMachine: true, sub: "sub-billing-lock-update", userId: 22838965 },
           created.id,
           {
+            approvalStatus: "APPROVED",
+            prizeSets: draftPrizeSets,
             status: ChallengeStatusEnum.DRAFT,
           },
         );
 
+        should.equal(draft.approvalStatus, "APPROVED");
         should.equal(draft.billing.billingAccountId, "80001012");
         should.equal(billingLockRequests.length, 1);
         billingLockRequests[0].should.deep.equal({
           billingAccountId: "80001012",
           challengeId: created.id,
           markup: 0.1,
-          memberPaymentAmount: 1150,
+          memberPaymentAmount: 1155,
         });
 
         const updatedPrizeSets = _.cloneDeep(draft.prizeSets);
@@ -1800,7 +1807,7 @@ describe("challenge service unit tests", () => {
           billingAccountId: "80001012",
           challengeId: created.id,
           markup: 0.1,
-          memberPaymentAmount: 1225,
+          memberPaymentAmount: 1230,
         });
       } finally {
         projectHelper.getProject = originalGetProject;

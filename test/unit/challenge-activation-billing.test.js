@@ -14,6 +14,8 @@ const should = chai.should();
 describe("challenge activation billing validation unit tests", () => {
   const applyCreateChallengeApprovalStatusHotfix =
     service.__testables.applyCreateChallengeApprovalStatusHotfix;
+  const applyNewDraftApprovalStatusPreservationHotfix =
+    service.__testables.applyNewDraftApprovalStatusPreservationHotfix;
   const validateChallengeActivationBillingAccount =
     service.__testables.validateChallengeActivationBillingAccount;
   const shouldBlockChallengeLaunchForApproval =
@@ -191,6 +193,52 @@ describe("challenge activation billing validation unit tests", () => {
 
     should.equal(applyCreateChallengeApprovalStatusHotfix(approvedChallenge), false);
     should.equal(approvedChallenge.approvalStatus, undefined);
+  });
+
+  it("keeps approved status when an approved NEW challenge is saved as DRAFT", () => {
+    const existingChallenge = {
+      status: ChallengeStatusEnum.NEW,
+      approvalStatus: "APPROVED",
+      approvalApprovedBy: "existing-approver",
+    };
+    const updatePayload = {
+      status: ChallengeStatusEnum.DRAFT,
+      approvalApprovedBy: "incoming-approver",
+    };
+    const pendingChallenge = {
+      status: ChallengeStatusEnum.NEW,
+      approvalStatus: "PENDING_APPROVAL",
+    };
+    const pendingUpdatePayload = {
+      status: ChallengeStatusEnum.DRAFT,
+    };
+    const rejectedUpdatePayload = {
+      status: ChallengeStatusEnum.DRAFT,
+    };
+
+    should.equal(
+      applyNewDraftApprovalStatusPreservationHotfix(existingChallenge, updatePayload),
+      true,
+    );
+    should.equal(updatePayload.approvalStatus, "APPROVED");
+    should.equal(updatePayload.approvalRejectionReason, null);
+    should.equal(updatePayload.approvalApprovedBy, undefined);
+
+    should.equal(
+      applyNewDraftApprovalStatusPreservationHotfix(pendingChallenge, pendingUpdatePayload),
+      false,
+    );
+    should.equal(pendingUpdatePayload.approvalStatus, undefined);
+
+    should.equal(
+      applyNewDraftApprovalStatusPreservationHotfix(
+        existingChallenge,
+        rejectedUpdatePayload,
+        "REJECTED",
+      ),
+      false,
+    );
+    should.equal(rejectedUpdatePayload.approvalStatus, undefined);
   });
 
   it("skips budget lock funds validation for ignored billing accounts", async () => {
