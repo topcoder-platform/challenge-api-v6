@@ -126,6 +126,157 @@ function normalizeApprovalStatus(value) {
   return normalized;
 }
 
+/**
+ * Normalizes a configured billing-account list for membership checks.
+ *
+ * @param {Array<string|number>|string|number|null|undefined} billingAccountIds Billing-account ids from config.
+ * @returns {Array<string>} Trimmed billing-account ids, with empty values removed.
+ */
+function normalizeConfiguredBillingAccountIds(billingAccountIds) {
+  if (_.isNil(billingAccountIds)) {
+    return [];
+  }
+
+  return _.flatMap([].concat(billingAccountIds), (billingAccountId) =>
+    _.toString(billingAccountId).split(","),
+  )
+    .map(normalizeOptionalString)
+    .filter(Boolean);
+}
+
+/**
+ * Resolves the billing account that should drive challenge approval decisions.
+ *
+ * @param {Object|null|undefined} challenge Existing or incoming challenge payload.
+ * @param {Object|null|undefined} data Incoming update payload, when applicable.
+ * @param {string|number|null|undefined} projectBillingAccountId Billing account returned by the project.
+ * @returns {string|null} The first available billing-account id, or `null` when none is present.
+ */
+function getApprovalFlowBillingAccountId(challenge, data, projectBillingAccountId) {
+  return (
+    normalizeOptionalString(projectBillingAccountId) ||
+    normalizeOptionalString(_.get(data, "billing.billingAccountId")) ||
+    normalizeOptionalString(_.get(challenge, "billing.billingAccountId")) ||
+    normalizeOptionalString(_.get(challenge, "billingRecord.billingAccountId")) ||
+    null
+  );
+}
+
+/**
+ * Determines whether the challenge approval flow should be bypassed.
+ *
+ * Challenges billed to configured Topgear billing accounts are auto-approved
+ * because they should not enter the manual budget approval flow.
+ *
+ * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @returns {boolean} `true` when challenge approval should be skipped.
+ */
+function shouldSkipChallengeApprovalFlow(billingAccountId) {
+  const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
+
+  if (!normalizedBillingAccountId) {
+    return false;
+  }
+
+  return _.includes(
+    normalizeConfiguredBillingAccountIds(config.TOPGEAR_BILLING_ACCOUNTS_ID),
+    normalizedBillingAccountId,
+  );
+}
+
+/**
+ * Applies the approval-flow bypass to a challenge payload.
+ *
+ * @param {Object} target Challenge create or update payload to mutate.
+ * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @returns {boolean} `true` when approval fields were forced to approved.
+ */
+function applyChallengeApprovalFlowBypass(target, billingAccountId) {
+  if (!shouldSkipChallengeApprovalFlow(billingAccountId)) {
+    return false;
+  }
+
+  target.approvalStatus = CHALLENGE_APPROVAL_STATUS.APPROVED;
+  target.approvalRejectionReason = null;
+  target.approvalApprovedBy = null;
+
+  return true;
+}
+
+/**
+ * Applies the temporary create-time approval hotfix to a challenge payload.
+ *
+ * Challenges created in NEW or DRAFT status are forced to approved while the
+ * budget approval flow is being investigated. A missing create status is
+ * treated as NEW because createChallenge defaults it later in the workflow.
+ *
+ * @param {Object} challenge Challenge create payload to mutate.
+ * @returns {boolean} `true` when approval fields were forced to approved.
+ */
+function applyCreateChallengeApprovalStatusHotfix(challenge) {
+  const challengeStatus = normalizeStatusSortValue(challenge.status || ChallengeStatusEnum.NEW);
+
+  if (
+    challengeStatus !== ChallengeStatusEnum.NEW &&
+    challengeStatus !== ChallengeStatusEnum.DRAFT
+  ) {
+    return false;
+  }
+
+  challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.APPROVED;
+  challenge.approvalRejectionReason = null;
+  challenge.approvalApprovedBy = null;
+
+  return true;
+}
+
+/**
+ * Applies the temporary NEW-to-DRAFT approval preservation hotfix to an update payload.
+ *
+ * Challenges auto-approved during creation must keep that approved state when
+ * saved from NEW to DRAFT, even if the same PATCH includes prize data.
+ *
+ * @param {Object} challenge Existing challenge response payload.
+ * @param {Object} data Sanitized challenge update payload to mutate.
+ * @param {string|null|undefined} requestedApprovalStatus Valid approval status from the update payload.
+ * @returns {boolean} `true` when approval fields were forced to remain approved.
+ */
+function applyNewDraftApprovalStatusPreservationHotfix(challenge, data, requestedApprovalStatus) {
+  const currentStatus = normalizeStatusSortValue(challenge.status);
+  const targetStatus = normalizeStatusSortValue(data.status || challenge.status);
+  const currentApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
+
+  if (
+    currentStatus !== ChallengeStatusEnum.NEW ||
+    targetStatus !== ChallengeStatusEnum.DRAFT ||
+    currentApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED ||
+    (requestedApprovalStatus != null &&
+      requestedApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED)
+  ) {
+    return false;
+  }
+
+  data.approvalStatus = CHALLENGE_APPROVAL_STATUS.APPROVED;
+  data.approvalRejectionReason = null;
+  delete data.approvalApprovedBy;
+
+  return true;
+}
+
+/**
+ * Determines whether challenge activation must wait for budget approval.
+ *
+ * @param {string|null|undefined} approvalStatus Effective approval status.
+ * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @returns {boolean} `true` when launch should be blocked by approval state.
+ */
+function shouldBlockChallengeLaunchForApproval(approvalStatus, billingAccountId) {
+  return (
+    !shouldSkipChallengeApprovalFlow(billingAccountId) &&
+    normalizeApprovalStatus(approvalStatus) !== CHALLENGE_APPROVAL_STATUS.APPROVED
+  );
+}
+
 async function userCanApproveChallengeBudget(currentUser, challengeOrProjectId) {
   if (!currentUser) {
     return false;
@@ -308,6 +459,9 @@ function getChallengeMemberPaymentAmount(challenge) {
  * finance later consumes the finalized payment amount after payment generation.
  * This keeps draft challenge rows visible as locked budget in billing-account
  * details until finance moves the row to consumed.
+ * Accounts configured to ignore challenge activation billing validation also
+ * skip this lock because the Billing Accounts API validates available funds
+ * when writing the lock.
  *
  * @param {object} challenge Challenge model or response object after persistence.
  * @returns {Promise<void>} Resolves after the billing-account lock is written or skipped.
@@ -322,6 +476,14 @@ async function syncChallengeBillingAccountLock(challenge) {
   const billingAccountId = _.get(billing, "billingAccountId");
   const hasBillingAccountId = !_.isNil(billingAccountId) && _.toString(billingAccountId).trim();
   const memberPaymentAmount = getChallengeMemberPaymentAmount(challenge);
+
+  if (shouldIgnoreChallengeActivationBillingValidation(billingAccountId)) {
+    logger.info("Skipping challenge billing lock sync for ignored billing account", {
+      billingAccountId,
+      challengeId: _.get(challenge, "id"),
+    });
+    return;
+  }
 
   if (!hasBillingAccountId || _.isNil(memberPaymentAmount)) {
     logger.warn("Skipping challenge billing lock sync due to missing billing context", {
@@ -2008,6 +2170,8 @@ searchChallenges.schema = {
 
 /**
  * Create challenge.
+ * Temporary hotfix: NEW and DRAFT challenge creations are auto-approved.
+ * Challenges billed to configured Topgear accounts skip manual budget approval and are auto-approved.
  * @param {Object} currentUser the user who perform operation
  * @param {Object} challenge the challenge to created
  * @param {String} userToken the user token
@@ -2112,41 +2276,55 @@ async function createChallenge(currentUser, challenge, userToken) {
     _.set(challenge, "legacy.reviewType", _.toUpper(_.get(challenge, "legacy.reviewType")));
   }
 
-  const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
-  const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
-
-  if (!requestedApprovalStatus) {
-    challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
-  } else {
-    challenge.approvalStatus = requestedApprovalStatus;
+  if (!challenge.status) {
+    challenge.status = ChallengeStatusEnum.NEW;
   }
 
-  if (
-    CHALLENGE_APPROVAL_ACTION_STATUSES.has(challenge.approvalStatus) &&
-    !canApproveChallengeBudget
-  ) {
-    throw new errors.ForbiddenError(
-      "Only admins or project managers with full access can approve or reject challenge budgets.",
+  let skipsChallengeApprovalFlow = applyCreateChallengeApprovalStatusHotfix(challenge);
+
+  if (!skipsChallengeApprovalFlow) {
+    const approvalBillingAccountId = getApprovalFlowBillingAccountId(challenge);
+    skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
+      challenge,
+      approvalBillingAccountId,
     );
   }
 
-  if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
-    const rejectionReason = _.toString(challenge.approvalRejectionReason || "").trim();
-    if (!rejectionReason) {
-      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
-    }
-    challenge.approvalRejectionReason = rejectionReason;
-    challenge.approvalApprovedBy = null;
-  } else if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
-    challenge.approvalRejectionReason = null;
-    challenge.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
-  } else {
-    challenge.approvalRejectionReason = null;
-    challenge.approvalApprovedBy = null;
-  }
+  if (!skipsChallengeApprovalFlow) {
+    const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
+    const canApproveChallengeBudget = await userCanApproveChallengeBudget(currentUser, challenge);
 
-  if (!challenge.status) {
-    challenge.status = ChallengeStatusEnum.NEW;
+    if (!requestedApprovalStatus) {
+      challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+    } else {
+      challenge.approvalStatus = requestedApprovalStatus;
+    }
+
+    if (
+      CHALLENGE_APPROVAL_ACTION_STATUSES.has(challenge.approvalStatus) &&
+      !canApproveChallengeBudget
+    ) {
+      throw new errors.ForbiddenError(
+        "Only admins or project managers with full access can approve or reject challenge budgets.",
+      );
+    }
+
+    if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+      const rejectionReason = _.toString(challenge.approvalRejectionReason || "").trim();
+      if (!rejectionReason) {
+        throw new errors.BadRequestError(
+          "Rejection reason is required when rejecting a challenge.",
+        );
+      }
+      challenge.approvalRejectionReason = rejectionReason;
+      challenge.approvalApprovedBy = null;
+    } else if (challenge.approvalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+      challenge.approvalRejectionReason = null;
+      challenge.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+    } else {
+      challenge.approvalRejectionReason = null;
+      challenge.approvalApprovedBy = null;
+    }
   }
 
   if (!challenge.startDate) {
@@ -2706,7 +2884,9 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
   const buildPrizeKeys = (sets) =>
     _.sortBy(
       _.flatMap(sets || [], (prizeSet) => {
-        const normalizedType = _.toString(_.get(prizeSet, "type", "")).trim().toUpperCase();
+        const normalizedType = _.toString(_.get(prizeSet, "type", ""))
+          .trim()
+          .toUpperCase();
         const prizes = Array.isArray(prizeSet && prizeSet.prizes) ? prizeSet.prizes : [];
 
         return prizes.map((prize) => {
@@ -2925,12 +3105,13 @@ function isBillingAccountExpired(active, endDate) {
 }
 
 /**
- * Determines whether challenge activation should skip expiry/funds validation
- * for a billing account.
+ * Determines whether challenge billing funds checks should be skipped for a
+ * billing account.
  *
  * Missing, inactive, and not-found checks still apply. The bypass is intended
  * for specific accounts that must remain launchable despite expired dates or
- * depleted remaining budget.
+ * depleted remaining budget, and that should not call the budget-lock endpoint
+ * because it enforces the same remaining-funds constraint.
  *
  * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
  * @returns {boolean} `true` when expiry/funds validation should be skipped.
@@ -2943,7 +3124,7 @@ function shouldIgnoreChallengeActivationBillingValidation(billingAccountId) {
   }
 
   return _.includes(
-    _.map(config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS, normalizeOptionalString),
+    normalizeConfiguredBillingAccountIds(config.IGNORED_CHALLENGE_ACTIVATION_BILLING_ACCOUNT_IDS),
     normalizedBillingAccountId,
   );
 }
@@ -3097,6 +3278,7 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * Update challenge.
  * When a challenge transitions to completed task status or a cancelled status,
  * payment generation is requested after the database update commits.
+ * Challenges billed to configured Topgear accounts skip manual budget approval and remain approved.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
@@ -3192,30 +3374,60 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const requestedApprovalStatus = normalizeApprovalStatus(data.approvalStatus);
   const prizeSetsUpdated =
     Array.isArray(data.prizeSets) && isDifferentPrizeSets(data.prizeSets, challenge.prizeSets);
+  const approvalBillingAccountId = getApprovalFlowBillingAccountId(
+    challenge,
+    data,
+    billingAccountId,
+  );
+  const skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
+    data,
+    approvalBillingAccountId,
+  );
 
-  if (
-    requestedApprovalStatus != null &&
-    requestedApprovalStatus !== challenge.approvalStatus &&
-    !canApproveChallengeBudget
-  ) {
-    throw new errors.ForbiddenError(
-      "Only admins or project managers with full access can change the challenge budget approval status.",
-    );
-  }
-
-  if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
-    const rejectionReason = rawApprovalRejectionReason.trim();
-    if (!rejectionReason) {
-      throw new errors.BadRequestError("Rejection reason is required when rejecting a challenge.");
+  if (!skipsChallengeApprovalFlow) {
+    if (
+      requestedApprovalStatus != null &&
+      requestedApprovalStatus !== challenge.approvalStatus &&
+      !canApproveChallengeBudget
+    ) {
+      throw new errors.ForbiddenError(
+        "Only admins or project managers with full access can change the challenge budget approval status.",
+      );
     }
-    data.approvalRejectionReason = rejectionReason;
-    data.approvalApprovedBy = null;
-  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
-    data.approvalRejectionReason = null;
-    data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
-  } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL) {
-    data.approvalRejectionReason = null;
-    data.approvalApprovedBy = null;
+
+    if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.REJECTED) {
+      const rejectionReason = rawApprovalRejectionReason.trim();
+      if (!rejectionReason) {
+        throw new errors.BadRequestError(
+          "Rejection reason is required when rejecting a challenge.",
+        );
+      }
+      data.approvalRejectionReason = rejectionReason;
+      data.approvalApprovedBy = null;
+    } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.APPROVED) {
+      data.approvalRejectionReason = null;
+      data.approvalApprovedBy = _.toString(currentUser.handle || "").trim() || null;
+    } else if (requestedApprovalStatus === CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL) {
+      data.approvalRejectionReason = null;
+      data.approvalApprovedBy = null;
+    }
+
+    const preservesNewDraftApprovalStatus = applyNewDraftApprovalStatusPreservationHotfix(
+      challenge,
+      data,
+      requestedApprovalStatus,
+    );
+
+    if (
+      prizeSetsUpdated &&
+      challenge.status !== ChallengeStatusEnum.ACTIVE &&
+      !preservesNewDraftApprovalStatus &&
+      (requestedApprovalStatus == null || !canApproveChallengeBudget)
+    ) {
+      data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
+      data.approvalRejectionReason = null;
+      data.approvalApprovedBy = null;
+    }
   }
 
   if (
@@ -3226,16 +3438,6 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     throw new errors.ForbiddenError(
       "Prizes and copilot fee are locked after launch. Contact the Project Manager for updates.",
     );
-  }
-
-  if (
-    prizeSetsUpdated &&
-    challenge.status !== ChallengeStatusEnum.ACTIVE &&
-    (requestedApprovalStatus == null || !canApproveChallengeBudget)
-  ) {
-    data.approvalStatus = CHALLENGE_APPROVAL_STATUS.PENDING_APPROVAL;
-    data.approvalRejectionReason = null;
-    data.approvalApprovedBy = null;
   }
 
   const resolvedApprovalStatus =
@@ -3267,8 +3469,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     data.status === ChallengeStatusEnum.COMPLETED &&
     challenge.status !== ChallengeStatusEnum.COMPLETED;
 
-  if (isStatusChangingToActive && resolvedApprovalStatus !== CHALLENGE_APPROVAL_STATUS.APPROVED) {
-    throw new errors.BadRequestError("Challenge launch is blocked until budget approval is Approved.");
+  if (
+    isStatusChangingToActive &&
+    shouldBlockChallengeLaunchForApproval(resolvedApprovalStatus, approvalBillingAccountId)
+  ) {
+    throw new errors.BadRequestError(
+      "Challenge launch is blocked until budget approval is Approved.",
+    );
   }
 
   let sendActivationEmail = false;
@@ -5140,6 +5347,11 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
 
 module.exports = {
   __testables: {
+    applyCreateChallengeApprovalStatusHotfix,
+    applyNewDraftApprovalStatusPreservationHotfix,
+    shouldBlockChallengeLaunchForApproval,
+    shouldSkipChallengeApprovalFlow,
+    syncChallengeBillingAccountLock,
     validateChallengeActivationBillingAccount,
   },
   searchChallenges,
