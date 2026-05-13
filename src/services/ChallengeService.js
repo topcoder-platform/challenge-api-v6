@@ -204,6 +204,33 @@ function applyChallengeApprovalFlowBypass(target, billingAccountId) {
 }
 
 /**
+ * Applies the temporary create-time approval hotfix to a challenge payload.
+ *
+ * Challenges created in NEW or DRAFT status are forced to approved while the
+ * budget approval flow is being investigated. A missing create status is
+ * treated as NEW because createChallenge defaults it later in the workflow.
+ *
+ * @param {Object} challenge Challenge create payload to mutate.
+ * @returns {boolean} `true` when approval fields were forced to approved.
+ */
+function applyCreateChallengeApprovalStatusHotfix(challenge) {
+  const challengeStatus = normalizeStatusSortValue(challenge.status || ChallengeStatusEnum.NEW);
+
+  if (
+    challengeStatus !== ChallengeStatusEnum.NEW &&
+    challengeStatus !== ChallengeStatusEnum.DRAFT
+  ) {
+    return false;
+  }
+
+  challenge.approvalStatus = CHALLENGE_APPROVAL_STATUS.APPROVED;
+  challenge.approvalRejectionReason = null;
+  challenge.approvalApprovedBy = null;
+
+  return true;
+}
+
+/**
  * Determines whether challenge activation must wait for budget approval.
  *
  * @param {string|null|undefined} approvalStatus Effective approval status.
@@ -2110,6 +2137,7 @@ searchChallenges.schema = {
 
 /**
  * Create challenge.
+ * Temporary hotfix: NEW and DRAFT challenge creations are auto-approved.
  * Challenges billed to configured Topgear accounts skip manual budget approval and are auto-approved.
  * @param {Object} currentUser the user who perform operation
  * @param {Object} challenge the challenge to created
@@ -2215,11 +2243,19 @@ async function createChallenge(currentUser, challenge, userToken) {
     _.set(challenge, "legacy.reviewType", _.toUpper(_.get(challenge, "legacy.reviewType")));
   }
 
-  const approvalBillingAccountId = getApprovalFlowBillingAccountId(challenge);
-  const skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
-    challenge,
-    approvalBillingAccountId,
-  );
+  if (!challenge.status) {
+    challenge.status = ChallengeStatusEnum.NEW;
+  }
+
+  let skipsChallengeApprovalFlow = applyCreateChallengeApprovalStatusHotfix(challenge);
+
+  if (!skipsChallengeApprovalFlow) {
+    const approvalBillingAccountId = getApprovalFlowBillingAccountId(challenge);
+    skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
+      challenge,
+      approvalBillingAccountId,
+    );
+  }
 
   if (!skipsChallengeApprovalFlow) {
     const requestedApprovalStatus = normalizeApprovalStatus(challenge.approvalStatus);
@@ -2256,10 +2292,6 @@ async function createChallenge(currentUser, challenge, userToken) {
       challenge.approvalRejectionReason = null;
       challenge.approvalApprovedBy = null;
     }
-  }
-
-  if (!challenge.status) {
-    challenge.status = ChallengeStatusEnum.NEW;
   }
 
   if (!challenge.startDate) {
@@ -5275,6 +5307,7 @@ async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
 
 module.exports = {
   __testables: {
+    applyCreateChallengeApprovalStatusHotfix,
     shouldBlockChallengeLaunchForApproval,
     shouldSkipChallengeApprovalFlow,
     syncChallengeBillingAccountLock,

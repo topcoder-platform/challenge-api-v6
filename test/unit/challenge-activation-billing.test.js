@@ -12,6 +12,8 @@ const { ChallengeStatusEnum } = require("../../src/common/prisma");
 const should = chai.should();
 
 describe("challenge activation billing validation unit tests", () => {
+  const applyCreateChallengeApprovalStatusHotfix =
+    service.__testables.applyCreateChallengeApprovalStatusHotfix;
   const validateChallengeActivationBillingAccount =
     service.__testables.validateChallengeActivationBillingAccount;
   const shouldBlockChallengeLaunchForApproval =
@@ -163,6 +165,32 @@ describe("challenge activation billing validation unit tests", () => {
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80000062"), false);
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061"), true);
     should.equal(shouldBlockChallengeLaunchForApproval("APPROVED", "80001061"), false);
+  });
+
+  it("auto-approves NEW and DRAFT challenge creation payloads", () => {
+    const defaultNewChallenge = {};
+    const draftChallenge = {
+      status: ChallengeStatusEnum.DRAFT,
+      approvalStatus: "REJECTED",
+      approvalRejectionReason: "too expensive",
+      approvalApprovedBy: "approver",
+    };
+    const approvedChallenge = {
+      status: ChallengeStatusEnum.APPROVED,
+    };
+
+    should.equal(applyCreateChallengeApprovalStatusHotfix(defaultNewChallenge), true);
+    should.equal(defaultNewChallenge.approvalStatus, "APPROVED");
+    should.equal(defaultNewChallenge.approvalRejectionReason, null);
+    should.equal(defaultNewChallenge.approvalApprovedBy, null);
+
+    should.equal(applyCreateChallengeApprovalStatusHotfix(draftChallenge), true);
+    should.equal(draftChallenge.approvalStatus, "APPROVED");
+    should.equal(draftChallenge.approvalRejectionReason, null);
+    should.equal(draftChallenge.approvalApprovedBy, null);
+
+    should.equal(applyCreateChallengeApprovalStatusHotfix(approvedChallenge), false);
+    should.equal(approvedChallenge.approvalStatus, undefined);
   });
 
   it("skips budget lock funds validation for ignored billing accounts", async () => {
