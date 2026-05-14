@@ -1410,6 +1410,13 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
+  // handle approvalStatus
+  if (!_.isNil(criteria.approvalStatus)) {
+    prismaFilter.where.AND.push({
+      approvalStatus: criteria.approvalStatus.toUpperCase(),
+    });
+  }
+
   _.forEach(_.keys(criteria), (key) => {
     if (_.toString(key).indexOf("meta.") > -1) {
       // Parse and use metadata key
@@ -2128,6 +2135,9 @@ searchChallenges.schema = {
       legacyId: Joi.number().integer().positive(),
       status: Joi.string()
         .valid(..._.values(ChallengeStatusEnum))
+        .insensitive(),
+      approvalStatus: Joi.string()
+        .valid(..._.values(CHALLENGE_APPROVAL_STATUS))
         .insensitive(),
       group: Joi.string(),
       startDateStart: Joi.date(),
