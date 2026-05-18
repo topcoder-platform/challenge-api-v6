@@ -1656,18 +1656,6 @@ async function searchChallenges(currentUser, criteria) {
       currentUser,
     );
   }
-  // When filtering by multiple project IDs, treat as having project manager access
-  // (the caller is expected to pass only project IDs the user has access to)
-  if (
-    !hasProjectManagerAccessForSearch &&
-    currentUser &&
-    !_hasAdminRole &&
-    !_isMachineToken &&
-    Array.isArray(criteria.projectIds) &&
-    criteria.projectIds.length > 0
-  ) {
-    hasProjectManagerAccessForSearch = true;
-  }
 
   let groupsToFilter = [];
   let accessibleGroups = [];
