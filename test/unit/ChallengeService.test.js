@@ -1191,6 +1191,16 @@ describe("challenge service unit tests", () => {
       should.equal(result.result[0].name, data.challenge.name);
     });
 
+    it("search challenges by approvalStatus case-insensitively", async () => {
+      const result = await service.searchChallenges(
+        { isMachine: true },
+        { approvalStatus: "approved" },
+      );
+
+      should.equal(result.total > 0, true);
+      should.equal(result.result.every((challenge) => challenge.approvalStatus === "APPROVED"), true);
+    });
+
     it("search challenges successfully 3", async () => {
       const res = await service.searchChallenges(
         { isMachine: true },
@@ -1400,6 +1410,16 @@ describe("challenge service unit tests", () => {
         await service.searchChallenges({ isMachine: true }, { updatedBy: ["abc"] });
       } catch (e) {
         should.equal(e.message.indexOf('"updatedBy" must be a string') >= 0, true);
+        return;
+      }
+      throw new Error("should not reach here");
+    });
+
+    it("search challenges - invalid approvalStatus", async () => {
+      try {
+        await service.searchChallenges({ isMachine: true }, { approvalStatus: "INVALID" });
+      } catch (e) {
+        should.equal(e.message.includes("approvalStatus") && e.message.includes("must be one of"), true);
         return;
       }
       throw new Error("should not reach here");
