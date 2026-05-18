@@ -1403,6 +1403,13 @@ async function searchChallenges(currentUser, criteria) {
     }
   });
 
+  // handle projectIds (array of project IDs, applied as IN filter)
+  if (Array.isArray(criteria.projectIds) && criteria.projectIds.length > 0) {
+    prismaFilter.where.AND.push({
+      projectId: { in: criteria.projectIds },
+    });
+  }
+
   // handle status
   if (!_.isNil(criteria.status)) {
     prismaFilter.where.AND.push({
@@ -1708,6 +1715,18 @@ async function searchChallenges(currentUser, criteria) {
       criteria.projectId,
       currentUser,
     );
+  }
+  // When filtering by multiple project IDs, treat as having project manager access
+  // (the caller is expected to pass only project IDs the user has access to)
+  if (
+    !hasProjectManagerAccessForSearch &&
+    currentUser &&
+    !_hasAdminRole &&
+    !_isMachineToken &&
+    Array.isArray(criteria.projectIds) &&
+    criteria.projectIds.length > 0
+  ) {
+    hasProjectManagerAccessForSearch = true;
   }
 
   let groupsToFilter = [];
@@ -2131,6 +2150,7 @@ searchChallenges.schema = {
       tags: Joi.array().items(Joi.string()),
       includeAllTags: Joi.boolean().default(true),
       projectId: Joi.number().integer().positive(),
+      projectIds: Joi.array().items(Joi.number().integer().positive()),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
       status: Joi.string()
