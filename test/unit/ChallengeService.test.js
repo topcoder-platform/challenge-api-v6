@@ -254,6 +254,7 @@ describe("challenge service unit tests", () => {
       should.equal(result.legacyId, testChallengeData.legacyId);
       should.equal(result.forumId, testChallengeData.forumId);
       should.equal(result.status, testChallengeData.status);
+      should.equal(result.approvalStatus, "PENDING_APPROVAL");
       should.equal(result.funChallenge, testChallengeData.funChallenge);
       should.equal(result.createdBy, "testuser");
       should.exist(result.startDate);
@@ -1190,6 +1191,16 @@ describe("challenge service unit tests", () => {
       should.equal(result.result[0].name, data.challenge.name);
     });
 
+    it("search challenges by approvalStatus case-insensitively", async () => {
+      const result = await service.searchChallenges(
+        { isMachine: true },
+        { approvalStatus: "approved" },
+      );
+
+      should.equal(result.total > 0, true);
+      should.equal(result.result.every((challenge) => challenge.approvalStatus === "APPROVED"), true);
+    });
+
     it("search challenges successfully 3", async () => {
       const res = await service.searchChallenges(
         { isMachine: true },
@@ -1399,6 +1410,16 @@ describe("challenge service unit tests", () => {
         await service.searchChallenges({ isMachine: true }, { updatedBy: ["abc"] });
       } catch (e) {
         should.equal(e.message.indexOf('"updatedBy" must be a string') >= 0, true);
+        return;
+      }
+      throw new Error("should not reach here");
+    });
+
+    it("search challenges - invalid approvalStatus", async () => {
+      try {
+        await service.searchChallenges({ isMachine: true }, { approvalStatus: "INVALID" });
+      } catch (e) {
+        should.equal(e.message.includes("approvalStatus") && e.message.includes("must be one of"), true);
         return;
       }
       throw new Error("should not reach here");
@@ -1759,7 +1780,7 @@ describe("challenge service unit tests", () => {
           config.M2M_FULL_ACCESS_TOKEN,
         );
         createdChallengeId = created.id;
-        should.equal(created.approvalStatus, "APPROVED");
+        should.equal(created.approvalStatus, "PENDING_APPROVAL");
         should.equal(billingLockRequests.length, 0);
 
         const draftPrizeSets = _.cloneDeep(challengeData.prizeSets);
@@ -1769,13 +1790,12 @@ describe("challenge service unit tests", () => {
           { isMachine: true, sub: "sub-billing-lock-update", userId: 22838965 },
           created.id,
           {
-            approvalStatus: "APPROVED",
             prizeSets: draftPrizeSets,
             status: ChallengeStatusEnum.DRAFT,
           },
         );
 
-        should.equal(draft.approvalStatus, "APPROVED");
+        should.equal(draft.approvalStatus, "PENDING_APPROVAL");
         should.equal(draft.billing.billingAccountId, "80001012");
         should.equal(billingLockRequests.length, 1);
         billingLockRequests[0].should.deep.equal({

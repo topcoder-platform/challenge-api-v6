@@ -189,6 +189,15 @@ paths:
           required: false
           type: integer
           minimum: 1
+        - name: projectIds
+          in: query
+          description: Filter by multiple v5 project ids (array). Use repeated query params, e.g. projectIds[]=1&projectIds[]=2.
+          required: false
+          type: array
+          items:
+            type: integer
+            minimum: 1
+          collectionFormat: brackets
         - name: forumId
           in: query
           description: Filter by forum id, exact match.
