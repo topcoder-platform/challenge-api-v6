@@ -541,6 +541,18 @@ async function ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName) {
     return;
   }
 
+  // For AI_ONLY review mode, no human Reviewer resources are required
+  if (normalizedPhaseName === "review") {
+    try {
+      const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challenge.id);
+      if (aiReviewConfig?.mode === "AI_ONLY") {
+        return;
+      }
+    } catch (_err) {
+      // non-fatal: proceed with standard check if AI config fetch fails
+    }
+  }
+
   const challengeId = challenge.id;
   const challengeResources = await helper.getChallengeResources(challengeId);
   const requiredRoleNameLower = _.toLower(requiredRoleName);
