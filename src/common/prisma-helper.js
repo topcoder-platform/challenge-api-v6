@@ -31,9 +31,7 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
   result.currentPhaseNames = _.map(_.filter(phases, (p) => p.isOpen === true), "name");
 
   const registrationPhase = _.find(phases, (p) => p.name === "Registration");
-  const submissionPhase =
-    _.find(phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[0]) ||
-    _.find(phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[1]);
+  const submissionPhase = _.find(phases, (p) => _.includes(SUBMISSION_PHASE_PRIORITY, p.name));
 
   if (registrationPhase) {
     result.registrationStartDate =

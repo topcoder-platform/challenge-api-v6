@@ -806,9 +806,9 @@ class ChallengeHelper {
   enrichChallengeForResponse(challenge, track, type, options = {}) {
     if (challenge.phases && challenge.phases.length > 0) {
       const registrationPhase = _.find(challenge.phases, (p) => p.name === "Registration");
-      const submissionPhase =
-        _.find(challenge.phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[0]) ||
-        _.find(challenge.phases, (p) => p.name === SUBMISSION_PHASE_PRIORITY[1]);
+      const submissionPhase = _.find(challenge.phases, (p) =>
+        _.includes(SUBMISSION_PHASE_PRIORITY, p.name)
+      );
 
       // select last started open phase as current phase
       _.forEach(challenge.phases, (p) => {
