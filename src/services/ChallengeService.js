@@ -3663,10 +3663,34 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  // If activating an AI_ONLY challenge, auto-select the AI Only timeline template
+  let cachedActivationAiConfig = null;
+  if (isStatusChangingToActive) {
+    try {
+      cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+      if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
+        const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
+        if (currentTemplateId !== config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+          logger.debug(
+            `updateChallenge: AI_ONLY mode detected, switching to AI Only timeline template (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
+        }
+      }
+    } catch (_err) {
+      // non-fatal: if AI config fetch fails, proceed without template override
+      logger.debug(
+        `updateChallenge: failed to fetch AI review config for template auto-select (challengeId=${challengeId}): ${_err.message}`,
+      );
+    }
+  }
+
   // TODO: Fix this Tech Debt once legacy is turned off
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
+  const isAiOnlyTemplateSwitch =
+    isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
@@ -3675,11 +3699,16 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   ) {
     if (
       finalStatus !== ChallengeStatusEnum.NEW &&
-      finalTimelineTemplateId !== challenge.timelineTemplateId
+      finalTimelineTemplateId !== challenge.timelineTemplateId &&
+      !isAiOnlyTemplateSwitch
     ) {
       throw new errors.BadRequestError(
         `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`,
       );
+    } else if (isAiOnlyTemplateSwitch && finalTimelineTemplateId !== challenge.timelineTemplateId) {
+      // AI Only template auto-switch: clear existing phases so they are re-populated from the new template
+      challenge.phases = [];
+      timelineTemplateChanged = true;
     }
   } else if (finalTimelineTemplateId !== challenge.timelineTemplateId) {
     // make sure there are no previous phases if the timeline template has changed
@@ -4022,7 +4051,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     // For AI_ONLY review mode, manual reviewers are not required; skip validation
     let isAiOnlyReviewMode = false;
     try {
-      const activationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+      // Reuse the config fetched earlier for template auto-select if available
+      const activationAiConfig = cachedActivationAiConfig ?? await helper.getAIReviewConfigByChallengeId(challengeId);
       isAiOnlyReviewMode = activationAiConfig?.mode === 'AI_ONLY';
     } catch (_err) {
       // non-fatal: proceed with standard reviewer validation if AI config fetch fails

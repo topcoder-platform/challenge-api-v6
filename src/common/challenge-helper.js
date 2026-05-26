@@ -536,6 +536,13 @@ class ChallengeHelper {
       return;
     }
 
+    // If the challenge already has an AI Review phase (AI-only template), do not add AI Screening
+    const hasAIReviewPhase = challenge.phases.some((phase) => phase.name === "AI Review");
+    if (hasAIReviewPhase) {
+      logDebugMessage("challenge has an AI Review phase; skipping AI Screening insertion");
+      return;
+    }
+
     // Find the regular submission phase
     const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
       challenge.phases.some((phase) => phase.name === name)
