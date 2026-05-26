@@ -63,6 +63,7 @@ const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
 ]);
 
 const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
+const CHECKPOINT_SUBMISSION_TYPE = "CHECKPOINT_SUBMISSION";
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -94,6 +95,96 @@ const CANCELLED_CHALLENGE_STATUSES = new Set([
  */
 function isCancelledChallengeStatus(status) {
   return CANCELLED_CHALLENGE_STATUSES.has(status);
+}
+
+/**
+ * Loads submission counters for challenge responses from the review submission table.
+ *
+ * Community app badges show the number of members with submissions, not the
+ * number of attempts, so repeated uploads by the same member are counted once.
+ *
+ * @param {Array<String>} challengeIds challenge identifiers to count submissions for
+ * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
+ * counts keyed by challenge id
+ * @throws {Error} when the review database query fails
+ */
+async function getLatestSubmissionCountsByChallenge(challengeIds) {
+  const ids = _.uniq(
+    (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const countsByChallenge = new Map();
+
+  if (!ids.length || !config.REVIEW_DB_URL) {
+    return countsByChallenge;
+  }
+
+  const reviewSchema = _.toString(config.REVIEW_DB_SCHEMA || "").trim();
+  const submissionTable = reviewSchema
+    ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
+    : Prisma.raw('"submission"');
+  const reviewClient = getReviewClient();
+
+  const rows = await reviewClient.$queryRaw`
+    SELECT
+      "challengeId",
+      COUNT(DISTINCT CASE
+        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+      END)::int AS "numOfCheckpointSubmissions",
+      COUNT(DISTINCT CASE
+        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+      END)::int AS "numOfSubmissions"
+    FROM ${submissionTable}
+    WHERE "challengeId" IN (${Prisma.join(ids)})
+      AND "memberId" IS NOT NULL
+    GROUP BY "challengeId"
+  `;
+
+  rows.forEach((row) => {
+    countsByChallenge.set(_.toString(row.challengeId), {
+      numOfSubmissions: Number(row.numOfSubmissions || 0),
+      numOfCheckpointSubmissions: Number(row.numOfCheckpointSubmissions || 0),
+    });
+  });
+
+  return countsByChallenge;
+}
+
+/**
+ * Applies latest-member submission counts to challenge records before response conversion.
+ *
+ * If the review query succeeds, challenges without submission rows are reset to
+ * zero so stale stored counters are not shown. If the query cannot run, callers
+ * keep the stored counters and log a warning instead of failing challenge reads.
+ *
+ * @param {Array<Object>} challenges challenge records being returned by the API
+ * @returns {Promise<void>}
+ */
+async function applyLatestSubmissionCounts(challenges) {
+  const records = (challenges || []).filter((challenge) => challenge && challenge.id);
+  if (!records.length || !config.REVIEW_DB_URL) {
+    return;
+  }
+
+  let countsByChallenge;
+  try {
+    countsByChallenge = await getLatestSubmissionCountsByChallenge(
+      records.map((challenge) => challenge.id),
+    );
+  } catch (err) {
+    logger.warn(`Failed to load latest submission counts: ${err.message}`);
+    return;
+  }
+
+  records.forEach((challenge) => {
+    const counts = countsByChallenge.get(_.toString(challenge.id)) || {
+      numOfSubmissions: 0,
+      numOfCheckpointSubmissions: 0,
+    };
+    challenge.numOfSubmissions = counts.numOfSubmissions;
+    challenge.numOfCheckpointSubmissions = counts.numOfCheckpointSubmissions;
+  });
 }
 
 function normalizeStatusSortValue(statusValue) {
@@ -1977,6 +2068,8 @@ async function searchChallenges(currentUser, criteria) {
       });
     }
 
+    await applyLatestSubmissionCounts(challenges);
+
     challenges.forEach((challenge) => {
       prismaHelper.convertModelToResponse(challenge);
     });
@@ -2753,6 +2846,8 @@ async function getChallenge(currentUser, id, checkIfExists) {
   if (!hasAdminRole(currentUser) && !_.get(currentUser, "isMachine", false)) {
     _.unset(challenge, "payments");
   }
+
+  await applyLatestSubmissionCounts([challenge]);
 
   prismaHelper.convertModelToResponse(challenge);
 
@@ -5297,6 +5392,8 @@ module.exports = {
     shouldSkipChallengeApprovalFlow,
     syncChallengeBillingAccountLock,
     validateChallengeActivationBillingAccount,
+    getLatestSubmissionCountsByChallenge,
+    applyLatestSubmissionCounts,
   },
   searchChallenges,
   createChallenge,
