@@ -3804,9 +3804,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     !hadAIReviewersBeforeUpdate &&
     hasAIReviewersAfterUpdate;
   logger.debug(`updateChallenge: isActiveWithNewAIReviewers=${isActiveWithNewAIReviewers}`);
-  const shouldEnsureAIScreeningPhase = isStatusChangingToActive || isActiveWithNewAIReviewers;
+  // AI_ONLY challenges use the AI Review phase instead of AI Screening; never add AI Screening for them
+  const isAiOnlyActivation = isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  const shouldEnsureAIScreeningPhase =
+    (isStatusChangingToActive && !isAiOnlyActivation) || isActiveWithNewAIReviewers;
   logger.debug(
-    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive}`,
+    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive} isAiOnlyActivation=${isAiOnlyActivation}`,
   );
 
   // Add AI screening phase when activating a challenge, or when AI reviewers are newly added
