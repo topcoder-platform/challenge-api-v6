@@ -4347,6 +4347,7 @@ updateChallenge.schema = {
               isOpen: Joi.boolean(),
               actualEndDate: Joi.date().allow(null),
               scheduledStartDate: Joi.date().allow(null),
+              scheduledEndDate: Joi.date().allow(null),
               constraints: Joi.array()
                 .items(
                   Joi.object()
@@ -4869,7 +4870,13 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.phases) {
     sanitized.phases = _.map(challenge.phases, (phase) =>
-      _.pick(phase, ["phaseId", "duration", "scheduledStartDate", "constraints"]),
+      _.pick(phase, [
+        "phaseId",
+        "duration",
+        "scheduledStartDate",
+        "scheduledEndDate",
+        "constraints",
+      ]),
     );
   }
   if (challenge.prizeSets) {
