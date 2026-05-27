@@ -24,6 +24,7 @@ const { getReviewClient } = require("../../src/common/review-prisma");
 const prisma = getClient();
 const reviewSchema = config.get("REVIEW_DB_SCHEMA");
 const reviewTableName = `"${reviewSchema}"."review"`;
+const submissionTableName = `"${reviewSchema}"."submission"`;
 const should = chai.should();
 let reviewClient;
 
@@ -78,6 +79,31 @@ describe("challenge service unit tests", () => {
       ADD COLUMN IF NOT EXISTS "scorecardId" varchar(255)
     `);
     await reviewClient.$executeRawUnsafe(`DELETE FROM ${reviewTableName}`);
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ${submissionTableName} (
+        "id" varchar(64) PRIMARY KEY,
+        "challengeId" varchar(255),
+        "memberId" varchar(255),
+        "type" varchar(64),
+        "status" varchar(64),
+        "submittedDate" timestamp,
+        "createdAt" timestamp DEFAULT now(),
+        "updatedAt" timestamp DEFAULT now()
+      )
+    `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "challengeId" varchar(255)
+    `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "memberId" varchar(255)
+    `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "type" varchar(64)
+    `);
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${submissionTableName}`);
 
     testChallengeData = {
       typeId: data.challenge.typeId,
@@ -620,6 +646,58 @@ describe("challenge service unit tests", () => {
       should.exist(result.created);
       should.equal(result.numOfSubmissions, 0);
       should.equal(result.numOfRegistrants, 0);
+    });
+
+    it("returns latest-member submission counters for challenge detail and listing", async () => {
+      const challengeId = data.challenge.id;
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: {
+          numOfSubmissions: 5,
+          numOfCheckpointSubmissions: 2,
+        },
+      });
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate")
+        VALUES
+          ('pm4831a1', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z'),
+          ('pm4831a2', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z'),
+          ('pm4831b1', '${challengeId}', 'member-2', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z'),
+          ('pm4831c1', '${challengeId}', 'member-3', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-04T00:00:00Z'),
+          ('pm4831d1', '${challengeId}', 'member-4', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-05T00:00:00Z'),
+          ('pm4831d2', '${challengeId}', 'member-4', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-06T00:00:00Z')
+      `);
+
+      try {
+        const detail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(detail.numOfSubmissions, 3);
+        should.equal(detail.numOfCheckpointSubmissions, 1);
+
+        const listing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(listing.result.length, 1);
+        should.equal(listing.result[0].numOfSubmissions, 3);
+        should.equal(listing.result[0].numOfCheckpointSubmissions, 1);
+      } finally {
+        await reviewClient.$executeRawUnsafe(
+          `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${challengeId}'`,
+        );
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: {
+            numOfSubmissions: 0,
+            numOfCheckpointSubmissions: 0,
+          },
+        });
+      }
     });
 
     it("get challenge preserves billing for project write users", async () => {
