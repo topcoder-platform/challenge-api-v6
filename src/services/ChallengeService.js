@@ -3686,9 +3686,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  // If activating an AI_ONLY challenge, auto-select the AI Only timeline template
+  // Auto-select the AI Only timeline template for AI_ONLY challenges.
+  // This runs on draft saves (status=NEW) as well as at activation so the correct
+  // template is persisted as early as possible.
+  const isDraftSave = [ChallengeStatusEnum.NEW, ChallengeStatusEnum.DRAFT].includes(challenge.status) && !isStatusChangingToActive;
   let cachedActivationAiConfig = null;
-  if (isStatusChangingToActive) {
+  if (isStatusChangingToActive || isDraftSave) {
     try {
       cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
       if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
