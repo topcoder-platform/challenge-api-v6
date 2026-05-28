@@ -3686,21 +3686,40 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
-  // Auto-select the AI Only timeline template for AI_ONLY challenges.
-  // This runs on draft saves (status=NEW) as well as at activation so the correct
-  // template is persisted as early as possible.
+  // Auto-select the AI Only timeline template for AI_ONLY challenges, and revert to the
+  // default template when the AI_ONLY config is removed. Runs on draft saves and activation.
   const isDraftSave = [ChallengeStatusEnum.NEW, ChallengeStatusEnum.DRAFT].includes(challenge.status) && !isStatusChangingToActive;
   let cachedActivationAiConfig = null;
+  let aiConfigFetched = false;
   if (isStatusChangingToActive || isDraftSave) {
     try {
       cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+      aiConfigFetched = true;
+      const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
       if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
-        const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
         if (currentTemplateId !== config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
           logger.debug(
             `updateChallenge: AI_ONLY mode detected, switching to AI Only timeline template (challengeId=${challengeId})`,
           );
           data.timelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
+        }
+      } else if (isDraftSave && currentTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+        // AI_ONLY config was removed; revert to the default template for this challenge's type+track
+        const defaultTemplates = await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
+          typeId: challenge.typeId,
+          trackId: challenge.trackId,
+          isDefault: true,
+        });
+        const defaultTemplate = defaultTemplates.result[0];
+        if (defaultTemplate) {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed, reverting to default timeline template ${defaultTemplate.timelineTemplateId} (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = defaultTemplate.timelineTemplateId;
+        } else {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed but no default template found for typeId=${challenge.typeId} trackId=${challenge.trackId}; keeping current template (challengeId=${challengeId})`,
+          );
         }
       }
     } catch (_err) {
@@ -3717,6 +3736,13 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   let timelineTemplateChanged = false;
   const isAiOnlyTemplateSwitch =
     isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
+  // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
+  const isAiOnlyTemplateRevert =
+    aiConfigFetched &&
+    isDraftSave &&
+    challenge.timelineTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID &&
+    cachedActivationAiConfig?.mode !== 'AI_ONLY';
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
@@ -3726,13 +3752,17 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     if (
       finalStatus !== ChallengeStatusEnum.NEW &&
       finalTimelineTemplateId !== challenge.timelineTemplateId &&
-      !isAiOnlyTemplateSwitch
+      !isAiOnlyTemplateSwitch &&
+      !isAiOnlyTemplateRevert
     ) {
       throw new errors.BadRequestError(
         `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`,
       );
-    } else if (isAiOnlyTemplateSwitch && finalTimelineTemplateId !== challenge.timelineTemplateId) {
-      // AI Only template auto-switch: clear existing phases so they are re-populated from the new template
+    } else if (
+      (isAiOnlyTemplateSwitch || isAiOnlyTemplateRevert) &&
+      finalTimelineTemplateId !== challenge.timelineTemplateId
+    ) {
+      // Auto-managed template change: clear existing phases so they are re-populated from the new template
       challenge.phases = [];
       timelineTemplateChanged = true;
     }
