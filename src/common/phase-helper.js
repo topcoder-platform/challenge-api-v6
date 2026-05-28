@@ -10,6 +10,61 @@ const prisma = require("../common/prisma").getClient();
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 
+/**
+ * Apply an explicit scheduled end date to a phase and update its duration.
+ *
+ * @param {Object} phase challenge phase being recalculated
+ * @param {Date|String} scheduledEndDate scheduled end date supplied by the update payload
+ * @returns {Boolean} true when the scheduled end date was applied
+ * @throws {BadRequestError} when the supplied end date is invalid or not after the phase start
+ */
+function applyScheduledEndDate(phase, scheduledEndDate) {
+  if (_.isNil(scheduledEndDate)) {
+    return false;
+  }
+
+  const scheduledStart = moment(phase.scheduledStartDate);
+  const scheduledEnd = moment(scheduledEndDate);
+
+  if (!scheduledEnd.isValid()) {
+    throw new errors.BadRequestError(
+      `scheduledEndDate: ${scheduledEndDate} should be a valid date`
+    );
+  }
+
+  if (!scheduledEnd.isAfter(scheduledStart)) {
+    throw new errors.BadRequestError(
+      `scheduledEndDate: ${scheduledEndDate} should be after scheduledStartDate: ${phase.scheduledStartDate}`
+    );
+  }
+
+  phase.scheduledEndDate = scheduledEnd.toDate().toISOString();
+  phase.duration = scheduledEnd.diff(scheduledStart, "seconds");
+  return true;
+}
+
+/**
+ * Recalculate a phase's scheduled end date from either explicit input or duration.
+ *
+ * @param {Object} phase challenge phase being recalculated
+ * @returns {undefined} mutates the provided phase
+ * @throws {BadRequestError} when an explicit scheduled end date is invalid
+ */
+function recalculateScheduledEndDate(phase) {
+  if (!_.isNil(phase.actualEndDate)) {
+    return;
+  }
+
+  if (applyScheduledEndDate(phase, phase.requestedScheduledEndDate)) {
+    return;
+  }
+
+  phase.scheduledEndDate = moment(phase.scheduledStartDate)
+    .add(phase.duration, "seconds")
+    .toDate()
+    .toISOString();
+}
+
 class ChallengePhaseHelper {
   phaseDefinitionMap = {};
   timelineTemplateMap = {};
@@ -141,6 +196,7 @@ class ChallengePhaseHelper {
         ...phase,
         predecessor: resolvedPredecessor,
         description: phaseDefinition.description,
+        requestedScheduledEndDate: _.get(newPhase, "scheduledEndDate"),
       };
       if (updatedPhase.name === "Post-Mortem") {
         updatedPhase.predecessor = "a93544bc-c165-4af4-b55e-18f3593b457a";
@@ -166,10 +222,7 @@ class ChallengePhaseHelper {
         } else if (_.isNil(phase.actualStartDate)) {
           updatedPhase.scheduledStartDate = moment(scheduledStartDate).toDate().toISOString();
         }
-        updatedPhase.scheduledEndDate = moment(updatedPhase.scheduledStartDate)
-          .add(updatedPhase.duration, "seconds")
-          .toDate()
-          .toISOString();
+        recalculateScheduledEndDate(updatedPhase);
       }
       if (_.isNil(phase.actualEndDate) && !_.isNil(newPhase) && !_.isNil(newPhase.constraints)) {
         updatedPhase.constraints = newPhase.constraints;
@@ -221,14 +274,9 @@ class ChallengePhaseHelper {
       } else if (_.isNil(phase.actualStartDate)) {
         phase.scheduledStartDate = predecessorPhase.scheduledEndDate;
       }
-      if (_.isNil(phase.actualEndDate)) {
-        phase.scheduledEndDate = moment(phase.scheduledStartDate)
-          .add(phase.duration, "seconds")
-          .toDate()
-          .toISOString();
-      }
+      recalculateScheduledEndDate(phase);
     }
-    return updatedPhases;
+    return _.map(updatedPhases, (phase) => _.omit(phase, "requestedScheduledEndDate"));
   }
 
   handlePhasesAfterCancelling(phases) {

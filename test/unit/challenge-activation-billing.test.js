@@ -12,10 +12,6 @@ const { ChallengeStatusEnum } = require("../../src/common/prisma");
 const should = chai.should();
 
 describe("challenge activation billing validation unit tests", () => {
-  const applyCreateChallengeApprovalStatusHotfix =
-    service.__testables.applyCreateChallengeApprovalStatusHotfix;
-  const applyNewDraftApprovalStatusPreservationHotfix =
-    service.__testables.applyNewDraftApprovalStatusPreservationHotfix;
   const validateChallengeActivationBillingAccount =
     service.__testables.validateChallengeActivationBillingAccount;
   const shouldBlockChallengeLaunchForApproval =
@@ -167,78 +163,6 @@ describe("challenge activation billing validation unit tests", () => {
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80000062"), false);
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061"), true);
     should.equal(shouldBlockChallengeLaunchForApproval("APPROVED", "80001061"), false);
-  });
-
-  it("auto-approves NEW and DRAFT challenge creation payloads", () => {
-    const defaultNewChallenge = {};
-    const draftChallenge = {
-      status: ChallengeStatusEnum.DRAFT,
-      approvalStatus: "REJECTED",
-      approvalRejectionReason: "too expensive",
-      approvalApprovedBy: "approver",
-    };
-    const approvedChallenge = {
-      status: ChallengeStatusEnum.APPROVED,
-    };
-
-    should.equal(applyCreateChallengeApprovalStatusHotfix(defaultNewChallenge), true);
-    should.equal(defaultNewChallenge.approvalStatus, "APPROVED");
-    should.equal(defaultNewChallenge.approvalRejectionReason, null);
-    should.equal(defaultNewChallenge.approvalApprovedBy, null);
-
-    should.equal(applyCreateChallengeApprovalStatusHotfix(draftChallenge), true);
-    should.equal(draftChallenge.approvalStatus, "APPROVED");
-    should.equal(draftChallenge.approvalRejectionReason, null);
-    should.equal(draftChallenge.approvalApprovedBy, null);
-
-    should.equal(applyCreateChallengeApprovalStatusHotfix(approvedChallenge), false);
-    should.equal(approvedChallenge.approvalStatus, undefined);
-  });
-
-  it("keeps approved status when an approved NEW challenge is saved as DRAFT", () => {
-    const existingChallenge = {
-      status: ChallengeStatusEnum.NEW,
-      approvalStatus: "APPROVED",
-      approvalApprovedBy: "existing-approver",
-    };
-    const updatePayload = {
-      status: ChallengeStatusEnum.DRAFT,
-      approvalApprovedBy: "incoming-approver",
-    };
-    const pendingChallenge = {
-      status: ChallengeStatusEnum.NEW,
-      approvalStatus: "PENDING_APPROVAL",
-    };
-    const pendingUpdatePayload = {
-      status: ChallengeStatusEnum.DRAFT,
-    };
-    const rejectedUpdatePayload = {
-      status: ChallengeStatusEnum.DRAFT,
-    };
-
-    should.equal(
-      applyNewDraftApprovalStatusPreservationHotfix(existingChallenge, updatePayload),
-      true,
-    );
-    should.equal(updatePayload.approvalStatus, "APPROVED");
-    should.equal(updatePayload.approvalRejectionReason, null);
-    should.equal(updatePayload.approvalApprovedBy, undefined);
-
-    should.equal(
-      applyNewDraftApprovalStatusPreservationHotfix(pendingChallenge, pendingUpdatePayload),
-      false,
-    );
-    should.equal(pendingUpdatePayload.approvalStatus, undefined);
-
-    should.equal(
-      applyNewDraftApprovalStatusPreservationHotfix(
-        existingChallenge,
-        rejectedUpdatePayload,
-        "REJECTED",
-      ),
-      false,
-    );
-    should.equal(rejectedUpdatePayload.approvalStatus, undefined);
   });
 
   it("skips budget lock funds validation for ignored billing accounts", async () => {
