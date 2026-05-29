@@ -218,5 +218,16 @@
       "createdBy": "topcoder user",
       "updatedAt": "2025-03-10T13:08:02.378Z",
       "updatedBy": "topcoder user"
+  },
+  {
+      "id": "c3a4d5e6-f7b8-4c9d-a0e1-2b3c4d5e6f7a",
+      "name": "AI Review",
+      "description": "AI Review Phase",
+      "isOpen": true,
+      "duration": 86400,
+      "createdAt": "2025-03-10T13:08:02.378Z",
+      "createdBy": "topcoder user",
+      "updatedAt": "2025-03-10T13:08:02.378Z",
+      "updatedBy": "topcoder user"
   }
 ]
