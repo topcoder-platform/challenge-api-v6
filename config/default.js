@@ -93,6 +93,10 @@ module.exports = {
         .filter(Boolean)
     : ["80000062"],
 
+  // The ID of the AI Only Challenge timeline template (seeded via migration)
+  AI_ONLY_TIMELINE_TEMPLATE_ID:
+    process.env.AI_ONLY_TIMELINE_TEMPLATE_ID || "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+
   // health check timeout in milliseconds
   HEALTH_CHECK_TIMEOUT: process.env.HEALTH_CHECK_TIMEOUT || 3000,
 

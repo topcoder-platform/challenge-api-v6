@@ -63,6 +63,7 @@ const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
 ]);
 
 const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
+const CHECKPOINT_SUBMISSION_TYPE = "CHECKPOINT_SUBMISSION";
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -94,6 +95,96 @@ const CANCELLED_CHALLENGE_STATUSES = new Set([
  */
 function isCancelledChallengeStatus(status) {
   return CANCELLED_CHALLENGE_STATUSES.has(status);
+}
+
+/**
+ * Loads submission counters for challenge responses from the review submission table.
+ *
+ * Community app badges show the number of members with submissions, not the
+ * number of attempts, so repeated uploads by the same member are counted once.
+ *
+ * @param {Array<String>} challengeIds challenge identifiers to count submissions for
+ * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
+ * counts keyed by challenge id
+ * @throws {Error} when the review database query fails
+ */
+async function getLatestSubmissionCountsByChallenge(challengeIds) {
+  const ids = _.uniq(
+    (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const countsByChallenge = new Map();
+
+  if (!ids.length || !config.REVIEW_DB_URL) {
+    return countsByChallenge;
+  }
+
+  const reviewSchema = _.toString(config.REVIEW_DB_SCHEMA || "").trim();
+  const submissionTable = reviewSchema
+    ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
+    : Prisma.raw('"submission"');
+  const reviewClient = getReviewClient();
+
+  const rows = await reviewClient.$queryRaw`
+    SELECT
+      "challengeId",
+      COUNT(DISTINCT CASE
+        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+      END)::int AS "numOfCheckpointSubmissions",
+      COUNT(DISTINCT CASE
+        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+      END)::int AS "numOfSubmissions"
+    FROM ${submissionTable}
+    WHERE "challengeId" IN (${Prisma.join(ids)})
+      AND "memberId" IS NOT NULL
+    GROUP BY "challengeId"
+  `;
+
+  rows.forEach((row) => {
+    countsByChallenge.set(_.toString(row.challengeId), {
+      numOfSubmissions: Number(row.numOfSubmissions || 0),
+      numOfCheckpointSubmissions: Number(row.numOfCheckpointSubmissions || 0),
+    });
+  });
+
+  return countsByChallenge;
+}
+
+/**
+ * Applies latest-member submission counts to challenge records before response conversion.
+ *
+ * If the review query succeeds, challenges without submission rows are reset to
+ * zero so stale stored counters are not shown. If the query cannot run, callers
+ * keep the stored counters and log a warning instead of failing challenge reads.
+ *
+ * @param {Array<Object>} challenges challenge records being returned by the API
+ * @returns {Promise<void>}
+ */
+async function applyLatestSubmissionCounts(challenges) {
+  const records = (challenges || []).filter((challenge) => challenge && challenge.id);
+  if (!records.length || !config.REVIEW_DB_URL) {
+    return;
+  }
+
+  let countsByChallenge;
+  try {
+    countsByChallenge = await getLatestSubmissionCountsByChallenge(
+      records.map((challenge) => challenge.id),
+    );
+  } catch (err) {
+    logger.warn(`Failed to load latest submission counts: ${err.message}`);
+    return;
+  }
+
+  records.forEach((challenge) => {
+    const counts = countsByChallenge.get(_.toString(challenge.id)) || {
+      numOfSubmissions: 0,
+      numOfCheckpointSubmissions: 0,
+    };
+    challenge.numOfSubmissions = counts.numOfSubmissions;
+    challenge.numOfCheckpointSubmissions = counts.numOfCheckpointSubmissions;
+  });
 }
 
 function normalizeStatusSortValue(statusValue) {
@@ -1343,6 +1434,13 @@ async function searchChallenges(currentUser, criteria) {
     }
   });
 
+  // handle projectIds (array of project IDs, applied as IN filter)
+  if (Array.isArray(criteria.projectIds) && criteria.projectIds.length > 0) {
+    prismaFilter.where.AND.push({
+      projectId: { in: criteria.projectIds },
+    });
+  }
+
   // handle status
   if (!_.isNil(criteria.status)) {
     prismaFilter.where.AND.push({
@@ -1970,6 +2068,8 @@ async function searchChallenges(currentUser, criteria) {
       });
     }
 
+    await applyLatestSubmissionCounts(challenges);
+
     challenges.forEach((challenge) => {
       prismaHelper.convertModelToResponse(challenge);
     });
@@ -2071,6 +2171,7 @@ searchChallenges.schema = {
       tags: Joi.array().items(Joi.string()),
       includeAllTags: Joi.boolean().default(true),
       projectId: Joi.number().integer().positive(),
+      projectIds: Joi.array().items(Joi.number().integer().positive()),
       forumId: Joi.number().integer(),
       legacyId: Joi.number().integer().positive(),
       status: Joi.string()
@@ -2745,6 +2846,8 @@ async function getChallenge(currentUser, id, checkIfExists) {
   if (!hasAdminRole(currentUser) && !_.get(currentUser, "isMachine", false)) {
     _.unset(challenge, "payments");
   }
+
+  await applyLatestSubmissionCounts([challenge]);
 
   prismaHelper.convertModelToResponse(challenge);
 
@@ -3583,10 +3686,63 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  // Auto-select the AI Only timeline template for AI_ONLY challenges, and revert to the
+  // default template when the AI_ONLY config is removed. Runs on draft saves and activation.
+  const isDraftSave = [ChallengeStatusEnum.NEW, ChallengeStatusEnum.DRAFT].includes(challenge.status) && !isStatusChangingToActive;
+  let cachedActivationAiConfig = null;
+  let aiConfigFetched = false;
+  if (isStatusChangingToActive || isDraftSave) {
+    try {
+      cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+      aiConfigFetched = true;
+      const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
+      if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
+        if (currentTemplateId !== config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+          logger.debug(
+            `updateChallenge: AI_ONLY mode detected, switching to AI Only timeline template (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
+        }
+      } else if (isDraftSave && currentTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+        // AI_ONLY config was removed; revert to the default template for this challenge's type+track
+        const defaultTemplates = await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
+          typeId: challenge.typeId,
+          trackId: challenge.trackId,
+          isDefault: true,
+        });
+        const defaultTemplate = defaultTemplates.result[0];
+        if (defaultTemplate) {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed, reverting to default timeline template ${defaultTemplate.timelineTemplateId} (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = defaultTemplate.timelineTemplateId;
+        } else {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed but no default template found for typeId=${challenge.typeId} trackId=${challenge.trackId}; keeping current template (challengeId=${challengeId})`,
+          );
+        }
+      }
+    } catch (_err) {
+      // non-fatal: if AI config fetch fails, proceed without template override
+      logger.debug(
+        `updateChallenge: failed to fetch AI review config for template auto-select (challengeId=${challengeId}): ${_err.message}`,
+      );
+    }
+  }
+
   // TODO: Fix this Tech Debt once legacy is turned off
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
+  const isAiOnlyTemplateSwitch =
+    isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
+  // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
+  const isAiOnlyTemplateRevert =
+    aiConfigFetched &&
+    isDraftSave &&
+    challenge.timelineTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID &&
+    cachedActivationAiConfig?.mode !== 'AI_ONLY';
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
@@ -3595,11 +3751,20 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   ) {
     if (
       finalStatus !== ChallengeStatusEnum.NEW &&
-      finalTimelineTemplateId !== challenge.timelineTemplateId
+      finalTimelineTemplateId !== challenge.timelineTemplateId &&
+      !isAiOnlyTemplateSwitch &&
+      !isAiOnlyTemplateRevert
     ) {
       throw new errors.BadRequestError(
         `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`,
       );
+    } else if (
+      (isAiOnlyTemplateSwitch || isAiOnlyTemplateRevert) &&
+      finalTimelineTemplateId !== challenge.timelineTemplateId
+    ) {
+      // Auto-managed template change: clear existing phases so they are re-populated from the new template
+      challenge.phases = [];
+      timelineTemplateChanged = true;
     }
   } else if (finalTimelineTemplateId !== challenge.timelineTemplateId) {
     // make sure there are no previous phases if the timeline template has changed
@@ -3695,9 +3860,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     !hadAIReviewersBeforeUpdate &&
     hasAIReviewersAfterUpdate;
   logger.debug(`updateChallenge: isActiveWithNewAIReviewers=${isActiveWithNewAIReviewers}`);
-  const shouldEnsureAIScreeningPhase = isStatusChangingToActive || isActiveWithNewAIReviewers;
+  // AI_ONLY challenges use the AI Review phase instead of AI Screening; never add AI Screening for them
+  const isAiOnlyActivation = isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  const shouldEnsureAIScreeningPhase =
+    (isStatusChangingToActive && !isAiOnlyActivation) || isActiveWithNewAIReviewers;
   logger.debug(
-    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive}`,
+    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive} isAiOnlyActivation=${isAiOnlyActivation}`,
   );
 
   // Add AI screening phase when activating a challenge, or when AI reviewers are newly added
@@ -3939,77 +4107,89 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     !isStandardTaskType &&
     (challenge.status === ChallengeStatusEnum.NEW || challenge.status === ChallengeStatusEnum.DRAFT)
   ) {
-    const effectiveReviewers = Array.isArray(data.reviewers)
-      ? data.reviewers
-      : Array.isArray(challenge.reviewers)
-        ? challenge.reviewers
-        : [];
-
-    const reviewersMissingFields = [];
-    effectiveReviewers.forEach((reviewer, index) => {
-      const hasScorecardId =
-        reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
-      const hasPhaseId =
-        reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
-
-      if (!hasScorecardId || !hasPhaseId) {
-        const missing = [];
-        if (!hasScorecardId) missing.push("scorecardId");
-        if (!hasPhaseId) missing.push("phaseId");
-        reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
-      }
-    });
-
-    if (reviewersMissingFields.length > 0) {
-      throw new errors.BadRequestError(
-        `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
-          "; ",
-        )}`,
-      );
+    // For AI_ONLY review mode, manual reviewers are not required; skip validation
+    let isAiOnlyReviewMode = false;
+    try {
+      // Reuse the config fetched earlier for template auto-select if available
+      const activationAiConfig = cachedActivationAiConfig ?? await helper.getAIReviewConfigByChallengeId(challengeId);
+      isAiOnlyReviewMode = activationAiConfig?.mode === 'AI_ONLY';
+    } catch (_err) {
+      // non-fatal: proceed with standard reviewer validation if AI config fetch fails
     }
 
-    const reviewerPhaseIds = new Set(
-      effectiveReviewers
-        .filter((reviewer) => reviewer && reviewer.phaseId)
-        .map((reviewer) => String(reviewer.phaseId)),
-    );
+    if (!isAiOnlyReviewMode) {
+      const effectiveReviewers = Array.isArray(data.reviewers)
+        ? data.reviewers
+        : Array.isArray(challenge.reviewers)
+          ? challenge.reviewers
+          : [];
 
-    if (reviewerPhaseIds.size === 0) {
-      throw new errors.BadRequestError(
-        "Cannot activate a challenge without at least one reviewer configured",
+      const reviewersMissingFields = [];
+      effectiveReviewers.forEach((reviewer, index) => {
+        const hasScorecardId =
+          reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
+        const hasPhaseId =
+          reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
+
+        if (!hasScorecardId || !hasPhaseId) {
+          const missing = [];
+          if (!hasScorecardId) missing.push("scorecardId");
+          if (!hasPhaseId) missing.push("phaseId");
+          reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
+        }
+      });
+
+      if (reviewersMissingFields.length > 0) {
+        throw new errors.BadRequestError(
+          `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
+            "; ",
+          )}`,
+        );
+      }
+
+      const reviewerPhaseIds = new Set(
+        effectiveReviewers
+          .filter((reviewer) => reviewer && reviewer.phaseId)
+          .map((reviewer) => String(reviewer.phaseId)),
       );
-    }
 
-    const normalizePhaseName = (name) =>
-      String(name || "")
-        .trim()
-        .toLowerCase();
-    const effectivePhases =
-      (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
-        ? phasesForUpdate
-        : challenge.phases) || [];
+      if (reviewerPhaseIds.size === 0) {
+        throw new errors.BadRequestError(
+          "Cannot activate a challenge without at least one reviewer configured",
+        );
+      }
 
-    const missingPhaseNames = new Set();
-    for (const phase of effectivePhases) {
-      if (!phase) {
-        continue;
-      }
-      const normalizedName = normalizePhaseName(phase.name);
-      if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
-        continue;
-      }
-      const phaseId = _.get(phase, "phaseId");
-      if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
-        missingPhaseNames.add(phase.name || "Unknown phase");
-      }
-    }
+      const normalizePhaseName = (name) =>
+        String(name || "")
+          .trim()
+          .toLowerCase();
+      const effectivePhases =
+        (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
+          ? phasesForUpdate
+          : challenge.phases) || [];
 
-    if (missingPhaseNames.size > 0) {
-      throw new errors.BadRequestError(
-        `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
-          missingPhaseNames,
-        ).join(", ")}`,
-      );
+      const missingPhaseNames = new Set();
+      for (const phase of effectivePhases) {
+        if (!phase) {
+          continue;
+        }
+        const normalizedName = normalizePhaseName(phase.name);
+        if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
+          continue;
+        }
+        const phaseId = _.get(phase, "phaseId");
+        if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
+          missingPhaseNames.add(phase.name || "Unknown phase");
+        }
+      }
+
+      if (missingPhaseNames.size > 0) {
+        throw new errors.BadRequestError(
+          `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
+            missingPhaseNames,
+          ).join(", ")}`,
+        );
+      }
     }
   }
 
@@ -4244,6 +4424,7 @@ updateChallenge.schema = {
               isOpen: Joi.boolean(),
               actualEndDate: Joi.date().allow(null),
               scheduledStartDate: Joi.date().allow(null),
+              scheduledEndDate: Joi.date().allow(null),
               constraints: Joi.array()
                 .items(
                   Joi.object()
@@ -4766,7 +4947,13 @@ function sanitizeChallenge(challenge) {
   }
   if (challenge.phases) {
     sanitized.phases = _.map(challenge.phases, (phase) =>
-      _.pick(phase, ["phaseId", "duration", "scheduledStartDate", "constraints"]),
+      _.pick(phase, [
+        "phaseId",
+        "duration",
+        "scheduledStartDate",
+        "scheduledEndDate",
+        "constraints",
+      ]),
     );
   }
   if (challenge.prizeSets) {
@@ -5289,6 +5476,8 @@ module.exports = {
     shouldSkipChallengeApprovalFlow,
     syncChallengeBillingAccountLock,
     validateChallengeActivationBillingAccount,
+    getLatestSubmissionCountsByChallenge,
+    applyLatestSubmissionCounts,
   },
   searchChallenges,
   createChallenge,

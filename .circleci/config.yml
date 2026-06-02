@@ -93,6 +93,8 @@ workflows:
                 - PM-4478_add-ai-screening-phase-when-editing-after-launch
                 - review-context
                 - PM-4684_challenge-approval-flow
+            tags:
+                only: /^dev-.*/
 
       - "build-qa":
           context: org-global
