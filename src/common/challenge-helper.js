@@ -796,7 +796,9 @@ class ChallengeHelper {
 
   /**
    * Enrich challenge for API responses. Normalizes dates, phases and ensures
-   * `track` and `type` fields have a consistent shape.
+   * `track` and `type` fields have a consistent shape. Adds `stalled` to show
+   * whether an active challenge has stopped between a closed phase and a due
+   * successor phase that has not opened.
    *
    * By default, `track` and `type` are returned as objects:
    *   track: { id, name, track }
@@ -853,6 +855,8 @@ class ChallengeHelper {
       }
     }
 
+    challenge.stalled = ChallengeHelper.isChallengeStalled(challenge);
+
     if (challenge.created)
       challenge.created = ChallengeHelper.convertDateToISOString(challenge.created);
     if (challenge.updated)
@@ -897,6 +901,120 @@ class ChallengeHelper {
         return m;
       });
     }
+  }
+
+  /**
+   * Determines whether a challenge has stalled between phases.
+   *
+   * A stalled challenge must be active, have no currently open phase, have at
+   * least one phase that actually opened and closed, and have a successor of a
+   * closed phase that is due to open but has no actual start date. Successors
+   * may reference either the predecessor challenge phase id or phase definition
+   * id because both forms exist in stored phase chains. Used by
+   * enrichChallengeForResponse to populate the response flag. Does not throw.
+   *
+   * @param {Object} challenge challenge response data with phases
+   * @returns {Boolean} true when the challenge is stalled, false otherwise
+   */
+  static isChallengeStalled(challenge) {
+    if (_.get(challenge, "status") !== ChallengeStatusEnum.ACTIVE) {
+      return false;
+    }
+
+    const phases = _.get(challenge, "phases", []);
+    if (!Array.isArray(phases) || phases.length === 0) {
+      return false;
+    }
+
+    if (_.some(phases, (phase) => phase && phase.isOpen === true)) {
+      return false;
+    }
+
+    const closedPhaseIdentifiers = new Set();
+    _.forEach(phases, (phase) => {
+      if (ChallengeHelper.hasPhaseOpenedAndClosed(phase)) {
+        _.forEach(ChallengeHelper.getPhaseIdentifiers(phase), (identifier) => {
+          closedPhaseIdentifiers.add(identifier);
+        });
+      }
+    });
+
+    if (closedPhaseIdentifiers.size === 0) {
+      return false;
+    }
+
+    return _.some(phases, (phase) => {
+      if (!phase || _.isNil(phase.predecessor)) {
+        return false;
+      }
+      if (!closedPhaseIdentifiers.has(String(phase.predecessor))) {
+        return false;
+      }
+      if (phase.isOpen === true || !_.isNil(phase.actualStartDate)) {
+        return false;
+      }
+      return ChallengeHelper.isPhaseDueToOpen(phase);
+    });
+  }
+
+  /**
+   * Checks whether a phase actually opened and later closed. Used internally
+   * by isChallengeStalled. Does not throw.
+   *
+   * @param {Object} phase challenge phase response data
+   * @returns {Boolean} true when actual start and end dates are set and the phase is not open
+   */
+  static hasPhaseOpenedAndClosed(phase) {
+    return (
+      phase &&
+      phase.isOpen !== true &&
+      !_.isNil(phase.actualStartDate) &&
+      !_.isNil(phase.actualEndDate)
+    );
+  }
+
+  /**
+   * Gets identifiers that successor phases may store in their predecessor field.
+   * Used internally by isChallengeStalled. Does not throw.
+   *
+   * @param {Object} phase challenge phase response data
+   * @returns {String[]} string identifiers for the challenge phase id and phase definition id
+   */
+  static getPhaseIdentifiers(phase) {
+    return _.compact([phase.id, phase.phaseId]).map((identifier) => String(identifier));
+  }
+
+  /**
+   * Determines whether a successor phase is due to open.
+   *
+   * Missing or invalid scheduled start dates are treated as due because a closed
+   * predecessor means the next phase has no scheduled future start to wait for.
+   * Used internally by isChallengeStalled. Does not throw.
+   *
+   * @param {Object} phase challenge phase response data
+   * @returns {Boolean} true when scheduledStartDate is absent, invalid, or not in the future
+   */
+  static isPhaseDueToOpen(phase) {
+    const scheduledStartTime = ChallengeHelper.getDateTime(phase.scheduledStartDate);
+    if (_.isNil(scheduledStartTime)) {
+      return true;
+    }
+    return scheduledStartTime <= Date.now();
+  }
+
+  /**
+   * Converts a date-like value to epoch milliseconds. Used internally by
+   * isPhaseDueToOpen. Does not throw.
+   *
+   * @param {Date|String|Number} value date-like value
+   * @returns {Number|null} epoch milliseconds, or null when the value cannot be parsed
+   */
+  static getDateTime(value) {
+    if (_.isNil(value)) {
+      return null;
+    }
+    const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
   }
 
   static convertDateToISOString(startDate) {

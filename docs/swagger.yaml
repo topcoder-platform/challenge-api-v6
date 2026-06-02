@@ -2716,6 +2716,9 @@ definitions:
         type: array
         items:
           type: string
+      stalled:
+        type: boolean
+        description: Flag indicating the challenge has no open phase after a previous phase opened and closed, and a due successor phase has not opened.
       registrationStartDate:
         type: string
         format: date-time
