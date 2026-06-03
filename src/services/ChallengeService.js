@@ -3734,8 +3734,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
-  const isAiOnlyTemplateSwitch =
-    isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  const isAiOnlyTemplateSwitch = cachedActivationAiConfig?.mode === 'AI_ONLY';
   // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
   // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
   const isAiOnlyTemplateRevert =
