@@ -122,6 +122,34 @@ class PhaseAdvancer {
       throw new errors.BadRequestError(`Phase ${targetPhaseName} not found or already closed`);
     }
 
+    // Block closing AI Review phase if there are pending AI decisions
+    if (operation === "close" && phase.name === "AI Review") {
+      const pendingAiDecisions = await this.#getPendingAiDecisionsCount(challengeId);
+      if (pendingAiDecisions > 0) {
+        console.log(
+          `Blocked closing AI Review phase for challenge ${challengeId}: ${pendingAiDecisions} pending AI decision(s)`
+        );
+        return {
+          success: false,
+          message: `Cannot close AI Review phase: ${pendingAiDecisions} pending AI decision(s) not yet completed`,
+          detail: "Pending AI decisions must be finalized before closing AI Review phase",
+          failureReasons: [
+            {
+              rule: "AI Review Phase Guard",
+              failedConditions: [
+                {
+                  fact: "pendingAiDecisions",
+                  operator: "equal",
+                  value: 0,
+                  actual: pendingAiDecisions,
+                },
+              ],
+            },
+          ],
+        };
+      }
+    }
+
     const rules = this.#collectRules(operation, phase);
     const facts = await this.#generateFacts(challengeId, legacyId, phases, phase, operation);
     const validation = await this.#validateRules(rules, facts);
@@ -351,6 +379,43 @@ class PhaseAdvancer {
       select: { numOfSubmissions: true },
     });
     return ch?.numOfSubmissions || 0;
+  }
+
+  /**
+   * Counts AI review decisions in PENDING status for active contest submissions.
+   * Used to block AI Review phase closure until all decisions are finalized.
+   */
+  async #getPendingAiDecisionsCount(challengeId) {
+    console.log(`Getting pending AI decisions count for challenge ${challengeId}`);
+    const reviewPrisma = getReviewClient();
+    const reviewSchema = config.REVIEW_DB_SCHEMA;
+    const aiReviewDecisionTable = Prisma.raw(`"${reviewSchema}"."aiReviewDecision"`);
+    const submissionTable = Prisma.raw(`"${reviewSchema}"."submission"`);
+
+    try {
+      const [{ count = 0 } = {}] = await reviewPrisma.$queryRaw(
+        Prisma.sql`
+          SELECT COUNT(*)::int AS count
+          FROM ${aiReviewDecisionTable} aid
+          INNER JOIN ${submissionTable} s
+            ON s."id" = aid."submissionId"
+          WHERE s."challengeId" = ${challengeId}
+            AND (s."status" = 'ACTIVE' OR s."status" IS NULL)
+            AND (
+              s."type" IS NULL
+              OR UPPER((s."type")::text) = 'CONTEST_SUBMISSION'
+            )
+            AND UPPER((aid."status")::text) = 'PENDING'
+        `
+      );
+      const rawCount = Number(count);
+      return Number.isFinite(rawCount) ? rawCount : 0;
+    } catch (error) {
+      console.error(
+        `Failed to count pending AI decisions for challenge ${challengeId}: ${error.message}`
+      );
+      throw error;
+    }
   }
 
   async #areAllSubmissionsReviewed(challengeId) {
