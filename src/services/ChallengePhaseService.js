@@ -13,7 +13,7 @@ const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
 const {
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed,
+  ensureAIPhaseCanBeClosed,
 } = require("./ChallengeService");
 
 const { getClient } = require("../common/prisma");

@@ -632,6 +632,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
 const AI_SCREENING_PHASE_NAME = "ai screening";
+const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
@@ -5207,11 +5208,11 @@ async function advancePhase(currentUser, challengeId, data) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
 
-  const isClosingAIScreening =
+  const isClosingAIScreeningOrReviewPhase =
     data.operation === "close" &&
-    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
-  if (isClosingAIScreening) {
-    await ensureAIScreeningCanBeClosed(challenge.id);
+    (normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME || normalizePhaseNameForComparison(data.phase) === AI_REVIEW_PHASE_NAME);
+  if (isClosingAIScreeningOrReviewPhase) {
+    await ensureAIPhaseCanBeClosed(challenge.id, data.phase);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
@@ -5490,7 +5491,7 @@ module.exports = {
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed,
+  ensureAIPhaseCanBeClosed,
 };
 
 logger.buildService(module.exports);
