@@ -661,17 +661,17 @@ async function ensureChallengeHasAiReviewers(challengeId) {
   }
 }
 
-async function ensureAIScreeningCanBeClosed(challengeId) {
-  logger.debug(`Validating AI Screening closure for challenge ${challengeId}`);
+async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening') {
+  logger.debug(`Validating ${phaseName} closure for challenge ${challengeId}`);
   await ensureChallengeHasAiReviewers(challengeId);
 
   const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
   if (!aiReviewConfig || !aiReviewConfig.id) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`,
+      `${phaseName} closure blocked for challenge ${challengeId}: AI review configuration not found`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI review configuration could not be fetched",
+      `Cannot close ${phaseName} phase because AI review configuration could not be fetched`,
     );
   }
 
@@ -704,14 +704,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     ]);
   } catch (err) {
     logger.error(
-      `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
+      `Failed to fetch ${phaseName} submissions/decisions for challenge ${challengeId}: ${err.message}`,
       err,
     );
     throw err;
   }
 
   logger.debug(
-    `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
+    `${phaseName} data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
       (decisions || []).length
     }`,
   );
@@ -720,7 +720,7 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id),
   );
   if (submissionIds.length === 0) {
-    logger.debug(`AI Screening closure allowed for challenge ${challengeId}: no submissions found`);
+    logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: no submissions found`);
     return;
   }
 
@@ -740,14 +740,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
 
   if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
+      `${phaseName} closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI reviews are not complete",
+      `Cannot close ${phaseName} phase because AI reviews are not complete`,
     );
   }
 
-  logger.debug(`AI Screening closure allowed for challenge ${challengeId}: all reviews finalized`);
+  logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: all reviews finalized`);
 }
 
 /**

@@ -803,8 +803,8 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
     }
 
-    if (normalizedClosingPhaseName === "ai screening") {
-      await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
+    if (normalizedClosingPhaseName === "ai screening" || normalizedClosingPhaseName === "ai review") {
+      await ensureAIPhaseCanBeClosed(challengePhase.challengeId, closingPhaseName);
     }
 
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {
