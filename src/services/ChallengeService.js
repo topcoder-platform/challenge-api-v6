@@ -187,6 +187,173 @@ async function applyLatestSubmissionCounts(challenges) {
   });
 }
 
+/**
+ * Loads the latest non-checkpoint Marathon Match submission per member from
+ * the review database.
+ *
+ * The close flow uses this to avoid selecting winners before parallel system
+ * scoring has produced a final summation for every member's latest attempt.
+ *
+ * @param {String} challengeId challenge identifier
+ * @returns {Promise<Array<Object>>} latest submission rows keyed by member
+ */
+async function getLatestMarathonMatchSubmissions(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    return [];
+  }
+
+  const reviewSchema = _.toString(config.REVIEW_DB_SCHEMA || "").trim();
+  const submissionTable = reviewSchema
+    ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
+    : Prisma.raw('"submission"');
+  const reviewClient = getReviewClient();
+
+  return reviewClient.$queryRaw`
+    SELECT
+      "id",
+      "memberId",
+      "submittedDate",
+      "createdAt",
+      "updatedAt"
+    FROM (
+      SELECT
+        "id",
+        "memberId",
+        "submittedDate",
+        "createdAt",
+        "updatedAt",
+        ROW_NUMBER() OVER (
+          PARTITION BY "memberId"
+          ORDER BY
+            COALESCE("isLatest", false) DESC,
+            COALESCE("submittedDate", "createdAt", "updatedAt") DESC,
+            "id" DESC
+        ) AS "rowNumber"
+      FROM ${submissionTable}
+      WHERE "challengeId" = ${challengeId}
+        AND "memberId" IS NOT NULL
+        AND COALESCE("type"::text, '') <> ${CHECKPOINT_SUBMISSION_TYPE}
+        AND COALESCE("status"::text, '') <> 'DELETED'
+    ) ranked
+    WHERE "rowNumber" = 1
+  `;
+}
+
+/**
+ * Normalizes identifiers used to match review summations to submissions.
+ * @param {*} value raw identifier value
+ * @returns {String} trimmed identifier, or an empty string when absent
+ */
+function normalizeMatchId(value) {
+  return _.toString(value || "").trim();
+}
+
+/**
+ * Reads a review summation timestamp for latest-result comparisons.
+ * @param {Object} summation review summation returned by Review API
+ * @returns {Number} timestamp in milliseconds, or zero when unavailable
+ */
+function getReviewSummationTimestampValue(summation) {
+  const candidate =
+    _.get(summation, "reviewedDate") ||
+    _.get(summation, "updatedAt") ||
+    _.get(summation, "createdAt");
+  const timestamp = new Date(candidate).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+/**
+ * Compares two final review summations for the same submission or submitter.
+ * Newer summations win; ties keep the higher score.
+ *
+ * @param {Object|null} current currently selected summation
+ * @param {Object} candidate summation being considered
+ * @returns {Boolean} true when candidate should replace current
+ */
+function shouldReplaceSelectedFinalSummation(current, candidate) {
+  if (!current) {
+    return true;
+  }
+
+  const currentTimestamp = getReviewSummationTimestampValue(current);
+  const candidateTimestamp = getReviewSummationTimestampValue(candidate);
+  if (candidateTimestamp !== currentTimestamp) {
+    return candidateTimestamp > currentTimestamp;
+  }
+
+  return Number(candidate.aggregateScore) > Number(current.aggregateScore);
+}
+
+/**
+ * Selects the final summations that should determine Marathon Match winners.
+ *
+ * When latest submission rows are available, every latest submission must have
+ * a matching final summation. Without submission rows, the function falls back
+ * to the newest final summation per submitter to preserve legacy behavior while
+ * avoiding duplicate winner placements for repeated attempts.
+ *
+ * @param {String} challengeId challenge identifier used in error messages
+ * @param {Array<Object>} finalSummations final review summations
+ * @param {Array<Object>} latestSubmissions latest submission rows
+ * @returns {Array<Object>} selected final summations to rank
+ * @throws {BadRequestError} when any latest submission has no final summation
+ */
+function selectMarathonMatchWinnerSummations(challengeId, finalSummations, latestSubmissions) {
+  if (!Array.isArray(latestSubmissions) || latestSubmissions.length === 0) {
+    const latestBySubmitter = new Map();
+    finalSummations.forEach((summation) => {
+      const submitterId = normalizeMatchId(summation.submitterId);
+      if (!submitterId) {
+        return;
+      }
+      if (shouldReplaceSelectedFinalSummation(latestBySubmitter.get(submitterId), summation)) {
+        latestBySubmitter.set(submitterId, summation);
+      }
+    });
+    return Array.from(latestBySubmitter.values());
+  }
+
+  const finalBySubmission = new Map();
+  finalSummations.forEach((summation) => {
+    const submitterId = normalizeMatchId(summation.submitterId);
+    const submissionId = normalizeMatchId(summation.submissionId);
+    if (!submitterId || !submissionId) {
+      return;
+    }
+    const key = `${submitterId}:${submissionId}`;
+    if (shouldReplaceSelectedFinalSummation(finalBySubmission.get(key), summation)) {
+      finalBySubmission.set(key, summation);
+    }
+  });
+
+  const selectedSummations = [];
+  const missingSubmissions = [];
+  latestSubmissions.forEach((submission) => {
+    const memberId = normalizeMatchId(submission.memberId);
+    const submissionId = normalizeMatchId(submission.id);
+    if (!memberId || !submissionId) {
+      return;
+    }
+
+    const summation = finalBySubmission.get(`${memberId}:${submissionId}`);
+    if (summation) {
+      selectedSummations.push(summation);
+    } else {
+      missingSubmissions.push(submissionId);
+    }
+  });
+
+  if (missingSubmissions.length > 0) {
+    throw new errors.BadRequestError(
+      `Cannot close Marathon Match challenge ${challengeId}: final system scoring is not complete for latest submissions. Missing final summations for submissionIds: ${missingSubmissions.join(
+        ", ",
+      )}`,
+    );
+  }
+
+  return selectedSummations;
+}
+
 function normalizeStatusSortValue(statusValue) {
   if (_.isNil(statusValue)) {
     return null;
@@ -5355,9 +5522,15 @@ async function closeMarathonMatch(currentUser, challengeId) {
   const finalSummations = (reviewSummations || []).filter(
     (summation) => summation.isFinal === true,
   );
+  const latestSubmissions = await getLatestMarathonMatchSubmissions(challengeId);
+  const winnerSummations = selectMarathonMatchWinnerSummations(
+    challengeId,
+    finalSummations,
+    latestSubmissions,
+  );
 
   const orderedSummations = _.orderBy(
-    finalSummations,
+    winnerSummations,
     ["aggregateScore", "createdAt"],
     ["desc", "asc"],
   );
