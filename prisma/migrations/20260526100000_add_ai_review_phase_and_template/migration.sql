@@ -69,7 +69,7 @@ INSERT INTO "TimelineTemplatePhase" (
 )
 ON CONFLICT DO NOTHING;
 
--- Submission phase (predecessor: Registration)
+-- Submission phase (no predecessor — runs in parallel with Registration)
 INSERT INTO "TimelineTemplatePhase" (
     "id",
     "timelineTemplateId",
@@ -84,7 +84,7 @@ INSERT INTO "TimelineTemplatePhase" (
     'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e',
     'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e',
     '6950164f-3c5e-4bdc-abc8-22aaf5a1bd49',
-    'a93544bc-c165-4af4-b55e-18f3593b457a',
+    NULL,
     432000,
     '2025-03-10T13:08:02.378Z',
     'topcoder user',

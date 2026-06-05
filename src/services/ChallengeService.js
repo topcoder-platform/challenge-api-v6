@@ -632,6 +632,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
 const AI_SCREENING_PHASE_NAME = "ai screening";
+const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
@@ -661,17 +662,17 @@ async function ensureChallengeHasAiReviewers(challengeId) {
   }
 }
 
-async function ensureAIScreeningCanBeClosed(challengeId) {
-  logger.debug(`Validating AI Screening closure for challenge ${challengeId}`);
+async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening') {
+  logger.debug(`Validating ${phaseName} closure for challenge ${challengeId}`);
   await ensureChallengeHasAiReviewers(challengeId);
 
   const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
   if (!aiReviewConfig || !aiReviewConfig.id) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`,
+      `${phaseName} closure blocked for challenge ${challengeId}: AI review configuration not found`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI review configuration could not be fetched",
+      `Cannot close ${phaseName} phase because AI review configuration could not be fetched`,
     );
   }
 
@@ -704,14 +705,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     ]);
   } catch (err) {
     logger.error(
-      `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
+      `Failed to fetch ${phaseName} submissions/decisions for challenge ${challengeId}: ${err.message}`,
       err,
     );
     throw err;
   }
 
   logger.debug(
-    `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
+    `${phaseName} data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
       (decisions || []).length
     }`,
   );
@@ -720,7 +721,7 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id),
   );
   if (submissionIds.length === 0) {
-    logger.debug(`AI Screening closure allowed for challenge ${challengeId}: no submissions found`);
+    logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: no submissions found`);
     return;
   }
 
@@ -740,14 +741,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
 
   if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
+      `${phaseName} closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI reviews are not complete",
+      `Cannot close ${phaseName} phase because AI reviews are not complete`,
     );
   }
 
-  logger.debug(`AI Screening closure allowed for challenge ${challengeId}: all reviews finalized`);
+  logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: all reviews finalized`);
 }
 
 /**
@@ -3734,8 +3735,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
-  const isAiOnlyTemplateSwitch =
-    isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  const isAiOnlyTemplateSwitch = cachedActivationAiConfig?.mode === 'AI_ONLY';
   // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
   // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
   const isAiOnlyTemplateRevert =
@@ -5208,11 +5208,11 @@ async function advancePhase(currentUser, challengeId, data) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
 
-  const isClosingAIScreening =
+  const isClosingAIScreeningOrReviewPhase =
     data.operation === "close" &&
-    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
-  if (isClosingAIScreening) {
-    await ensureAIScreeningCanBeClosed(challenge.id);
+    (normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME || normalizePhaseNameForComparison(data.phase) === AI_REVIEW_PHASE_NAME);
+  if (isClosingAIScreeningOrReviewPhase) {
+    await ensureAIPhaseCanBeClosed(challenge.id, data.phase);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
@@ -5491,7 +5491,7 @@ module.exports = {
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed,
+  ensureAIPhaseCanBeClosed,
 };
 
 logger.buildService(module.exports);
