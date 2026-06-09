@@ -541,8 +541,8 @@ async function ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName) {
     return;
   }
 
-  // For AI_ONLY review mode, no human Reviewer resources are required
-  if (normalizedPhaseName === "review") {
+  // For AI_ONLY review mode, no human Reviewer or Approver resources are required
+  if (normalizedPhaseName === "review" || normalizedPhaseName === "approval") {
     try {
       const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challenge.id);
       if (aiReviewConfig?.mode === "AI_ONLY") {

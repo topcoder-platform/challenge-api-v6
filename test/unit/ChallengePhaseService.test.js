@@ -1713,6 +1713,55 @@ describe('challenge phase service unit tests', () => {
       throw new Error('should not reach here')
     })
 
+    it('partially update challenge phase - opens approval phase without approver resource for AI_ONLY challenges', async () => {
+      const approvalPhase = await prisma.phase.create({
+        data: {
+          id: uuid(),
+          name: 'Approval',
+          description: 'desc',
+          isOpen: false,
+          duration: 86400,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+      const approvalChallengePhaseId = uuid()
+      await prisma.challengePhase.create({
+        data: {
+          id: approvalChallengePhaseId,
+          challengeId: data.challenge.id,
+          phaseId: approvalPhase.id,
+          name: 'Approval',
+          isOpen: false,
+          createdBy: 'admin',
+          updatedBy: 'admin'
+        }
+      })
+
+      const originalGetAIReviewConfigByChallengeId = helper.getAIReviewConfigByChallengeId
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetResourceRoles = helper.getResourceRoles
+      helper.getAIReviewConfigByChallengeId = async () => ({ mode: 'AI_ONLY' })
+      helper.getChallengeResources = async () => []
+      helper.getResourceRoles = async () => [{ id: 'approver-role-id', name: 'Approver' }]
+
+      try {
+        const challengePhase = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          approvalChallengePhaseId,
+          { isOpen: true }
+        )
+        should.equal(challengePhase.isOpen, true)
+      } finally {
+        helper.getAIReviewConfigByChallengeId = originalGetAIReviewConfigByChallengeId
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getResourceRoles = originalGetResourceRoles
+        await prisma.challengePhase.delete({ where: { id: approvalChallengePhaseId } })
+        await prisma.phase.delete({ where: { id: approvalPhase.id } })
+      }
+    })
+
     it('partially update challenge phase - opens marathon match review phase without reviewer resource', async () => {
       const reviewPhase = await prisma.phase.create({
         data: {
