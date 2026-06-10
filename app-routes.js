@@ -185,9 +185,11 @@ module.exports = (app) => {
               !helper.checkIfExists(def.scopes, req.authUser.scopes)
             ) {
               logger.info(
-                `[${getSignature(req)}] Public route: dropping machine token due to scope mismatch`
+                `[${getSignature(req)}] Public route: preserving machine token whitelist bypass despite scope mismatch`
               );
-              req.authUser = undefined;
+              req.authUser = {
+                bypassChallengeWhitelist: true,
+              };
             } else {
               logger.info(`[${getSignature(req)}] Public route: valid machine token attached`);
             }

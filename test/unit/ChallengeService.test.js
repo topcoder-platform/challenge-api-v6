@@ -783,6 +783,13 @@ describe("challenge service unit tests", () => {
         );
         should.equal(machine.id, createdChallengeData.id);
 
+        const whitelistBypassOnly = await service.getChallenge(
+          { bypassChallengeWhitelist: true },
+          createdChallengeData.id,
+          true,
+        );
+        should.equal(whitelistBypassOnly.id, createdChallengeData.id);
+
         try {
           await service.getChallenge(
             { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
@@ -1234,6 +1241,13 @@ describe("challenge service unit tests", () => {
         );
         should.equal(machine.total, 1);
         should.equal(machine.result[0].id, data.challenge.id);
+
+        const whitelistBypassOnly = await service.searchChallenges(
+          { bypassChallengeWhitelist: true },
+          { id: data.challenge.id },
+        );
+        should.equal(whitelistBypassOnly.total, 1);
+        should.equal(whitelistBypassOnly.result[0].id, data.challenge.id);
       } finally {
         await prisma.challengeUserWhitelist.deleteMany({
           where: { challengeId: data.challenge.id },

@@ -1262,13 +1262,18 @@ async function validateChallengeTerms(terms = []) {
 /**
  * Determine whether challenge whitelist checks apply for a request.
  * Interactive users, including admins and anonymous callers, must be evaluated;
- * M2M callers are allowed to bypass this user-facing access control.
+ * M2M callers are allowed to bypass this user-facing access control. Public
+ * routes may preserve `bypassChallengeWhitelist` for valid machine tokens that
+ * are not otherwise attached as full M2M callers.
  *
  * @param {Object} currentUser the user who performs the operation
  * @returns {Boolean} true when whitelist rules should be applied
  */
 function shouldApplyChallengeWhitelist(currentUser) {
-  return !_.get(currentUser, "isMachine", false);
+  return (
+    !_.get(currentUser, "isMachine", false) &&
+    !_.get(currentUser, "bypassChallengeWhitelist", false)
+  );
 }
 
 /**
