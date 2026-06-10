@@ -3179,6 +3179,61 @@ describe("challenge service unit tests", () => {
       throw new Error("should not reach here");
     });
 
+    it("close marathon match blocks fallback selection when a newer submitter summation is not final", async () => {
+      const originalGetReviewSummations = helper.getReviewSummations;
+      helper.getReviewSummations = async () => [
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 75.8,
+          submissionId: "old-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-03T09:15:00.000Z",
+          reviewedDate: "2024-05-03T09:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: false,
+          aggregateScore: 95.7,
+          submissionId: "latest-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-03T10:15:00.000Z",
+          reviewedDate: "2024-05-03T10:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 83.6,
+          submissionId: "latest-liuliquan-submission",
+          submitterId: "9876543",
+          submitterHandle: "tonyj",
+          createdAt: "2024-05-03T10:20:00.000Z",
+          reviewedDate: "2024-05-03T10:20:00.000Z",
+        },
+      ];
+      originalReviewSummations = originalGetReviewSummations;
+
+      try {
+        await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id);
+      } catch (e) {
+        should.equal(e.name, "BadRequestError");
+        should.equal(
+          e.message.indexOf(
+            "final system scoring is not complete for latest submitter summations",
+          ) >= 0,
+          true,
+        );
+        should.equal(e.message.indexOf("12345678") >= 0, true);
+        return;
+      }
+      throw new Error("should not reach here");
+    });
+
     it("close marathon match successfully with M2M token", async () => {
       const originalGetReviewSummations = helper.getReviewSummations;
       helper.getReviewSummations = async () => [
