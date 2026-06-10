@@ -263,14 +263,14 @@ function getReviewSummationTimestampValue(summation) {
 }
 
 /**
- * Compares two final review summations for the same submission or submitter.
+ * Compares two review summations for the same submission or submitter.
  * Newer summations win; ties keep the higher score.
  *
  * @param {Object|null} current currently selected summation
  * @param {Object} candidate summation being considered
  * @returns {Boolean} true when candidate should replace current
  */
-function shouldReplaceSelectedFinalSummation(current, candidate) {
+function shouldReplaceSelectedReviewSummation(current, candidate) {
   if (!current) {
     return true;
   }
@@ -285,20 +285,54 @@ function shouldReplaceSelectedFinalSummation(current, candidate) {
 }
 
 /**
+ * Finds the newest submission-scoped review summation per submitter.
+ *
+ * This is used as a fallback completeness signal when latest submission rows
+ * cannot be read directly from the review database.
+ *
+ * @param {Array<Object>} reviewSummations review summations returned by Review API
+ * @returns {Map<String, Object>} latest submission-scoped summation by submitter id
+ */
+function getLatestSubmissionScopedSummationsBySubmitter(reviewSummations) {
+  const latestBySubmitter = new Map();
+
+  (Array.isArray(reviewSummations) ? reviewSummations : []).forEach((summation) => {
+    const submitterId = normalizeMatchId(summation.submitterId);
+    const submissionId = normalizeMatchId(summation.submissionId);
+    if (!submitterId || !submissionId) {
+      return;
+    }
+
+    if (shouldReplaceSelectedReviewSummation(latestBySubmitter.get(submitterId), summation)) {
+      latestBySubmitter.set(submitterId, summation);
+    }
+  });
+
+  return latestBySubmitter;
+}
+
+/**
  * Selects the final summations that should determine Marathon Match winners.
  *
  * When latest submission rows are available, every latest submission must have
- * a matching final summation. Without submission rows, the function falls back
- * to the newest final summation per submitter to preserve legacy behavior while
- * avoiding duplicate winner placements for repeated attempts.
+ * a matching final summation. Without submission rows, the function uses the
+ * newest submission-scoped summation per submitter as a fallback completeness
+ * signal before ranking the newest final summation per submitter.
  *
  * @param {String} challengeId challenge identifier used in error messages
+ * @param {Array<Object>} reviewSummations all review summations
  * @param {Array<Object>} finalSummations final review summations
  * @param {Array<Object>} latestSubmissions latest submission rows
  * @returns {Array<Object>} selected final summations to rank
- * @throws {BadRequestError} when any latest submission has no final summation
+ * @throws {BadRequestError} when any latest submission or fallback latest
+ * submitter summation has no final summation
  */
-function selectMarathonMatchWinnerSummations(challengeId, finalSummations, latestSubmissions) {
+function selectMarathonMatchWinnerSummations(
+  challengeId,
+  reviewSummations,
+  finalSummations,
+  latestSubmissions,
+) {
   if (!Array.isArray(latestSubmissions) || latestSubmissions.length === 0) {
     const latestBySubmitter = new Map();
     finalSummations.forEach((summation) => {
@@ -306,10 +340,32 @@ function selectMarathonMatchWinnerSummations(challengeId, finalSummations, lates
       if (!submitterId) {
         return;
       }
-      if (shouldReplaceSelectedFinalSummation(latestBySubmitter.get(submitterId), summation)) {
+      if (shouldReplaceSelectedReviewSummation(latestBySubmitter.get(submitterId), summation)) {
         latestBySubmitter.set(submitterId, summation);
       }
     });
+
+    const latestKnownSummations = getLatestSubmissionScopedSummationsBySubmitter(reviewSummations);
+    const missingSubmitters = [];
+    latestKnownSummations.forEach((latestSummation, submitterId) => {
+      const selectedFinal = latestBySubmitter.get(submitterId);
+      if (
+        !selectedFinal ||
+        normalizeMatchId(selectedFinal.submissionId) !==
+          normalizeMatchId(latestSummation.submissionId)
+      ) {
+        missingSubmitters.push(submitterId);
+      }
+    });
+
+    if (missingSubmitters.length > 0) {
+      throw new errors.BadRequestError(
+        `Cannot close Marathon Match challenge ${challengeId}: final system scoring is not complete for latest submitter summations. Missing final summations for submitterIds: ${missingSubmitters
+          .sort()
+          .join(", ")}`,
+      );
+    }
+
     return Array.from(latestBySubmitter.values());
   }
 
@@ -321,7 +377,7 @@ function selectMarathonMatchWinnerSummations(challengeId, finalSummations, lates
       return;
     }
     const key = `${submitterId}:${submissionId}`;
-    if (shouldReplaceSelectedFinalSummation(finalBySubmission.get(key), summation)) {
+    if (shouldReplaceSelectedReviewSummation(finalBySubmission.get(key), summation)) {
       finalBySubmission.set(key, summation);
     }
   });
@@ -5525,6 +5581,7 @@ async function closeMarathonMatch(currentUser, challengeId) {
   const latestSubmissions = await getLatestMarathonMatchSubmissions(challengeId);
   const winnerSummations = selectMarathonMatchWinnerSummations(
     challengeId,
+    reviewSummations,
     finalSummations,
     latestSubmissions,
   );
