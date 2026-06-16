@@ -22,7 +22,8 @@
     "e2e:cov": "nyc --reporter=html --reporter=text npm run e2e",
     "services:up": "docker-compose -f ./local/docker-compose.yml up -d",
     "services:down": "docker-compose -f ./local/docker-compose.yml down",
-    "services:logs": "docker-compose -f ./local/docker-compose.yml logs"
+    "services:logs": "docker-compose -f ./local/docker-compose.yml logs",
+    "deploy:dev": "BRANCH=$(git rev-parse --abbrev-ref HEAD) && TAG=\"dev-${BRANCH}\" && git tag -d \"$TAG\" 2>/dev/null; git push origin \":refs/tags/$TAG\" 2>/dev/null; git tag \"$TAG\" && git push origin \"$TAG\""
   },
   "author": "TCSCODER",
   "license": "MIT",

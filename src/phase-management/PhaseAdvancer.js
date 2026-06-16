@@ -352,6 +352,7 @@ class PhaseAdvancer {
     });
     return ch?.numOfSubmissions || 0;
   }
+  
 
   async #areAllSubmissionsReviewed(challengeId) {
     console.log(`Evaluating review completion for challenge ${challengeId}`);

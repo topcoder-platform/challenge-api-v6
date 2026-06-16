@@ -187,6 +187,229 @@ async function applyLatestSubmissionCounts(challenges) {
   });
 }
 
+/**
+ * Loads the latest non-checkpoint Marathon Match submission per member from
+ * the review database.
+ *
+ * The close flow uses this to avoid selecting winners before parallel system
+ * scoring has produced a final summation for every member's latest attempt.
+ *
+ * @param {String} challengeId challenge identifier
+ * @returns {Promise<Array<Object>>} latest submission rows keyed by member
+ */
+async function getLatestMarathonMatchSubmissions(challengeId) {
+  if (!config.REVIEW_DB_URL) {
+    return [];
+  }
+
+  const reviewSchema = _.toString(config.REVIEW_DB_SCHEMA || "").trim();
+  const submissionTable = reviewSchema
+    ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
+    : Prisma.raw('"submission"');
+  const reviewClient = getReviewClient();
+
+  return reviewClient.$queryRaw`
+    SELECT
+      "id",
+      "memberId",
+      "submittedDate",
+      "createdAt",
+      "updatedAt"
+    FROM (
+      SELECT
+        "id",
+        "memberId",
+        "submittedDate",
+        "createdAt",
+        "updatedAt",
+        ROW_NUMBER() OVER (
+          PARTITION BY "memberId"
+          ORDER BY
+            COALESCE("isLatest", false) DESC,
+            COALESCE("submittedDate", "createdAt", "updatedAt") DESC,
+            "id" DESC
+        ) AS "rowNumber"
+      FROM ${submissionTable}
+      WHERE "challengeId" = ${challengeId}
+        AND "memberId" IS NOT NULL
+        AND COALESCE("type"::text, '') <> ${CHECKPOINT_SUBMISSION_TYPE}
+        AND COALESCE("status"::text, '') <> 'DELETED'
+    ) ranked
+    WHERE "rowNumber" = 1
+  `;
+}
+
+/**
+ * Normalizes identifiers used to match review summations to submissions.
+ * @param {*} value raw identifier value
+ * @returns {String} trimmed identifier, or an empty string when absent
+ */
+function normalizeMatchId(value) {
+  return _.toString(value || "").trim();
+}
+
+/**
+ * Reads a review summation timestamp for latest-result comparisons.
+ * @param {Object} summation review summation returned by Review API
+ * @returns {Number} timestamp in milliseconds, or zero when unavailable
+ */
+function getReviewSummationTimestampValue(summation) {
+  const candidate =
+    _.get(summation, "reviewedDate") ||
+    _.get(summation, "updatedAt") ||
+    _.get(summation, "createdAt");
+  const timestamp = new Date(candidate).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+/**
+ * Compares two review summations for the same submission or submitter.
+ * Newer summations win; ties keep the higher score.
+ *
+ * @param {Object|null} current currently selected summation
+ * @param {Object} candidate summation being considered
+ * @returns {Boolean} true when candidate should replace current
+ */
+function shouldReplaceSelectedReviewSummation(current, candidate) {
+  if (!current) {
+    return true;
+  }
+
+  const currentTimestamp = getReviewSummationTimestampValue(current);
+  const candidateTimestamp = getReviewSummationTimestampValue(candidate);
+  if (candidateTimestamp !== currentTimestamp) {
+    return candidateTimestamp > currentTimestamp;
+  }
+
+  return Number(candidate.aggregateScore) > Number(current.aggregateScore);
+}
+
+/**
+ * Finds the newest submission-scoped review summation per submitter.
+ *
+ * This is used as a fallback completeness signal when latest submission rows
+ * cannot be read directly from the review database.
+ *
+ * @param {Array<Object>} reviewSummations review summations returned by Review API
+ * @returns {Map<String, Object>} latest submission-scoped summation by submitter id
+ */
+function getLatestSubmissionScopedSummationsBySubmitter(reviewSummations) {
+  const latestBySubmitter = new Map();
+
+  (Array.isArray(reviewSummations) ? reviewSummations : []).forEach((summation) => {
+    const submitterId = normalizeMatchId(summation.submitterId);
+    const submissionId = normalizeMatchId(summation.submissionId);
+    if (!submitterId || !submissionId) {
+      return;
+    }
+
+    if (shouldReplaceSelectedReviewSummation(latestBySubmitter.get(submitterId), summation)) {
+      latestBySubmitter.set(submitterId, summation);
+    }
+  });
+
+  return latestBySubmitter;
+}
+
+/**
+ * Selects the final summations that should determine Marathon Match winners.
+ *
+ * When latest submission rows are available, every latest submission must have
+ * a matching final summation. Without submission rows, the function uses the
+ * newest submission-scoped summation per submitter as a fallback completeness
+ * signal before ranking the newest final summation per submitter.
+ *
+ * @param {String} challengeId challenge identifier used in error messages
+ * @param {Array<Object>} reviewSummations all review summations
+ * @param {Array<Object>} finalSummations final review summations
+ * @param {Array<Object>} latestSubmissions latest submission rows
+ * @returns {Array<Object>} selected final summations to rank
+ * @throws {BadRequestError} when any latest submission or fallback latest
+ * submitter summation has no final summation
+ */
+function selectMarathonMatchWinnerSummations(
+  challengeId,
+  reviewSummations,
+  finalSummations,
+  latestSubmissions,
+) {
+  if (!Array.isArray(latestSubmissions) || latestSubmissions.length === 0) {
+    const latestBySubmitter = new Map();
+    finalSummations.forEach((summation) => {
+      const submitterId = normalizeMatchId(summation.submitterId);
+      if (!submitterId) {
+        return;
+      }
+      if (shouldReplaceSelectedReviewSummation(latestBySubmitter.get(submitterId), summation)) {
+        latestBySubmitter.set(submitterId, summation);
+      }
+    });
+
+    const latestKnownSummations = getLatestSubmissionScopedSummationsBySubmitter(reviewSummations);
+    const missingSubmitters = [];
+    latestKnownSummations.forEach((latestSummation, submitterId) => {
+      const selectedFinal = latestBySubmitter.get(submitterId);
+      if (
+        !selectedFinal ||
+        normalizeMatchId(selectedFinal.submissionId) !==
+          normalizeMatchId(latestSummation.submissionId)
+      ) {
+        missingSubmitters.push(submitterId);
+      }
+    });
+
+    if (missingSubmitters.length > 0) {
+      throw new errors.BadRequestError(
+        `Cannot close Marathon Match challenge ${challengeId}: final system scoring is not complete for latest submitter summations. Missing final summations for submitterIds: ${missingSubmitters
+          .sort()
+          .join(", ")}`,
+      );
+    }
+
+    return Array.from(latestBySubmitter.values());
+  }
+
+  const finalBySubmission = new Map();
+  finalSummations.forEach((summation) => {
+    const submitterId = normalizeMatchId(summation.submitterId);
+    const submissionId = normalizeMatchId(summation.submissionId);
+    if (!submitterId || !submissionId) {
+      return;
+    }
+    const key = `${submitterId}:${submissionId}`;
+    if (shouldReplaceSelectedReviewSummation(finalBySubmission.get(key), summation)) {
+      finalBySubmission.set(key, summation);
+    }
+  });
+
+  const selectedSummations = [];
+  const missingSubmissions = [];
+  latestSubmissions.forEach((submission) => {
+    const memberId = normalizeMatchId(submission.memberId);
+    const submissionId = normalizeMatchId(submission.id);
+    if (!memberId || !submissionId) {
+      return;
+    }
+
+    const summation = finalBySubmission.get(`${memberId}:${submissionId}`);
+    if (summation) {
+      selectedSummations.push(summation);
+    } else {
+      missingSubmissions.push(submissionId);
+    }
+  });
+
+  if (missingSubmissions.length > 0) {
+    throw new errors.BadRequestError(
+      `Cannot close Marathon Match challenge ${challengeId}: final system scoring is not complete for latest submissions. Missing final summations for submissionIds: ${missingSubmissions.join(
+        ", ",
+      )}`,
+    );
+  }
+
+  return selectedSummations;
+}
+
 function normalizeStatusSortValue(statusValue) {
   if (_.isNil(statusValue)) {
     return null;
@@ -632,6 +855,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES);
 const REQUIRED_REVIEW_PHASE_NAME_SET = new Set([...REVIEW_PHASE_NAMES, "iterative review"]);
 const AI_SCREENING_PHASE_NAME = "ai screening";
+const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
@@ -661,17 +885,17 @@ async function ensureChallengeHasAiReviewers(challengeId) {
   }
 }
 
-async function ensureAIScreeningCanBeClosed(challengeId) {
-  logger.debug(`Validating AI Screening closure for challenge ${challengeId}`);
+async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening') {
+  logger.debug(`Validating ${phaseName} closure for challenge ${challengeId}`);
   await ensureChallengeHasAiReviewers(challengeId);
 
   const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
   if (!aiReviewConfig || !aiReviewConfig.id) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: AI review configuration not found`,
+      `${phaseName} closure blocked for challenge ${challengeId}: AI review configuration not found`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI review configuration could not be fetched",
+      `Cannot close ${phaseName} phase because AI review configuration could not be fetched`,
     );
   }
 
@@ -704,14 +928,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     ]);
   } catch (err) {
     logger.error(
-      `Failed to fetch AI screening submissions/decisions for challenge ${challengeId}: ${err.message}`,
+      `Failed to fetch ${phaseName} submissions/decisions for challenge ${challengeId}: ${err.message}`,
       err,
     );
     throw err;
   }
 
   logger.debug(
-    `AI Screening data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
+    `${phaseName} data for challenge ${challengeId}: submissions=${(submissions || []).length}, decisions=${
       (decisions || []).length
     }`,
   );
@@ -720,7 +944,7 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
     (submissions || []).map((submission) => extractSubmissionId(submission)).filter((id) => !!id),
   );
   if (submissionIds.length === 0) {
-    logger.debug(`AI Screening closure allowed for challenge ${challengeId}: no submissions found`);
+    logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: no submissions found`);
     return;
   }
 
@@ -740,14 +964,14 @@ async function ensureAIScreeningCanBeClosed(challengeId) {
 
   if (hasPendingDecision || missingFinalizedSubmissions.length > 0) {
     logger.debug(
-      `AI Screening closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
+      `${phaseName} closure blocked for challenge ${challengeId}: hasPendingDecision=${hasPendingDecision}, missingFinalizedSubmissions=${missingFinalizedSubmissions.length}`,
     );
     throw new errors.BadRequestError(
-      "Cannot close AI Screening phase because AI reviews are not complete",
+      `Cannot close ${phaseName} phase because AI reviews are not complete`,
     );
   }
 
-  logger.debug(`AI Screening closure allowed for challenge ${challengeId}: all reviews finalized`);
+  logger.debug(`${phaseName} closure allowed for challenge ${challengeId}: all reviews finalized`);
 }
 
 /**
@@ -3686,10 +3910,62 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     }
   }
 
+  // Auto-select the AI Only timeline template for AI_ONLY challenges, and revert to the
+  // default template when the AI_ONLY config is removed. Runs on draft saves and activation.
+  const isDraftSave = [ChallengeStatusEnum.NEW, ChallengeStatusEnum.DRAFT].includes(challenge.status) && !isStatusChangingToActive;
+  let cachedActivationAiConfig = null;
+  let aiConfigFetched = false;
+  if (isStatusChangingToActive || isDraftSave) {
+    try {
+      cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
+      aiConfigFetched = true;
+      const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
+      if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
+        if (currentTemplateId !== config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+          logger.debug(
+            `updateChallenge: AI_ONLY mode detected, switching to AI Only timeline template (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
+        }
+      } else if (isDraftSave && currentTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+        // AI_ONLY config was removed; revert to the default template for this challenge's type+track
+        const defaultTemplates = await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
+          typeId: challenge.typeId,
+          trackId: challenge.trackId,
+          isDefault: true,
+        });
+        const defaultTemplate = defaultTemplates.result[0];
+        if (defaultTemplate) {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed, reverting to default timeline template ${defaultTemplate.timelineTemplateId} (challengeId=${challengeId})`,
+          );
+          data.timelineTemplateId = defaultTemplate.timelineTemplateId;
+        } else {
+          logger.debug(
+            `updateChallenge: AI_ONLY config removed but no default template found for typeId=${challenge.typeId} trackId=${challenge.trackId}; keeping current template (challengeId=${challengeId})`,
+          );
+        }
+      }
+    } catch (_err) {
+      // non-fatal: if AI config fetch fails, proceed without template override
+      logger.debug(
+        `updateChallenge: failed to fetch AI review config for template auto-select (challengeId=${challengeId}): ${_err.message}`,
+      );
+    }
+  }
+
   // TODO: Fix this Tech Debt once legacy is turned off
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
+  const isAiOnlyTemplateSwitch = cachedActivationAiConfig?.mode === 'AI_ONLY';
+  // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
+  // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
+  const isAiOnlyTemplateRevert =
+    aiConfigFetched &&
+    isDraftSave &&
+    challenge.timelineTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID &&
+    cachedActivationAiConfig?.mode !== 'AI_ONLY';
   if (
     !currentUser.isMachine &&
     !hasAdminRole(currentUser) &&
@@ -3698,11 +3974,20 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   ) {
     if (
       finalStatus !== ChallengeStatusEnum.NEW &&
-      finalTimelineTemplateId !== challenge.timelineTemplateId
+      finalTimelineTemplateId !== challenge.timelineTemplateId &&
+      !isAiOnlyTemplateSwitch &&
+      !isAiOnlyTemplateRevert
     ) {
       throw new errors.BadRequestError(
         `Cannot change the timelineTemplateId for challenges with status: ${finalStatus}`,
       );
+    } else if (
+      (isAiOnlyTemplateSwitch || isAiOnlyTemplateRevert) &&
+      finalTimelineTemplateId !== challenge.timelineTemplateId
+    ) {
+      // Auto-managed template change: clear existing phases so they are re-populated from the new template
+      challenge.phases = [];
+      timelineTemplateChanged = true;
     }
   } else if (finalTimelineTemplateId !== challenge.timelineTemplateId) {
     // make sure there are no previous phases if the timeline template has changed
@@ -3798,9 +4083,12 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     !hadAIReviewersBeforeUpdate &&
     hasAIReviewersAfterUpdate;
   logger.debug(`updateChallenge: isActiveWithNewAIReviewers=${isActiveWithNewAIReviewers}`);
-  const shouldEnsureAIScreeningPhase = isStatusChangingToActive || isActiveWithNewAIReviewers;
+  // AI_ONLY challenges use the AI Review phase instead of AI Screening; never add AI Screening for them
+  const isAiOnlyActivation = isStatusChangingToActive && cachedActivationAiConfig?.mode === 'AI_ONLY';
+  const shouldEnsureAIScreeningPhase =
+    (isStatusChangingToActive && !isAiOnlyActivation) || isActiveWithNewAIReviewers;
   logger.debug(
-    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive}`,
+    `updateChallenge: shouldEnsureAIScreeningPhase=${shouldEnsureAIScreeningPhase} isStatusChangingToActive=${isStatusChangingToActive} isAiOnlyActivation=${isAiOnlyActivation}`,
   );
 
   // Add AI screening phase when activating a challenge, or when AI reviewers are newly added
@@ -4042,77 +4330,89 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     !isStandardTaskType &&
     (challenge.status === ChallengeStatusEnum.NEW || challenge.status === ChallengeStatusEnum.DRAFT)
   ) {
-    const effectiveReviewers = Array.isArray(data.reviewers)
-      ? data.reviewers
-      : Array.isArray(challenge.reviewers)
-        ? challenge.reviewers
-        : [];
-
-    const reviewersMissingFields = [];
-    effectiveReviewers.forEach((reviewer, index) => {
-      const hasScorecardId =
-        reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
-      const hasPhaseId =
-        reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
-
-      if (!hasScorecardId || !hasPhaseId) {
-        const missing = [];
-        if (!hasScorecardId) missing.push("scorecardId");
-        if (!hasPhaseId) missing.push("phaseId");
-        reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
-      }
-    });
-
-    if (reviewersMissingFields.length > 0) {
-      throw new errors.BadRequestError(
-        `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
-          "; ",
-        )}`,
-      );
+    // For AI_ONLY review mode, manual reviewers are not required; skip validation
+    let isAiOnlyReviewMode = false;
+    try {
+      // Reuse the config fetched earlier for template auto-select if available
+      const activationAiConfig = cachedActivationAiConfig ?? await helper.getAIReviewConfigByChallengeId(challengeId);
+      isAiOnlyReviewMode = activationAiConfig?.mode === 'AI_ONLY';
+    } catch (_err) {
+      // non-fatal: proceed with standard reviewer validation if AI config fetch fails
     }
 
-    const reviewerPhaseIds = new Set(
-      effectiveReviewers
-        .filter((reviewer) => reviewer && reviewer.phaseId)
-        .map((reviewer) => String(reviewer.phaseId)),
-    );
+    if (!isAiOnlyReviewMode) {
+      const effectiveReviewers = Array.isArray(data.reviewers)
+        ? data.reviewers
+        : Array.isArray(challenge.reviewers)
+          ? challenge.reviewers
+          : [];
 
-    if (reviewerPhaseIds.size === 0) {
-      throw new errors.BadRequestError(
-        "Cannot activate a challenge without at least one reviewer configured",
+      const reviewersMissingFields = [];
+      effectiveReviewers.forEach((reviewer, index) => {
+        const hasScorecardId =
+          reviewer && !_.isNil(reviewer.scorecardId) && String(reviewer.scorecardId).trim() !== "";
+        const hasPhaseId =
+          reviewer && !_.isNil(reviewer.phaseId) && String(reviewer.phaseId).trim() !== "";
+
+        if (!hasScorecardId || !hasPhaseId) {
+          const missing = [];
+          if (!hasScorecardId) missing.push("scorecardId");
+          if (!hasPhaseId) missing.push("phaseId");
+          reviewersMissingFields.push(`reviewer[${index}] missing ${missing.join(" and ")}`);
+        }
+      });
+
+      if (reviewersMissingFields.length > 0) {
+        throw new errors.BadRequestError(
+          `Cannot activate challenge; reviewers are missing required fields: ${reviewersMissingFields.join(
+            "; ",
+          )}`,
+        );
+      }
+
+      const reviewerPhaseIds = new Set(
+        effectiveReviewers
+          .filter((reviewer) => reviewer && reviewer.phaseId)
+          .map((reviewer) => String(reviewer.phaseId)),
       );
-    }
 
-    const normalizePhaseName = (name) =>
-      String(name || "")
-        .trim()
-        .toLowerCase();
-    const effectivePhases =
-      (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
-        ? phasesForUpdate
-        : challenge.phases) || [];
+      if (reviewerPhaseIds.size === 0) {
+        throw new errors.BadRequestError(
+          "Cannot activate a challenge without at least one reviewer configured",
+        );
+      }
 
-    const missingPhaseNames = new Set();
-    for (const phase of effectivePhases) {
-      if (!phase) {
-        continue;
-      }
-      const normalizedName = normalizePhaseName(phase.name);
-      if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
-        continue;
-      }
-      const phaseId = _.get(phase, "phaseId");
-      if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
-        missingPhaseNames.add(phase.name || "Unknown phase");
-      }
-    }
+      const normalizePhaseName = (name) =>
+        String(name || "")
+          .trim()
+          .toLowerCase();
+      const effectivePhases =
+        (Array.isArray(phasesForUpdate) && phasesForUpdate.length > 0
+          ? phasesForUpdate
+          : challenge.phases) || [];
 
-    if (missingPhaseNames.size > 0) {
-      throw new errors.BadRequestError(
-        `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
-          missingPhaseNames,
-        ).join(", ")}`,
-      );
+      const missingPhaseNames = new Set();
+      for (const phase of effectivePhases) {
+        if (!phase) {
+          continue;
+        }
+        const normalizedName = normalizePhaseName(phase.name);
+        if (!REQUIRED_REVIEW_PHASE_NAME_SET.has(normalizedName)) {
+          continue;
+        }
+        const phaseId = _.get(phase, "phaseId");
+        if (!phaseId || !reviewerPhaseIds.has(String(phaseId))) {
+          missingPhaseNames.add(phase.name || "Unknown phase");
+        }
+      }
+
+      if (missingPhaseNames.size > 0) {
+        throw new errors.BadRequestError(
+          `Cannot activate challenge; missing reviewers for phase(s): ${Array.from(
+            missingPhaseNames,
+          ).join(", ")}`,
+        );
+      }
     }
   }
 
@@ -5131,11 +5431,11 @@ async function advancePhase(currentUser, challengeId, data) {
     throw new errors.BadRequestError(`Challenge with id: ${challengeId} is not in ACTIVE status.`);
   }
 
-  const isClosingAIScreening =
+  const isClosingAIScreeningOrReviewPhase =
     data.operation === "close" &&
-    normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME;
-  if (isClosingAIScreening) {
-    await ensureAIScreeningCanBeClosed(challenge.id);
+    (normalizePhaseNameForComparison(data.phase) === AI_SCREENING_PHASE_NAME || normalizePhaseNameForComparison(data.phase) === AI_REVIEW_PHASE_NAME);
+  if (isClosingAIScreeningOrReviewPhase) {
+    await ensureAIPhaseCanBeClosed(challenge.id, data.phase);
   }
 
   const phaseAdvancerResult = await phaseAdvancer.advancePhase(
@@ -5278,9 +5578,16 @@ async function closeMarathonMatch(currentUser, challengeId) {
   const finalSummations = (reviewSummations || []).filter(
     (summation) => summation.isFinal === true,
   );
+  const latestSubmissions = await getLatestMarathonMatchSubmissions(challengeId);
+  const winnerSummations = selectMarathonMatchWinnerSummations(
+    challengeId,
+    reviewSummations,
+    finalSummations,
+    latestSubmissions,
+  );
 
   const orderedSummations = _.orderBy(
-    finalSummations,
+    winnerSummations,
     ["aggregateScore", "createdAt"],
     ["desc", "asc"],
   );
@@ -5414,7 +5721,7 @@ module.exports = {
   getDefaultReviewers,
   setDefaultReviewers,
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed,
+  ensureAIPhaseCanBeClosed,
 };
 
 logger.buildService(module.exports);

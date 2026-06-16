@@ -13,7 +13,7 @@ const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
 const {
   indexChallengeAndPostToKafka,
-  ensureAIScreeningCanBeClosed,
+  ensureAIPhaseCanBeClosed,
 } = require("./ChallengeService");
 
 const { getClient } = require("../common/prisma");
@@ -541,6 +541,18 @@ async function ensureRequiredResourcesBeforeOpeningPhase(challenge, phaseName) {
     return;
   }
 
+  // For AI_ONLY review mode, no human Reviewer or Approver resources are required
+  if (normalizedPhaseName === "review" || normalizedPhaseName === "approval") {
+    try {
+      const aiReviewConfig = await helper.getAIReviewConfigByChallengeId(challenge.id);
+      if (aiReviewConfig?.mode === "AI_ONLY") {
+        return;
+      }
+    } catch (_err) {
+      // non-fatal: proceed with standard check if AI config fetch fails
+    }
+  }
+
   const challengeId = challenge.id;
   const challengeResources = await helper.getChallengeResources(challengeId);
   const requiredRoleNameLower = _.toLower(requiredRoleName);
@@ -791,8 +803,8 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       );
     }
 
-    if (normalizedClosingPhaseName === "ai screening") {
-      await ensureAIScreeningCanBeClosed(challengePhase.challengeId);
+    if (normalizedClosingPhaseName === "ai screening" || normalizedClosingPhaseName === "ai review") {
+      await ensureAIPhaseCanBeClosed(challengePhase.challengeId, closingPhaseName);
     }
 
     if (!("actualEndDate" in data) || _.isNil(data.actualEndDate)) {

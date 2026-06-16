@@ -103,6 +103,10 @@ describe("challenge service unit tests", () => {
       ALTER TABLE ${submissionTableName}
       ADD COLUMN IF NOT EXISTS "type" varchar(64)
     `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "isLatest" boolean
+    `);
     await reviewClient.$executeRawUnsafe(`DELETE FROM ${submissionTableName}`);
 
     testChallengeData = {
@@ -779,6 +783,13 @@ describe("challenge service unit tests", () => {
         );
         should.equal(machine.id, createdChallengeData.id);
 
+        const whitelistBypassOnly = await service.getChallenge(
+          { bypassChallengeWhitelist: true },
+          createdChallengeData.id,
+          true,
+        );
+        should.equal(whitelistBypassOnly.id, createdChallengeData.id);
+
         try {
           await service.getChallenge(
             { handle: "blocked", roles: ["administrator"], userId: "blocked-user" },
@@ -1230,6 +1241,13 @@ describe("challenge service unit tests", () => {
         );
         should.equal(machine.total, 1);
         should.equal(machine.result[0].id, data.challenge.id);
+
+        const whitelistBypassOnly = await service.searchChallenges(
+          { bypassChallengeWhitelist: true },
+          { id: data.challenge.id },
+        );
+        should.equal(whitelistBypassOnly.total, 1);
+        should.equal(whitelistBypassOnly.result[0].id, data.challenge.id);
       } finally {
         await prisma.challengeUserWhitelist.deleteMany({
           where: { challengeId: data.challenge.id },
@@ -2978,6 +2996,9 @@ describe("challenge service unit tests", () => {
             updatedBy: "admin",
           },
         });
+        await reviewClient.$executeRawUnsafe(
+          `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${data.marathonMatchChallenge.id}'`,
+        );
       }
     });
 
@@ -3053,6 +3074,178 @@ describe("challenge service unit tests", () => {
         should.equal(phase.isOpen, false);
         should.exist(phase.actualEndDate);
       });
+    });
+
+    it("close marathon match selects winners from latest member final summations", async () => {
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "createdAt", "updatedAt", "isLatest")
+        VALUES
+          ('old-topacc-submission', '${data.marathonMatchChallenge.id}', '12345678', 'Contest Submission', 'ACTIVE', '2024-05-01T09:00:00.000Z', '2024-05-01T09:00:00.000Z', '2024-05-01T09:00:00.000Z', false),
+          ('latest-topacc-submission', '${data.marathonMatchChallenge.id}', '12345678', 'Contest Submission', 'ACTIVE', '2024-05-01T10:00:00.000Z', '2024-05-01T10:00:00.000Z', '2024-05-01T10:00:00.000Z', true),
+          ('old-liuliquan-submission', '${data.marathonMatchChallenge.id}', '9876543', 'Contest Submission', 'ACTIVE', '2024-05-01T09:05:00.000Z', '2024-05-01T09:05:00.000Z', '2024-05-01T09:05:00.000Z', false),
+          ('latest-liuliquan-submission', '${data.marathonMatchChallenge.id}', '9876543', 'Contest Submission', 'ACTIVE', '2024-05-01T10:05:00.000Z', '2024-05-01T10:05:00.000Z', '2024-05-01T10:05:00.000Z', true)
+      `);
+
+      const originalGetReviewSummations = helper.getReviewSummations;
+      helper.getReviewSummations = async () => [
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 75.8,
+          submissionId: "old-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-01T09:15:00.000Z",
+          reviewedDate: "2024-05-01T09:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 95.7,
+          submissionId: "latest-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-01T10:15:00.000Z",
+          reviewedDate: "2024-05-01T10:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 99.9,
+          submissionId: "old-liuliquan-submission",
+          submitterId: "9876543",
+          submitterHandle: "tonyj",
+          createdAt: "2024-05-01T09:20:00.000Z",
+          reviewedDate: "2024-05-01T09:20:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 83.6,
+          submissionId: "latest-liuliquan-submission",
+          submitterId: "9876543",
+          submitterHandle: "tonyj",
+          createdAt: "2024-05-01T10:20:00.000Z",
+          reviewedDate: "2024-05-01T10:20:00.000Z",
+        },
+      ];
+      originalReviewSummations = originalGetReviewSummations;
+
+      const originalGetChallengeResources = helper.getChallengeResources;
+      helper.getChallengeResources = async () => [
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 12345678, memberHandle: "thomaskranitsas" },
+        { roleId: config.SUBMITTER_ROLE_ID, memberId: 9876543, memberHandle: "tonyj" },
+      ];
+      originalChallengeResources = originalGetChallengeResources;
+
+      const result = await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id);
+
+      should.exist(result);
+      should.equal(result.status, ChallengeStatusEnum.COMPLETED);
+      should.equal(result.winners.length, 2);
+      should.equal(result.winners[0].placement, 1);
+      should.equal(result.winners[0].userId, 12345678);
+      should.equal(result.winners[1].placement, 2);
+      should.equal(result.winners[1].userId, 9876543);
+    });
+
+    it("close marathon match blocks until all latest submissions have final summations", async () => {
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "createdAt", "updatedAt", "isLatest")
+        VALUES
+          ('latest-topacc-submission', '${data.marathonMatchChallenge.id}', '12345678', 'Contest Submission', 'ACTIVE', '2024-05-02T10:00:00.000Z', '2024-05-02T10:00:00.000Z', '2024-05-02T10:00:00.000Z', true),
+          ('latest-liuliquan-submission', '${data.marathonMatchChallenge.id}', '9876543', 'Contest Submission', 'ACTIVE', '2024-05-02T10:05:00.000Z', '2024-05-02T10:05:00.000Z', '2024-05-02T10:05:00.000Z', true)
+      `);
+
+      const originalGetReviewSummations = helper.getReviewSummations;
+      helper.getReviewSummations = async () => [
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 83.6,
+          submissionId: "latest-liuliquan-submission",
+          submitterId: "9876543",
+          submitterHandle: "tonyj",
+          createdAt: "2024-05-02T10:20:00.000Z",
+          reviewedDate: "2024-05-02T10:20:00.000Z",
+        },
+      ];
+      originalReviewSummations = originalGetReviewSummations;
+
+      try {
+        await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id);
+      } catch (e) {
+        should.equal(e.name, "BadRequestError");
+        should.equal(
+          e.message.indexOf("final system scoring is not complete for latest submissions") >= 0,
+          true,
+        );
+        should.equal(e.message.indexOf("latest-topacc-submission") >= 0, true);
+        return;
+      }
+      throw new Error("should not reach here");
+    });
+
+    it("close marathon match blocks fallback selection when a newer submitter summation is not final", async () => {
+      const originalGetReviewSummations = helper.getReviewSummations;
+      helper.getReviewSummations = async () => [
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 75.8,
+          submissionId: "old-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-03T09:15:00.000Z",
+          reviewedDate: "2024-05-03T09:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: false,
+          aggregateScore: 95.7,
+          submissionId: "latest-topacc-submission",
+          submitterId: "12345678",
+          submitterHandle: "thomaskranitsas",
+          createdAt: "2024-05-03T10:15:00.000Z",
+          reviewedDate: "2024-05-03T10:15:00.000Z",
+        },
+        {
+          id: uuid(),
+          challengeId: data.marathonMatchChallenge.id,
+          isFinal: true,
+          aggregateScore: 83.6,
+          submissionId: "latest-liuliquan-submission",
+          submitterId: "9876543",
+          submitterHandle: "tonyj",
+          createdAt: "2024-05-03T10:20:00.000Z",
+          reviewedDate: "2024-05-03T10:20:00.000Z",
+        },
+      ];
+      originalReviewSummations = originalGetReviewSummations;
+
+      try {
+        await service.closeMarathonMatch(adminUser, data.marathonMatchChallenge.id);
+      } catch (e) {
+        should.equal(e.name, "BadRequestError");
+        should.equal(
+          e.message.indexOf(
+            "final system scoring is not complete for latest submitter summations",
+          ) >= 0,
+          true,
+        );
+        should.equal(e.message.indexOf("12345678") >= 0, true);
+        return;
+      }
+      throw new Error("should not reach here");
     });
 
     it("close marathon match successfully with M2M token", async () => {

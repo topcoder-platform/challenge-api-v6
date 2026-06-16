@@ -407,5 +407,33 @@
       "createdBy": "topcoder user",
       "updatedAt": "2025-03-10T13:08:02.378Z",
       "updatedBy": "topcoder user"
+  },
+  {
+      "id": "b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e",
+      "name": "AI Only Challenge",
+      "description": "AI-Only Challenge Timeline",
+      "isActive": true,
+      "phases": [
+          {
+              "phaseId": "a93544bc-c165-4af4-b55e-18f3593b457a",
+              "defaultDuration": 432000,
+              "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+          },
+          {
+              "phaseId": "6950164f-3c5e-4bdc-abc8-22aaf5a1bd49",
+              "defaultDuration": 432000,
+              "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e"
+          },
+          {
+              "phaseId": "c3a4d5e6-f7b8-4c9d-a0e1-2b3c4d5e6f7a",
+              "defaultDuration": 86400,
+              "predecessor": "6950164f-3c5e-4bdc-abc8-22aaf5a1bd49",
+              "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f"
+          }
+      ],
+      "createdAt": "2025-03-10T13:08:02.378Z",
+      "createdBy": "topcoder user",
+      "updatedAt": "2025-03-10T13:08:02.378Z",
+      "updatedBy": "topcoder user"
   }
 ]
