@@ -65,6 +65,29 @@ function recalculateScheduledEndDate(phase) {
     .toISOString();
 }
 
+/**
+ * Find the incoming update payload for a persisted challenge phase.
+ * This helper does not raise exceptions.
+ *
+ * @param {Array<Object>} newPhases phase updates from the challenge update request
+ * @param {Object} phase persisted challenge phase being updated
+ * @returns {Object|undefined} the matching phase update, preferring challenge phase row id
+ */
+function findPhaseUpdate(newPhases, phase) {
+  if (!Array.isArray(newPhases)) {
+    return undefined;
+  }
+
+  if (!_.isNil(phase.id)) {
+    const phaseUpdate = _.find(newPhases, (p) => p.id === phase.id);
+    if (!_.isNil(phaseUpdate)) {
+      return phaseUpdate;
+    }
+  }
+
+  return _.find(newPhases, (p) => p.phaseId === phase.phaseId);
+}
+
 class ChallengePhaseHelper {
   phaseDefinitionMap = {};
   timelineTemplateMap = {};
@@ -182,7 +205,7 @@ class ChallengePhaseHelper {
     const updatedPhases = _.map(challengePhasesOrdered, (phase) => {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
-      const newPhase = _.find(newPhases, (p) => p.phaseId === phase.phaseId);
+      const newPhase = findPhaseUpdate(newPhases, phase);
       const templatePredecessor = _.get(phaseFromTemplate, "predecessor");
       // Prefer template predecessor only when that phase exists on the challenge, otherwise keep the stored link.
       const resolvedPredecessor = _.isNil(phaseFromTemplate)

@@ -1,6 +1,7 @@
 require("../../app-bootstrap");
 
-const { expect } = require("chai");
+const chai = require("chai");
+const { expect } = chai;
 const { ChallengeStatusEnum } = require("@prisma/client");
 const challengeHelper = require("../../src/common/challenge-helper");
 
