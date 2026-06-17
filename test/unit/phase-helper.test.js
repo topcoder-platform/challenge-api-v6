@@ -163,4 +163,154 @@ describe('phase helper unit tests', () => {
     updatedPhases[1].scheduledEndDate.should.equal(submissionEndDate)
     updatedPhases[1].duration.should.equal(3 * 24 * 60 * 60)
   })
+
+  it('allows active Design phases to be shortened to a future end date', async () => {
+    const registrationPhaseId = 'design-registration-phase'
+    const submissionPhaseId = 'design-submission-phase'
+    const staleDuration = 5 * 24 * 60 * 60
+    const registrationStartDate = '2099-05-26T05:14:00.000Z'
+    const currentRegistrationEndDate = '2099-05-31T05:14:00.000Z'
+    const shortenedRegistrationEndDate = '2099-05-29T05:14:00.000Z'
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: submissionPhaseId, name: 'Submission', description: 'Submission phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: staleDuration },
+        {
+          phaseId: submissionPhaseId,
+          predecessor: registrationPhaseId,
+          defaultDuration: staleDuration
+        }
+      ]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration: staleDuration,
+          isOpen: true,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          scheduledStartDate: registrationStartDate,
+          scheduledEndDate: currentRegistrationEndDate
+        },
+        {
+          duration: staleDuration,
+          name: 'Submission',
+          phaseId: submissionPhaseId,
+          predecessor: registrationPhaseId,
+          scheduledStartDate: currentRegistrationEndDate,
+          scheduledEndDate: '2099-06-05T05:14:00.000Z'
+        }
+      ],
+      [
+        {
+          phaseId: registrationPhaseId,
+          scheduledEndDate: shortenedRegistrationEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      { allowActivePhaseShortening: true }
+    )
+
+    updatedPhases[0].scheduledEndDate.should.equal(shortenedRegistrationEndDate)
+    updatedPhases[0].duration.should.equal(3 * 24 * 60 * 60)
+    updatedPhases[1].scheduledStartDate.should.equal(shortenedRegistrationEndDate)
+  })
+
+  it('rejects active phase shortening for non-Design tracks', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const staleDuration = 5 * 24 * 60 * 60
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: staleDuration }
+      ]
+    )
+
+    try {
+      await phaseHelper.populatePhasesForChallengeUpdate(
+        [
+          {
+            duration: staleDuration,
+            isOpen: true,
+            name: 'Registration',
+            phaseId: registrationPhaseId,
+            scheduledStartDate: '2099-05-26T05:14:00.000Z',
+            scheduledEndDate: '2099-05-31T05:14:00.000Z'
+          }
+        ],
+        [
+          {
+            phaseId: registrationPhaseId,
+            scheduledEndDate: '2099-05-29T05:14:00.000Z'
+          }
+        ],
+        'timeline-template-id',
+        false,
+        { allowActivePhaseShortening: false }
+      )
+    } catch (e) {
+      e.message.should.equal('Active phases can only be shortened for Design track challenges.')
+      return
+    }
+
+    throw new Error('should not reach here')
+  })
+
+  it('rejects active phase end dates before the current date/time', async () => {
+    const registrationPhaseId = 'past-registration-phase'
+    const now = Date.now()
+    const registrationStartDate = new Date(now - 2 * 60 * 60 * 1000).toISOString()
+    const pastRegistrationEndDate = new Date(now - 60 * 60 * 1000).toISOString()
+    const currentRegistrationEndDate = new Date(now + 24 * 60 * 60 * 1000).toISOString()
+    const staleDuration = 24 * 60 * 60
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: staleDuration }
+      ]
+    )
+
+    try {
+      await phaseHelper.populatePhasesForChallengeUpdate(
+        [
+          {
+            duration: staleDuration,
+            isOpen: true,
+            name: 'Registration',
+            phaseId: registrationPhaseId,
+            scheduledStartDate: registrationStartDate,
+            scheduledEndDate: currentRegistrationEndDate
+          }
+        ],
+        [
+          {
+            phaseId: registrationPhaseId,
+            scheduledEndDate: pastRegistrationEndDate
+          }
+        ],
+        'timeline-template-id',
+        false,
+        { allowActivePhaseShortening: true }
+      )
+    } catch (e) {
+      e.message.should.equal(
+        'Active phase scheduledEndDate cannot be set before the current date/time.'
+      )
+      return
+    }
+
+    throw new Error('should not reach here')
+  })
 })

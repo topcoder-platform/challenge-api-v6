@@ -9,6 +9,120 @@ const timelineTemplateService = require("../services/TimelineTemplateService");
 const prisma = require("../common/prisma").getClient();
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
+const DESIGN_TRACK = "DESIGN";
+
+/**
+ * Resolve a track object or token to the canonical track value used in challenge metadata.
+ *
+ * @param {Object|String|null|undefined} track challenge track relation, display value, or token
+ * @returns {String} normalized uppercase track token
+ */
+function normalizeTrackToken(track) {
+  if (_.isNil(track)) {
+    return "";
+  }
+
+  if (_.isString(track)) {
+    return _.toUpper(_.trim(track));
+  }
+
+  return _.toUpper(
+    _.trim(
+      _.get(track, "track") ||
+        _.get(track, "name") ||
+        _.get(track, "abbreviation") ||
+        ""
+    )
+  );
+}
+
+/**
+ * Check whether a challenge track represents Design.
+ *
+ * @param {Object|String|null|undefined} track challenge track relation, display value, or token
+ * @returns {Boolean} true when the track is Design
+ */
+function isDesignTrack(track) {
+  return normalizeTrackToken(track) === DESIGN_TRACK;
+}
+
+/**
+ * Resolve the requested scheduled end date from a phase update payload.
+ *
+ * @param {Object} phase existing challenge phase
+ * @param {Object|null|undefined} newPhase phase update payload
+ * @returns {Date|String|undefined} requested scheduled end date when the payload changes it
+ */
+function resolveRequestedScheduledEndDate(phase, newPhase) {
+  if (_.isNil(newPhase)) {
+    return undefined;
+  }
+
+  if (!_.isNil(_.get(newPhase, "scheduledEndDate"))) {
+    return _.get(newPhase, "scheduledEndDate");
+  }
+
+  const requestedDuration = _.get(newPhase, "duration");
+  if (_.isNil(requestedDuration) || _.isNil(phase.scheduledStartDate)) {
+    return undefined;
+  }
+
+  const scheduledStart = moment(phase.scheduledStartDate);
+  if (!scheduledStart.isValid()) {
+    return undefined;
+  }
+
+  return scheduledStart.add(requestedDuration, "seconds").toDate().toISOString();
+}
+
+/**
+ * Validate an active phase scheduled end date change against PM-5378 rules.
+ *
+ * @param {Object} phase existing challenge phase
+ * @param {Date|String|null|undefined} requestedScheduledEndDate requested scheduled end date
+ * @param {Object} options validation options
+ * @param {Boolean} options.allowActivePhaseShortening whether active phase shortening is allowed
+ * @returns {undefined} validates only
+ * @throws {BadRequestError} when active phase shortening is disallowed or would end in the past
+ */
+function validateActivePhaseScheduledEndDateChange(
+  phase,
+  requestedScheduledEndDate,
+  options = {}
+) {
+  if (_.isNil(phase) || phase.isOpen !== true || _.isNil(requestedScheduledEndDate)) {
+    return;
+  }
+
+  const requestedEnd = moment(requestedScheduledEndDate);
+  if (!requestedEnd.isValid()) {
+    return;
+  }
+
+  const currentEnd = moment(phase.scheduledEndDate);
+  const hasCurrentEnd = currentEnd.isValid();
+  const hasChangedEndDate = !hasCurrentEnd || requestedEnd.valueOf() !== currentEnd.valueOf();
+
+  if (!hasChangedEndDate) {
+    return;
+  }
+
+  if (requestedEnd.isBefore(moment())) {
+    throw new errors.BadRequestError(
+      "Active phase scheduledEndDate cannot be set before the current date/time."
+    );
+  }
+
+  if (
+    hasCurrentEnd &&
+    requestedEnd.isBefore(currentEnd) &&
+    options.allowActivePhaseShortening !== true
+  ) {
+    throw new errors.BadRequestError(
+      "Active phases can only be shortened for Design track challenges."
+    );
+  }
+}
 
 /**
  * Apply an explicit scheduled end date to a phase and update its duration.
@@ -142,7 +256,8 @@ class ChallengePhaseHelper {
     challengePhases,
     newPhases,
     timelineTemplateId,
-    isBeingActivated
+    isBeingActivated,
+    options = {}
   ) {
     const { timelineTemplateMap, timelineTempate } = await this.getTemplateAndTemplateMap(
       timelineTemplateId
@@ -183,6 +298,11 @@ class ChallengePhaseHelper {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
       const newPhase = _.find(newPhases, (p) => p.phaseId === phase.phaseId);
+      validateActivePhaseScheduledEndDateChange(
+        phase,
+        resolveRequestedScheduledEndDate(phase, newPhase),
+        options
+      );
       const templatePredecessor = _.get(phaseFromTemplate, "predecessor");
       // Prefer template predecessor only when that phase exists on the challenge, otherwise keep the stored link.
       const resolvedPredecessor = _.isNil(phaseFromTemplate)
@@ -339,6 +459,29 @@ class ChallengePhaseHelper {
       };
     }
     return this.timelineTemplateMap[timelineTemplateId];
+  }
+
+  /**
+   * Check whether a challenge track represents Design.
+   *
+   * @param {Object|String|null|undefined} track challenge track relation, display value, or token
+   * @returns {Boolean} true when the track is Design
+   */
+  isDesignTrack(track) {
+    return isDesignTrack(track);
+  }
+
+  /**
+   * Validate an active phase scheduled end date change against PM-5378 rules.
+   *
+   * @param {Object} phase existing challenge phase
+   * @param {Date|String|null|undefined} requestedScheduledEndDate requested scheduled end date
+   * @param {Object} options validation options
+   * @returns {undefined} validates only
+   * @throws {BadRequestError} when active phase shortening is disallowed or would end in the past
+   */
+  validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options = {}) {
+    validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options);
   }
 }
 

@@ -1401,6 +1401,141 @@ describe('challenge phase service unit tests', () => {
       }
     })
 
+    it('partially update challenge phase - allows Design active phase shortening and recalculates successor schedules', async function () {
+      this.timeout(50000)
+      const originalChallenge = await prisma.challenge.findUnique({
+        where: { id: data.challenge.id },
+        select: { trackId: true }
+      })
+      let designTrack
+      let reviewPhase
+      let appealsPhase
+      const reviewChallengePhaseId = uuid()
+      const appealsChallengePhaseId = uuid()
+      const now = Date.now()
+      const reviewStartDate = new Date(now - 60 * 60 * 1000)
+      const reviewEndDate = new Date(now + 4 * 24 * 60 * 60 * 1000)
+      const shortenedReviewEndDate = new Date(now + 2 * 24 * 60 * 60 * 1000)
+      const reviewDuration = Math.round(
+        (reviewEndDate.getTime() - reviewStartDate.getTime()) / 1000
+      )
+      const appealsDuration = 43200
+
+      try {
+        designTrack = await prisma.challengeTrack.create({
+          data: {
+            id: uuid(),
+            name: `Design ${shortId()}`,
+            description: 'Design track for active phase shortening tests',
+            isActive: true,
+            abbreviation: `D${shortId()}`,
+            track: 'DESIGN',
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          }
+        })
+        await prisma.challenge.update({
+          where: { id: data.challenge.id },
+          data: { trackId: designTrack.id }
+        })
+
+        reviewPhase = await prisma.phase.create({
+          data: {
+            id: uuid(),
+            name: 'Review',
+            description: 'desc',
+            isOpen: false,
+            duration: 86400,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          }
+        })
+        appealsPhase = await prisma.phase.create({
+          data: {
+            id: uuid(),
+            name: 'Appeals',
+            description: 'desc',
+            isOpen: false,
+            duration: appealsDuration,
+            createdBy: 'admin',
+            updatedBy: 'admin'
+          }
+        })
+
+        await prisma.challengePhase.createMany({
+          data: [
+            {
+              id: reviewChallengePhaseId,
+              challengeId: data.challenge.id,
+              phaseId: reviewPhase.id,
+              name: 'Review',
+              duration: reviewDuration,
+              isOpen: true,
+              actualStartDate: reviewStartDate,
+              scheduledStartDate: reviewStartDate,
+              scheduledEndDate: reviewEndDate,
+              createdBy: 'admin',
+              updatedBy: 'admin'
+            },
+            {
+              id: appealsChallengePhaseId,
+              challengeId: data.challenge.id,
+              phaseId: appealsPhase.id,
+              predecessor: reviewPhase.id,
+              name: 'Appeals',
+              duration: appealsDuration,
+              scheduledStartDate: reviewEndDate,
+              scheduledEndDate: new Date(reviewEndDate.getTime() + appealsDuration * 1000),
+              createdBy: 'admin',
+              updatedBy: 'admin'
+            }
+          ]
+        })
+
+        const updatedReview = await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          reviewChallengePhaseId,
+          { scheduledEndDate: shortenedReviewEndDate }
+        )
+
+        should.equal(
+          new Date(updatedReview.scheduledEndDate).toISOString(),
+          shortenedReviewEndDate.toISOString()
+        )
+
+        const updatedAppeals = await prisma.challengePhase.findUnique({
+          where: { id: appealsChallengePhaseId }
+        })
+        should.equal(
+          new Date(updatedAppeals.scheduledStartDate).toISOString(),
+          shortenedReviewEndDate.toISOString()
+        )
+        should.equal(
+          new Date(updatedAppeals.scheduledEndDate).toISOString(),
+          new Date(shortenedReviewEndDate.getTime() + appealsDuration * 1000).toISOString()
+        )
+      } finally {
+        await prisma.challengePhase.deleteMany({
+          where: { id: { in: [reviewChallengePhaseId, appealsChallengePhaseId] } }
+        })
+        if (reviewPhase || appealsPhase) {
+          await prisma.phase.deleteMany({
+            where: { id: { in: _.compact([reviewPhase?.id, appealsPhase?.id]) } }
+          })
+        }
+        if (originalChallenge) {
+          await prisma.challenge.update({
+            where: { id: data.challenge.id },
+            data: { trackId: originalChallenge.trackId }
+          })
+        }
+        if (designTrack) {
+          await prisma.challengeTrack.delete({ where: { id: designTrack.id } })
+        }
+      }
+    })
+
     it('partially update challenge phase - cannot close Appeals Response when appeals lack responses', async function () {
       this.timeout(50000)
       const appealsPhaseId = uuid()
