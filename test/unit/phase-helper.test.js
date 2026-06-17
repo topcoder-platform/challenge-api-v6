@@ -99,6 +99,73 @@ describe('phase helper unit tests', () => {
     updatedPhases[1].duration.should.equal(4 * 24 * 60 * 60)
   })
 
+  it('matches launched phase updates by challenge phase id before phase definition id', async () => {
+    const sharedPhaseId = 'shared-registration-phase'
+    const staleDuration = 120 * 60 * 60
+    const firstPhaseStartDate = '2026-06-15T09:29:45.575Z'
+    const secondPhaseStartDate = '2026-06-15T09:29:45.576Z'
+    const firstPhaseEndDate = '2026-06-20T10:14:45.575Z'
+    const secondPhaseEndDate = '2026-06-20T11:44:45.576Z'
+
+    stubPhaseLookups(
+      [{ id: sharedPhaseId, name: 'Registration', description: 'Registration phase' }],
+      [{ phaseId: sharedPhaseId, defaultDuration: staleDuration }]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          id: 'first-challenge-phase',
+          duration: staleDuration,
+          name: 'Registration',
+          phaseId: sharedPhaseId,
+          isOpen: true,
+          scheduledStartDate: firstPhaseStartDate,
+          scheduledEndDate: '2026-06-20T09:29:45.575Z',
+          actualStartDate: firstPhaseStartDate,
+          actualEndDate: null
+        },
+        {
+          id: 'second-challenge-phase',
+          duration: staleDuration,
+          name: 'Registration',
+          phaseId: sharedPhaseId,
+          isOpen: true,
+          scheduledStartDate: secondPhaseStartDate,
+          scheduledEndDate: '2026-06-20T09:29:45.576Z',
+          actualStartDate: secondPhaseStartDate,
+          actualEndDate: null
+        }
+      ],
+      [
+        {
+          id: 'first-challenge-phase',
+          duration: staleDuration,
+          phaseId: sharedPhaseId,
+          scheduledEndDate: firstPhaseEndDate,
+          scheduledStartDate: firstPhaseStartDate
+        },
+        {
+          id: 'second-challenge-phase',
+          duration: staleDuration,
+          phaseId: sharedPhaseId,
+          scheduledEndDate: secondPhaseEndDate,
+          scheduledStartDate: secondPhaseStartDate
+        }
+      ],
+      'timeline-template-id',
+      false
+    )
+
+    const firstUpdatedPhase = updatedPhases.find((phase) => phase.id === 'first-challenge-phase')
+    const secondUpdatedPhase = updatedPhases.find((phase) => phase.id === 'second-challenge-phase')
+
+    firstUpdatedPhase.scheduledEndDate.should.equal(firstPhaseEndDate)
+    firstUpdatedPhase.duration.should.equal(120 * 60 * 60 + 45 * 60)
+    secondUpdatedPhase.scheduledEndDate.should.equal(secondPhaseEndDate)
+    secondUpdatedPhase.duration.should.equal(122 * 60 * 60 + 15 * 60)
+  })
+
   it('uses scheduled end dates from update payload for MM phases', async () => {
     const registrationPhaseId = 'mm-registration-phase'
     const submissionPhaseId = 'mm-submission-phase'
