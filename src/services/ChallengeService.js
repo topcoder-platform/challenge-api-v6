@@ -3849,6 +3849,8 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
   let isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
+  const preventPhaseShortening =
+    challenge.status === ChallengeStatusEnum.ACTIVE && !allowActivePhaseShortening;
   const isStatusChangingToCancelled =
     isCancelledChallengeStatus(data.status) && !isCancelledChallengeStatus(challenge.status);
   if (data.status) {
@@ -4046,7 +4048,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
         data.phases,
         challenge.timelineTemplateId,
         isChallengeBeingActivated,
-        { allowActivePhaseShortening },
+        { allowActivePhaseShortening, preventPhaseShortening },
       );
     }
     phasesUpdated = true;

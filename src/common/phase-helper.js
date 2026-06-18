@@ -76,21 +76,26 @@ function resolveRequestedScheduledEndDate(phase, newPhase) {
 }
 
 /**
- * Validate an active phase scheduled end date change against PM-5378 rules.
+ * Validate a phase scheduled end date change against PM-5378 rules.
  *
  * @param {Object} phase existing challenge phase
  * @param {Date|String|null|undefined} requestedScheduledEndDate requested scheduled end date
  * @param {Object} options validation options
- * @param {Boolean} options.allowActivePhaseShortening whether active phase shortening is allowed
+ * @param {Boolean} options.allowActivePhaseShortening whether Design track phase shortening is allowed
+ * @param {Boolean} options.preventPhaseShortening whether shortening is guarded for all incomplete phases
  * @returns {undefined} validates only
- * @throws {BadRequestError} when active phase shortening is disallowed or would end in the past
+ * @throws {BadRequestError} when phase shortening is disallowed or would end in the past
  */
 function validateActivePhaseScheduledEndDateChange(
   phase,
   requestedScheduledEndDate,
   options = {}
 ) {
-  if (_.isNil(phase) || phase.isOpen !== true || _.isNil(requestedScheduledEndDate)) {
+  if (!_.isNil(phase?.actualEndDate)) {
+    return;
+  }
+
+  if (_.isNil(phase) || _.isNil(requestedScheduledEndDate)) {
     return;
   }
 
@@ -107,19 +112,25 @@ function validateActivePhaseScheduledEndDateChange(
     return;
   }
 
-  if (requestedEnd.isBefore(moment())) {
+  const shouldValidatePhaseEnd =
+    phase.isOpen === true ||
+    options.allowActivePhaseShortening === true ||
+    options.preventPhaseShortening === true;
+  const isShortened = hasCurrentEnd && requestedEnd.isBefore(currentEnd);
+
+  if (shouldValidatePhaseEnd && requestedEnd.isBefore(moment())) {
     throw new errors.BadRequestError(
-      "Active phase scheduledEndDate cannot be set before the current date/time."
+      "Phase scheduledEndDate cannot be set before the current date/time."
     );
   }
 
   if (
-    hasCurrentEnd &&
-    requestedEnd.isBefore(currentEnd) &&
-    options.allowActivePhaseShortening !== true
+    isShortened &&
+    options.allowActivePhaseShortening !== true &&
+    (phase.isOpen === true || options.preventPhaseShortening === true)
   ) {
     throw new errors.BadRequestError(
-      "Active phases can only be shortened for Design track challenges."
+      "Challenge phase schedules can only be shortened for Design track challenges."
     );
   }
 }
@@ -320,7 +331,7 @@ class ChallengePhaseHelper {
     const updatedPhases = _.map(challengePhasesOrdered, (phase) => {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
-      const newPhase = _.find(newPhases, (p) => p.phaseId === phase.phaseId);
+      const newPhase = findPhaseUpdate(newPhases, phase);
       validateActivePhaseScheduledEndDateChange(
         phase,
         resolveRequestedScheduledEndDate(phase, newPhase),
@@ -495,13 +506,13 @@ class ChallengePhaseHelper {
   }
 
   /**
-   * Validate an active phase scheduled end date change against PM-5378 rules.
+   * Validate a phase scheduled end date change against PM-5378 rules.
    *
    * @param {Object} phase existing challenge phase
    * @param {Date|String|null|undefined} requestedScheduledEndDate requested scheduled end date
    * @param {Object} options validation options
    * @returns {undefined} validates only
-   * @throws {BadRequestError} when active phase shortening is disallowed or would end in the past
+   * @throws {BadRequestError} when phase shortening is disallowed or would end in the past
    */
   validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options = {}) {
     validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options);
