@@ -17,7 +17,7 @@ const {
   ensureAIPhaseCanBeClosed,
 } = require("./ChallengeService");
 
-const { getClient } = require("../common/prisma");
+const { getClient, ChallengeStatusEnum } = require("../common/prisma");
 const prisma = getClient();
 const PENDING_REVIEW_STATUSES = Object.freeze(["PENDING", "IN_PROGRESS", "DRAFT", "SUBMITTED"]);
 const REVIEW_PHASE_NAMES = Object.freeze([
@@ -648,6 +648,7 @@ getChallengePhase.schema = {
  * @param {Object} data the partial phase update
  * @returns {Object} the updated challengePhase
  * @throws {ForbiddenError} when the current user cannot modify the challenge
+ * @throws {BadRequestError} when phase schedule shortening violates track or timing rules
  */
 async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data) {
   const challenge = await getChallengeForPhaseAccess(challengeId);
@@ -917,11 +918,13 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       }
     }
   }
-  phaseHelper.validateActivePhaseScheduledEndDateChange(
-    challengePhase,
-    data.scheduledEndDate,
-    { allowActivePhaseShortening: phaseHelper.isDesignTrack(challenge.track) }
-  );
+  const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
+  const preventPhaseShortening =
+    challenge.status === ChallengeStatusEnum.ACTIVE && !allowActivePhaseShortening;
+  phaseHelper.validateActivePhaseScheduledEndDateChange(challengePhase, data.scheduledEndDate, {
+    allowActivePhaseShortening,
+    preventPhaseShortening,
+  });
   const dataToUpdate = _.omit(data, "constraints");
   const shouldRefreshPhaseNames =
     Object.prototype.hasOwnProperty.call(data, "isOpen") ||

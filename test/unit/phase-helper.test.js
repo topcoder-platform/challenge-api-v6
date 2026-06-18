@@ -1,5 +1,6 @@
 const chai = require('chai')
 
+require('../../app-bootstrap')
 const phaseHelper = require('../../src/common/phase-helper')
 
 chai.should()
@@ -289,17 +290,114 @@ describe('phase helper unit tests', () => {
     updatedPhases[1].scheduledStartDate.should.equal(shortenedRegistrationEndDate)
   })
 
+  it('allows future Design phases to be shortened to a future end date', async () => {
+    const registrationPhaseId = 'design-registration-phase'
+    const reviewPhaseId = 'design-review-phase'
+    const registrationDuration = 2 * 24 * 60 * 60
+    const reviewDuration = 5 * 24 * 60 * 60
+    const registrationStartDate = '2099-05-26T05:14:00.000Z'
+    const registrationEndDate = '2099-05-28T05:14:00.000Z'
+    const currentReviewEndDate = '2099-06-02T05:14:00.000Z'
+    const shortenedReviewEndDate = '2099-05-30T05:14:00.000Z'
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: reviewPhaseId, name: 'Review', description: 'Review phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: registrationDuration },
+        {
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          defaultDuration: reviewDuration
+        }
+      ]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration: registrationDuration,
+          isOpen: true,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          scheduledStartDate: registrationStartDate,
+          scheduledEndDate: registrationEndDate
+        },
+        {
+          duration: reviewDuration,
+          name: 'Review',
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          scheduledStartDate: registrationEndDate,
+          scheduledEndDate: currentReviewEndDate
+        }
+      ],
+      [
+        {
+          phaseId: reviewPhaseId,
+          scheduledEndDate: shortenedReviewEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      { allowActivePhaseShortening: true }
+    )
+
+    updatedPhases[1].scheduledStartDate.should.equal(registrationEndDate)
+    updatedPhases[1].scheduledEndDate.should.equal(shortenedReviewEndDate)
+    updatedPhases[1].duration.should.equal(2 * 24 * 60 * 60)
+  })
+
+  it('keeps a persisted end date when a stale duration would imply active non-Design shortening', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const registrationStartDate = '2099-05-26T05:14:00.000Z'
+    const currentRegistrationEndDate = '2099-05-27T05:14:00.000Z'
+    const staleShortDuration = 23 * 60 * 60
+
+    stubPhaseLookups(
+      [{ id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }],
+      [{ phaseId: registrationPhaseId, defaultDuration: 6 * 24 * 60 * 60 }]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration: 24 * 60 * 60,
+          isOpen: true,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          scheduledStartDate: registrationStartDate,
+          scheduledEndDate: currentRegistrationEndDate
+        }
+      ],
+      [
+        {
+          duration: staleShortDuration,
+          phaseId: registrationPhaseId,
+          scheduledEndDate: currentRegistrationEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      {
+        allowActivePhaseShortening: false,
+        preventPhaseShortening: true
+      }
+    )
+
+    updatedPhases[0].scheduledEndDate.should.equal(currentRegistrationEndDate)
+    updatedPhases[0].duration.should.equal(24 * 60 * 60)
+  })
+
   it('rejects active phase shortening for non-Design tracks', async () => {
     const registrationPhaseId = 'development-registration-phase'
     const staleDuration = 5 * 24 * 60 * 60
 
     stubPhaseLookups(
-      [
-        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }
-      ],
-      [
-        { phaseId: registrationPhaseId, defaultDuration: staleDuration }
-      ]
+      [{ id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }],
+      [{ phaseId: registrationPhaseId, defaultDuration: staleDuration }]
     )
 
     try {
@@ -325,11 +423,142 @@ describe('phase helper unit tests', () => {
         { allowActivePhaseShortening: false }
       )
     } catch (e) {
-      e.message.should.equal('Active phases can only be shortened for Design track challenges.')
+      e.message.should.equal(
+        'Challenge phase schedules can only be shortened for Design track challenges.'
+      )
       return
     }
 
     throw new Error('should not reach here')
+  })
+
+  it('rejects future phase shortening for active non-Design challenges', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const reviewPhaseId = 'development-review-phase'
+    const registrationDuration = 2 * 24 * 60 * 60
+    const reviewDuration = 5 * 24 * 60 * 60
+    const registrationStartDate = '2099-05-26T05:14:00.000Z'
+    const registrationEndDate = '2099-05-28T05:14:00.000Z'
+    const currentReviewEndDate = '2099-06-02T05:14:00.000Z'
+    const shortenedReviewEndDate = '2099-05-30T05:14:00.000Z'
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: reviewPhaseId, name: 'Review', description: 'Review phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: registrationDuration },
+        {
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          defaultDuration: reviewDuration
+        }
+      ]
+    )
+
+    try {
+      await phaseHelper.populatePhasesForChallengeUpdate(
+        [
+          {
+            duration: registrationDuration,
+            isOpen: true,
+            name: 'Registration',
+            phaseId: registrationPhaseId,
+            scheduledStartDate: registrationStartDate,
+            scheduledEndDate: registrationEndDate
+          },
+          {
+            duration: reviewDuration,
+            name: 'Review',
+            phaseId: reviewPhaseId,
+            predecessor: registrationPhaseId,
+            scheduledStartDate: registrationEndDate,
+            scheduledEndDate: currentReviewEndDate
+          }
+        ],
+        [
+          {
+            phaseId: reviewPhaseId,
+            scheduledEndDate: shortenedReviewEndDate
+          }
+        ],
+        'timeline-template-id',
+        false,
+        {
+          allowActivePhaseShortening: false,
+          preventPhaseShortening: true
+        }
+      )
+    } catch (e) {
+      e.message.should.equal(
+        'Challenge phase schedules can only be shortened for Design track challenges.'
+      )
+      return
+    }
+
+    throw new Error('should not reach here')
+  })
+
+  it('allows future non-Design phases to be shortened before launch', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const reviewPhaseId = 'development-review-phase'
+    const registrationDuration = 2 * 24 * 60 * 60
+    const reviewDuration = 5 * 24 * 60 * 60
+    const registrationStartDate = '2099-05-26T05:14:00.000Z'
+    const registrationEndDate = '2099-05-28T05:14:00.000Z'
+    const currentReviewEndDate = '2099-06-02T05:14:00.000Z'
+    const shortenedReviewEndDate = '2099-05-30T05:14:00.000Z'
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: reviewPhaseId, name: 'Review', description: 'Review phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: registrationDuration },
+        {
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          defaultDuration: reviewDuration
+        }
+      ]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration: registrationDuration,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          scheduledStartDate: registrationStartDate,
+          scheduledEndDate: registrationEndDate
+        },
+        {
+          duration: reviewDuration,
+          name: 'Review',
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          scheduledStartDate: registrationEndDate,
+          scheduledEndDate: currentReviewEndDate
+        }
+      ],
+      [
+        {
+          phaseId: reviewPhaseId,
+          scheduledEndDate: shortenedReviewEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      {
+        allowActivePhaseShortening: false,
+        preventPhaseShortening: false
+      }
+    )
+
+    updatedPhases[1].scheduledEndDate.should.equal(shortenedReviewEndDate)
+    updatedPhases[1].duration.should.equal(2 * 24 * 60 * 60)
   })
 
   it('rejects active phase end dates before the current date/time', async () => {
@@ -341,12 +570,8 @@ describe('phase helper unit tests', () => {
     const staleDuration = 24 * 60 * 60
 
     stubPhaseLookups(
-      [
-        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }
-      ],
-      [
-        { phaseId: registrationPhaseId, defaultDuration: staleDuration }
-      ]
+      [{ id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }],
+      [{ phaseId: registrationPhaseId, defaultDuration: staleDuration }]
     )
 
     try {
@@ -372,9 +597,7 @@ describe('phase helper unit tests', () => {
         { allowActivePhaseShortening: true }
       )
     } catch (e) {
-      e.message.should.equal(
-        'Active phase scheduledEndDate cannot be set before the current date/time.'
-      )
+      e.message.should.equal('Phase scheduledEndDate cannot be set before the current date/time.')
       return
     }
 
