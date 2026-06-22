@@ -902,7 +902,20 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   // Update ChallengePhase
   const currentUserId = String(currentUser.userId);
   data.updatedBy = currentUserId;
-  if (!_.isNil(data.duration)) {
+  if (!_.isNil(data.scheduledEndDate)) {
+    const startInput = !_.isNil(data.scheduledStartDate)
+      ? data.scheduledStartDate
+      : !_.isNil(challengePhase.scheduledStartDate)
+        ? challengePhase.scheduledStartDate
+        : null;
+    if (startInput) {
+      const startDate = new Date(startInput);
+      const endDate = new Date(data.scheduledEndDate);
+      if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+        data.duration = Math.floor((endDate.getTime() - startDate.getTime()) / 1000);
+      }
+    }
+  } else if (!_.isNil(data.duration)) {
     const startInput = !_.isNil(data.scheduledStartDate)
       ? data.scheduledStartDate
       : !_.isNil(challengePhase.scheduledStartDate)

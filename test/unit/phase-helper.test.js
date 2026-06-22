@@ -103,10 +103,10 @@ describe('phase helper unit tests', () => {
   it('matches launched phase updates by challenge phase id before phase definition id', async () => {
     const sharedPhaseId = 'shared-registration-phase'
     const staleDuration = 120 * 60 * 60
-    const firstPhaseStartDate = '2026-06-15T09:29:45.575Z'
-    const secondPhaseStartDate = '2026-06-15T09:29:45.576Z'
-    const firstPhaseEndDate = '2026-06-20T10:14:45.575Z'
-    const secondPhaseEndDate = '2026-06-20T11:44:45.576Z'
+    const firstPhaseStartDate = '2099-06-15T09:29:45.575Z'
+    const secondPhaseStartDate = '2099-06-15T09:29:45.576Z'
+    const firstPhaseEndDate = '2099-06-20T10:14:45.575Z'
+    const secondPhaseEndDate = '2099-06-20T11:44:45.576Z'
 
     stubPhaseLookups(
       [{ id: sharedPhaseId, name: 'Registration', description: 'Registration phase' }],
@@ -122,7 +122,7 @@ describe('phase helper unit tests', () => {
           phaseId: sharedPhaseId,
           isOpen: true,
           scheduledStartDate: firstPhaseStartDate,
-          scheduledEndDate: '2026-06-20T09:29:45.575Z',
+          scheduledEndDate: '2099-06-20T09:29:45.575Z',
           actualStartDate: firstPhaseStartDate,
           actualEndDate: null
         },
@@ -133,7 +133,7 @@ describe('phase helper unit tests', () => {
           phaseId: sharedPhaseId,
           isOpen: true,
           scheduledStartDate: secondPhaseStartDate,
-          scheduledEndDate: '2026-06-20T09:29:45.576Z',
+          scheduledEndDate: '2099-06-20T09:29:45.576Z',
           actualStartDate: secondPhaseStartDate,
           actualEndDate: null
         }

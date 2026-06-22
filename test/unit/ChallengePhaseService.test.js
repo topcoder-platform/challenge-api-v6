@@ -391,6 +391,28 @@ describe('challenge phase service unit tests', () => {
       )
     })
 
+    it('partially update challenge phase - explicit scheduledEndDate wins over stale duration', async function () {
+      this.timeout(50000)
+      const scheduledStartDate = '2025-01-01T00:00:00.000Z'
+      const scheduledEndDate = new Date(
+        new Date(scheduledStartDate).getTime() + 7200 * 1000
+      ).toISOString()
+      const challengePhase = await service.partiallyUpdateChallengePhase(
+        authUser,
+        data.challenge.id,
+        data.challengePhase1Id,
+        {
+          duration: 3600,
+          scheduledEndDate,
+          scheduledStartDate
+        }
+      )
+
+      should.equal(new Date(challengePhase.scheduledStartDate).toISOString(), scheduledStartDate)
+      should.equal(new Date(challengePhase.scheduledEndDate).toISOString(), scheduledEndDate)
+      should.equal(challengePhase.duration, 7200)
+    })
+
     it('partially update challenge phase - closing sets actual end date', async () => {
       await prisma.challengePhase.update({
         where: { id: data.challengePhase1Id },
