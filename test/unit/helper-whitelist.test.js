@@ -22,4 +22,8 @@ describe("challenge whitelist helper", () => {
       }),
     ).to.equal(true);
   });
+
+  it("does not apply challenge group checks to M2M callers", async () => {
+    await helper.ensureAccessibleByGroupsAccess({ isMachine: true }, { groups: ["private-group"] });
+  });
 });

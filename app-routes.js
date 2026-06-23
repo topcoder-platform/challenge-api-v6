@@ -13,6 +13,85 @@ const logger = require("./src/common/logger");
 const routes = require("./src/routes");
 const authenticator = require("tc-core-library-js").middleware.jwtAuthenticator;
 
+/**
+ * Returns whether a normalized auth user has interactive roles.
+ *
+ * @param {Object} authUser the decoded auth user from the authenticator
+ * @returns {Boolean} true when the caller has one or more user roles
+ */
+function hasInteractiveRoles(authUser) {
+  const roles = _.get(authUser, "roles");
+  return _.isArray(roles) ? roles.length > 0 : !!roles;
+}
+
+/**
+ * Read the scope claim from an auth user.
+ *
+ * The shared authenticator normally copies Auth0's `scope` string into
+ * `scopes`, but this also handles callers already carrying either shape.
+ *
+ * @param {Object} authUser the decoded auth user from the authenticator
+ * @returns {Array|String|undefined} scopes from the token
+ */
+function getAuthUserScopes(authUser) {
+  if (!authUser) {
+    return undefined;
+  }
+  return (
+    authUser.scopes ||
+    _.find(authUser, (value, key) => {
+      return key.indexOf("scope") !== -1;
+    })
+  );
+}
+
+/**
+ * Determine whether an auth user represents an M2M caller.
+ *
+ * Some valid client-credentials tokens are decoded with scopes but without the
+ * `isMachine` flag. Treat no-role scoped callers as M2M so route-level scope
+ * checks, not user group membership, decide access.
+ *
+ * @param {Object} authUser the decoded auth user from the authenticator
+ * @returns {Boolean} true when the caller should be handled as M2M
+ */
+function isM2MAuthUser(authUser) {
+  return !!(
+    authUser &&
+    (_.get(authUser, "isMachine", false) ||
+      (getAuthUserScopes(authUser) && !hasInteractiveRoles(authUser)))
+  );
+}
+
+/**
+ * Check whether an M2M caller has any scope required by the route definition.
+ *
+ * @param {Object} def route definition from src/routes.js
+ * @param {Object} authUser the decoded auth user from the authenticator
+ * @returns {Boolean} true when one required route scope is present
+ */
+function hasRequiredM2MScopes(def, authUser) {
+  const scopes = getAuthUserScopes(authUser);
+  return !!(def.scopes && scopes && helper.checkIfExists(def.scopes, scopes));
+}
+
+/**
+ * Normalize a valid M2M caller to the shape expected by service authorization.
+ *
+ * @param {Object} def route definition from src/routes.js
+ * @param {Object} authUser the decoded auth user from the authenticator
+ * @returns {Boolean} true when the caller has required M2M scopes
+ */
+function normalizeM2MAuthUser(def, authUser) {
+  if (!isM2MAuthUser(authUser) || !hasRequiredM2MScopes(def, authUser)) {
+    return false;
+  }
+  const scopes = getAuthUserScopes(authUser);
+  authUser.isMachine = true;
+  authUser.scopes = _.isString(scopes) ? scopes.split(" ") : scopes;
+  return true;
+}
+
 const sanitizeForLog = (value) => {
   const seen = new WeakSet();
   try {
@@ -43,7 +122,7 @@ const getSignature = (req) => req.signature || req._reqLogId || "no-signature";
  * Configure all routes for express app
  * @param app the express app
  */
-module.exports = (app) => {
+function configureRoutes(app) {
   // Load all routes
   _.each(routes, (verbs, path) => {
     _.each(verbs, (def, verb) => {
@@ -82,17 +161,19 @@ module.exports = (app) => {
         });
 
         actions.push((req, res, next) => {
-          if (req.authUser.isMachine) {
+          if (isM2MAuthUser(req.authUser)) {
             // M2M
-            if (!req.authUser.scopes || !helper.checkIfExists(def.scopes, req.authUser.scopes)) {
+            if (!normalizeM2MAuthUser(def, req.authUser)) {
               logger.warn(
                 `[${getSignature(req)}] Machine token scope mismatch. required=${safeInspect(
                   def.scopes
-                )} provided=${safeInspect(req.authUser.scopes)}`
+                )} provided=${safeInspect(getAuthUserScopes(req.authUser))}`
               );
-              next(new errors.ForbiddenError(`You are not allowed to perform this action, because the scopes are incorrect. \
+              next(
+                new errors.ForbiddenError(`You are not allowed to perform this action, because the scopes are incorrect. \
                                               Required scopes: ${JSON.stringify(def.scopes)} \
-                                              Provided scopes: ${JSON.stringify(req.authUser.scopes)}`));
+                                              Provided scopes: ${JSON.stringify(getAuthUserScopes(req.authUser))}`)
+              );
             } else {
               req.authUser.handle = config.M2M_AUDIT_HANDLE;
               req.authUser.userId = config.M2M_AUDIT_USERID;
@@ -120,9 +201,11 @@ module.exports = (app) => {
                     def.access
                   )} provided=${safeInspect(req.authUser.roles)}`
                 );
-                next(new errors.ForbiddenError(`You are not allowed to perform this action, because the roles are incorrect. \
+                next(
+                  new errors.ForbiddenError(`You are not allowed to perform this action, because the roles are incorrect. \
                                                 Required roles: ${JSON.stringify(def.access)} \
-                                                Provided roles: ${JSON.stringify(req.authUser.roles)}`));
+                                                Provided roles: ${JSON.stringify(req.authUser.roles)}`)
+                );
               } else {
                 // user token is used in create/update challenge to ensure user can create/update challenge under specific project
                 req.userToken = req.headers.authorization.split(" ")[1];
@@ -135,8 +218,12 @@ module.exports = (app) => {
               }
             } else {
               logger.warn(`[${getSignature(req)}] Authenticated user missing roles`);
-              next(new errors.ForbiddenError("You are not authorized to perform this action, \
-                                             because no roles were provided"));
+              next(
+                new errors.ForbiddenError(
+                  "You are not authorized to perform this action, \
+                                             because no roles were provided"
+                )
+              );
             }
           }
         });
@@ -178,12 +265,8 @@ module.exports = (app) => {
           if (!req.authUser) {
             logger.info(`[${getSignature(req)}] Public route: no authUser context`);
             next();
-          } else if (req.authUser.isMachine) {
-            if (
-              !def.scopes ||
-              !req.authUser.scopes ||
-              !helper.checkIfExists(def.scopes, req.authUser.scopes)
-            ) {
+          } else if (isM2MAuthUser(req.authUser)) {
+            if (!normalizeM2MAuthUser(def, req.authUser)) {
               logger.info(
                 `[${getSignature(req)}] Public route: preserving machine token whitelist bypass despite scope mismatch`
               );
@@ -242,4 +325,13 @@ module.exports = (app) => {
       });
     }
   });
+}
+
+module.exports = configureRoutes;
+module.exports.__testables = {
+  getAuthUserScopes,
+  hasInteractiveRoles,
+  hasRequiredM2MScopes,
+  isM2MAuthUser,
+  normalizeM2MAuthUser,
 };
