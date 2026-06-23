@@ -11,12 +11,13 @@ const logger = require("../common/logger");
 const errors = require("../common/errors");
 const constants = require("../../app-constants");
 const { getReviewClient } = require("../common/review-prisma");
+const phaseHelper = require("../common/phase-helper");
 const {
   indexChallengeAndPostToKafka,
   ensureAIPhaseCanBeClosed,
 } = require("./ChallengeService");
 
-const { getClient } = require("../common/prisma");
+const { getClient, ChallengeStatusEnum } = require("../common/prisma");
 const prisma = getClient();
 const PENDING_REVIEW_STATUSES = Object.freeze(["PENDING", "IN_PROGRESS", "DRAFT", "SUBMITTED"]);
 const REVIEW_PHASE_NAMES = Object.freeze([
@@ -48,18 +49,6 @@ function datesAreSame(dateA, dateB) {
     return false;
   }
   return new Date(dateA).getTime() === new Date(dateB).getTime();
-}
-
-function dateIsAfter(dateA, dateB) {
-  if (_.isNil(dateA) || _.isNil(dateB)) {
-    return false;
-  }
-  const timeA = new Date(dateA).getTime();
-  const timeB = new Date(dateB).getTime();
-  if (Number.isNaN(timeA) || Number.isNaN(timeB)) {
-    return false;
-  }
-  return timeA > timeB;
 }
 
 function buildPhaseIdentifiers(phase) {
@@ -479,13 +468,13 @@ async function hasPendingEscalationRequestsForChallenge(challengeId) {
 /**
  * Load a challenge for challenge-scoped phase operations.
  * @param {String} challengeId the challenge id
- * @returns {Object} the challenge with the given id and type metadata
+ * @returns {Object} the challenge with the given id and type/track metadata
  * @throws {NotFoundError} when the challenge does not exist
  */
 async function getChallengeForPhaseAccess(challengeId) {
   const challenge = await prisma.challenge.findUnique({
     where: { id: challengeId },
-    include: { type: true },
+    include: { track: true, type: true },
   });
   if (!challenge) {
     throw new errors.NotFoundError(`Challenge with id: ${challengeId} doesn't exist`);
@@ -659,6 +648,7 @@ getChallengePhase.schema = {
  * @param {Object} data the partial phase update
  * @returns {Object} the updated challengePhase
  * @throws {ForbiddenError} when the current user cannot modify the challenge
+ * @throws {BadRequestError} when phase schedule shortening violates track or timing rules
  */
 async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data) {
   const challenge = await getChallengeForPhaseAccess(challengeId);
@@ -912,7 +902,20 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   // Update ChallengePhase
   const currentUserId = String(currentUser.userId);
   data.updatedBy = currentUserId;
-  if (!_.isNil(data.duration)) {
+  if (!_.isNil(data.scheduledEndDate)) {
+    const startInput = !_.isNil(data.scheduledStartDate)
+      ? data.scheduledStartDate
+      : !_.isNil(challengePhase.scheduledStartDate)
+        ? challengePhase.scheduledStartDate
+        : null;
+    if (startInput) {
+      const startDate = new Date(startInput);
+      const endDate = new Date(data.scheduledEndDate);
+      if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime())) {
+        data.duration = Math.floor((endDate.getTime() - startDate.getTime()) / 1000);
+      }
+    }
+  } else if (!_.isNil(data.duration)) {
     const startInput = !_.isNil(data.scheduledStartDate)
       ? data.scheduledStartDate
       : !_.isNil(challengePhase.scheduledStartDate)
@@ -928,6 +931,17 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       }
     }
   }
+  const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
+  const preventPhaseShortening =
+    challenge.status === ChallengeStatusEnum.ACTIVE && !allowActivePhaseShortening;
+  const requestedScheduledStartDate = !_.isNil(data.scheduledStartDate)
+    ? data.scheduledStartDate
+    : challengePhase.scheduledStartDate;
+  phaseHelper.validateActivePhaseScheduledEndDateChange(challengePhase, data.scheduledEndDate, {
+    allowActivePhaseShortening,
+    preventPhaseShortening,
+    requestedScheduledStartDate,
+  });
   const dataToUpdate = _.omit(data, "constraints");
   const shouldRefreshPhaseNames =
     Object.prototype.hasOwnProperty.call(data, "isOpen") ||
@@ -939,10 +953,10 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
         id: challengePhase.id,
       },
     });
-    let scheduleExtended = false;
+    let scheduleEndChanged = false;
     if (shouldAttemptSuccessorRecalc) {
-      scheduleExtended = dateIsAfter(updatedPhase.scheduledEndDate, originalScheduledEndDate);
-      if (scheduleExtended) {
+      scheduleEndChanged = !datesAreSame(updatedPhase.scheduledEndDate, originalScheduledEndDate);
+      if (scheduleEndChanged) {
         await recalculateDependentPhaseDates(tx, challengeId, updatedPhase, currentUserId);
       }
     }
@@ -952,7 +966,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       !_.isNil(updatedPhase.actualEndDate)
     ) {
       const shiftBaselineScheduledEndDate =
-        scheduleExtended && !_.isNil(updatedPhase.scheduledEndDate)
+        scheduleEndChanged && !_.isNil(updatedPhase.scheduledEndDate)
           ? updatedPhase.scheduledEndDate
           : originalScheduledEndDate;
       const scheduledEndTime = new Date(shiftBaselineScheduledEndDate).getTime();
