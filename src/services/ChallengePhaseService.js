@@ -934,9 +934,13 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
   const preventPhaseShortening =
     challenge.status === ChallengeStatusEnum.ACTIVE && !allowActivePhaseShortening;
+  const requestedScheduledStartDate = !_.isNil(data.scheduledStartDate)
+    ? data.scheduledStartDate
+    : challengePhase.scheduledStartDate;
   phaseHelper.validateActivePhaseScheduledEndDateChange(challengePhase, data.scheduledEndDate, {
     allowActivePhaseShortening,
     preventPhaseShortening,
+    requestedScheduledStartDate,
   });
   const dataToUpdate = _.omit(data, "constraints");
   const shouldRefreshPhaseNames =

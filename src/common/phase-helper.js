@@ -47,6 +47,21 @@ function isDesignTrack(track) {
 }
 
 /**
+ * Resolve the requested scheduled start date from a phase update payload.
+ *
+ * @param {Object} phase existing challenge phase
+ * @param {Object|null|undefined} newPhase phase update payload
+ * @returns {Date|String|undefined} requested scheduled start date, falling back to current start
+ */
+function resolveRequestedScheduledStartDate(phase, newPhase) {
+  if (_.isNil(newPhase) || _.isNil(_.get(newPhase, "scheduledStartDate"))) {
+    return _.get(phase, "scheduledStartDate");
+  }
+
+  return _.get(newPhase, "scheduledStartDate");
+}
+
+/**
  * Resolve the requested scheduled end date from a phase update payload.
  *
  * @param {Object} phase existing challenge phase
@@ -63,16 +78,45 @@ function resolveRequestedScheduledEndDate(phase, newPhase) {
   }
 
   const requestedDuration = _.get(newPhase, "duration");
-  if (_.isNil(requestedDuration) || _.isNil(phase.scheduledStartDate)) {
+  const requestedScheduledStartDate = resolveRequestedScheduledStartDate(phase, newPhase);
+  if (_.isNil(requestedDuration) || _.isNil(requestedScheduledStartDate)) {
     return undefined;
   }
 
-  const scheduledStart = moment(phase.scheduledStartDate);
+  const scheduledStart = moment(requestedScheduledStartDate);
   if (!scheduledStart.isValid()) {
     return undefined;
   }
 
   return scheduledStart.add(requestedDuration, "seconds").toDate().toISOString();
+}
+
+/**
+ * Check whether a requested schedule reduces the phase duration.
+ *
+ * @param {Object} phase existing challenge phase
+ * @param {Date|String|null|undefined} requestedScheduledStartDate requested phase start date
+ * @param {Date|String} requestedScheduledEndDate requested phase end date
+ * @returns {Boolean} true when requested duration is shorter than persisted duration
+ */
+function isPhaseDurationShortened(phase, requestedScheduledStartDate, requestedScheduledEndDate) {
+  const currentStart = moment(phase.scheduledStartDate);
+  const currentEnd = moment(phase.scheduledEndDate);
+  const requestedStart = moment(
+    _.defaultTo(requestedScheduledStartDate, phase.scheduledStartDate)
+  );
+  const requestedEnd = moment(requestedScheduledEndDate);
+
+  if (
+    !currentStart.isValid() ||
+    !currentEnd.isValid() ||
+    !requestedStart.isValid() ||
+    !requestedEnd.isValid()
+  ) {
+    return requestedEnd.isBefore(currentEnd);
+  }
+
+  return requestedEnd.diff(requestedStart, "seconds") < currentEnd.diff(currentStart, "seconds");
 }
 
 /**
@@ -83,6 +127,7 @@ function resolveRequestedScheduledEndDate(phase, newPhase) {
  * @param {Object} options validation options
  * @param {Boolean} options.allowActivePhaseShortening whether Design track phase shortening is allowed
  * @param {Boolean} options.preventPhaseShortening whether shortening is guarded for all incomplete phases
+ * @param {Date|String|null|undefined} options.requestedScheduledStartDate requested scheduled start date
  * @returns {undefined} validates only
  * @throws {BadRequestError} when phase shortening is disallowed or would end in the past
  */
@@ -116,7 +161,14 @@ function validateActivePhaseScheduledEndDateChange(
     phase.isOpen === true ||
     options.allowActivePhaseShortening === true ||
     options.preventPhaseShortening === true;
-  const isShortened = hasCurrentEnd && requestedEnd.isBefore(currentEnd);
+  const isShortened =
+    hasCurrentEnd &&
+    requestedEnd.isBefore(currentEnd) &&
+    isPhaseDurationShortened(
+      phase,
+      options.requestedScheduledStartDate,
+      requestedScheduledEndDate
+    );
 
   if (shouldValidatePhaseEnd && requestedEnd.isBefore(moment())) {
     throw new errors.BadRequestError(
@@ -335,7 +387,10 @@ class ChallengePhaseHelper {
       validateActivePhaseScheduledEndDateChange(
         phase,
         resolveRequestedScheduledEndDate(phase, newPhase),
-        options
+        {
+          ...options,
+          requestedScheduledStartDate: resolveRequestedScheduledStartDate(phase, newPhase),
+        }
       );
       const templatePredecessor = _.get(phaseFromTemplate, "predecessor");
       // Prefer template predecessor only when that phase exists on the challenge, otherwise keep the stored link.
