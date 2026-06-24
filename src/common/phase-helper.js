@@ -47,51 +47,6 @@ function isDesignTrack(track) {
 }
 
 /**
- * Resolve the requested scheduled start date from a phase update payload.
- *
- * @param {Object} phase existing challenge phase
- * @param {Object|null|undefined} newPhase phase update payload
- * @returns {Date|String|undefined} requested scheduled start date, falling back to current start
- */
-function resolveRequestedScheduledStartDate(phase, newPhase) {
-  if (_.isNil(newPhase) || _.isNil(_.get(newPhase, "scheduledStartDate"))) {
-    return _.get(phase, "scheduledStartDate");
-  }
-
-  return _.get(newPhase, "scheduledStartDate");
-}
-
-/**
- * Resolve the requested scheduled end date from a phase update payload.
- *
- * @param {Object} phase existing challenge phase
- * @param {Object|null|undefined} newPhase phase update payload
- * @returns {Date|String|undefined} requested scheduled end date when the payload changes it
- */
-function resolveRequestedScheduledEndDate(phase, newPhase) {
-  if (_.isNil(newPhase)) {
-    return undefined;
-  }
-
-  if (!_.isNil(_.get(newPhase, "scheduledEndDate"))) {
-    return _.get(newPhase, "scheduledEndDate");
-  }
-
-  const requestedDuration = _.get(newPhase, "duration");
-  const requestedScheduledStartDate = resolveRequestedScheduledStartDate(phase, newPhase);
-  if (_.isNil(requestedDuration) || _.isNil(requestedScheduledStartDate)) {
-    return undefined;
-  }
-
-  const scheduledStart = moment(requestedScheduledStartDate);
-  if (!scheduledStart.isValid()) {
-    return undefined;
-  }
-
-  return scheduledStart.add(requestedDuration, "seconds").toDate().toISOString();
-}
-
-/**
  * Check whether a requested schedule reduces the phase duration.
  *
  * @param {Object} phase existing challenge phase
@@ -185,6 +140,58 @@ function validateActivePhaseScheduledEndDateChange(
       "Challenge phase schedules can only be shortened for Design track challenges."
     );
   }
+}
+
+/**
+ * Validate recalculated schedules against persisted phase schedules.
+ *
+ * @param {Array<Object>} originalPhases persisted challenge phases before the update
+ * @param {Array<Object>} updatedPhases recalculated challenge phases that will be persisted
+ * @param {Object} options validation options forwarded to the phase schedule validator
+ * @returns {undefined} validates only
+ * @throws {BadRequestError} when a recalculated schedule violates shortening rules
+ */
+function validateRecalculatedPhaseSchedules(originalPhases, updatedPhases, options = {}) {
+  const originalById = new Map();
+  const originalByPhaseId = new Map();
+
+  _.each(originalPhases, (phase) => {
+    if (_.isNil(phase)) {
+      return;
+    }
+
+    if (!_.isNil(phase.id)) {
+      originalById.set(phase.id, phase);
+    }
+    if (!_.isNil(phase.phaseId)) {
+      originalByPhaseId.set(phase.phaseId, phase);
+    }
+  });
+
+  _.each(updatedPhases, (updatedPhase) => {
+    if (_.isNil(updatedPhase)) {
+      return;
+    }
+
+    const originalPhase = (
+      !_.isNil(updatedPhase.id)
+        ? originalById.get(updatedPhase.id)
+        : undefined
+    ) || originalByPhaseId.get(updatedPhase.phaseId);
+
+    if (_.isNil(originalPhase)) {
+      return;
+    }
+
+    validateActivePhaseScheduledEndDateChange(
+      originalPhase,
+      updatedPhase.scheduledEndDate,
+      {
+        ...options,
+        requestedScheduledStartDate: updatedPhase.scheduledStartDate,
+      }
+    );
+  });
 }
 
 /**
@@ -384,14 +391,6 @@ class ChallengePhaseHelper {
       const phaseFromTemplate = timelineTemplateMap.get(phase.phaseId);
       const phaseDefinition = phaseDefinitionMap.get(phase.phaseId);
       const newPhase = findPhaseUpdate(newPhases, phase);
-      validateActivePhaseScheduledEndDateChange(
-        phase,
-        resolveRequestedScheduledEndDate(phase, newPhase),
-        {
-          ...options,
-          requestedScheduledStartDate: resolveRequestedScheduledStartDate(phase, newPhase),
-        }
-      );
       const templatePredecessor = _.get(phaseFromTemplate, "predecessor");
       // Prefer template predecessor only when that phase exists on the challenge, otherwise keep the stored link.
       const resolvedPredecessor = _.isNil(phaseFromTemplate)
@@ -485,6 +484,7 @@ class ChallengePhaseHelper {
       }
       recalculateScheduledEndDate(phase);
     }
+    validateRecalculatedPhaseSchedules(challengePhasesOrdered, updatedPhases, options);
     return _.map(updatedPhases, (phase) => _.omit(phase, "requestedScheduledEndDate"));
   }
 
