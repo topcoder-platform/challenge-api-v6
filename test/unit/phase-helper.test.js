@@ -436,6 +436,79 @@ describe('phase helper unit tests', () => {
     updatedPhases[0].duration.should.equal(duration)
   })
 
+  it('allows active non-Design dependent phases to move earlier when duration is unchanged', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const reviewPhaseId = 'development-review-phase'
+    const duration = 24 * 60 * 60
+    const currentRegistrationStartDate = '2099-05-26T05:14:00.000Z'
+    const currentRegistrationEndDate = '2099-05-27T05:14:00.000Z'
+    const currentReviewEndDate = '2099-05-28T05:14:00.000Z'
+    const requestedRegistrationStartDate = '2099-05-25T05:14:00.000Z'
+    const requestedRegistrationEndDate = '2099-05-26T05:14:00.000Z'
+    const requestedReviewEndDate = '2099-05-27T05:14:00.000Z'
+
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: reviewPhaseId, name: 'Review', description: 'Review phase' }
+      ],
+      [
+        { phaseId: registrationPhaseId, defaultDuration: duration },
+        {
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          defaultDuration: duration
+        }
+      ]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration,
+          isOpen: true,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          scheduledStartDate: currentRegistrationStartDate,
+          scheduledEndDate: currentRegistrationEndDate
+        },
+        {
+          duration,
+          name: 'Review',
+          phaseId: reviewPhaseId,
+          predecessor: registrationPhaseId,
+          scheduledStartDate: currentRegistrationEndDate,
+          scheduledEndDate: currentReviewEndDate
+        }
+      ],
+      [
+        {
+          duration,
+          phaseId: registrationPhaseId,
+          scheduledStartDate: requestedRegistrationStartDate,
+          scheduledEndDate: requestedRegistrationEndDate
+        },
+        {
+          duration,
+          phaseId: reviewPhaseId,
+          scheduledEndDate: requestedReviewEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      {
+        allowActivePhaseShortening: false,
+        preventPhaseShortening: true
+      }
+    )
+
+    updatedPhases[0].scheduledStartDate.should.equal(requestedRegistrationStartDate)
+    updatedPhases[0].scheduledEndDate.should.equal(requestedRegistrationEndDate)
+    updatedPhases[1].scheduledStartDate.should.equal(requestedRegistrationEndDate)
+    updatedPhases[1].scheduledEndDate.should.equal(requestedReviewEndDate)
+    updatedPhases[1].duration.should.equal(duration)
+  })
+
   it('rejects active non-Design phase updates that shorten duration after moving start earlier', async () => {
     const registrationPhaseId = 'development-registration-phase'
     const currentRegistrationStartDate = '2099-05-26T05:14:00.000Z'
