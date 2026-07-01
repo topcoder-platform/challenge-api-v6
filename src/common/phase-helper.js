@@ -404,8 +404,18 @@ class ChallengePhaseHelper {
         ...phase,
         predecessor: resolvedPredecessor,
         description: phaseDefinition.description,
+        requestedScheduledStartDate: _.get(newPhase, "scheduledStartDate"),
         requestedScheduledEndDate: _.get(newPhase, "scheduledEndDate"),
       };
+      if (
+        _.isNil(updatedPhase.actualEndDate) &&
+        !_.isNil(updatedPhase.actualStartDate) &&
+        !_.isNil(updatedPhase.requestedScheduledStartDate)
+      ) {
+        updatedPhase.scheduledStartDate = moment(updatedPhase.requestedScheduledStartDate)
+          .toDate()
+          .toISOString();
+      }
       if (updatedPhase.name === "Post-Mortem") {
         updatedPhase.predecessor = "a93544bc-c165-4af4-b55e-18f3593b457a";
       }
@@ -414,7 +424,7 @@ class ChallengePhaseHelper {
       }
       if (_.isNil(updatedPhase.predecessor)) {
         let scheduledStartDate = _.defaultTo(
-          _.get(newPhase, "scheduledStartDate"),
+          updatedPhase.requestedScheduledStartDate,
           updatedPhase.scheduledStartDate
         );
         if (
@@ -485,7 +495,9 @@ class ChallengePhaseHelper {
       recalculateScheduledEndDate(phase);
     }
     validateRecalculatedPhaseSchedules(challengePhasesOrdered, updatedPhases, options);
-    return _.map(updatedPhases, (phase) => _.omit(phase, "requestedScheduledEndDate"));
+    return _.map(updatedPhases, (phase) =>
+      _.omit(phase, ["requestedScheduledStartDate", "requestedScheduledEndDate"])
+    );
   }
 
   handlePhasesAfterCancelling(phases) {

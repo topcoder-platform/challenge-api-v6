@@ -436,6 +436,53 @@ describe('phase helper unit tests', () => {
     updatedPhases[0].duration.should.equal(duration)
   })
 
+  it('allows started non-Design phase schedule to move earlier when duration is unchanged', async () => {
+    const registrationPhaseId = 'development-registration-phase'
+    const currentRegistrationStartDate = '2099-05-26T05:14:00.000Z'
+    const currentRegistrationEndDate = '2099-05-31T05:14:00.000Z'
+    const requestedRegistrationStartDate = '2099-05-25T05:14:00.000Z'
+    const requestedRegistrationEndDate = '2099-05-30T05:14:00.000Z'
+    const duration = 5 * 24 * 60 * 60
+
+    stubPhaseLookups(
+      [{ id: registrationPhaseId, name: 'Registration', description: 'Registration phase' }],
+      [{ phaseId: registrationPhaseId, defaultDuration: duration }]
+    )
+
+    const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+      [
+        {
+          duration,
+          isOpen: true,
+          name: 'Registration',
+          phaseId: registrationPhaseId,
+          actualStartDate: requestedRegistrationStartDate,
+          scheduledStartDate: currentRegistrationStartDate,
+          scheduledEndDate: currentRegistrationEndDate
+        }
+      ],
+      [
+        {
+          duration,
+          phaseId: registrationPhaseId,
+          scheduledStartDate: requestedRegistrationStartDate,
+          scheduledEndDate: requestedRegistrationEndDate
+        }
+      ],
+      'timeline-template-id',
+      false,
+      {
+        allowActivePhaseShortening: false,
+        preventPhaseShortening: true
+      }
+    )
+
+    updatedPhases[0].actualStartDate.should.equal(requestedRegistrationStartDate)
+    updatedPhases[0].scheduledStartDate.should.equal(requestedRegistrationStartDate)
+    updatedPhases[0].scheduledEndDate.should.equal(requestedRegistrationEndDate)
+    updatedPhases[0].duration.should.equal(duration)
+  })
+
   it('allows active non-Design dependent phases to move earlier when duration is unchanged', async () => {
     const registrationPhaseId = 'development-registration-phase'
     const reviewPhaseId = 'development-review-phase'
