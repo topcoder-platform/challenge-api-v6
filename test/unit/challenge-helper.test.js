@@ -159,3 +159,30 @@ describe('challenge response helper', () => {
     challenge.submissionEndDate.should.equal(submissionEndDate)
   })
 })
+
+describe("challenge metadata validation", () => {
+  it("allows supported submission_type metadata values", () => {
+    expect(() => challengeHelper.validateSubmissionTypeMetadata([
+      {
+        name: "submission_type",
+        value: "zip",
+      },
+    ])).not.to.throw();
+
+    expect(() => challengeHelper.validateSubmissionTypeMetadata([
+      {
+        name: "submission_type",
+        value: "url",
+      },
+    ])).not.to.throw();
+  });
+
+  it("rejects unsupported submission_type metadata values", () => {
+    expect(() => challengeHelper.validateSubmissionTypeMetadata([
+      {
+        name: "submission_type",
+        value: "artifact",
+      },
+    ])).to.throw("metadata submission_type must be either zip or url");
+  });
+});

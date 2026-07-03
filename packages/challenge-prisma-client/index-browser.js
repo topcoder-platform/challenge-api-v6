@@ -152,6 +152,9 @@ exports.Prisma.ChallengeScalarFieldEnum = {
   endDate: 'endDate',
   legacyId: 'legacyId',
   status: 'status',
+  approvalStatus: 'approvalStatus',
+  approvalRejectionReason: 'approvalRejectionReason',
+  approvalApprovedBy: 'approvalApprovedBy',
   createdAt: 'createdAt',
   createdBy: 'createdBy',
   updatedAt: 'updatedAt',
@@ -520,6 +523,8 @@ exports.Prisma.ChallengeOrderByRelevanceFieldEnum = {
   tags: 'tags',
   groups: 'groups',
   taskMemberId: 'taskMemberId',
+  approvalRejectionReason: 'approvalRejectionReason',
+  approvalApprovedBy: 'approvalApprovedBy',
   createdBy: 'createdBy',
   updatedBy: 'updatedBy'
 };
@@ -770,6 +775,12 @@ exports.ChallengeStatusEnum = exports.$Enums.ChallengeStatusEnum = {
   CANCELLED_REQUIREMENTS_INFEASIBLE: 'CANCELLED_REQUIREMENTS_INFEASIBLE',
   CANCELLED_ZERO_REGISTRATIONS: 'CANCELLED_ZERO_REGISTRATIONS',
   CANCELLED_PAYMENT_FAILED: 'CANCELLED_PAYMENT_FAILED'
+};
+
+exports.ChallengeApprovalStatusEnum = exports.$Enums.ChallengeApprovalStatusEnum = {
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
 };
 
 exports.ChallengeTrackEnum = exports.$Enums.ChallengeTrackEnum = {

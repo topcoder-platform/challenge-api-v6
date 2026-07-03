@@ -28,7 +28,8 @@ function hasInteractiveRoles(authUser) {
  * Read the scope claim from an auth user.
  *
  * The shared authenticator normally copies Auth0's `scope` string into
- * `scopes`, but this also handles callers already carrying either shape.
+ * `scopes`, but this also handles callers already carrying either shape or
+ * Auth0 RBAC `permissions`.
  *
  * @param {Object} authUser the decoded auth user from the authenticator
  * @returns {Array|String|undefined} scopes from the token
@@ -39,6 +40,7 @@ function getAuthUserScopes(authUser) {
   }
   return (
     authUser.scopes ||
+    authUser.permissions ||
     _.find(authUser, (value, key) => {
       return key.indexOf("scope") !== -1;
     })

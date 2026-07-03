@@ -312,6 +312,9 @@ Refer to the verification document `Verification.md`
   - Manage attachments: `POST /v6/challenges/{id}/attachments`, `DELETE /v6/challenges/{id}/attachments/{attachmentId}`. See `work-manager/src/services/challenges.js`.
   - Default reviewers: `GET /v6/challenge/default-reviewers?typeId&trackId`. See `work-manager/src/services/challenges.js`.
   - Challenge metadata: `GET /v6/challenge-types`, `GET /v6/challenge-tracks`, `GET /v6/challenge-phases`, `GET /v6/challenge-timelines`. See `work-manager/src/services/challenges.js` and config under `work-manager/config/constants/*`.
+- Challenge `metadata` may include `submission_type` to override the community-app submission flow:
+  `zip` shows the standard Topcoder zip upload page, and `url` shows the Topgear URL upload page.
+  When omitted, consumers should keep their existing default behavior.
 - API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.

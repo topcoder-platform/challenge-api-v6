@@ -2585,10 +2585,10 @@ definitions:
           properties:
             name:
               type: string
-              description: The sample metadata type
+              description: Metadata name. Use submission_type to override the challenge submission flow.
             value:
               type: string
-              description: The sample metadata value
+              description: Metadata value. For submission_type, supported values are zip and url.
           required:
             - name
             - value
@@ -2871,10 +2871,10 @@ definitions:
           properties:
             name:
               type: string
-              description: The sample metadata type
+              description: Metadata name. Use submission_type to override the challenge submission flow.
             value:
               type: string
-              description: The sample metadata value
+              description: Metadata value. For submission_type, supported values are zip and url.
           required:
             - name
             - value
@@ -3042,10 +3042,10 @@ definitions:
           properties:
             name:
               type: string
-              description: The sample metadata type
+              description: Metadata name. Use submission_type to override the challenge submission flow.
             value:
               type: string
-              description: The sample metadata value
+              description: Metadata value. For submission_type, supported values are zip and url.
           required:
             - name
             - value
@@ -3258,10 +3258,10 @@ definitions:
           properties:
             name:
               type: string
-              description: The sample metadata type
+              description: Metadata name. Use submission_type to override the challenge submission flow.
             value:
               type: string
-              description: The sample metadata value
+              description: Metadata value. For submission_type, supported values are zip and url.
           required:
             - name
             - value

@@ -16,6 +16,8 @@ const { ChallengeStatusEnum } = require("@prisma/client");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
+const SUBMISSION_TYPE_METADATA_FIELD = "submission_type";
+const VALID_SUBMISSION_TYPES = ["url", "zip"];
 
 class ChallengeHelper {
   /**
@@ -105,6 +107,32 @@ class ChallengeHelper {
       );
     });
     await Promise.all(promises);
+  }
+
+  /**
+   * Validate the metadata-backed challenge submission type.
+   * The `submission_type` metadata entry is optional, but when it is present it
+   * must select one of the two supported community-app submission flows.
+   *
+   * @param {Array<Object>|undefined} metadata challenge metadata entries
+   * @throws {BadRequestError} if `submission_type` is present with an unsupported value
+   */
+  validateSubmissionTypeMetadata(metadata) {
+    if (_.isNil(metadata)) {
+      return;
+    }
+
+    const submissionTypeEntry = _.find(metadata, { name: SUBMISSION_TYPE_METADATA_FIELD });
+    if (_.isNil(submissionTypeEntry)) {
+      return;
+    }
+
+    const submissionType = _.toLower(_.toString(_.get(submissionTypeEntry, "value", "")).trim());
+    if (!_.includes(VALID_SUBMISSION_TYPES, submissionType)) {
+      throw new errors.BadRequestError(
+        "metadata submission_type must be either zip or url"
+      );
+    }
   }
 
   validatePrizeSetsAndGetPrizeType(prizeSets) {
@@ -203,6 +231,7 @@ class ChallengeHelper {
     helper.ensureNoDuplicateOrNullElements(challenge.groups, "groups");
     // helper.ensureNoDuplicateOrNullElements(challenge.terms, 'terms')
     // helper.ensureNoDuplicateOrNullElements(challenge.events, 'events')
+    this.validateSubmissionTypeMetadata(challenge.metadata);
 
     // check groups authorization
     if (challenge.groups && challenge.groups.length > 0) {
@@ -669,6 +698,7 @@ class ChallengeHelper {
 
     helper.ensureNoDuplicateOrNullElements(data.tags, "tags");
     helper.ensureNoDuplicateOrNullElements(data.groups, "groups");
+    this.validateSubmissionTypeMetadata(data.metadata);
 
     if (data.projectId) {
       await ChallengeHelper.ensureProjectExist(data.projectId, currentUser);
