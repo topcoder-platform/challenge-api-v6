@@ -46,6 +46,19 @@ describe("Challenge route access", () => {
     expect(authUser.scopes).to.deep.equal(["read:challenges"]);
   });
 
+  it("normalizes valid no-role permission tokens as M2M callers", () => {
+    const authUser = {
+      permissions: ["read:challenges"],
+    };
+
+    expect(__testables.isM2MAuthUser(authUser)).to.equal(true);
+    expect(
+      __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
+    ).to.equal(true);
+    expect(authUser.isMachine).to.equal(true);
+    expect(authUser.scopes).to.deep.equal(["read:challenges"]);
+  });
+
   it("does not normalize role-bearing users with scopes as M2M callers", () => {
     const authUser = {
       roles: [constants.UserRoles.User],

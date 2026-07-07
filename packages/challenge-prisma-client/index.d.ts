@@ -215,6 +215,15 @@ export const PrizeSetTypeEnum: {
 export type PrizeSetTypeEnum = (typeof PrizeSetTypeEnum)[keyof typeof PrizeSetTypeEnum]
 
 
+export const ChallengeApprovalStatusEnum: {
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
+};
+
+export type ChallengeApprovalStatusEnum = (typeof ChallengeApprovalStatusEnum)[keyof typeof ChallengeApprovalStatusEnum]
+
+
 export const ReviewOpportunityTypeEnum: {
   REGULAR_REVIEW: 'REGULAR_REVIEW',
   COMPONENT_DEV_REVIEW: 'COMPONENT_DEV_REVIEW',
@@ -246,6 +255,10 @@ export const ChallengeStatusEnum: typeof $Enums.ChallengeStatusEnum
 export type PrizeSetTypeEnum = $Enums.PrizeSetTypeEnum
 
 export const PrizeSetTypeEnum: typeof $Enums.PrizeSetTypeEnum
+
+export type ChallengeApprovalStatusEnum = $Enums.ChallengeApprovalStatusEnum
+
+export const ChallengeApprovalStatusEnum: typeof $Enums.ChallengeApprovalStatusEnum
 
 export type ReviewOpportunityTypeEnum = $Enums.ReviewOpportunityTypeEnum
 
@@ -3779,6 +3792,9 @@ export namespace Prisma {
     endDate: Date | null
     legacyId: number | null
     status: $Enums.ChallengeStatusEnum | null
+    approvalStatus: $Enums.ChallengeApprovalStatusEnum | null
+    approvalRejectionReason: string | null
+    approvalApprovedBy: string | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -3813,6 +3829,9 @@ export namespace Prisma {
     endDate: Date | null
     legacyId: number | null
     status: $Enums.ChallengeStatusEnum | null
+    approvalStatus: $Enums.ChallengeApprovalStatusEnum | null
+    approvalRejectionReason: string | null
+    approvalApprovedBy: string | null
     createdAt: Date | null
     createdBy: string | null
     updatedAt: Date | null
@@ -3850,6 +3869,9 @@ export namespace Prisma {
     endDate: number
     legacyId: number
     status: number
+    approvalStatus: number
+    approvalRejectionReason: number
+    approvalApprovedBy: number
     createdAt: number
     createdBy: number
     updatedAt: number
@@ -3904,6 +3926,9 @@ export namespace Prisma {
     endDate?: true
     legacyId?: true
     status?: true
+    approvalStatus?: true
+    approvalRejectionReason?: true
+    approvalApprovedBy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -3938,6 +3963,9 @@ export namespace Prisma {
     endDate?: true
     legacyId?: true
     status?: true
+    approvalStatus?: true
+    approvalRejectionReason?: true
+    approvalApprovedBy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -3975,6 +4003,9 @@ export namespace Prisma {
     endDate?: true
     legacyId?: true
     status?: true
+    approvalStatus?: true
+    approvalRejectionReason?: true
+    approvalApprovedBy?: true
     createdAt?: true
     createdBy?: true
     updatedAt?: true
@@ -4099,6 +4130,9 @@ export namespace Prisma {
     endDate: Date | null
     legacyId: number | null
     status: $Enums.ChallengeStatusEnum
+    approvalStatus: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason: string | null
+    approvalApprovedBy: string | null
     createdAt: Date
     createdBy: string
     updatedAt: Date
@@ -4155,6 +4189,9 @@ export namespace Prisma {
     endDate?: boolean
     legacyId?: boolean
     status?: boolean
+    approvalStatus?: boolean
+    approvalRejectionReason?: boolean
+    approvalApprovedBy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -4212,6 +4249,9 @@ export namespace Prisma {
     endDate?: boolean
     legacyId?: boolean
     status?: boolean
+    approvalStatus?: boolean
+    approvalRejectionReason?: boolean
+    approvalApprovedBy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -4252,6 +4292,9 @@ export namespace Prisma {
     endDate?: boolean
     legacyId?: boolean
     status?: boolean
+    approvalStatus?: boolean
+    approvalRejectionReason?: boolean
+    approvalApprovedBy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
@@ -4292,13 +4335,16 @@ export namespace Prisma {
     endDate?: boolean
     legacyId?: boolean
     status?: boolean
+    approvalStatus?: boolean
+    approvalRejectionReason?: boolean
+    approvalApprovedBy?: boolean
     createdAt?: boolean
     createdBy?: boolean
     updatedAt?: boolean
     updatedBy?: boolean
   }
 
-  export type ChallengeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "privateDescription" | "challengeSource" | "descriptionFormat" | "projectId" | "typeId" | "trackId" | "timelineTemplateId" | "overviewTotalPrizes" | "numOfRegistrants" | "numOfSubmissions" | "numOfCheckpointSubmissions" | "currentPhaseNames" | "wiproAllowed" | "funChallenge" | "tags" | "groups" | "taskIsTask" | "taskIsAssigned" | "taskMemberId" | "submissionStartDate" | "submissionEndDate" | "registrationStartDate" | "registrationEndDate" | "startDate" | "endDate" | "legacyId" | "status" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challenge"]>
+  export type ChallengeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "description" | "privateDescription" | "challengeSource" | "descriptionFormat" | "projectId" | "typeId" | "trackId" | "timelineTemplateId" | "overviewTotalPrizes" | "numOfRegistrants" | "numOfSubmissions" | "numOfCheckpointSubmissions" | "currentPhaseNames" | "wiproAllowed" | "funChallenge" | "tags" | "groups" | "taskIsTask" | "taskIsAssigned" | "taskMemberId" | "submissionStartDate" | "submissionEndDate" | "registrationStartDate" | "registrationEndDate" | "startDate" | "endDate" | "legacyId" | "status" | "approvalStatus" | "approvalRejectionReason" | "approvalApprovedBy" | "createdAt" | "createdBy" | "updatedAt" | "updatedBy", ExtArgs["result"]["challenge"]>
   export type ChallengeInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     billingRecord?: boolean | Challenge$billingRecordArgs<ExtArgs>
     legacyRecord?: boolean | Challenge$legacyRecordArgs<ExtArgs>
@@ -4386,6 +4432,9 @@ export namespace Prisma {
       endDate: Date | null
       legacyId: number | null
       status: $Enums.ChallengeStatusEnum
+      approvalStatus: $Enums.ChallengeApprovalStatusEnum
+      approvalRejectionReason: string | null
+      approvalApprovedBy: string | null
       createdAt: Date
       createdBy: string
       updatedAt: Date
@@ -4862,6 +4911,9 @@ export namespace Prisma {
     readonly endDate: FieldRef<"Challenge", 'DateTime'>
     readonly legacyId: FieldRef<"Challenge", 'Int'>
     readonly status: FieldRef<"Challenge", 'ChallengeStatusEnum'>
+    readonly approvalStatus: FieldRef<"Challenge", 'ChallengeApprovalStatusEnum'>
+    readonly approvalRejectionReason: FieldRef<"Challenge", 'String'>
+    readonly approvalApprovedBy: FieldRef<"Challenge", 'String'>
     readonly createdAt: FieldRef<"Challenge", 'DateTime'>
     readonly createdBy: FieldRef<"Challenge", 'String'>
     readonly updatedAt: FieldRef<"Challenge", 'DateTime'>
@@ -35408,6 +35460,9 @@ export namespace Prisma {
     endDate: 'endDate',
     legacyId: 'legacyId',
     status: 'status',
+    approvalStatus: 'approvalStatus',
+    approvalRejectionReason: 'approvalRejectionReason',
+    approvalApprovedBy: 'approvalApprovedBy',
     createdAt: 'createdAt',
     createdBy: 'createdBy',
     updatedAt: 'updatedAt',
@@ -35866,6 +35921,8 @@ export namespace Prisma {
     tags: 'tags',
     groups: 'groups',
     taskMemberId: 'taskMemberId',
+    approvalRejectionReason: 'approvalRejectionReason',
+    approvalApprovedBy: 'approvalApprovedBy',
     createdBy: 'createdBy',
     updatedBy: 'updatedBy'
   };
@@ -36265,6 +36322,20 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'ChallengeApprovalStatusEnum'
+   */
+  export type EnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ChallengeApprovalStatusEnum'>
+    
+
+
+  /**
+   * Reference to a field of type 'ChallengeApprovalStatusEnum[]'
+   */
+  export type ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ChallengeApprovalStatusEnum[]'>
+    
+
+
+  /**
    * Reference to a field of type 'ChallengeTrackEnum'
    */
   export type EnumChallengeTrackEnumFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ChallengeTrackEnum'>
@@ -36371,6 +36442,9 @@ export namespace Prisma {
     endDate?: DateTimeNullableFilter<"Challenge"> | Date | string | null
     legacyId?: IntNullableFilter<"Challenge"> | number | null
     status?: EnumChallengeStatusEnumFilter<"Challenge"> | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFilter<"Challenge"> | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: StringNullableFilter<"Challenge"> | string | null
+    approvalApprovedBy?: StringNullableFilter<"Challenge"> | string | null
     createdAt?: DateTimeFilter<"Challenge"> | Date | string
     createdBy?: StringFilter<"Challenge"> | string
     updatedAt?: DateTimeFilter<"Challenge"> | Date | string
@@ -36427,6 +36501,9 @@ export namespace Prisma {
     endDate?: SortOrderInput | SortOrder
     legacyId?: SortOrderInput | SortOrder
     status?: SortOrder
+    approvalStatus?: SortOrder
+    approvalRejectionReason?: SortOrderInput | SortOrder
+    approvalApprovedBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -36487,6 +36564,9 @@ export namespace Prisma {
     endDate?: DateTimeNullableFilter<"Challenge"> | Date | string | null
     legacyId?: IntNullableFilter<"Challenge"> | number | null
     status?: EnumChallengeStatusEnumFilter<"Challenge"> | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFilter<"Challenge"> | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: StringNullableFilter<"Challenge"> | string | null
+    approvalApprovedBy?: StringNullableFilter<"Challenge"> | string | null
     createdAt?: DateTimeFilter<"Challenge"> | Date | string
     createdBy?: StringFilter<"Challenge"> | string
     updatedAt?: DateTimeFilter<"Challenge"> | Date | string
@@ -36543,6 +36623,9 @@ export namespace Prisma {
     endDate?: SortOrderInput | SortOrder
     legacyId?: SortOrderInput | SortOrder
     status?: SortOrder
+    approvalStatus?: SortOrder
+    approvalRejectionReason?: SortOrderInput | SortOrder
+    approvalApprovedBy?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -36588,6 +36671,9 @@ export namespace Prisma {
     endDate?: DateTimeNullableWithAggregatesFilter<"Challenge"> | Date | string | null
     legacyId?: IntNullableWithAggregatesFilter<"Challenge"> | number | null
     status?: EnumChallengeStatusEnumWithAggregatesFilter<"Challenge"> | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumWithAggregatesFilter<"Challenge"> | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: StringNullableWithAggregatesFilter<"Challenge"> | string | null
+    approvalApprovedBy?: StringNullableWithAggregatesFilter<"Challenge"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Challenge"> | Date | string
     createdBy?: StringWithAggregatesFilter<"Challenge"> | string
     updatedAt?: DateTimeWithAggregatesFilter<"Challenge"> | Date | string
@@ -38780,6 +38866,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -38836,6 +38925,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -38886,6 +38978,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -38942,6 +39037,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -38995,6 +39093,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -39029,6 +39130,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -39066,6 +39170,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -41500,6 +41607,13 @@ export namespace Prisma {
     not?: NestedEnumChallengeStatusEnumFilter<$PrismaModel> | $Enums.ChallengeStatusEnum
   }
 
+  export type EnumChallengeApprovalStatusEnumFilter<$PrismaModel = never> = {
+    equals?: $Enums.ChallengeApprovalStatusEnum | EnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    in?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    not?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel> | $Enums.ChallengeApprovalStatusEnum
+  }
+
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -41713,6 +41827,9 @@ export namespace Prisma {
     endDate?: SortOrder
     legacyId?: SortOrder
     status?: SortOrder
+    approvalStatus?: SortOrder
+    approvalRejectionReason?: SortOrder
+    approvalApprovedBy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -41756,6 +41873,9 @@ export namespace Prisma {
     endDate?: SortOrder
     legacyId?: SortOrder
     status?: SortOrder
+    approvalStatus?: SortOrder
+    approvalRejectionReason?: SortOrder
+    approvalApprovedBy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -41790,6 +41910,9 @@ export namespace Prisma {
     endDate?: SortOrder
     legacyId?: SortOrder
     status?: SortOrder
+    approvalStatus?: SortOrder
+    approvalRejectionReason?: SortOrder
+    approvalApprovedBy?: SortOrder
     createdAt?: SortOrder
     createdBy?: SortOrder
     updatedAt?: SortOrder
@@ -41921,6 +42044,16 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumChallengeStatusEnumFilter<$PrismaModel>
     _max?: NestedEnumChallengeStatusEnumFilter<$PrismaModel>
+  }
+
+  export type EnumChallengeApprovalStatusEnumWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.ChallengeApprovalStatusEnum | EnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    in?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    not?: NestedEnumChallengeApprovalStatusEnumWithAggregatesFilter<$PrismaModel> | $Enums.ChallengeApprovalStatusEnum
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel>
+    _max?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel>
   }
 
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -43767,6 +43900,10 @@ export namespace Prisma {
     set?: $Enums.ChallengeStatusEnum
   }
 
+  export type EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput = {
+    set?: $Enums.ChallengeApprovalStatusEnum
+  }
+
   export type DateTimeFieldUpdateOperationsInput = {
     set?: Date | string
   }
@@ -45410,6 +45547,13 @@ export namespace Prisma {
     not?: NestedEnumChallengeStatusEnumFilter<$PrismaModel> | $Enums.ChallengeStatusEnum
   }
 
+  export type NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel = never> = {
+    equals?: $Enums.ChallengeApprovalStatusEnum | EnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    in?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    not?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel> | $Enums.ChallengeApprovalStatusEnum
+  }
+
   export type NestedDateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -45546,6 +45690,16 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumChallengeStatusEnumFilter<$PrismaModel>
     _max?: NestedEnumChallengeStatusEnumFilter<$PrismaModel>
+  }
+
+  export type NestedEnumChallengeApprovalStatusEnumWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.ChallengeApprovalStatusEnum | EnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    in?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    notIn?: $Enums.ChallengeApprovalStatusEnum[] | ListEnumChallengeApprovalStatusEnumFieldRefInput<$PrismaModel>
+    not?: NestedEnumChallengeApprovalStatusEnumWithAggregatesFilter<$PrismaModel> | $Enums.ChallengeApprovalStatusEnum
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel>
+    _max?: NestedEnumChallengeApprovalStatusEnumFilter<$PrismaModel>
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -46968,6 +47122,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -47023,6 +47180,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -47088,6 +47248,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47143,6 +47306,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -47192,6 +47358,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -47246,6 +47415,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -47412,6 +47584,9 @@ export namespace Prisma {
     endDate?: DateTimeNullableFilter<"Challenge"> | Date | string | null
     legacyId?: IntNullableFilter<"Challenge"> | number | null
     status?: EnumChallengeStatusEnumFilter<"Challenge"> | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFilter<"Challenge"> | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: StringNullableFilter<"Challenge"> | string | null
+    approvalApprovedBy?: StringNullableFilter<"Challenge"> | string | null
     createdAt?: DateTimeFilter<"Challenge"> | Date | string
     createdBy?: StringFilter<"Challenge"> | string
     updatedAt?: DateTimeFilter<"Challenge"> | Date | string
@@ -47518,6 +47693,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -47572,6 +47750,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48004,6 +48185,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48059,6 +48243,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48124,6 +48311,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48179,6 +48369,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48228,6 +48421,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48283,6 +48479,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48348,6 +48547,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48403,6 +48605,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48452,6 +48657,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48507,6 +48715,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48572,6 +48783,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48627,6 +48841,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48736,6 +48953,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48791,6 +49011,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -48856,6 +49079,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48911,6 +49137,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -48960,6 +49189,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49015,6 +49247,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49080,6 +49315,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49135,6 +49373,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49184,6 +49425,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49239,6 +49483,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49304,6 +49551,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49359,6 +49609,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49408,6 +49661,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49463,6 +49719,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49528,6 +49787,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49583,6 +49845,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49632,6 +49897,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49687,6 +49955,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49752,6 +50023,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49807,6 +50081,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -49856,6 +50133,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49911,6 +50191,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -49976,6 +50259,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50031,6 +50317,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50080,6 +50369,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50135,6 +50427,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50230,6 +50525,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50285,6 +50583,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50436,6 +50737,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50491,6 +50795,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50556,6 +50863,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50611,6 +50921,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50884,6 +51197,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -50939,6 +51255,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -51067,6 +51386,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51122,6 +51444,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51334,6 +51659,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -51389,6 +51717,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -51485,6 +51816,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51540,6 +51874,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51589,6 +51926,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -51644,6 +51984,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -51742,6 +52085,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51797,6 +52143,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52261,6 +52610,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -52315,6 +52667,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -53150,6 +53505,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -53216,6 +53574,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53270,6 +53631,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53322,6 +53686,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53454,6 +53821,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -53520,6 +53890,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53574,6 +53947,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53626,6 +54002,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54134,6 +54513,9 @@ export namespace Prisma {
     endDate?: Date | string | null
     legacyId?: number | null
     status?: $Enums.ChallengeStatusEnum
+    approvalStatus?: $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: string | null
+    approvalApprovedBy?: string | null
     createdAt?: Date | string
     createdBy: string
     updatedAt?: Date | string
@@ -54255,6 +54637,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54309,6 +54694,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54361,6 +54749,9 @@ export namespace Prisma {
     endDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     legacyId?: NullableIntFieldUpdateOperationsInput | number | null
     status?: EnumChallengeStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeStatusEnum
+    approvalStatus?: EnumChallengeApprovalStatusEnumFieldUpdateOperationsInput | $Enums.ChallengeApprovalStatusEnum
+    approvalRejectionReason?: NullableStringFieldUpdateOperationsInput | string | null
+    approvalApprovedBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdBy?: StringFieldUpdateOperationsInput | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
