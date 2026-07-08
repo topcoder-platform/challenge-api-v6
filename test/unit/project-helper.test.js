@@ -41,13 +41,13 @@ describe('project helper unit tests', () => {
     })
   })
 
-  it('converts legacy whole-percentage billing markup to decimal format', async () => {
+  it('preserves billing markup multipliers greater than one', async () => {
     m2mHelper.getM2MToken = async () => 'test-token'
     axios.get = async () => ({
       status: 200,
       data: {
         tcBillingAccountId: '80004217',
-        markup: 58
+        markup: 1.2229
       }
     })
 
@@ -55,7 +55,7 @@ describe('project helper unit tests', () => {
 
     result.should.deep.equal({
       billingAccountId: '80004217',
-      markup: 0.58
+      markup: 1.2229
     })
   })
 
@@ -81,13 +81,13 @@ describe('project helper unit tests', () => {
     const result = await projectHelper.lockChallengeBillingAccountAmount({
       billingAccountId: '80001012',
       challengeId: 'challenge-id',
-      memberPaymentAmount: 1000,
-      markup: 0.1
+      memberPaymentAmount: 394,
+      markup: 1.2229
     })
 
     patchUrl.should.equal('http://localhost:4000/v6/billing-accounts/80001012/lock-amount')
     patchBody.should.deep.equal({
-      amount: 1100,
+      amount: 875.8226,
       challengeId: 'challenge-id',
       externalId: 'challenge-id',
       externalType: 'CHALLENGE'
@@ -95,7 +95,7 @@ describe('project helper unit tests', () => {
     patchHeaders.should.deep.equal({ Authorization: 'Bearer test-token' })
     result.should.deep.equal({
       externalId: 'challenge-id',
-      amount: 1100
+      amount: 875.8226
     })
   })
 })
