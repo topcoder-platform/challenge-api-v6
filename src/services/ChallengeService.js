@@ -1956,7 +1956,6 @@ async function searchChallenges(currentUser, criteria) {
   const requestedMemberId = !_.isNil(criteria.memberId) ? _.toString(criteria.memberId) : null;
   const currentUserMemberId =
     currentUser && !_hasAdminRole && !_isMachineToken ? _.toString(currentUser.userId) : null;
-  const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
   const isSelfMemberSearch = Boolean(
     requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId,
   );
@@ -2078,27 +2077,11 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  // FIXME: Tech Debt
-  let excludeTasks = true;
-  if (requestedMemberId) {
-    // When we already restrict the result set to a specific member,
-    // rerunning the generic task visibility filter is redundant.
-    excludeTasks = false;
-  } else if (
-    currentUser &&
-    (_hasAdminRole || _isMachineToken || hasProjectManagerAccessForSearch)
-  ) {
-    // if you're an admin or m2m, security rules wont be applied
-    excludeTasks = false;
-  }
-
   /**
-   * For non-authenticated users:
-   * - Only unassigned tasks will be returned
-   * For authenticated users (non-admin):
-   * - Only unassigned tasks and tasks assigned to the logged in user will be returned
-   * For admins/m2m:
-   * - All tasks will be returned
+   * Task challenges are visible to ordinary authenticated users only when they
+   * have a resource on the task. Anonymous users never receive tasks. Admin,
+   * machine-token and project-manager searches retain their operational access.
+   * A requested memberId narrows results but never grants the caller task access.
    */
   if (currentUser && (_hasAdminRole || _isMachineToken)) {
     // For admins/m2m, allow filtering based on task properties
@@ -2117,26 +2100,14 @@ async function searchChallenges(currentUser, criteria) {
         taskMemberId: criteria.taskMemberId,
       });
     }
-  } else if (excludeTasks) {
-    const taskFilter = [];
-    if (memberIdForTaskFilter) {
+  } else if (!hasProjectManagerAccessForSearch) {
+    const taskFilter = [{ taskIsTask: false }];
+    if (currentUserMemberId) {
       taskFilter.push({
+        taskIsTask: true,
         memberAccesses: {
-          some: { memberId: memberIdForTaskFilter },
+          some: { memberId: currentUserMemberId },
         },
-      });
-    }
-    taskFilter.push({
-      taskIsTask: false,
-    });
-    taskFilter.push({
-      taskIsTask: true,
-      taskIsAssigned: false,
-      taskMemberId: null,
-    });
-    if (currentUser && !_hasAdminRole && !_isMachineToken) {
-      taskFilter.push({
-        taskMemberId: currentUser.userId,
       });
     }
     prismaFilter.where.AND.push({

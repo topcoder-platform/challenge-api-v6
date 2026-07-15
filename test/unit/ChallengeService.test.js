@@ -1006,6 +1006,71 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("search challenges hides unassigned tasks from anonymous users", async () => {
+      await prisma.challenge.update({
+        where: { id: data.taskChallenge.id },
+        data: {
+          taskIsAssigned: false,
+          taskMemberId: null,
+        },
+      });
+
+      try {
+        const result = await service.searchChallenges(undefined, {
+          id: data.taskChallenge.id,
+        });
+
+        should.equal(result.total, 0);
+        should.equal(result.result.length, 0);
+      } finally {
+        await prisma.challenge.update({
+          where: { id: data.taskChallenge.id },
+          data: { taskIsAssigned: true },
+        });
+      }
+    });
+
+    it("search challenges uses the caller resource association for task visibility", async () => {
+      const originalGetCompleteUserGroupTreeIds = helper.getCompleteUserGroupTreeIds;
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      const originalChallengeFindMany = prisma.challenge.findMany;
+      let capturedWhere;
+
+      helper.getCompleteUserGroupTreeIds = async () => [];
+      prisma.memberChallengeAccess.findMany = async () => [{ challengeId: data.taskChallenge.id }];
+      prisma.challenge.findMany = async (query) => {
+        capturedWhere = query.where;
+        return [];
+      };
+
+      try {
+        const result = await service.searchChallenges(
+          { roles: ["Topcoder User"], userId: "caller-resource-id" },
+          { memberId: "different-member-id" },
+        );
+
+        should.equal(result.total, 0);
+        const taskVisibilityFilter = capturedWhere.AND.find(
+          (filter) => filter.OR && filter.OR.some((condition) => condition.taskIsTask === false),
+        );
+        taskVisibilityFilter.should.deep.equal({
+          OR: [
+            { taskIsTask: false },
+            {
+              taskIsTask: true,
+              memberAccesses: {
+                some: { memberId: "caller-resource-id" },
+              },
+            },
+          ],
+        });
+      } finally {
+        helper.getCompleteUserGroupTreeIds = originalGetCompleteUserGroupTreeIds;
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
+        prisma.challenge.findMany = originalChallengeFindMany;
+      }
+    });
+
     it("search challenges sorts status alphabetically for member and non-member searches", async () => {
       const statusChallenges = [
         {

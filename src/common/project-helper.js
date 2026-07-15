@@ -9,16 +9,15 @@ const errors = require("./errors");
 const logger = require("./logger");
 
 /**
- * Normalizes billing-account markup to the decimal format persisted on
+ * Normalizes billing-account markup to the multiplier format persisted on
  * challenges.
  *
- * Legacy project-service responses can return whole percentage points (for
- * example `50` for 50%), while newer billing-account records use decimal
- * fractions (for example `0.58` for 58%). This helper preserves modern values
- * and converts only legacy percentages.
+ * Billing-account records use the direct multiplier consumed by challenge,
+ * finance, and billing-account ledger math. Values greater than `1` are valid
+ * and must not be converted to percentage form.
  *
  * @param {unknown} rawMarkup Markup value returned by Projects API.
- * @returns {number|null} Decimal markup or `null` when the input is empty or invalid.
+ * @returns {number|null} Billing markup multiplier or `null` when the input is empty or invalid.
  */
 function normalizeBillingMarkup(rawMarkup) {
   if (_.isNil(rawMarkup) || rawMarkup === "") {
@@ -30,7 +29,7 @@ function normalizeBillingMarkup(rawMarkup) {
     return null;
   }
 
-  return markup > 1 ? markup / 100 : markup;
+  return markup;
 }
 
 /**
@@ -261,7 +260,7 @@ class ProjectHelper {
    * @param {string|number} params.billingAccountId Billing-account identifier.
    * @param {string} params.challengeId Challenge id to use as the external reference.
    * @param {number|string} params.memberPaymentAmount Challenge member-payment amount before markup.
-   * @param {number|string|null|undefined} params.markup Billing-account markup as a decimal or percentage.
+   * @param {number|string|null|undefined} params.markup Billing-account markup multiplier.
    * @returns {Promise<object>} Billing Accounts API lock response.
    * @throws {errors.BadRequestError} When required values are missing or invalid.
    * @throws {Error} When the Billing Accounts API rejects the lock request.
