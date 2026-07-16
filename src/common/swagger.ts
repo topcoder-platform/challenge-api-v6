@@ -87,7 +87,7 @@ function withAuthMetadata(baseDoc) {
   annotatedDoc.info = annotatedDoc.info || {};
   annotatedDoc.info["x-notes"] = annotatedDoc.info["x-notes"] || {};
   annotatedDoc.info["x-notes"].authorization =
-    "Authorization metadata (roles and scopes) generated from src/routes.js at runtime.";
+    "Authorization metadata (roles and scopes) generated from src/routes.ts at runtime.";
 
   return annotatedDoc;
 }

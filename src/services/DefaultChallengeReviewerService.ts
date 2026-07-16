@@ -54,8 +54,8 @@ function sanitize(record) {
  * @param {Object} criteria search criteria
  * @returns {Object} prisma filter
  */
-function getSearchFilter(criteria = {}) {
-  const filter = {};
+function getSearchFilter(criteria: any = {}) {
+  const filter: any = {};
 
   if (!_.isEmpty(criteria.typeId)) {
     filter.typeId = { equals: criteria.typeId };
@@ -84,7 +84,7 @@ function getSearchFilter(criteria = {}) {
  * @param {Object} criteria search criteria
  * @returns {Promise<Object>} paginated result
  */
-async function searchDefaultChallengeReviewers(criteria = {}) {
+async function searchDefaultChallengeReviewers(criteria: any = {}) {
   const searchFilter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
 
   const page = criteria.page || 1;
@@ -127,7 +127,7 @@ searchDefaultChallengeReviewers.schema = {
  * @param {Object} data payload
  * @param {Boolean} isPartial indicates partial update
  */
-async function validateRelatedEntities(data = {}, isPartial = false) {
+async function validateRelatedEntities(data: any = {}, isPartial = false) {
   const validations = [];
 
   const shouldValidate = (value) => (!isPartial || !_.isUndefined(value));
@@ -206,8 +206,8 @@ async function validateRelatedEntities(data = {}, isPartial = false) {
  * @param {Boolean} isPartial whether payload is partial
  * @returns {Object} normalized data
  */
-function normalizePayload(data = {}, isPartial = false) {
-  const normalized = {};
+function normalizePayload(data: any = {}, isPartial = false) {
+  const normalized: any = {};
 
   const shouldAssign = (value) => (!isPartial || !_.isUndefined(value));
 

@@ -54,7 +54,7 @@ class ChallengeHelper {
    * @param {String} currentUser the user
    */
   static async ensureProjectExist(projectId, currentUser) {
-    let token = await getM2MToken();
+    const token = await getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
     try {
       const res = await axios.get(url, {
@@ -165,7 +165,7 @@ class ChallengeHelper {
    * @param {Object} oldChallenge the old challenge data used to block skill edits on completed
    * challenges
    */
-  async validateSkills(challenge, oldChallenge) {
+  async validateSkills(challenge, oldChallenge?) {
     if (!challenge.skills) {
       return;
     }
@@ -194,7 +194,7 @@ class ChallengeHelper {
         throw new errors.BadRequestError("The skill id is invalid " + id);
       }
 
-      const skill = {
+      const skill: any = {
         id,
         name: found.name,
       };
@@ -260,7 +260,7 @@ class ChallengeHelper {
   async applyDefaultMemberReviewersForChallengeCreation(
     challenge,
     prisma,
-    logDebugMessage,
+    logDebugMessage: (...args: any[]) => void,
   ) {
     if (!challenge || !prisma) {
       return;
@@ -344,7 +344,11 @@ class ChallengeHelper {
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    */
-  async applyDefaultAIConfigForChallengeCreation(challenge, prisma, logDebugMessage) {
+  async applyDefaultAIConfigForChallengeCreation(
+    challenge,
+    prisma,
+    logDebugMessage: (...args: any[]) => void,
+  ) {
     if (!challenge || !prisma) {
       return;
     }
@@ -480,7 +484,7 @@ class ChallengeHelper {
       config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
       "/"
     );
-    
+
     const url = `${reviewsApiBaseUrl}/v6/ai-review/configs`;
 
     for (const aiReviewConfig of aiReviewConfigs) {
@@ -547,19 +551,23 @@ class ChallengeHelper {
   /**
    * Add AI Screening phase for challenges with AI reviewers.
     * AI screening phases are positioned after submission/checkpoint submission and allocated 4 hours by default.
-   * 
+   *
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    * @param {Function} logDebugMessage optional logging function
    */
-  async addAIScreeningPhaseForChallenge(challenge, prisma, logDebugMessage = () => {}) {
+  async addAIScreeningPhaseForChallenge(
+    challenge,
+    prisma,
+    logDebugMessage: (...args: any[]) => void = () => {},
+  ) {
     if (!challenge || !challenge.phases || !Array.isArray(challenge.reviewers)) {
       return;
     }
 
     // Check if there are any AI reviewers
     const hasAIReviewers = challenge.reviewers.some((reviewer) => !reviewer.isMemberReview && reviewer.aiWorkflowId);
-    
+
     if (!hasAIReviewers) {
       logDebugMessage("no AI reviewers found, skipping AI screening phase creation");
       return;
@@ -594,7 +602,8 @@ class ChallengeHelper {
     }
 
     // Get the AI Screening phase definition from the database
-    const { phaseDefinitionMap } = await phaseHelper.getPhaseDefinitionsAndMap();
+    const { phaseDefinitionMap }: { phaseDefinitionMap: Map<any, any> } =
+      await phaseHelper.getPhaseDefinitionsAndMap();
     const aiScreeningPhaseDefEntry = Array.from(phaseDefinitionMap.entries()).find(
       ([_, phase]) => phase.name === "AI Screening"
     );
@@ -842,7 +851,7 @@ class ChallengeHelper {
    * @param {Object} [type]
    * @param {{ asString?: boolean }} [options]
    */
-  enrichChallengeForResponse(challenge, track, type, options = {}) {
+  enrichChallengeForResponse(challenge, track, type, options: any = {}) {
     if (challenge.phases && challenge.phases.length > 0) {
       const registrationPhase = _.find(challenge.phases, (p) => p.name === "Registration");
       const submissionPhase = _.find(challenge.phases, (p) =>
@@ -1051,8 +1060,8 @@ class ChallengeHelper {
     if (startDate instanceof Date) {
       return startDate.toISOString();
     }
-    if (typeof startDate === "string" && !isNaN(startDate)) {
-      startDate = parseInt(startDate);
+    if (typeof startDate === "string" && !isNaN(Number(startDate))) {
+      startDate = parseInt(startDate, 10);
     }
     if (typeof startDate === "number") {
       const date = new Date(startDate);

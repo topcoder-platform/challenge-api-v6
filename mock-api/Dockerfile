@@ -1,11 +1,14 @@
-FROM node:10.20-jessie
+FROM node:22.19.0-alpine
 
-COPY . /challenge-api
+RUN apk add --no-cache openssl \
+    && npm install --global pnpm@9.15.9
 
-RUN (cd /challenge-api && yarn install)
+WORKDIR /challenge-api
+COPY . .
+RUN pnpm install --frozen-lockfile \
+    && pnpm build
 
 WORKDIR /challenge-api/mock-api
+RUN npm ci
 
-RUN yarn install
-
-CMD yarn start
+CMD ["npm", "start"]

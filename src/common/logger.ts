@@ -143,13 +143,13 @@ logger.decorateWithValidators = function (service) {
     service[name] = async function () {
       const args = Array.prototype.slice.call(arguments);
       const value = _combineObject(params, args);
-      
+
       // Convert plain object schema to Joi schema if needed
       let schema = method.schema;
       if (schema && !schema.validate && typeof schema === 'object') {
         schema = Joi.object().keys(schema);
       }
-      
+
       const normalized = Joi.attempt(value, schema);
 
       const newArgs = [];

@@ -15,7 +15,7 @@ const prisma = require("../common/prisma").getClient();
  * @param {Object} criteria the search criteria
  * @returns {Object} the search result
  */
-async function searchPhases(criteria = {}) {
+async function searchPhases(criteria: any = {}) {
   const searchFilter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
 
   const page = criteria.page || 1;
@@ -38,7 +38,7 @@ async function searchPhases(criteria = {}) {
  * @returns filter used in prisma
  */
 function getSearchFilter(criteria) {
-  const ret = {};
+  const ret: any = {};
   if (!_.isEmpty(criteria.name)) {
     ret.name = { equals: criteria.name };
   }
@@ -122,7 +122,7 @@ getPhase.schema = {
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated phase
  */
-async function update(authUser, phaseId, data, isFull) {
+async function update(authUser, phaseId, data, isFull?: boolean) {
   const phase = await getPhase(phaseId);
   if (data.name && data.name.toLowerCase() !== phase.name.toLowerCase()) {
     await checkName(data.name);
@@ -202,7 +202,7 @@ partiallyUpdatePhase.schema = {
  * @returns {Object} the deleted phase
  */
 async function deletePhase(phaseId) {
-  let ret = await getPhase(phaseId);
+  const ret = await getPhase(phaseId);
   await prisma.phase.delete({ where: { id: phaseId } });
   // post bus event
   await helper.postBusEvent(constants.Topics.PhaseDeleted, ret);
@@ -226,7 +226,7 @@ async function validatePhases(phases) {
   const invalidPhases = _.filter(phases, (p) => !map.has(p.phaseId));
   if (invalidPhases.length > 0) {
     throw new errors.BadRequestError(
-      `The following phases are invalid: ${toString(invalidPhases)}`
+      `The following phases are invalid: ${(globalThis as any).toString(invalidPhases)}`
     );
   }
 }

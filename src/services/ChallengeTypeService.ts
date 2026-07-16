@@ -5,51 +5,27 @@ const _ = require("lodash");
 const Joi = require("joi");
 const helper = require("../common/helper");
 const logger = require("../common/logger");
-const errors = require("../common/errors");
 const constants = require("../../app-constants");
+const errors = require("../common/errors");
 
-const { getClient, ChallengeTrackEnum } = require("../common/prisma");
-const prisma = getClient();
-
-// Backward compatible aliases kept for payloads still using legacy track enum values.
-const legacyTrackAliases = {
-  DEVELOP: ChallengeTrackEnum.DEVELOPMENT,
-  QA: ChallengeTrackEnum.QUALITY_ASSURANCE,
-};
-
-const supportedTrackValues = _.uniq([
-  ..._.values(ChallengeTrackEnum),
-  ...Object.keys(legacyTrackAliases),
-]);
-
-/**
- * Normalize legacy track aliases to current enum values.
- * @param {String} track raw track value
- * @returns {String|null|undefined} normalized track value
- */
-function normalizeTrackValue(track) {
-  if (_.isNil(track)) {
-    return track;
-  }
-  const normalized = _.toUpper(_.trim(track));
-  return legacyTrackAliases[normalized] || normalized;
-}
+const prisma = require("../common/prisma").getClient();
 
 /**
  * Search challenge types
  * @param {Object} criteria the search criteria
  * @returns {Promise<Object>} the search result
  */
-async function searchChallengeTracks(criteria) {
-  const filter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
+async function searchChallengeTypes(criteria) {
+  const searchFilter = getSearchFilter(_.omit(criteria, ["page", "perPage"]));
+
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 50;
 
-  const cacheKey = `ChallengeTrack${page}_${perPage}_${JSON.stringify(criteria)}`;
+  const cacheKey = `ChallengeType_${page}_${perPage}_${JSON.stringify(criteria)}`;
 
   let records = helper.getFromInternalCache(cacheKey);
   if (records == null || records.length === 0) {
-    records = await prisma.challengeTrack.findMany({ where: filter });
+    records = await prisma.challengeType.findMany({ where: searchFilter });
     records = _.map(records, (r) => _.omit(r, constants.auditFields));
     helper.setToInternalCache(cacheKey, records);
   }
@@ -67,90 +43,109 @@ async function searchChallengeTracks(criteria) {
  * @returns filter used in prisma
  */
 function getSearchFilter(criteria) {
-  const ret = {};
+  const ret: any = {};
   if (!_.isEmpty(criteria.name)) {
     ret.name = { equals: criteria.name };
-  }
-  if (!_.isEmpty(criteria.description)) {
-    ret.description = { contains: criteria.description };
   }
   if (!_.isEmpty(criteria.abbreviation)) {
     ret.abbreviation = { equals: criteria.abbreviation };
   }
+  if (!_.isEmpty(criteria.description)) {
+    ret.description = { contains: criteria.description };
+  }
   if (!_.isUndefined(criteria.isActive)) {
     ret.isActive = { equals: criteria.isActive };
   }
-  if (criteria.legacyId) {
-    ret.legacyId = { equals: criteria.legacyId };
+  if (!_.isUndefined(criteria.isTask)) {
+    ret.isTask = { equals: criteria.isTask };
   }
-  if (!_.isEmpty(criteria.track)) {
-    ret.track = { equals: normalizeTrackValue(criteria.track) };
+  if (!_.isUndefined(criteria.legacyId)) {
+    ret.legacyId = { equals: criteria.legacyId };
   }
   ret.isLegacy = { equals: _.isUndefined(criteria.isLegacy) ? false : criteria.isLegacy };
   return ret;
 }
 
-searchChallengeTracks.schema = {
+searchChallengeTypes.schema = {
   criteria: Joi.object().keys({
     page: Joi.page(),
     perPage: Joi.number().integer().min(1).max(100).default(100),
     name: Joi.string(),
     description: Joi.string(),
     isActive: Joi.boolean(),
+    isTask: Joi.boolean(),
     abbreviation: Joi.string(),
     legacyId: Joi.number().integer().positive(),
-    track: Joi.string()
-      .uppercase()
-      .valid(...supportedTrackValues),
     isLegacy: Joi.boolean(),
   }),
 };
 
 /**
- * Check challenge track exists by same name
- * @param {String} name challenge track name
+ * Check challenge type exists by same name
+ * @param {String} name challenge type name
  * @throws conflict error if same name exists
  */
-async function checkTrackName(name) {
-  const existingByName = await prisma.challengeTrack.findMany({
+async function checkTypeName(name) {
+  const existingByName = await prisma.challengeType.findMany({
     where: { name },
   });
-  if (existingByName.length > 0) {
-    throw new errors.ConflictError(`ChallengeTrack with name ${name} already exists`);
+  if (existingByName && existingByName.length > 0) {
+    throw new errors.ConflictError(`ChallengeType with name: ${name} already exist`);
   }
 }
 
 /**
- * Check challenge track exists by same abbreviation
- * @param {String} name challenge track abbreviation
+ * Check challenge type exists by same abbreviation
+ * @param {String} name challenge type abbreviation
  * @throws conflict error if same abbreviation exists
  */
-async function checkTrackAbrv(abbreviation) {
-  const existingByAbbr = await prisma.challengeTrack.findMany({
+async function checkTypeAbrv(abbreviation) {
+  const existingByAbbr = await prisma.challengeType.findMany({
     where: { abbreviation },
   });
-  if (existingByAbbr.length > 0) {
+  if (existingByAbbr && existingByAbbr.length > 0) {
     throw new errors.ConflictError(
-      `ChallengeTrack with abbreviation ${abbreviation} already exists`,
+      `ChallengeType with abbreviation: ${abbreviation} already exist`,
     );
   }
 }
 
 /**
+ * Check challenge type exists by same legacyId.
+ * @param {Number} legacyId challenge type legacy id
+ * @param {String} [excludeId] optional type id to exclude from the lookup
+ * @throws conflict error if same legacy id exists
+ */
+async function checkTypeLegacyId(legacyId, excludeId?) {
+  if (_.isNil(legacyId)) {
+    return;
+  }
+
+  const existingByLegacyId = await prisma.challengeType.findMany({
+    where: {
+      legacyId,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+  });
+  if (existingByLegacyId && existingByLegacyId.length > 0) {
+    throw new errors.ConflictError(`ChallengeType with legacyId: ${legacyId} already exist`);
+  }
+}
+
+/**
  * Create challenge type.
- * @param {Object} authUser auth user
+ * @param {Object} authUser auth user info
  * @param {Object} type the challenge type to created
  * @returns {Object} the created challenge type
  */
-async function createChallengeTrack(authUser, type) {
-  await checkTrackName(type.name);
-  await checkTrackAbrv(type.abbreviation);
-  const normalizedTrack = normalizeTrackValue(type.track);
-  let ret = await prisma.challengeTrack.create({
+async function createChallengeType(authUser, type) {
+  await checkTypeName(type.name);
+  await checkTypeAbrv(type.abbreviation);
+  await checkTypeLegacyId(type.legacyId);
+  let ret = await prisma.challengeType.create({
     data: {
       isLegacy: false,
       ...type,
-      track: normalizedTrack,
       createdBy: authUser.userId,
       updatedBy: authUser.userId,
     },
@@ -158,22 +153,20 @@ async function createChallengeTrack(authUser, type) {
   ret = _.omit(ret, constants.auditFields);
   helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTrackCreated, ret);
+  await helper.postBusEvent(constants.Topics.ChallengeTypeCreated, ret);
   return ret;
 }
 
-createChallengeTrack.schema = {
+createChallengeType.schema = {
   authUser: Joi.any(),
   type: Joi.object()
     .keys({
       name: Joi.string().required(),
       description: Joi.string(),
       isActive: Joi.boolean().required(),
+      isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string()
-        .uppercase()
-        .valid(...supportedTrackValues),
       isLegacy: Joi.boolean().default(false),
     })
     .required(),
@@ -184,33 +177,38 @@ createChallengeTrack.schema = {
  * @param {String} id the challenge type id
  * @returns {Object} the challenge type with given id
  */
-async function getChallengeTrack(id) {
-  let ret = await prisma.challengeTrack.findUnique({ where: { id } });
+async function getChallengeType(id) {
+  let ret = await prisma.challengeType.findUnique({
+    where: { id },
+  });
   if (!ret || _.isUndefined(ret.id)) {
-    throw new errors.NotFoundError(`Challenge Track with id: ${id} doesn't exist`);
+    throw new errors.NotFoundError(`ChallengeType with id: ${id} doesn't exist`);
   }
   ret = _.omit(ret, constants.auditFields);
   return ret;
 }
 
-getChallengeTrack.schema = {
+getChallengeType.schema = {
   id: Joi.id(),
 };
 
 /**
  * Fully update challenge type.
- * @param {Object} authUser auth user
+ * @param {Object} authUser auth user info
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
  */
-async function fullyUpdateChallengeTrack(authUser, id, data) {
-  const type = await getChallengeTrack(id);
+async function fullyUpdateChallengeType(authUser, id, data) {
+  const type = await getChallengeType(id);
   if (type.name.toLowerCase() !== data.name.toLowerCase()) {
-    await checkTrackName(data.name);
+    await checkTypeName(data.name);
   }
   if (type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
-    await checkTrackAbrv(data.abbreviation);
+    await checkTypeAbrv(data.abbreviation);
+  }
+  if (type.legacyId !== data.legacyId) {
+    await checkTypeLegacyId(data.legacyId, id);
   }
   if (_.isUndefined(data.description)) {
     data.description = null;
@@ -218,27 +216,23 @@ async function fullyUpdateChallengeTrack(authUser, id, data) {
   if (_.isUndefined(data.legacyId)) {
     data.legacyId = null;
   }
-  if (_.isUndefined(data.track)) {
-    data.track = null;
-  } else {
-    data.track = normalizeTrackValue(data.track);
-  }
   if (_.isUndefined(data.isLegacy)) {
     data.isLegacy = false;
   }
-  data.updatedBy = authUser.userId;
-  let ret = await prisma.challengeTrack.update({
+  let ret = await prisma.challengeType.update({
+    data: {
+      ...data,
+      updatedBy: authUser.userId,
+    },
     where: { id },
-    data,
   });
   ret = _.omit(ret, constants.auditFields);
   helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTrackUpdated, ret);
+  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, ret);
   return ret;
 }
-
-fullyUpdateChallengeTrack.schema = {
+fullyUpdateChallengeType.schema = {
   authUser: Joi.any(),
   id: Joi.id(),
   data: Joi.object()
@@ -246,11 +240,9 @@ fullyUpdateChallengeTrack.schema = {
       name: Joi.string().required(),
       description: Joi.string(),
       isActive: Joi.boolean().required(),
+      isTask: Joi.boolean(),
       abbreviation: Joi.string().required(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string()
-        .uppercase()
-        .valid(...supportedTrackValues),
       isLegacy: Joi.boolean(),
     })
     .required(),
@@ -258,35 +250,35 @@ fullyUpdateChallengeTrack.schema = {
 
 /**
  * Partially update challenge type.
- * @param {Object} authUser auth user
+ * @param {Object} authUser auth user info
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
  */
-async function partiallyUpdateChallengeTrack(authUser, id, data) {
-  const type = await getChallengeTrack(id);
+async function partiallyUpdateChallengeType(authUser, id, data) {
+  const type = await getChallengeType(id);
   if (data.name && type.name.toLowerCase() !== data.name.toLowerCase()) {
-    await checkTrackName(data.name);
+    await checkTypeName(data.name);
   }
   if (data.abbreviation && type.abbreviation.toLowerCase() !== data.abbreviation.toLowerCase()) {
-    await checkTrackAbrv(data.abbreviation);
+    await checkTypeAbrv(data.abbreviation);
   }
-  if (!_.isUndefined(data.track)) {
-    data.track = normalizeTrackValue(data.track);
+  if (!_.isUndefined(data.legacyId) && type.legacyId !== data.legacyId) {
+    await checkTypeLegacyId(data.legacyId, id);
   }
   data.updatedBy = authUser.userId;
-  let ret = await prisma.challengeTrack.update({
+  let ret = await prisma.challengeType.update({
     where: { id },
     data: _.extend(type, data),
   });
   ret = _.omit(ret, constants.auditFields);
   helper.flushInternalCache();
   // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTrackUpdated, _.assignIn({ id }, data));
+  await helper.postBusEvent(constants.Topics.ChallengeTypeUpdated, _.assignIn({ id }, data));
   return ret;
 }
 
-partiallyUpdateChallengeTrack.schema = {
+partiallyUpdateChallengeType.schema = {
   authUser: Joi.any(),
   id: Joi.id(),
   data: Joi.object()
@@ -294,42 +286,39 @@ partiallyUpdateChallengeTrack.schema = {
       name: Joi.string(),
       description: Joi.string(),
       isActive: Joi.boolean(),
+      isTask: Joi.boolean().default(false),
       abbreviation: Joi.string(),
       legacyId: Joi.number().integer().positive(),
-      track: Joi.string()
-        .uppercase()
-        .valid(...supportedTrackValues),
       isLegacy: Joi.boolean(),
     })
     .required(),
 };
 
 /**
- * Delete challenge track.
- * @param {String} id the challenge track id
- * @return {Object} the deleted challenge track
+ * Delete challenge type.
+ * @param {String} id the challenge type id
+ * @returns {Object} the deleted challenge type
  */
-async function deleteChallengeTrack(id) {
-  let ret = await getChallengeTrack(id);
-  await prisma.challengeTrack.delete({ where: { id } });
+async function deleteChallengeType(id) {
+  const ret = await getChallengeType(id);
+  await prisma.challengeType.delete({ where: { id } });
   helper.flushInternalCache();
-
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengeTypeDeleted, ret);
   return ret;
 }
 
-deleteChallengeTrack.schema = {
+deleteChallengeType.schema = {
   id: Joi.id(),
 };
 
 module.exports = {
-  searchChallengeTracks,
-  createChallengeTrack,
-  getChallengeTrack,
-  fullyUpdateChallengeTrack,
-  partiallyUpdateChallengeTrack,
-  deleteChallengeTrack,
+  searchChallengeTypes,
+  createChallengeType,
+  getChallengeType,
+  fullyUpdateChallengeType,
+  partiallyUpdateChallengeType,
+  deleteChallengeType,
 };
 
 logger.buildService(module.exports);

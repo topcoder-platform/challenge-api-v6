@@ -1,5 +1,8 @@
 /**
- * The application entry point
+ * Configures the compatibility-preserving Express application mounted by NestJS.
+ *
+ * The existing middleware, route, validation, authentication, and error behavior
+ * intentionally remains here while Nest owns application bootstrap and lifecycle.
  */
 
 require("./app-bootstrap");
@@ -12,31 +15,6 @@ const cors = require("cors");
 const HttpStatus = require("http-status-codes");
 const logger = require("./src/common/logger");
 
-// Global error and signal handlers to improve crash visibility.
-// Note: SIGSEGV cannot be handled in userland, but these cover other fatal cases.
-process.on("uncaughtException", (err) => {
-  try {
-    logger.error("Uncaught exception:", err);
-    if (process.report && typeof process.report.writeReport === "function") {
-      const reportPath = process.report.writeReport();
-      if (reportPath) logger.error(`Diagnostic report written: ${reportPath}`);
-    }
-  } finally {
-    // Exit to avoid undefined state after an unhandled exception
-    process.exit(1);
-  }
-});
-
-process.on("unhandledRejection", (reason, promise) => {
-  logger.error("Unhandled rejection:", { reason, promise });
-  try {
-    if (process.report && typeof process.report.writeReport === "function") {
-      const reportPath = process.report.writeReport();
-      if (reportPath) logger.error(`Diagnostic report written: ${reportPath}`);
-    }
-  } catch (_) {}
-});
-
 const interceptor = require("express-interceptor");
 const fileUpload = require("express-fileupload");
 const YAML = require("yamljs");
@@ -45,7 +23,6 @@ const challengeAPISwaggerDoc = YAML.load("./docs/swagger.yaml");
 const { withAuthMetadata } = require("./src/common/swagger");
 const challengeAPIWithAuthDoc = withAuthMetadata(challengeAPISwaggerDoc);
 const { ForbiddenError } = require("./src/common/errors");
-const { getClient } = require("./src/common/prisma");
 
 // setup express app
 const app = express();
@@ -122,10 +99,10 @@ app.use(
 require("./app-routes")(app);
 
 // The error handler
-// eslint-disable-next-line no-unused-vars
+
 app.use((err, req, res, next) => {
   logger.logFullError(err, req.signature || `${req.method} ${req.url}`);
-  const errorResponse = {};
+  const errorResponse: any = {};
   let status = err.isJoi
     ? HttpStatus.BAD_REQUEST
     : err.httpStatus || _.get(err, "response.status") || HttpStatus.INTERNAL_SERVER_ERROR;
@@ -166,42 +143,5 @@ app.use((err, req, res, next) => {
 
   res.status(status).json(errorResponse);
 });
-
-const server = app.listen(app.get("port"), () => {
-  logger.info(`Express server listening on port ${app.get("port")}`);
-});
-
-// Graceful shutdown: close HTTP server and disconnect Prisma
-const prisma = getClient();
-const gracefulShutdown = (signal) => {
-  try {
-    logger.info(`[${signal}] Received. Starting graceful shutdown...`);
-    // Stop accepting new connections
-    server.close(async () => {
-      logger.info("HTTP server closed. Disconnecting Prisma...");
-      try {
-        await prisma.$disconnect();
-        logger.info("Prisma disconnected. Exiting.");
-      } catch (err) {
-        logger.error("Error during Prisma disconnect:", err);
-      } finally {
-        process.exit(0);
-      }
-    });
-    // Fallback: force exit if shutdown takes too long
-    const timeout = setTimeout(() => {
-      logger.error("Forced shutdown due to timeout.");
-      process.exit(1);
-    }, 10000);
-    // Don't keep the process alive solely for the timeout
-    timeout.unref();
-  } catch (err) {
-    logger.error("Unexpected error during graceful shutdown:", err);
-    process.exit(1);
-  }
-};
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 module.exports = app;

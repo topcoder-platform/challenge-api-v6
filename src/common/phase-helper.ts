@@ -89,7 +89,7 @@ function isPhaseDurationShortened(phase, requestedScheduledStartDate, requestedS
 function validateActivePhaseScheduledEndDateChange(
   phase,
   requestedScheduledEndDate,
-  options = {}
+  options: any = {}
 ) {
   if (!_.isNil(phase?.actualEndDate)) {
     return;
@@ -151,7 +151,7 @@ function validateActivePhaseScheduledEndDateChange(
  * @returns {undefined} validates only
  * @throws {BadRequestError} when a recalculated schedule violates shortening rules
  */
-function validateRecalculatedPhaseSchedules(originalPhases, updatedPhases, options = {}) {
+function validateRecalculatedPhaseSchedules(originalPhases, updatedPhases, options: any = {}) {
   const originalById = new Map();
   const originalByPhaseId = new Map();
 
@@ -273,8 +273,8 @@ function findPhaseUpdate(newPhases, phase) {
 }
 
 class ChallengePhaseHelper {
-  phaseDefinitionMap = {};
-  timelineTemplateMap = {};
+  phaseDefinitionMap: any = {};
+  timelineTemplateMap: any = {};
 
   async populatePhasesForChallengeCreation(phases, startDate, timelineTemplateId) {
     if (_.isUndefined(timelineTemplateId)) {
@@ -323,7 +323,7 @@ class ChallengePhaseHelper {
       }
       return phase;
     });
-    for (let phase of finalPhases) {
+    for (const phase of finalPhases) {
       if (_.isUndefined(phase.predecessor)) {
         continue;
       }
@@ -350,7 +350,7 @@ class ChallengePhaseHelper {
     newPhases,
     timelineTemplateId,
     isBeingActivated,
-    options = {}
+    options: any = {}
   ) {
     const { timelineTemplateMap, timelineTempate } = await this.getTemplateAndTemplateMap(
       timelineTemplateId
@@ -472,7 +472,7 @@ class ChallengePhaseHelper {
     }
 
     let iterativeReviewSet = false;
-    for (let phase of updatedPhases) {
+    for (const phase of updatedPhases) {
       if (_.isNil(phase.predecessor)) {
         continue;
       }
@@ -522,7 +522,7 @@ class ChallengePhaseHelper {
     const invalidPhases = _.filter(phases, (p) => !phaseDefinitionMap.has(p.phaseId));
     if (invalidPhases.length > 0) {
       throw new errors.BadRequestError(
-        `The following phases are invalid: ${toString(invalidPhases)}`
+        `The following phases are invalid: ${(globalThis as any).toString(invalidPhases)}`
       );
     }
   }
@@ -536,7 +536,7 @@ class ChallengePhaseHelper {
     if (_.isEmpty(this.phaseDefinitionMap)) {
       const records = await prisma.phase.findMany({});
 
-      const map = new Map();
+      const map = new Map<any, any>();
       _.each(records, (r) => {
         map.set(r.id, r);
       });
@@ -549,7 +549,7 @@ class ChallengePhaseHelper {
   async getTemplateAndTemplateMap(timelineTemplateId) {
     if (_.isEmpty(this.timelineTemplateMap[timelineTemplateId])) {
       const records = await timelineTemplateService.getTimelineTemplate(timelineTemplateId);
-      const map = new Map();
+      const map = new Map<any, any>();
       _.each(records.phases, (r) => {
         map.set(r.phaseId, r);
       });
@@ -581,7 +581,7 @@ class ChallengePhaseHelper {
    * @returns {undefined} validates only
    * @throws {BadRequestError} when phase shortening is disallowed or would end in the past
    */
-  validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options = {}) {
+  validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options: any = {}) {
     validateActivePhaseScheduledEndDateChange(phase, requestedScheduledEndDate, options);
   }
 }
