@@ -1,5 +1,5 @@
 -- View to use in performance updates (PM-2206)
-DROP VIEW IF EXISTS "MemberChallengeAccess";
+DROP VIEW IF EXISTS "challenges"."MemberChallengeAccess";
 
 DO $$
 BEGIN
