@@ -466,7 +466,7 @@ function normalizeConfiguredBillingAccountIds(billingAccountIds) {
  * @param {string|number|null|undefined} projectBillingAccountId Billing account returned by the project.
  * @returns {string|null} The first available billing-account id, or `null` when none is present.
  */
-function getApprovalFlowBillingAccountId(challenge, data, projectBillingAccountId) {
+function getApprovalFlowBillingAccountId(challenge, data?: any, projectBillingAccountId?: any) {
   return (
     normalizeOptionalString(projectBillingAccountId) ||
     normalizeOptionalString(_.get(data, "billing.billingAccountId")) ||
@@ -980,7 +980,7 @@ async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening')
  * @param {Object} [options]
  * @param {Map<string, Object>} [options.skillLookup] optional map of skillId -> skill payload
  */
-async function enrichSkillsData(challenge, { skillLookup } = {}) {
+async function enrichSkillsData(challenge, { skillLookup }: { skillLookup?: any } = {}) {
   if (!Array.isArray(challenge.skills) || challenge.skills.length === 0) {
     return;
   }
@@ -1030,7 +1030,7 @@ async function enrichSkillsData(challenge, { skillLookup } = {}) {
       const skillId = skill.skillId || skill.id;
       const found = getFromLookup(skillId);
       if (found) {
-        const enrichedSkill = {
+        const enrichedSkill: any = {
           id: skillId,
           name: found.name,
         };
@@ -1342,7 +1342,7 @@ setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
  */
 async function searchByLegacyId(currentUser, legacyId, page, perPage) {
   const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
-  const where = { legacyId };
+  const where: any = { legacyId };
   if (whitelistFilter) {
     where.AND = [whitelistFilter];
   }
@@ -1461,7 +1461,7 @@ async function searchChallengesViaMemberAccess({
       return aValue - bValue;
     }
     if (aValue instanceof Date && bValue instanceof Date) {
-      return aValue - bValue;
+      return (aValue as any) - (bValue as any);
     }
     const aStr = `${aValue}`;
     const bStr = `${bValue}`;
@@ -2101,7 +2101,7 @@ async function searchChallenges(currentUser, criteria) {
       });
     }
   } else if (!hasProjectManagerAccessForSearch) {
-    const taskFilter = [{ taskIsTask: false }];
+    const taskFilter: any[] = [{ taskIsTask: false }];
     if (currentUserMemberId) {
       taskFilter.push({
         taskIsTask: true,
@@ -2283,7 +2283,7 @@ async function searchChallenges(currentUser, criteria) {
     console.log(e);
   }
 
-  let result = challenges;
+  const result = challenges;
 
   if (currentUser) {
     if (!currentUser.isMachine && !_hasAdminRole) {
@@ -2984,7 +2984,7 @@ createChallenge.schema = {
  * @returns {Object} the challenge with given id. Interactive callers keep
  * billing details only when they already have project write access.
  */
-async function getChallenge(currentUser, id, checkIfExists) {
+async function getChallenge(currentUser, id, checkIfExists?: any) {
   // Log the ID of the challenge being requested
   logger.info(`Requesting challenge by id: ${id}`);
   const challenge = await prisma.challenge.findUnique({
@@ -3147,7 +3147,7 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
  * @param {Array} winners the Winner Array
  * @param {Array} challengeResources the challenge resources
  */
-function buildCombinedWinnerPayload(data = {}) {
+function buildCombinedWinnerPayload(data: any = {}) {
   const combined = [];
   if (Array.isArray(data.winners)) {
     combined.push(
@@ -3529,7 +3529,7 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  */
 // Note: `options` may be a boolean for backward compatibility (emitEvent flag),
 // or an object { emitEvent?: boolean }.
-async function updateChallenge(currentUser, challengeId, data, options = {}) {
+async function updateChallenge(currentUser, challengeId, data, options: any = {}) {
   // Backward compatibility for callers passing a boolean as the 4th arg
   let emitEvent = true;
   if (typeof options === "boolean") {
@@ -3817,7 +3817,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   /* END self-service stuffs */
 
-  let isChallengeBeingActivated = isStatusChangingToActive;
+  const isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
   const preventPhaseShortening =
@@ -4095,7 +4095,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     data.phases = phasesForUpdate;
   }
 
-  let phasesForDates = phasesUpdated ? data.phases : challenge.phases;
+  const phasesForDates = phasesUpdated ? data.phases : challenge.phases;
 
   if (phasesUpdated || data.startDate) {
     const startSource =
@@ -5264,7 +5264,7 @@ async function syncChallengePhases(
       "actualEndDate",
       "challengeSource",
     ];
-    const phaseData = {};
+    const phaseData: any = {};
     for (const key of scalarKeys) {
       if (!_.isUndefined(phase[key])) {
         phaseData[key] = phase[key];
@@ -5301,7 +5301,7 @@ async function syncChallengePhases(
           continue;
         }
 
-        const constraintData = {
+        const constraintData: any = {
           challengePhaseId: recordId,
           name: constraint.name,
           value: constraint.value,
@@ -5640,7 +5640,7 @@ closeMarathonMatch.schema = {
   challengeId: Joi.id(),
 };
 
-async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
+async function indexChallengeAndPostToKafka(updatedChallenge, track?: any, type?: any) {
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updatedChallenge.prizeSets);
 
   // No conversion needed - values are already in dollars in the database

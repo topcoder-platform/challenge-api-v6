@@ -3,7 +3,7 @@
  */
 
 module.exports = function s3ParseUrl(url) {
-  var decodedUrl = decodeURIComponent(url);
+  const decodedUrl = decodeURIComponent(url);
   let match;
 
   // http://s3.amazonaws.com/bucket/key1/key2

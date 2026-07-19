@@ -7,8 +7,26 @@ const cors = require('cors')
 const config = require('config')
 const winston = require('winston')
 const _ = require('lodash')
-const prisma = require('../src/common/prisma').getClient()
 const { v4: uuid } = require('uuid');
+
+let prisma
+
+/**
+ * Returns the shared Challenge API Prisma client for DB-backed mock routes.
+ *
+ * Static mock endpoints do not need database configuration, so the client is
+ * initialized only when the member-challenge lookup route is called.
+ *
+ * @returns {import('@prisma/client').PrismaClient} the shared Prisma client
+ * @throws {Error} when the existing DATABASE_URL setting is unavailable or
+ * Prisma cannot initialize its PostgreSQL adapter
+ */
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = require('../src/common/prisma').getClient()
+  }
+  return prisma
+}
 
 const app = express()
 app.set('port', config.PORT)
@@ -114,7 +132,8 @@ app.get('/v5/resources', (req, res) => {
 app.get('/v5/resources/:memberId/challenges', (req, res) => {
   const memberId = req.params.memberId
   if (memberId === '40309246' || memberId === '151743') {
-    prisma.challenge.findMany()
+    Promise.resolve()
+      .then(() => getPrismaClient().challenge.findMany())
       .then(result => {
         const ret = []
         for (const element of result) {

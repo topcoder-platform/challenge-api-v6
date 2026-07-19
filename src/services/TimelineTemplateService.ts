@@ -61,7 +61,7 @@ async function searchTimelineTemplates(criteria) {
  * @returns filter used in prisma
  */
 function getSearchFilter(criteria) {
-  const ret = {};
+  const ret: any = {};
   if (!_.isEmpty(criteria.name)) {
     ret.name = { equals: criteria.name };
   }
@@ -175,7 +175,7 @@ getTimelineTemplate.schema = {
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated timeline template
  */
-async function update(authUser, timelineTemplateId, data, isFull) {
+async function update(authUser, timelineTemplateId, data, isFull?: boolean) {
   const timelineTemplate = await getTimelineTemplate(timelineTemplateId);
 
   if (data.name && data.name.toLowerCase() !== timelineTemplate.name.toLowerCase()) {
@@ -302,7 +302,7 @@ partiallyUpdateTimelineTemplate.schema = {
  * @returns {Object} the deleted timeline template
  */
 async function deleteTimelineTemplate(timelineTemplateId) {
-  let ret = await getTimelineTemplate(timelineTemplateId);
+  const ret = await getTimelineTemplate(timelineTemplateId);
   // TimelineTemplatePhase will be deleted with cascade
   await prisma.timelineTemplate.delete({ where: { id: timelineTemplateId } });
   // post bus event

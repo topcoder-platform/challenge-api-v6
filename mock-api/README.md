@@ -2,7 +2,8 @@
 
 
 ## Dependencies
-- NodeJS https://nodejs.org/en/ (v10)
+- Node.js 22 (use the version in the repository's `.nvmrc`)
+- Root Challenge API dependencies installed with pnpm
 
 
 ## Configuration
@@ -12,7 +13,11 @@ There are following config params:
 
 
 ## Local deployment
-- Install dependencies `npm i`
+- From the repository root, run `nvm use && pnpm install`
+- In this directory, run `nvm use && npm ci`
 - Start app `npm start`
 - App is running at `http://localhost:4000`
 
+The start command registers the root TypeScript runtime because this support
+service reuses the Challenge API Prisma client. Set the existing `DATABASE_URL`
+when exercising mock endpoints that read challenge data.

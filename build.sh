@@ -1,23 +1,13 @@
-#!/bin/bash
-set -eo pipefail
-APP_NAME=$1
-UPDATE_CACHE=""
-FOLDER_NAME="challenge-api"
-docker-compose -f docker/docker-compose.yml build $APP_NAME
-docker create --name app $APP_NAME:latest
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-if [ -d node_modules ]
-then
-  mv yarn.lock old-yarn.lock
-  docker cp app:/$FOLDER_NAME/yarn.lock yarn.lock
-  set +eo pipefail
-  UPDATE_CACHE=$(cmp yarn.lock old-yarn.lock)
-  set -eo pipefail
-else
-  UPDATE_CACHE=1
+readonly APP_NAME="${1:?Usage: $0 <application-name>}"
+build_args=(--file docker/Dockerfile --tag "${APP_NAME}:latest")
+
+# CircleCI creates this file for private registry access. Pass it to BuildKit
+# without copying credentials into the build context or an image layer.
+if [[ -f .npmrc ]]; then
+  build_args+=(--secret id=npmrc,src=.npmrc)
 fi
 
-if [ "$UPDATE_CACHE" == 1 ]
-then
-  docker cp app:/$FOLDER_NAME/node_modules .
-fi
+DOCKER_BUILDKIT=1 docker build "${build_args[@]}" .

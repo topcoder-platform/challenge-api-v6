@@ -1098,13 +1098,13 @@ function getBusApiClient() {
  * @param {Object} payload the event payload
  * @param {Object} options the extra options to the message
  */
-async function postBusEvent(topic, payload, options = {}) {
+async function postBusEvent(topic, payload, options: any = {}) {
   if (DISABLED_TOPICS.has(topic)) {
     logger.debug(`helper.postBusEvent: skipping disabled topic ${topic}`);
     return;
   }
   const client = getBusApiClient();
-  const message = {
+  const message: any = {
     topic,
     originator: constants.EVENT_ORIGINATOR,
     timestamp: new Date().toISOString(),
@@ -1134,7 +1134,7 @@ function calculateChallengeEndDate(challenge, data) {
   if (!data) {
     data = challenge;
   }
-  let lastPhase = data.phases[data.phases.length - 1];
+  const lastPhase = data.phases[data.phases.length - 1];
   return lastPhase.actualEndDate || lastPhase.scheduledEndDate;
   // let phase = data.phases[data.phases.length - 1]
   // if (!phase || (!data.startDate && !challenge.startDate)) {
@@ -1160,7 +1160,7 @@ function calculateChallengeEndDate(challenge, data) {
  */
 async function listResourcesByMemberAndChallenge(memberId, challengeId) {
   const token = await m2mHelper.getM2MToken();
-  let response = {};
+  let response: any = {};
   try {
     response = await axios.get(config.RESOURCES_API_URL, {
       headers: { Authorization: `Bearer ${token}` },
@@ -1237,7 +1237,7 @@ async function validateChallengeTerms(terms = []) {
   }
   const listOfTerms = [];
   const token = await m2mHelper.getM2MToken();
-  for (let term of uniqueTerms) {
+  for (const term of uniqueTerms) {
     // Get the terms details from the API
     try {
       await axios.get(`${config.TERMS_API_URL}/${term.id}`, {

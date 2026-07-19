@@ -45,10 +45,10 @@ async function importTimelineTemplate() {
 async function importChallenge() {
   await prisma.challenge.deleteMany();
   const data = require("./seed/Challenge.json");
-  let prismaData = _.map(data, (d) => {
+  const prismaData = _.map(data, (d) => {
     return prismaHelper.convertChallengeSchemaToPrisma({ userId: "topcoder user" }, d);
   });
-  for (let d of prismaData) {
+  for (const d of prismaData) {
     await prisma.challenge.create({ data: d });
   }
 }
