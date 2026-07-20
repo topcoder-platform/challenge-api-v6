@@ -22,8 +22,8 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/en/) 22 (use the version in `.nvmrc`)
-- [pnpm](https://pnpm.io/) 9.15.9
+- [Node.js](https://nodejs.org/en/) 26.4.0 (use the version in `.nvmrc`)
+- [pnpm](https://pnpm.io/) 11.15.1
 - [AWS S3](https://aws.amazon.com/s3/)
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
@@ -104,7 +104,7 @@ database operation or application startup.
 
 ## Local Deployment
 
-0. Select the repository's Node 22 version with
+0. Select the repository's Node 26.4.0 version with
 
    ```bash
    nvm use
