@@ -1,19 +1,27 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22.19.0-alpine AS base
+FROM node:26.4.0-alpine3.23 AS build-base
 
-RUN apk add --no-cache openssl
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl
 WORKDIR /challenge-api
-RUN npm install --global pnpm@9.15.9
+RUN npm install --global pnpm@11.15.1
 
-FROM base AS build
+FROM build-base AS build
 
 COPY . .
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     pnpm install --frozen-lockfile
 RUN pnpm lint && pnpm build
 
-FROM base AS runtime
+FROM node:26.4.0-alpine3.23 AS runtime
+
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
+WORKDIR /challenge-api
 
 ENV NODE_OPTIONS="--report-on-fatalerror --report-uncaught-exception --report-signal=SIGUSR2 --report-directory=/challenge-api/reports --report-filename=report.%p.%t.json --enable-source-maps" \
     PRISMA_LOG_LEVEL=info \
