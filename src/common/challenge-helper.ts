@@ -13,6 +13,7 @@ const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
+const { ChallengeMetadataNames, BOOLEAN_METADATA_VALUES } = require("../../app-constants");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
@@ -135,6 +136,38 @@ class ChallengeHelper {
     }
   }
 
+  /**
+   * Validate the metadata flag that expands winning-submission downloads to all registrants.
+   * Create and update request validation call this method before metadata is persisted. The
+   * flag is optional (missing preserves the existing restricted behavior), but a supplied value
+   * must be an exact string boolean so downstream services can evaluate it consistently.
+   *
+   * @param {Array<Object>|undefined} metadata challenge metadata entries
+   * @returns {void}
+   * @throws {BadRequestError} if the download flag is not the string `true` or `false`
+   */
+  validateRegisteredMemberWinningSubmissionDownloadMetadata(metadata) {
+    if (_.isNil(metadata)) {
+      return;
+    }
+
+    const downloadFlagEntry = _.find(metadata, {
+      name: ChallengeMetadataNames.ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+    });
+    if (_.isNil(downloadFlagEntry)) {
+      return;
+    }
+
+    if (
+      typeof downloadFlagEntry.value !== "string" ||
+      !_.includes(BOOLEAN_METADATA_VALUES, downloadFlagEntry.value)
+    ) {
+      throw new errors.BadRequestError(
+        "metadata allowAllRegistrantsToDownloadWinningSubmissions must be either true or false as a string"
+      );
+    }
+  }
+
   validatePrizeSetsAndGetPrizeType(prizeSets) {
     if (_.isEmpty(prizeSets)) return null;
 
@@ -232,6 +265,7 @@ class ChallengeHelper {
     // helper.ensureNoDuplicateOrNullElements(challenge.terms, 'terms')
     // helper.ensureNoDuplicateOrNullElements(challenge.events, 'events')
     this.validateSubmissionTypeMetadata(challenge.metadata);
+    this.validateRegisteredMemberWinningSubmissionDownloadMetadata(challenge.metadata);
 
     // check groups authorization
     if (challenge.groups && challenge.groups.length > 0) {
@@ -708,6 +742,7 @@ class ChallengeHelper {
     helper.ensureNoDuplicateOrNullElements(data.tags, "tags");
     helper.ensureNoDuplicateOrNullElements(data.groups, "groups");
     this.validateSubmissionTypeMetadata(data.metadata);
+    this.validateRegisteredMemberWinningSubmissionDownloadMetadata(data.metadata);
 
     if (data.projectId) {
       await ChallengeHelper.ensureProjectExist(data.projectId, currentUser);

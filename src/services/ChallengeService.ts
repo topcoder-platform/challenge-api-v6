@@ -2848,7 +2848,15 @@ createChallenge.schema = {
         .items(
           Joi.object().keys({
             name: Joi.string().required(),
-            value: Joi.required(),
+            value: Joi.when("name", {
+              is: constants.ChallengeMetadataNames
+                .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+              then: Joi.string()
+                .valid(...constants.BOOLEAN_METADATA_VALUES)
+                .strict()
+                .required(),
+              otherwise: Joi.required(),
+            }),
           }),
         )
         .unique((a, b) => a.name === b.name),
@@ -4607,7 +4615,15 @@ updateChallenge.schema = {
           Joi.object()
             .keys({
               name: Joi.string().required(),
-              value: Joi.required(),
+              value: Joi.when("name", {
+                is: constants.ChallengeMetadataNames
+                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                then: Joi.string()
+                  .valid(...constants.BOOLEAN_METADATA_VALUES)
+                  .strict()
+                  .required(),
+                otherwise: Joi.required(),
+              }),
             })
             .unknown(true),
         )

@@ -18,6 +18,13 @@ const prizeTypes = {
   POINT: "POINT",
 };
 
+const ChallengeMetadataNames = {
+  ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS:
+    "allowAllRegistrantsToDownloadWinningSubmissions",
+};
+
+const BOOLEAN_METADATA_VALUES = ["true", "false"];
+
 const validChallengeParams = {
   UpdatedBy: "updatedBy",
   Updated: "updatedAt",
@@ -168,6 +175,8 @@ const auditFields = [
 module.exports = {
   UserRoles,
   prizeTypes,
+  ChallengeMetadataNames,
+  BOOLEAN_METADATA_VALUES,
   validChallengeParams,
   EVENT_ORIGINATOR,
   EVENT_MIME_TYPE,
