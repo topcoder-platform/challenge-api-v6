@@ -1,14 +1,46 @@
-FROM node:22.19.0-alpine
+FROM node:26.4.0-alpine3.23 AS build
 
-RUN apk add --no-cache openssl \
-    && npm install --global pnpm@9.15.9
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl \
+    && npm install --global pnpm@11.15.1
 
 WORKDIR /challenge-api
 COPY . .
 RUN pnpm install --frozen-lockfile \
-    && pnpm build
+    && pnpm lint \
+    && pnpm build \
+    && rm -rf dist/src/scripts dist/src/phase-management/mocks \
+    && rm -f dist/tsconfig.build.tsbuildinfo \
+    && node --check mock-api/app.js \
+    && node --check mock-api/config/default.js \
+    && pnpm prune --prod \
+    && find node_modules -type f \
+        \( -name yarn.lock -o -name package-lock.json -o -name pnpm-lock.yaml \
+        -o -name npm-shrinkwrap.json \) -delete \
+    && rm -f pnpm-lock.yaml \
+        node_modules/.modules.yaml \
+        node_modules/.package-map.json \
+        node_modules/.pnpm-workspace-state-v1.json \
+        node_modules/.pnpm/lock.yaml
 
+FROM node:26.4.0-alpine3.23 AS runtime
+
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/pnpm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm \
+        /usr/local/bin/pnpx /usr/local/bin/corepack
+
+WORKDIR /challenge-api
+
+# The mock uses the compiled Challenge Prisma adapter for its one DB-backed
+# endpoint; all other endpoints are static. Copy only production dependencies,
+# compiled runtime code, and the mock's JavaScript/configuration.
+COPY --from=build --chown=node:node /challenge-api/node_modules ./node_modules
+COPY --from=build --chown=node:node /challenge-api/dist ./dist
+COPY --from=build --chown=node:node /challenge-api/mock-api/app.js ./mock-api/app.js
+COPY --from=build --chown=node:node /challenge-api/mock-api/config ./mock-api/config
+
+USER node
 WORKDIR /challenge-api/mock-api
-RUN npm ci
-
-CMD ["npm", "start"]
+CMD ["node", "app.js"]

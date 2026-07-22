@@ -12,7 +12,7 @@ const { v4: uuid } = require('uuid');
 let prisma
 
 /**
- * Returns the shared Challenge API Prisma client for DB-backed mock routes.
+ * Returns the compiled Challenge API Prisma client for DB-backed mock routes.
  *
  * Static mock endpoints do not need database configuration, so the client is
  * initialized only when the member-challenge lookup route is called.
@@ -23,7 +23,7 @@ let prisma
  */
 function getPrismaClient() {
   if (!prisma) {
-    prisma = require('../src/common/prisma').getClient()
+    prisma = require('../dist/src/common/prisma').getClient()
   }
   return prisma
 }

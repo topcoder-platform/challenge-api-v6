@@ -4,7 +4,7 @@ set -eu
 echo "Starting Challenge API v6..."
 
 echo "Running database migrations..."
-pnpm exec prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 echo "Migrations completed successfully"
 
 echo "Starting application server..."
