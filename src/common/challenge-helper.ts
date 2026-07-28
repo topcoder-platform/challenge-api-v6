@@ -13,6 +13,7 @@ const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
 const { ChallengeStatusEnum } = require("@prisma/client");
+const { ChallengeMetadataNames, BOOLEAN_METADATA_VALUES } = require("../../app-constants");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
@@ -54,7 +55,7 @@ class ChallengeHelper {
    * @param {String} currentUser the user
    */
   static async ensureProjectExist(projectId, currentUser) {
-    let token = await getM2MToken();
+    const token = await getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
     try {
       const res = await axios.get(url, {
@@ -135,6 +136,38 @@ class ChallengeHelper {
     }
   }
 
+  /**
+   * Validate the metadata flag that expands winning-submission downloads to all registrants.
+   * Create and update request validation call this method before metadata is persisted. The
+   * flag is optional (missing preserves the existing restricted behavior), but a supplied value
+   * must be an exact string boolean so downstream services can evaluate it consistently.
+   *
+   * @param {Array<Object>|undefined} metadata challenge metadata entries
+   * @returns {void}
+   * @throws {BadRequestError} if the download flag is not the string `true` or `false`
+   */
+  validateRegisteredMemberWinningSubmissionDownloadMetadata(metadata) {
+    if (_.isNil(metadata)) {
+      return;
+    }
+
+    const downloadFlagEntry = _.find(metadata, {
+      name: ChallengeMetadataNames.ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+    });
+    if (_.isNil(downloadFlagEntry)) {
+      return;
+    }
+
+    if (
+      typeof downloadFlagEntry.value !== "string" ||
+      !_.includes(BOOLEAN_METADATA_VALUES, downloadFlagEntry.value)
+    ) {
+      throw new errors.BadRequestError(
+        "metadata allowAllRegistrantsToDownloadWinningSubmissions must be either true or false as a string"
+      );
+    }
+  }
+
   validatePrizeSetsAndGetPrizeType(prizeSets) {
     if (_.isEmpty(prizeSets)) return null;
 
@@ -165,7 +198,7 @@ class ChallengeHelper {
    * @param {Object} oldChallenge the old challenge data used to block skill edits on completed
    * challenges
    */
-  async validateSkills(challenge, oldChallenge) {
+  async validateSkills(challenge, oldChallenge?) {
     if (!challenge.skills) {
       return;
     }
@@ -194,7 +227,7 @@ class ChallengeHelper {
         throw new errors.BadRequestError("The skill id is invalid " + id);
       }
 
-      const skill = {
+      const skill: any = {
         id,
         name: found.name,
       };
@@ -232,6 +265,7 @@ class ChallengeHelper {
     // helper.ensureNoDuplicateOrNullElements(challenge.terms, 'terms')
     // helper.ensureNoDuplicateOrNullElements(challenge.events, 'events')
     this.validateSubmissionTypeMetadata(challenge.metadata);
+    this.validateRegisteredMemberWinningSubmissionDownloadMetadata(challenge.metadata);
 
     // check groups authorization
     if (challenge.groups && challenge.groups.length > 0) {
@@ -260,7 +294,7 @@ class ChallengeHelper {
   async applyDefaultMemberReviewersForChallengeCreation(
     challenge,
     prisma,
-    logDebugMessage,
+    logDebugMessage: (...args: any[]) => void,
   ) {
     if (!challenge || !prisma) {
       return;
@@ -344,7 +378,11 @@ class ChallengeHelper {
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    */
-  async applyDefaultAIConfigForChallengeCreation(challenge, prisma, logDebugMessage) {
+  async applyDefaultAIConfigForChallengeCreation(
+    challenge,
+    prisma,
+    logDebugMessage: (...args: any[]) => void,
+  ) {
     if (!challenge || !prisma) {
       return;
     }
@@ -480,7 +518,7 @@ class ChallengeHelper {
       config.REVIEWS_API_URL || "https://api.topcoder-dev.com",
       "/"
     );
-    
+
     const url = `${reviewsApiBaseUrl}/v6/ai-review/configs`;
 
     for (const aiReviewConfig of aiReviewConfigs) {
@@ -547,19 +585,23 @@ class ChallengeHelper {
   /**
    * Add AI Screening phase for challenges with AI reviewers.
     * AI screening phases are positioned after submission/checkpoint submission and allocated 4 hours by default.
-   * 
+   *
    * @param {Object} challenge challenge payload (mutated in-place)
    * @param {Object} prisma Prisma client
    * @param {Function} logDebugMessage optional logging function
    */
-  async addAIScreeningPhaseForChallenge(challenge, prisma, logDebugMessage = () => {}) {
+  async addAIScreeningPhaseForChallenge(
+    challenge,
+    prisma,
+    logDebugMessage: (...args: any[]) => void = () => {},
+  ) {
     if (!challenge || !challenge.phases || !Array.isArray(challenge.reviewers)) {
       return;
     }
 
     // Check if there are any AI reviewers
     const hasAIReviewers = challenge.reviewers.some((reviewer) => !reviewer.isMemberReview && reviewer.aiWorkflowId);
-    
+
     if (!hasAIReviewers) {
       logDebugMessage("no AI reviewers found, skipping AI screening phase creation");
       return;
@@ -594,7 +636,8 @@ class ChallengeHelper {
     }
 
     // Get the AI Screening phase definition from the database
-    const { phaseDefinitionMap } = await phaseHelper.getPhaseDefinitionsAndMap();
+    const { phaseDefinitionMap }: { phaseDefinitionMap: Map<any, any> } =
+      await phaseHelper.getPhaseDefinitionsAndMap();
     const aiScreeningPhaseDefEntry = Array.from(phaseDefinitionMap.entries()).find(
       ([_, phase]) => phase.name === "AI Screening"
     );
@@ -699,6 +742,7 @@ class ChallengeHelper {
     helper.ensureNoDuplicateOrNullElements(data.tags, "tags");
     helper.ensureNoDuplicateOrNullElements(data.groups, "groups");
     this.validateSubmissionTypeMetadata(data.metadata);
+    this.validateRegisteredMemberWinningSubmissionDownloadMetadata(data.metadata);
 
     if (data.projectId) {
       await ChallengeHelper.ensureProjectExist(data.projectId, currentUser);
@@ -842,7 +886,7 @@ class ChallengeHelper {
    * @param {Object} [type]
    * @param {{ asString?: boolean }} [options]
    */
-  enrichChallengeForResponse(challenge, track, type, options = {}) {
+  enrichChallengeForResponse(challenge, track, type, options: any = {}) {
     if (challenge.phases && challenge.phases.length > 0) {
       const registrationPhase = _.find(challenge.phases, (p) => p.name === "Registration");
       const submissionPhase = _.find(challenge.phases, (p) =>
@@ -1051,8 +1095,8 @@ class ChallengeHelper {
     if (startDate instanceof Date) {
       return startDate.toISOString();
     }
-    if (typeof startDate === "string" && !isNaN(startDate)) {
-      startDate = parseInt(startDate);
+    if (typeof startDate === "string" && !isNaN(Number(startDate))) {
+      startDate = parseInt(startDate, 10);
     }
     if (typeof startDate === "number") {
       const date = new Date(startDate);

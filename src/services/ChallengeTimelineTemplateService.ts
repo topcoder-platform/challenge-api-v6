@@ -46,7 +46,7 @@ async function searchChallengeTimelineTemplates(criteria) {
  * @returns filter used in prisma
  */
 function getSearchFilter(criteria) {
-  const ret = {};
+  const ret: any = {};
   if (criteria.typeId) {
     ret.typeId = { equals: criteria.typeId };
   }
@@ -227,7 +227,7 @@ fullyUpdateChallengeTimelineTemplate.schema = {
  * @returns {Object} the deleted challenge type timeline template
  */
 async function deleteChallengeTimelineTemplate(challengeTimelineTemplateId) {
-  let ret = await getChallengeTimelineTemplate(challengeTimelineTemplateId);
+  const ret = await getChallengeTimelineTemplate(challengeTimelineTemplateId);
   await prisma.challengeTimelineTemplate.delete({ where: { id: challengeTimelineTemplateId } });
   // post bus event
   await helper.postBusEvent(constants.Topics.ChallengeTimelineTemplateDeleted, ret);

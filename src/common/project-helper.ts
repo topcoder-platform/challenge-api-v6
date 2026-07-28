@@ -100,7 +100,7 @@ class ProjectHelper {
    * @returns {Promise<object>} the project details
    */
   async getProject(projectId, currentUser) {
-    let token = await m2mHelper.getM2MToken();
+    const token = await m2mHelper.getM2MToken();
     const url = `${config.PROJECTS_API_URL}/${projectId}`;
     logger.debug(`projectHelper.getProject: GET ${url}`);
     try {

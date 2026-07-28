@@ -41,9 +41,14 @@ jspm_packages/
 
 # TypeScript v1 declaration files
 typings/
+dist/
+*.tsbuildinfo
 
 # Optional npm cache directory
 .npm
+
+# Lockfiles for separately managed tooling remain outside the API package scope.
+data-migration/pnpm-lock.yaml
 
 # Optional eslint cache
 .eslintcache
@@ -65,9 +70,6 @@ typings/
 .next
 ecr-login.sh
 test.js
-
-# pnpm lock
-pnpm-lock.yaml
 
 .cursor
 .idea

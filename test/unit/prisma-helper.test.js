@@ -5,6 +5,29 @@ const prismaHelper = require('../../src/common/prisma-helper')
 chai.should()
 
 describe('prisma helper unit tests', () => {
+  it('preserves the registered-member winning download flag for metadata persistence', () => {
+    const result = prismaHelper.convertChallengeSchemaToPrisma(
+      { userId: 'test-user' },
+      {
+        metadata: [
+          {
+            name: 'allowAllRegistrantsToDownloadWinningSubmissions',
+            value: 'true'
+          }
+        ]
+      }
+    )
+
+    result.metadata.create.should.deep.equal([
+      {
+        name: 'allowAllRegistrantsToDownloadWinningSubmissions',
+        value: 'true',
+        createdBy: 'test-user',
+        updatedBy: 'test-user'
+      }
+    ])
+  })
+
   it('derives submission dates from the standard Submission phase', () => {
     const result = {}
     const submissionStartDate = '2026-05-22T08:00:00.000Z'

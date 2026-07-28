@@ -235,7 +235,7 @@ function convertChallengeSchemaToPrisma(currentUser, challenge) {
   if (!_.isNil(challenge.reviewers)) {
     result.reviewers = {
       create: _.map(challenge.reviewers, (r, index) => {
-        const reviewer = {
+        const reviewer: any = {
           ...auditFields,
           scorecardId: String(r.scorecardId),
           isMemberReview: !!r.isMemberReview,

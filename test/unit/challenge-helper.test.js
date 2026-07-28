@@ -185,4 +185,45 @@ describe("challenge metadata validation", () => {
       },
     ])).to.throw("metadata submission_type must be either zip or url");
   });
+
+  it("allows exact string values for the registered-member winning download flag", () => {
+    expect(() => challengeHelper.validateRegisteredMemberWinningSubmissionDownloadMetadata([
+      {
+        name: "allowAllRegistrantsToDownloadWinningSubmissions",
+        value: "true",
+      },
+    ])).not.to.throw();
+
+    expect(() => challengeHelper.validateRegisteredMemberWinningSubmissionDownloadMetadata([
+      {
+        name: "allowAllRegistrantsToDownloadWinningSubmissions",
+        value: "false",
+      },
+    ])).not.to.throw();
+  });
+
+  it("allows the registered-member winning download flag to be omitted", () => {
+    expect(() =>
+      challengeHelper.validateRegisteredMemberWinningSubmissionDownloadMetadata(undefined)
+    ).not.to.throw();
+    expect(() => challengeHelper.validateRegisteredMemberWinningSubmissionDownloadMetadata([
+      {
+        name: "submission_type",
+        value: "zip",
+      },
+    ])).not.to.throw();
+  });
+
+  it("rejects non-string or non-boolean registered-member winning download flag values", () => {
+    for (const value of [true, false, "TRUE", "yes", " true "]) {
+      expect(() => challengeHelper.validateRegisteredMemberWinningSubmissionDownloadMetadata([
+        {
+          name: "allowAllRegistrantsToDownloadWinningSubmissions",
+          value,
+        },
+      ])).to.throw(
+        "metadata allowAllRegistrantsToDownloadWinningSubmissions must be either true or false as a string"
+      );
+    }
+  });
 });

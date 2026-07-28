@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "app.ts",
+    "app-bootstrap.ts",
+    "app-constants.ts",
+    "app-routes.ts",
+    "main.ts",
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "data-migration",
+    "mock-api",
+    "packages"
+  ]
+}
