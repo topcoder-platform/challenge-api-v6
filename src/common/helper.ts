@@ -13,6 +13,8 @@ const axiosRetry = require("axios-retry").default;
 const busApi = require("topcoder-bus-api-wrapper");
 const NodeCache = require("node-cache");
 const HttpStatus = require("http-status-codes");
+const cityTimezones = require("city-timezones");
+const momentTimezone = require("moment-timezone");
 const logger = require("./logger");
 
 const projectHelper = require("./project-helper");
@@ -1736,17 +1738,16 @@ async function getReviewSummations(challengeId) {
 }
 
 /**
- * Get member by ID
+ * Get a member profile by ID.
  * @param {String} userId the user ID
- * @returns {Object}
+ * @returns {Promise<Object>} the matching member profile, or an empty object
+ * @throws {Error} when authentication or the Members API request fails
  */
 async function getMemberById(userId) {
   const token = await m2mHelper.getM2MToken();
-  console.log(`${config.MEMBERS_API_URL}?userId=${userId}`);
   const res = await axios.get(`${config.MEMBERS_API_URL}?userId=${userId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  console.log(res.data);
   if (res.data.length > 0) return res.data[0];
   return {};
 }
@@ -1867,24 +1868,81 @@ async function sendSelfServiceNotification(type, recipients, data) {
 }
 
 /**
- * Build payload for phase change email notification
- * @param {String} challenge Id
- * @param {String} challenge name
- * @param {String} challenge phase name
- * @param {String} operation to be performed on the phase - open | close | reopen
- * @param {String|Date} at - The date/time when the phase opened/closed
+ * Resolve a member's IANA timezone from the city and country in their primary address.
+ * The first city-timezones match and profile app country/city fallback are used.
+ * @param {Object} memberData the member profile returned by the Members API
+ * @returns {String} a valid IANA timezone, or UTC when the location cannot be resolved
  */
-function buildPhaseChangeEmailData({ challengeId, challengeName, phaseName, operation, at }) {
+function getMemberTimezone(memberData) {
+  const city = _.get(memberData, "addresses[0].city");
+  if (!city) {
+    return "UTC";
+  }
+
+  try {
+    const matches = cityTimezones.lookupViaCity(String(city).trim());
+    let timezone = _.get(matches, "[0].timezone");
+
+    if (!timezone) {
+      const countryCode = memberData.homeCountryCode || memberData.competitionCountryCode;
+      const country = countryCode
+        ? _.get(cityTimezones.findFromIsoCode(countryCode), "[0].country")
+        : null;
+      timezone = country ? `${country}/${String(city).trim()}` : null;
+    }
+
+    return timezone && momentTimezone.tz.zone(timezone) ? timezone : "UTC";
+  } catch (e) {
+    return "UTC";
+  }
+}
+
+/**
+ * Format a phase change timestamp in the member's local timezone.
+ * This value is displayed in phase notification emails.
+ * @param {String|Date} at the instant when the phase opened or closed
+ * @param {Object} memberData the recipient's member profile
+ * @returns {String} the localized timestamp in `MMMM DD, YYYY HH:mm z` format
+ */
+function formatLocalizedPhaseTime(at, memberData) {
+  return momentTimezone(at)
+    .tz(getMemberTimezone(memberData))
+    .format("MMMM DD, YYYY HH:mm z");
+}
+
+/**
+ * Build payload for a phase change email notification.
+ * @param {Object} options phase notification values
+ * @param {String} options.challengeId the challenge ID
+ * @param {String} options.challengeName the challenge name
+ * @param {String} options.phaseName the challenge phase name
+ * @param {String} options.operation the phase operation: open, close, or reopen
+ * @param {String|Date} options.at the phase change timestamp used when no localization is supplied
+ * @param {String} options.localizedTime the phase change timestamp localized for the recipient
+ * @returns {Object} template data for the recipient's phase notification email
+ */
+function buildPhaseChangeEmailData({
+  challengeId,
+  challengeName,
+  phaseName,
+  operation,
+  at,
+  localizedTime,
+}) {
   const isOpen = operation === "open" || operation === "reopen";
   const isClose = operation === "close";
+  const displayedTime = localizedTime || at;
+  const phaseChange = `${phaseName} ${isClose ? "Closed" : "Open"}`;
 
   return {
     challengeURL: `${config.CHALLENGE_URL}/${challengeId}`,
     challengeName,
     phaseOpen: isOpen ? phaseName : null,
-    phaseOpenDate: isOpen ? at : null,
+    phaseOpenDate: isOpen ? displayedTime : null,
     phaseClose: isClose ? phaseName : null,
-    phaseCloseDate: isClose ? at : null,
+    phaseCloseDate: isClose ? displayedTime : null,
+    localized_time: displayedTime,
+    phase_change: phaseChange,
   };
 }
 
@@ -2053,6 +2111,8 @@ module.exports = {
   setToInternalCache,
   flushInternalCache,
   removeNullProperties,
+  getMemberTimezone,
+  formatLocalizedPhaseTime,
   buildPhaseChangeEmailData,
   sendPhaseChangeNotification,
 };
