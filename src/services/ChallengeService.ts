@@ -845,8 +845,9 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
+const CHECKPOINT_REVIEW_PHASE_NAME = "checkpoint review";
 const REVIEW_PHASE_NAMES = Object.freeze([
-  "checkpoint review",
+  CHECKPOINT_REVIEW_PHASE_NAME,
   "checkpoint screening",
   "screening",
   "review",
@@ -859,6 +860,33 @@ const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Determines whether checkpoint winners are ready to be included in challenge responses.
+ * Detail and search response sanitization use this after Checkpoint Review has closed,
+ * while completed challenges preserve their existing winner visibility.
+ *
+ * @param {Object} challenge challenge data containing status and phase state
+ * @returns {Boolean} true when assigned checkpoint winners may be returned
+ * @throws {Error} this function does not throw
+ */
+function shouldExposeCheckpointWinners(challenge) {
+  if (challenge.status === ChallengeStatusEnum.COMPLETED) {
+    return true;
+  }
+  if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
+    return false;
+  }
+
+  return _.some(
+    challenge.phases,
+    (phase) =>
+      normalizePhaseNameForComparison(phase.name) === CHECKPOINT_REVIEW_PHASE_NAME &&
+      phase.isOpen !== true &&
+      !_.isNil(phase.actualStartDate) &&
+      !_.isNil(phase.actualEndDate),
+  );
 }
 
 function extractSubmissionId(submission) {
@@ -2316,6 +2344,8 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+    }
+    if (!shouldExposeCheckpointWinners(challenge)) {
       _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
@@ -3041,8 +3071,14 @@ async function getChallenge(currentUser, id, checkIfExists?: any) {
   }
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
-    _.unset(challenge, "winners");
-    _.unset(challenge, "checkpointWinners");
+    if (shouldExposeCheckpointWinners(challenge)) {
+      challenge.winners = _.filter(
+        challenge.winners,
+        (winner) => winner.type === PrizeSetTypeEnum.CHECKPOINT,
+      );
+    } else {
+      _.unset(challenge, "winners");
+    }
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
