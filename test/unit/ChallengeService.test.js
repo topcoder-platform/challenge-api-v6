@@ -704,6 +704,55 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("counts every Design submission as a separate concept", async () => {
+      const challengeId = data.challenge.id;
+      const originalTrack = data.challengeTrack.track;
+      await prisma.challengeTrack.update({
+        where: { id: data.challenge.trackId },
+        data: { track: "DESIGN" },
+      });
+
+      try {
+        await reviewClient.$executeRawUnsafe(`
+          INSERT INTO ${submissionTableName}
+            ("id", "challengeId", "memberId", "type", "status", "submittedDate")
+          VALUES
+            ('pm5761a1', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z'),
+            ('pm5761a2', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z'),
+            ('pm5761a3', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z'),
+            ('pm5761c1', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-04T00:00:00Z'),
+            ('pm5761c2', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-05T00:00:00Z')
+        `);
+
+        const detail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(detail.numOfSubmissions, 3);
+        should.equal(detail.numOfCheckpointSubmissions, 2);
+
+        const listing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(listing.result.length, 1);
+        should.equal(listing.result[0].numOfSubmissions, 3);
+        should.equal(listing.result[0].numOfCheckpointSubmissions, 2);
+      } finally {
+        try {
+          await reviewClient.$executeRawUnsafe(
+            `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${challengeId}'`,
+          );
+        } finally {
+          await prisma.challengeTrack.update({
+            where: { id: data.challenge.trackId },
+            data: { track: originalTrack },
+          });
+        }
+      }
+    });
+
     it("get challenge preserves billing for project write users", async () => {
       const originalUserHasProjectWriteAccess = helper.userHasProjectWriteAccess;
 
