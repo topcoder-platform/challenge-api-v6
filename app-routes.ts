@@ -68,7 +68,7 @@ function isM2MAuthUser(authUser) {
 /**
  * Check whether an M2M caller has any scope required by the route definition.
  *
- * @param {Object} def route definition from src/routes.js
+ * @param {Object} def route definition from src/routes.ts
  * @param {Object} authUser the decoded auth user from the authenticator
  * @returns {Boolean} true when one required route scope is present
  */
@@ -80,7 +80,7 @@ function hasRequiredM2MScopes(def, authUser) {
 /**
  * Normalize a valid M2M caller to the shape expected by service authorization.
  *
- * @param {Object} def route definition from src/routes.js
+ * @param {Object} def route definition from src/routes.ts
  * @param {Object} authUser the decoded auth user from the authenticator
  * @returns {Boolean} true when the caller has required M2M scopes
  */
@@ -129,7 +129,7 @@ function configureRoutes(app) {
   _.each(routes, (verbs, path) => {
     _.each(verbs, (def, verb) => {
       const controllerPath = `./src/controllers/${def.controller}`;
-      const method = require(controllerPath)[def.method]; // eslint-disable-line
+      const method = require(controllerPath)[def.method];
       if (!method) {
         throw new Error(`${def.method} is undefined`);
       }
@@ -237,7 +237,7 @@ function configureRoutes(app) {
           if (!hasToken) {
             return next();
           }
-          const interceptRes = {};
+          const interceptRes: any = {};
           interceptRes.status = () => interceptRes;
           interceptRes.json = () => interceptRes;
           interceptRes.send = (payload) => {

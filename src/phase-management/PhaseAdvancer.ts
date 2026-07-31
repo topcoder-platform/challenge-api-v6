@@ -163,7 +163,11 @@ class PhaseAdvancer {
     return (
       phases
         .filter((phase) => phase.actualEndDate == null && phase.name === phaseName)
-        .sort((a, b) => new Date(a.scheduledStartDate) - new Date(b.scheduledStartDate))[0] || null
+        .sort(
+          (a, b) =>
+            (new Date(a.scheduledStartDate) as any) -
+            (new Date(b.scheduledStartDate) as any)
+        )[0] || null
     );
   }
 
@@ -269,7 +273,7 @@ class PhaseAdvancer {
     ).toISOString();
 
     const scheduledStartDate = parseDate(phase.scheduledStartDate);
-    const delta = scheduledStartDate - actualStartDate; // in milliseconds
+    const delta = (scheduledStartDate as any) - (actualStartDate as any); // in milliseconds
 
     if (delta !== 0) {
       console.log("Updating subsequent phases");
@@ -287,7 +291,7 @@ class PhaseAdvancer {
     phase.actualEndDate = actualEndDate.toISOString();
 
     const scheduledEndDate = parseDate(phase.scheduledEndDate);
-    const delta = scheduledEndDate - actualEndDate;
+    const delta = (scheduledEndDate as any) - (actualEndDate as any);
 
     if (delta !== 0) {
       this.#updateSubsequentPhases(phases, phase, -delta);
@@ -352,7 +356,7 @@ class PhaseAdvancer {
     });
     return ch?.numOfSubmissions || 0;
   }
-  
+
 
   async #areAllSubmissionsReviewed(challengeId) {
     console.log(`Evaluating review completion for challenge ${challengeId}`);

@@ -4,7 +4,9 @@
   "description": "Mock TC API",
   "main": "app.js",
   "scripts": {
-    "start": "node app"
+    "start": "node --require ../node_modules/ts-node/register/transpile-only app",
+    "lint": "node --check app.js && node --check config/default.js",
+    "build": "npm run lint"
   },
   "author": "TCSCODER",
   "license": "none",
@@ -13,5 +15,8 @@
     "cors": "^2.8.5",
     "config": "^4.1.1",
     "winston": "^3.18.3"
+  },
+  "overrides": {
+    "body-parser": "2.3.0"
   }
 }

@@ -16,7 +16,8 @@
         "migrate:test": "npm run migrate && npm run test",
         "migrate:reset:test": "npm run migrate:reset && npm run test",
         "lint": "eslint .",
-        "lint:fix": "eslint . --fix"
+        "lint:fix": "eslint . --fix",
+        "build": "node --check src/scripts/recalculateChallengeWinners.js"
     },
     "dependencies": {
         "@prisma/client": "~7.1.0",

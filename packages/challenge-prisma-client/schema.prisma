@@ -12,7 +12,7 @@ generator externalClient {
   provider        = "prisma-client-js"
   output          = "../packages/challenge-prisma-client"
   previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 // Enum for allowed challenge track values (matches app-constants)

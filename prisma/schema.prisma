@@ -1,6 +1,5 @@
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -12,7 +11,7 @@ generator externalClient {
   provider = "prisma-client-js"
   output   = "../packages/challenge-prisma-client"
   previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 // Enum for allowed challenge track values (matches app-constants)
@@ -342,7 +341,9 @@ model ChallengeMetadata {
   challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   challengeId String
   name        String // name of the metadata
-  value       String // value stored as string for flexibility
+  // Values are stored as strings for flexibility. Boolean metadata, including
+  // allowAllRegistrantsToDownloadWinningSubmissions, uses "true" or "false".
+  value       String
 
   createdAt DateTime @default(now())
   createdBy String

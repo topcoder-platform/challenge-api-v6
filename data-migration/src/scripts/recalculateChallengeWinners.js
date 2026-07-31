@@ -12,12 +12,12 @@
  *    - AUTH0_CLIENT_ID / AUTH0_CLIENT_SECRET / AUTH0_URL / AUTH0_AUDIENCE (for submitter handles)
  *    - RESOURCES_API_URL (optional; defaults to http://localhost:4000/v5/resources)
  * 2) Run CSV-only mode to review results:
- *    - node data-migration/src/scripts/recalculateChallengeWinners.js --csv-only --csv-path /tmp/winners.csv
+ *    - pnpm recalculate-winners:csv -- --csv-path /tmp/winners.csv
  * 3) Validate CSV output (challenge ordering is DESC by ID):
  *    - Submission ID, Challenge ID, Submitter handle, Submission date, Review score (avg),
  *      Scorecard min passing score, Placement
  * 4) Run write mode to apply winners:
- *    - node data-migration/src/scripts/recalculateChallengeWinners.js
+ *    - pnpm recalculate-winners
  * 5) Optional filters:
  *    - --challenge-id <uuid> (repeatable)
  *    - --challenge-ids <uuid,uuid>
@@ -41,9 +41,10 @@ require("dotenv").config();
 const config = require("config");
 const appRoot = path.resolve(__dirname, "..", "..", "..");
 const requireFromRoot = createRequire(path.join(appRoot, "package.json"));
-const { PrismaClient, Prisma, PrizeSetTypeEnum } = requireFromRoot("@prisma/client");
+const { Prisma, PrizeSetTypeEnum } = requireFromRoot("@prisma/client");
 const { getReviewClient } = require("../../../src/common/review-prisma");
-const helper = require("../../../src/common/helper");
+
+let helper;
 
 const DEFAULT_ACTOR = process.env.UPDATED_BY || process.env.CREATED_BY || "winner-recalc";
 const CREATED_BY = process.env.CREATED_BY || DEFAULT_ACTOR;
@@ -196,7 +197,7 @@ const parseArgs = (argv) => {
 const printUsage = () => {
   console.log(`
 Usage:
-  node data-migration/src/scripts/recalculateChallengeWinners.js [options]
+  pnpm recalculate-winners -- [options]
 
 Options:
   --csv-only, --csv         Output CSV report and skip DB writes.
@@ -401,6 +402,11 @@ async function main() {
     throw new Error("REVIEW_DB_URL must be set for the review database.");
   }
 
+  // Load database-dependent application modules only after argument and
+  // environment validation so `--help` remains usable without database config.
+  helper = require("../../../src/common/helper");
+  const prisma = require("../../../src/common/prisma").getClient();
+
   const reviewSchema = config.REVIEW_DB_SCHEMA || "reviews";
   const tables = {
     submission: buildSchemaTable(reviewSchema, "submission"),
@@ -409,7 +415,6 @@ async function main() {
     reviewSummation: buildSchemaTable(reviewSchema, "reviewSummation"),
   };
 
-  const prisma = new PrismaClient();
   const reviewClient = getReviewClient();
 
   await prisma.$connect();

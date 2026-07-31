@@ -123,7 +123,7 @@ getAttachment.schema = {
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated attachment
  */
-async function update(currentUser, challengeId, attachmentId, data, isFull) {
+async function update(currentUser, challengeId, attachmentId, data, isFull?: boolean) {
   const { challenge, attachment } = await _getChallengeAttachment(challengeId, attachmentId);
   await helper.ensureUserCanModifyChallenge(currentUser, challenge);
   validateUrl(data.url);

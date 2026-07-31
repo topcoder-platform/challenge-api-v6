@@ -100,17 +100,24 @@ function isCancelledChallengeStatus(status) {
 /**
  * Loads submission counters for challenge responses from the review submission table.
  *
- * Community app badges show the number of members with submissions, not the
- * number of attempts, so repeated uploads by the same member are counted once.
+ * Community app badges normally show the number of members with submissions,
+ * so repeated uploads by the same member are counted once. Design challenges
+ * count every submission because each upload can be a unique concept.
  *
  * @param {Array<String>} challengeIds challenge identifiers to count submissions for
+ * @param {Array<String>} designChallengeIds Design challenge identifiers that count every upload
  * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
  * counts keyed by challenge id
  * @throws {Error} when the review database query fails
  */
-async function getLatestSubmissionCountsByChallenge(challengeIds) {
+async function getLatestSubmissionCountsByChallenge(challengeIds, designChallengeIds = []) {
   const ids = _.uniq(
     (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const designIds = _.uniq(
+    (designChallengeIds || [])
       .map((challengeId) => _.toString(challengeId).trim())
       .filter((challengeId) => !!challengeId),
   );
@@ -124,16 +131,22 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
   const submissionTable = reviewSchema
     ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
     : Prisma.raw('"submission"');
+  const submissionIdentity = designIds.length
+    ? Prisma.sql`CASE
+        WHEN "challengeId" IN (${Prisma.join(designIds)}) THEN "id"
+        ELSE "memberId"
+      END`
+    : Prisma.sql`"memberId"`;
   const reviewClient = getReviewClient();
 
   const rows = await reviewClient.$queryRaw`
     SELECT
       "challengeId",
       COUNT(DISTINCT CASE
-        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfCheckpointSubmissions",
       COUNT(DISTINCT CASE
-        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfSubmissions"
     FROM ${submissionTable}
     WHERE "challengeId" IN (${Prisma.join(ids)})
@@ -152,7 +165,11 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
 }
 
 /**
- * Applies latest-member submission counts to challenge records before response conversion.
+ * Applies submission counts to challenge records before response conversion.
+ *
+ * Design challenges count every submission as a separate concept. Other tracks
+ * count distinct submitting members so replacement attempts do not inflate the
+ * displayed total.
  *
  * If the review query succeeds, challenges without submission rows are reset to
  * zero so stale stored counters are not shown. If the query cannot run, callers
@@ -169,8 +186,12 @@ async function applyLatestSubmissionCounts(challenges) {
 
   let countsByChallenge;
   try {
+    const designChallengeIds = records
+      .filter((challenge) => phaseHelper.isDesignTrack(challenge.track))
+      .map((challenge) => challenge.id);
     countsByChallenge = await getLatestSubmissionCountsByChallenge(
       records.map((challenge) => challenge.id),
+      designChallengeIds,
     );
   } catch (err) {
     logger.warn(`Failed to load latest submission counts: ${err.message}`);
@@ -466,7 +487,7 @@ function normalizeConfiguredBillingAccountIds(billingAccountIds) {
  * @param {string|number|null|undefined} projectBillingAccountId Billing account returned by the project.
  * @returns {string|null} The first available billing-account id, or `null` when none is present.
  */
-function getApprovalFlowBillingAccountId(challenge, data, projectBillingAccountId) {
+function getApprovalFlowBillingAccountId(challenge, data?: any, projectBillingAccountId?: any) {
   return (
     normalizeOptionalString(projectBillingAccountId) ||
     normalizeOptionalString(_.get(data, "billing.billingAccountId")) ||
@@ -845,8 +866,9 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
+const CHECKPOINT_REVIEW_PHASE_NAME = "checkpoint review";
 const REVIEW_PHASE_NAMES = Object.freeze([
-  "checkpoint review",
+  CHECKPOINT_REVIEW_PHASE_NAME,
   "checkpoint screening",
   "screening",
   "review",
@@ -859,6 +881,33 @@ const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Determines whether checkpoint winners are ready to be included in challenge responses.
+ * Detail and search response sanitization use this after Checkpoint Review has closed,
+ * while completed challenges preserve their existing winner visibility.
+ *
+ * @param {Object} challenge challenge data containing status and phase state
+ * @returns {Boolean} true when assigned checkpoint winners may be returned
+ * @throws {Error} this function does not throw
+ */
+function shouldExposeCheckpointWinners(challenge) {
+  if (challenge.status === ChallengeStatusEnum.COMPLETED) {
+    return true;
+  }
+  if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
+    return false;
+  }
+
+  return _.some(
+    challenge.phases,
+    (phase) =>
+      normalizePhaseNameForComparison(phase.name) === CHECKPOINT_REVIEW_PHASE_NAME &&
+      phase.isOpen !== true &&
+      !_.isNil(phase.actualStartDate) &&
+      !_.isNil(phase.actualEndDate),
+  );
 }
 
 function extractSubmissionId(submission) {
@@ -1003,7 +1052,7 @@ async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening')
  * @param {Object} [options]
  * @param {Map<string, Object>} [options.skillLookup] optional map of skillId -> skill payload
  */
-async function enrichSkillsData(challenge, { skillLookup } = {}) {
+async function enrichSkillsData(challenge, { skillLookup }: { skillLookup?: any } = {}) {
   if (!Array.isArray(challenge.skills) || challenge.skills.length === 0) {
     return;
   }
@@ -1053,7 +1102,7 @@ async function enrichSkillsData(challenge, { skillLookup } = {}) {
       const skillId = skill.skillId || skill.id;
       const found = getFromLookup(skillId);
       if (found) {
-        const enrichedSkill = {
+        const enrichedSkill: any = {
           id: skillId,
           name: found.name,
         };
@@ -1365,7 +1414,7 @@ setDefaultReviewers.schema = { currentUser: Joi.any(), data: Joi.any() };
  */
 async function searchByLegacyId(currentUser, legacyId, page, perPage) {
   const whitelistFilter = helper.getChallengeWhitelistAccessFilter(currentUser);
-  const where = { legacyId };
+  const where: any = { legacyId };
   if (whitelistFilter) {
     where.AND = [whitelistFilter];
   }
@@ -1484,7 +1533,7 @@ async function searchChallengesViaMemberAccess({
       return aValue - bValue;
     }
     if (aValue instanceof Date && bValue instanceof Date) {
-      return aValue - bValue;
+      return (aValue as any) - (bValue as any);
     }
     const aStr = `${aValue}`;
     const bStr = `${bValue}`;
@@ -1979,7 +2028,6 @@ async function searchChallenges(currentUser, criteria) {
   const requestedMemberId = !_.isNil(criteria.memberId) ? _.toString(criteria.memberId) : null;
   const currentUserMemberId =
     currentUser && !_hasAdminRole && !_isMachineToken ? _.toString(currentUser.userId) : null;
-  const memberIdForTaskFilter = requestedMemberId || currentUserMemberId;
   const isSelfMemberSearch = Boolean(
     requestedMemberId && currentUserMemberId && requestedMemberId === currentUserMemberId,
   );
@@ -2101,27 +2149,11 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  // FIXME: Tech Debt
-  let excludeTasks = true;
-  if (requestedMemberId) {
-    // When we already restrict the result set to a specific member,
-    // rerunning the generic task visibility filter is redundant.
-    excludeTasks = false;
-  } else if (
-    currentUser &&
-    (_hasAdminRole || _isMachineToken || hasProjectManagerAccessForSearch)
-  ) {
-    // if you're an admin or m2m, security rules wont be applied
-    excludeTasks = false;
-  }
-
   /**
-   * For non-authenticated users:
-   * - Only unassigned tasks will be returned
-   * For authenticated users (non-admin):
-   * - Only unassigned tasks and tasks assigned to the logged in user will be returned
-   * For admins/m2m:
-   * - All tasks will be returned
+   * Task challenges are visible to ordinary authenticated users only when they
+   * have a resource on the task. Anonymous users never receive tasks. Admin,
+   * machine-token and project-manager searches retain their operational access.
+   * A requested memberId narrows results but never grants the caller task access.
    */
   if (currentUser && (_hasAdminRole || _isMachineToken)) {
     // For admins/m2m, allow filtering based on task properties
@@ -2140,26 +2172,14 @@ async function searchChallenges(currentUser, criteria) {
         taskMemberId: criteria.taskMemberId,
       });
     }
-  } else if (excludeTasks) {
-    const taskFilter = [];
-    if (memberIdForTaskFilter) {
+  } else if (!hasProjectManagerAccessForSearch) {
+    const taskFilter: any[] = [{ taskIsTask: false }];
+    if (currentUserMemberId) {
       taskFilter.push({
+        taskIsTask: true,
         memberAccesses: {
-          some: { memberId: memberIdForTaskFilter },
+          some: { memberId: currentUserMemberId },
         },
-      });
-    }
-    taskFilter.push({
-      taskIsTask: false,
-    });
-    taskFilter.push({
-      taskIsTask: true,
-      taskIsAssigned: false,
-      taskMemberId: null,
-    });
-    if (currentUser && !_hasAdminRole && !_isMachineToken) {
-      taskFilter.push({
-        taskMemberId: currentUser.userId,
       });
     }
     prismaFilter.where.AND.push({
@@ -2335,7 +2355,7 @@ async function searchChallenges(currentUser, criteria) {
     console.log(e);
   }
 
-  let result = challenges;
+  const result = challenges;
 
   if (currentUser) {
     if (!currentUser.isMachine && !_hasAdminRole) {
@@ -2368,6 +2388,8 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+    }
+    if (!shouldExposeCheckpointWinners(challenge)) {
       _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
@@ -2900,7 +2922,15 @@ createChallenge.schema = {
         .items(
           Joi.object().keys({
             name: Joi.string().required(),
-            value: Joi.required(),
+            value: Joi.when("name", {
+              is: constants.ChallengeMetadataNames
+                .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+              then: Joi.string()
+                .valid(...constants.BOOLEAN_METADATA_VALUES)
+                .strict()
+                .required(),
+              otherwise: Joi.required(),
+            }),
           }),
         )
         .unique((a, b) => a.name === b.name),
@@ -3036,7 +3066,7 @@ createChallenge.schema = {
  * @returns {Object} the challenge with given id. Interactive callers keep
  * billing details only when they already have project write access.
  */
-async function getChallenge(currentUser, id, checkIfExists) {
+async function getChallenge(currentUser, id, checkIfExists?: any) {
   // Log the ID of the challenge being requested
   logger.info(`Requesting challenge by id: ${id}`);
   const challenge = await prisma.challenge.findUnique({
@@ -3085,8 +3115,14 @@ async function getChallenge(currentUser, id, checkIfExists) {
   }
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
-    _.unset(challenge, "winners");
-    _.unset(challenge, "checkpointWinners");
+    if (shouldExposeCheckpointWinners(challenge)) {
+      challenge.winners = _.filter(
+        challenge.winners,
+        (winner) => winner.type === PrizeSetTypeEnum.CHECKPOINT,
+      );
+    } else {
+      _.unset(challenge, "winners");
+    }
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
@@ -3199,7 +3235,7 @@ function isDifferentPrizeSets(prizeSets = [], otherPrizeSets = []) {
  * @param {Array} winners the Winner Array
  * @param {Array} challengeResources the challenge resources
  */
-function buildCombinedWinnerPayload(data = {}) {
+function buildCombinedWinnerPayload(data: any = {}) {
   const combined = [];
   if (Array.isArray(data.winners)) {
     combined.push(
@@ -3581,7 +3617,7 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  */
 // Note: `options` may be a boolean for backward compatibility (emitEvent flag),
 // or an object { emitEvent?: boolean }.
-async function updateChallenge(currentUser, challengeId, data, options = {}) {
+async function updateChallenge(currentUser, challengeId, data, options: any = {}) {
   // Backward compatibility for callers passing a boolean as the 4th arg
   let emitEvent = true;
   if (typeof options === "boolean") {
@@ -3869,7 +3905,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
 
   /* END self-service stuffs */
 
-  let isChallengeBeingActivated = isStatusChangingToActive;
+  const isChallengeBeingActivated = isStatusChangingToActive;
   let isChallengeBeingCancelled = false;
   const allowActivePhaseShortening = phaseHelper.isDesignTrack(challenge.track);
   const preventPhaseShortening =
@@ -4147,7 +4183,7 @@ async function updateChallenge(currentUser, challengeId, data, options = {}) {
     data.phases = phasesForUpdate;
   }
 
-  let phasesForDates = phasesUpdated ? data.phases : challenge.phases;
+  const phasesForDates = phasesUpdated ? data.phases : challenge.phases;
 
   if (phasesUpdated || data.startDate) {
     const startSource =
@@ -4659,7 +4695,15 @@ updateChallenge.schema = {
           Joi.object()
             .keys({
               name: Joi.string().required(),
-              value: Joi.required(),
+              value: Joi.when("name", {
+                is: constants.ChallengeMetadataNames
+                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                then: Joi.string()
+                  .valid(...constants.BOOLEAN_METADATA_VALUES)
+                  .strict()
+                  .required(),
+                otherwise: Joi.required(),
+              }),
             })
             .unknown(true),
         )
@@ -5316,7 +5360,7 @@ async function syncChallengePhases(
       "actualEndDate",
       "challengeSource",
     ];
-    const phaseData = {};
+    const phaseData: any = {};
     for (const key of scalarKeys) {
       if (!_.isUndefined(phase[key])) {
         phaseData[key] = phase[key];
@@ -5353,7 +5397,7 @@ async function syncChallengePhases(
           continue;
         }
 
-        const constraintData = {
+        const constraintData: any = {
           challengePhaseId: recordId,
           name: constraint.name,
           value: constraint.value,
@@ -5692,7 +5736,7 @@ closeMarathonMatch.schema = {
   challengeId: Joi.id(),
 };
 
-async function indexChallengeAndPostToKafka(updatedChallenge, track, type) {
+async function indexChallengeAndPostToKafka(updatedChallenge, track?: any, type?: any) {
   const prizeType = challengeHelper.validatePrizeSetsAndGetPrizeType(updatedChallenge.prizeSets);
 
   // No conversion needed - values are already in dollars in the database

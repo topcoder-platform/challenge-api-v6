@@ -2,9 +2,7 @@
 
 This microservice provides access and interaction with all sorts of Challenge data.
 
-## Devlopment status
-
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/topcoder-platform/challenge-api.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/topcoder-platform/challenge-api/alerts/)[![Language grade: JavaScript](https://img.shields.io/lgtm/grade/javascript/g/topcoder-platform/challenge-api.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/topcoder-platform/challenge-api/context:javascript)
+## Development status
 
 ### Deployment status
 
@@ -12,7 +10,7 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 
 ## Swagger definition
 
-- [Swagger](https://api.topcoder.com/v5/challenges/docs/)
+- [Swagger](https://api.topcoder.com/v6/challenges/api-docs/)
 
 ## Intended use
 
@@ -24,10 +22,26 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 
 ## Prerequisites
 
-- [NodeJS](https://nodejs.org/en/) (v18+)
+- [Node.js](https://nodejs.org/en/) 26.4.0 (use the version in `.nvmrc`)
+- [pnpm](https://pnpm.io/) 11.15.1
 - [AWS S3](https://aws.amazon.com/s3/)
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
+
+## Technology
+
+The API is written in TypeScript and runs on NestJS 11 with the Express adapter.
+The adapter mounts the established Express middleware and route graph so existing
+HTTP routes, validation, authentication, response bodies, and middleware ordering
+remain compatible. Database access uses Prisma 7 with the PostgreSQL driver
+adapter. Domain events continue to be sent through the existing Bus API wrapper;
+this service does not connect to Kafka directly.
+
+The API runtime client is Prisma 7. The checked-in
+`packages/challenge-prisma-client` artifact remains on Prisma 6 for its existing
+downstream consumers, so the root generation command intentionally targets only
+the API client. Upgrading that shared artifact requires a coordinated downstream
+release.
 
 ## Configuration
 
@@ -63,20 +77,26 @@ The following parameters can be set in config files or in env variables:
 - SCOPES: the configurable M2M token scopes, refer `config/default.js` for more details
 - M2M_AUDIT_HANDLE: the audit name used when perform create/update operation using M2M token
 - FORUM_TITLE_LENGTH_LIMIT: the forum title length limit
+- DATABASE_URL: PostgreSQL connection URL for the challenge database
+- REVIEW_DB_URL: optional PostgreSQL connection URL for review data; existing
+  deployments may continue to omit it when review-database access is not used
 
 You can find sample `.env` files inside the `/docs` directory.
+The TypeScript, NestJS, and Prisma 7 migration does not introduce or rename any
+configuration parameters.
 
 ## Available commands
 
-Make sure you have set environment variable `DATABASE_URL` before any database operations.
+Run `nvm use` before pnpm commands. Make sure `DATABASE_URL` is set before any
+database operation or application startup.
 
-1. Creating tables: `npm run create-tables`
-2. Seed/Insert data to tables: `npm run seed-tables`
-3. Start all the depending services for local deployment: `npm run services:up`
-4. Stop all the depending services for local deployment: `npm run services:down`
-5. Check the logs of all the depending services for local deployment: `npm run services:logs`
-6. Initialize the local environments: `npm run local:init`
-7. Reset the local environments: `npm run local:reset`
+1. Install dependencies and generate the Prisma client: `pnpm install`
+2. Build the API: `pnpm build`
+3. Create or update local database tables: `pnpm create-tables`
+4. Seed tables: `pnpm seed-tables`
+5. Start local supporting services: `pnpm services:up`
+6. Stop local supporting services: `pnpm services:down`
+7. Check supporting-service logs: `pnpm services:logs`
 
 ### Notes
 
@@ -84,7 +104,7 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
 
 ## Local Deployment
 
-0. Make sure to use Node v10+ by command `node -v`. We recommend using [NVM](https://github.com/nvm-sh/nvm) to quickly switch to the right version:
+0. Select the repository's Node 26.4.0 version with
 
    ```bash
    nvm use
@@ -102,7 +122,7 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
    AUTH0_CLIENT_SECRET=
    ```
 
-   - Values from this file would be automatically used by many `npm` commands.
+   - Values from this file are automatically used by the application and Prisma commands.
    - ⚠️ Never commit this file or its copy to the repository!
 
    Please make sure database url is configured before everything.
@@ -110,12 +130,12 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
    DATABASE_URL=
    ```
 
-   After that you can run `npm install` to install dependencies. And then prisma will setup clients automatically.
+   Then run `pnpm install`. The postinstall hook generates the Prisma 7 client.
 
 2. 🚢 Start docker-compose with services which are required to start Topcoder Challenges API locally
 
    ```bash
-   npm run services:up
+   pnpm services:up
    ```
    This command will start postgres with docker-compose.
 
@@ -131,7 +151,7 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
    ```bash
    export DATABASE_URL="postgresql://johndoe:mypassword@localhost:5432/challengedb?schema=public"
    ```
-   Be sure to run it before running `npm install`
+   Set it before running database commands or starting the API.
 
 
 3. ♻ Running mock-api:
@@ -159,57 +179,25 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
 
    To create database tables, you can run:
    ```bash
-   npm run create-tables
+   pnpm create-tables
    ```
 
    To create test data, you can run:
    ```bash
-   npm run seed-tables
+   pnpm seed-tables
    ```
 
-   To reset db structure and create testdata, you can run:
-   ```bash
-   npm run local:init
-   ```
+5. Configure external integrations
 
-5. Comment Code for M2M Token and postBusEvent
-
-   In local environment, you don't need to use M2M Token or bus API.
-
-   You can just comment them to make it working.
-
-   For M2M token, you need to comment `src/common/m2m-helper.js#L18`, just return an empty string.
-
-   The content will be like:
-   ```js
-   getM2MToken() {
-      // return M2MHelper.m2m.getMachineToken(config.AUTH0_CLIENT_ID, config.AUTH0_CLIENT_SECRET);
-      return '';
-   }
-   ```
-
-   For postBusEvent, you need to comment codes in `src/common/helper.js#L684`. The content will be like:
-   ```js
-   async function postBusEvent(topic, payload, options = {}) {
-      // const client = getBusApiClient();
-      const message = {
-         topic,
-         originator: constants.EVENT_ORIGINATOR,
-         timestamp: new Date().toISOString(),
-         "mime-type": constants.EVENT_MIME_TYPE,
-         payload,
-      };
-      if (options.key) {
-         message.key = options.key;
-      }
-      // await client.postEvent(message);
-   }
-   ```
+   Authenticated operations and event publication use the existing Auth0 and
+   Bus API settings. Configure `AUTH0_*` and `BUSAPI_URL` for environments that
+   exercise those paths. Topics disabled by the existing topic configuration are
+   skipped exactly as before; no local Kafka connection is required.
 
 6. 🚀 Start Topcoder Challenge API
 
    ```bash
-   npm start
+   pnpm start
    ```
 
    The Topcoder Challenge API will be served on `http://localhost:3000`
@@ -222,8 +210,8 @@ Make sure you have set environment variable `DATABASE_URL` before any database o
 
 ### Configuration
 
-Test configuration is at `config/test.js`. You don't need to change them.
-The following test parameters can be set in config file or in env variables:
+Tests use `config/default.js` plus environment-variable overrides. The following
+test parameters can be set with environment variables:
 
 - ADMIN_TOKEN: admin token
 - COPILOT_TOKEN: copilot token
@@ -248,13 +236,13 @@ Seeding db data is not needed.
 To run unit tests alone
 
 ```bash
-npm run test
+pnpm test
 ```
 
 To run unit tests with coverage report
 
 ```bash
-npm run test:cov
+pnpm test:cov
 ```
 
 ### Running integration tests
@@ -262,13 +250,13 @@ npm run test:cov
 To run integration tests alone
 
 ```bash
-npm run e2e
+pnpm e2e
 ```
 
 To run integration tests with coverage report
 
 ```bash
-npm run e2e:cov
+pnpm e2e:cov
 ```
 
 ## Verification
@@ -282,8 +270,8 @@ Refer to the verification document `Verification.md`
   challenge also have attachments field linking to its attachments,
   this will speed up challenge CRUDS operations.
 
-- In the app-constants.js Topics field, the used topics are using a test topic,
-  the suggested ones are commented out, because these topics are not created in TC dev Kafka yet.
+- Topic names are defined in `app-constants.ts`. Event envelopes are posted to
+  the Bus API, which owns Kafka integration for this service.
 
 **Downstream Usage**
 

@@ -2585,10 +2585,16 @@ definitions:
           properties:
             name:
               type: string
-              description: Metadata name. Use submission_type to override the challenge submission flow.
+              description: >-
+                Metadata name. Use submission_type to override the challenge submission flow. Use
+                allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
+                winning submissions after the challenge ends.
             value:
               type: string
-              description: Metadata value. For submission_type, supported values are zip and url.
+              description: >-
+                Metadata value. For submission_type, supported values are zip and url. For
+                allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
+                false are accepted; a missing entry behaves as false.
           required:
             - name
             - value
@@ -2674,6 +2680,7 @@ definitions:
           - placement
       checkpointWinners:
         type: array
+        description: Checkpoint winners are returned after Checkpoint Review closes, including while the challenge is active.
         items:
           properties:
             userId:
@@ -2871,10 +2878,16 @@ definitions:
           properties:
             name:
               type: string
-              description: Metadata name. Use submission_type to override the challenge submission flow.
+              description: >-
+                Metadata name. Use submission_type to override the challenge submission flow. Use
+                allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
+                winning submissions after the challenge ends.
             value:
               type: string
-              description: Metadata value. For submission_type, supported values are zip and url.
+              description: >-
+                Metadata value. For submission_type, supported values are zip and url. For
+                allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
+                false are accepted; a missing entry behaves as false.
           required:
             - name
             - value
@@ -3042,10 +3055,16 @@ definitions:
           properties:
             name:
               type: string
-              description: Metadata name. Use submission_type to override the challenge submission flow.
+              description: >-
+                Metadata name. Use submission_type to override the challenge submission flow. Use
+                allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
+                winning submissions after the challenge ends.
             value:
               type: string
-              description: Metadata value. For submission_type, supported values are zip and url.
+              description: >-
+                Metadata value. For submission_type, supported values are zip and url. For
+                allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
+                false are accepted; a missing entry behaves as false.
           required:
             - name
             - value
@@ -3258,10 +3277,16 @@ definitions:
           properties:
             name:
               type: string
-              description: Metadata name. Use submission_type to override the challenge submission flow.
+              description: >-
+                Metadata name. Use submission_type to override the challenge submission flow. Use
+                allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
+                winning submissions after the challenge ends.
             value:
               type: string
-              description: Metadata value. For submission_type, supported values are zip and url.
+              description: >-
+                Metadata value. For submission_type, supported values are zip and url. For
+                allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
+                false are accepted; a missing entry behaves as false.
           required:
             - name
             - value
