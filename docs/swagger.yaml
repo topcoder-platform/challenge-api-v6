@@ -2680,6 +2680,7 @@ definitions:
           - placement
       checkpointWinners:
         type: array
+        description: Checkpoint winners are returned after Checkpoint Review closes, including while the challenge is active.
         items:
           properties:
             userId:

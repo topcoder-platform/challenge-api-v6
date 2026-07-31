@@ -652,6 +652,115 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("returns checkpoint winners after checkpoint review closes while keeping placement winners hidden", async () => {
+      const challengeId = data.challenge.id;
+      const checkpointPhase = await prisma.challengePhase.findFirstOrThrow({
+        where: { challengeId },
+      });
+      const originalPhase = _.pick(checkpointPhase, [
+        "name",
+        "isOpen",
+        "actualStartDate",
+        "actualEndDate",
+      ]);
+      const phaseStartDate = new Date(Date.now() - 60_000);
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: { status: ChallengeStatusEnum.ACTIVE },
+      });
+      await prisma.challengePhase.update({
+        where: { id: checkpointPhase.id },
+        data: {
+          name: "Checkpoint Review",
+          isOpen: true,
+          actualStartDate: phaseStartDate,
+          actualEndDate: null,
+        },
+      });
+      await prisma.challengeWinner.createMany({
+        data: [
+          {
+            challengeId,
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.CHECKPOINT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+          {
+            challengeId,
+            userId: 456,
+            handle: "placement-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.PLACEMENT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+        ],
+      });
+
+      try {
+        const openPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(_.isUndefined(openPhaseDetail.checkpointWinners), true);
+        openPhaseDetail.winners.should.deep.equal([]);
+
+        const openPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(openPhaseListing.result.length, 1);
+        should.equal(_.isUndefined(openPhaseListing.result[0].checkpointWinners), true);
+        should.equal(_.isUndefined(openPhaseListing.result[0].winners), true);
+
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: {
+            isOpen: false,
+            actualEndDate: new Date(),
+          },
+        });
+
+        const closedPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        closedPhaseDetail.checkpointWinners.should.deep.equal([
+          {
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+          },
+        ]);
+        closedPhaseDetail.winners.should.deep.equal([]);
+
+        const closedPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(closedPhaseListing.result.length, 1);
+        closedPhaseListing.result[0].checkpointWinners.should.deep.equal(
+          closedPhaseDetail.checkpointWinners,
+        );
+        should.equal(_.isUndefined(closedPhaseListing.result[0].winners), true);
+      } finally {
+        await prisma.challengeWinner.deleteMany({ where: { challengeId } });
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: originalPhase,
+        });
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { status: ChallengeStatusEnum.COMPLETED },
+        });
+      }
+    });
+
     it("returns latest-member submission counters for challenge detail and listing", async () => {
       const challengeId = data.challenge.id;
       await prisma.challenge.update({
