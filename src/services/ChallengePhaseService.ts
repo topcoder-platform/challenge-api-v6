@@ -28,6 +28,7 @@ const REVIEW_PHASE_NAMES = Object.freeze([
   "approval",
 ]);
 const REVIEW_PHASE_NAME_SET = new Set(REVIEW_PHASE_NAMES.map((name) => name.toLowerCase()));
+const PHASE_NOTIFICATION_BATCH_SIZE = 10;
 const PHASE_RESOURCE_ROLE_REQUIREMENTS = Object.freeze({
   "iterative review": "Iterative Reviewer",
   "checkpoint screening": "Checkpoint Screener",
@@ -641,7 +642,8 @@ getChallengePhase.schema = {
 };
 
 /**
- * Partially update challenge phase
+ * Partially update a challenge phase and publish individualized, localized
+ * notifications when the update opens, closes, or reopens the phase.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {String} id the phase id
@@ -1060,16 +1062,24 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       // build recipients
       const resources = await helper.getChallengeResources(challengeId);
 
-      const recipients = Array.from(
-        new Set(
-          (resources || [])
-            .map((r) => r?.email || r?.memberEmail)
-            .filter(Boolean)
-            .map((e) => String(e).trim().toLowerCase()),
-        ),
-      );
+      const recipients = new Map();
+      for (const resource of resources || []) {
+        if (resource?.phaseChangeNotifications !== true) {
+          continue;
+        }
 
-      if (!recipients.length) {
+        const email = String(resource?.email || resource?.memberEmail || "")
+          .trim()
+          .toLowerCase();
+        if (email && !recipients.has(email)) {
+          recipients.set(email, {
+            email,
+            memberId: resource.memberId,
+          });
+        }
+      }
+
+      if (!recipients.size) {
         logger.debug(
           `phase change notification skipped: no recipients for challenge ${challengeId}`,
         );
@@ -1079,15 +1089,41 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
       // build payload that matches the SendGrid HTML template
       const phaseName = result.name || data.name || challengePhase.name;
 
-      const payload = helper.buildPhaseChangeEmailData({
-        challengeId,
-        challengeName,
-        phaseName,
-        operation,
-        at,
-      });
+      for (const recipientBatch of _.chunk(
+        Array.from(recipients.values()),
+        PHASE_NOTIFICATION_BATCH_SIZE,
+      )) {
+        await Promise.all(
+          recipientBatch.map(async (recipient) => {
+            let member = {};
+            if (!_.isNil(recipient.memberId)) {
+              try {
+                member = await helper.getMemberById(recipient.memberId);
+              } catch (e) {
+                logger.debug(
+                  `phase change notification could not resolve member ${recipient.memberId}: ${e.message}`,
+                );
+              }
+            }
 
-      await helper.sendPhaseChangeNotification(notificationType, recipients, payload);
+            const localizedTime = helper.formatLocalizedPhaseTime(at, member);
+            const payload = helper.buildPhaseChangeEmailData({
+              challengeId,
+              challengeName,
+              phaseName,
+              operation,
+              at,
+              localizedTime,
+            });
+
+            await helper.sendPhaseChangeNotification(
+              notificationType,
+              [recipient.email],
+              payload,
+            );
+          }),
+        );
+      }
     }
   } catch (e) {
     logger.debug(
