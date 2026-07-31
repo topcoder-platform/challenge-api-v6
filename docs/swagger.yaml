@@ -2588,8 +2588,7 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends. For Design challenges,
-                submissionsViewable must also be true.
+                winning submissions after the challenge ends.
             value:
               type: string
               description: >-
@@ -2881,8 +2880,7 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends. For Design challenges,
-                submissionsViewable must also be true.
+                winning submissions after the challenge ends.
             value:
               type: string
               description: >-
@@ -3059,8 +3057,7 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends. For Design challenges,
-                submissionsViewable must also be true.
+                winning submissions after the challenge ends.
             value:
               type: string
               description: >-
@@ -3282,8 +3279,7 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends. For Design challenges,
-                submissionsViewable must also be true.
+                winning submissions after the challenge ends.
             value:
               type: string
               description: >-
