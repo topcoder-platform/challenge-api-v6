@@ -88,6 +88,11 @@ const CANCELLED_CHALLENGE_STATUSES = new Set([
   ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
 ]);
 
+const TERMINAL_CHALLENGE_STATUSES = new Set([
+  ChallengeStatusEnum.COMPLETED,
+  ...CANCELLED_CHALLENGE_STATUSES,
+]);
+
 /**
  * Determines whether a challenge status is one of the terminal cancelled states.
  * @param {String} status challenge status from the update payload or stored challenge
@@ -95,6 +100,64 @@ const CANCELLED_CHALLENGE_STATUSES = new Set([
  */
 function isCancelledChallengeStatus(status) {
   return CANCELLED_CHALLENGE_STATUSES.has(status);
+}
+
+/**
+ * Determines whether a challenge has reached a terminal status for test-data cleanup rules.
+ * Completed and every explicit cancelled status are terminal; draft, approved, active, deleted,
+ * and new challenges are not.
+ *
+ * @param {String} status challenge status from persistence
+ * @returns {Boolean} true for COMPLETED and CANCELLED* statuses
+ */
+function isTerminalChallengeStatus(status) {
+  return TERMINAL_CHALLENGE_STATUSES.has(status);
+}
+
+/**
+ * Reads the effective test-challenge flag from metadata using strict enabled semantics.
+ * Only the exact metadata pair `is_test_challenge: "true"` is enabled. Missing, false, and
+ * malformed values are disabled. Update protection and deletion eligibility use this method.
+ *
+ * @param {Array<Object>|undefined|null} metadata challenge metadata entries
+ * @returns {Boolean} true only when an exact enabled metadata entry exists
+ */
+function isTestChallengeMetadataEnabled(metadata) {
+  return _.some(metadata, {
+    name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+    value: "true",
+  });
+}
+
+/**
+ * Prevents changing test-data classification in updates that start or finish terminal.
+ * Metadata arrays replace the stored array on update, so supplying an array without the flag has
+ * an effective false value. Omitting the metadata property entirely preserves the stored value.
+ * This guard runs before project lookups or persistence in updateChallenge.
+ *
+ * @param {Object} challenge current persisted challenge response
+ * @param {Object} data raw validated update payload
+ * @returns {void}
+ * @throws {BadRequestError} when a terminal update changes the effective test-challenge flag
+ */
+function ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data) {
+  const currentStatus = _.get(challenge, "status");
+  const finalStatus = _.isNil(_.get(data, "status")) ? currentStatus : _.get(data, "status");
+  if (
+    _.isNil(data) ||
+    (!isTerminalChallengeStatus(currentStatus) && !isTerminalChallengeStatus(finalStatus)) ||
+    !Object.prototype.hasOwnProperty.call(data, "metadata")
+  ) {
+    return;
+  }
+
+  const currentFlag = isTestChallengeMetadataEnabled(_.get(challenge, "metadata"));
+  const requestedFlag = isTestChallengeMetadataEnabled(data.metadata);
+  if (currentFlag !== requestedFlag) {
+    throw new errors.BadRequestError(
+      "is_test_challenge metadata cannot be changed when a challenge is or becomes COMPLETED or CANCELLED",
+    );
+  }
 }
 
 /**
@@ -2469,11 +2532,13 @@ searchChallenges.schema = {
  * Create challenge.
  * Challenges billed to configured Topgear accounts skip manual budget approval and are auto-approved.
  * @param {Object} currentUser the user who perform operation
- * @param {Object} challenge the challenge to created
+ * @param {Object} challenge the challenge to create; omitted `is_test_challenge` metadata defaults
+ * to the exact string `false`
  * @param {String} userToken the user token
  * @returns {Object} the created challenge
  */
 async function createChallenge(currentUser, challenge, userToken) {
+  challenge.metadata = challengeHelper.applyTestChallengeMetadataDefault(challenge.metadata);
   const buildLogContext = () =>
     JSON.stringify({
       challengeName: challenge.name,
@@ -2900,8 +2965,11 @@ createChallenge.schema = {
           Joi.object().keys({
             name: Joi.string().required(),
             value: Joi.when("name", {
-              is: constants.ChallengeMetadataNames
-                .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+              is: Joi.valid(
+                constants.ChallengeMetadataNames
+                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              ),
               then: Joi.string()
                 .valid(...constants.BOOLEAN_METADATA_VALUES)
                 .strict()
@@ -3587,10 +3655,13 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * When a challenge transitions to completed task status or a cancelled status,
  * payment generation is requested after the database update commits.
  * Challenges billed to configured Topgear accounts skip manual budget approval and remain approved.
+ * Updates that start in or transition to a completed/cancelled status may not change the effective
+ * `is_test_challenge` metadata value.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
  * @returns {Object} the updated challenge
+ * @throws {BadRequestError} if an update starting or finishing terminal changes the test flag
  */
 // Note: `options` may be a boolean for backward compatibility (emitEvent flag),
 // or an object { emitEvent?: boolean }.
@@ -3612,6 +3683,7 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   enrichChallengeForResponse(challenge);
   prismaHelper.convertModelToResponse(challenge);
+  ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
   const auditUserId = _.toString(currentUser.userId);
   const payloadIncludesTerms =
@@ -4673,8 +4745,11 @@ updateChallenge.schema = {
             .keys({
               name: Joi.string().required(),
               value: Joi.when("name", {
-                is: constants.ChallengeMetadataNames
-                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                is: Joi.valid(
+                  constants.ChallengeMetadataNames
+                    .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                  constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+                ),
                 then: Joi.string()
                   .valid(...constants.BOOLEAN_METADATA_VALUES)
                   .strict()
@@ -5426,19 +5501,41 @@ function sanitizeData(data, challenge) {
 }
 
 /**
- * Delete challenge.
+ * Delete a challenge in NEW status or terminal test data after completion/cancellation.
+ * The terminal-status bypass requires both a COMPLETED/CANCELLED* status and the exact metadata
+ * pair `is_test_challenge: "true"`. Draft, approved, and active challenges cannot use the bypass.
+ * Missing, false, or malformed values are disabled. Existing modification authorization checks
+ * are applied before deletion.
+ *
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @returns {Object} the deleted challenge
+ * @throws {NotFoundError} if the challenge does not exist or is not eligible for deletion
+ * @throws {ForbiddenError} if the caller cannot modify the challenge
  */
 async function deleteChallenge(currentUser, challengeId) {
   // Use findFirst for compound filters; findUnique only supports unique fields
   const challenge = await prisma.challenge.findFirst({
-    where: { id: challengeId, status: ChallengeStatusEnum.NEW },
+    where: {
+      id: challengeId,
+      OR: [
+        { status: ChallengeStatusEnum.NEW },
+        {
+          status: { in: Array.from(TERMINAL_CHALLENGE_STATUSES) },
+          metadata: {
+            some: {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            },
+          },
+        },
+      ],
+    },
+    include: { metadata: true },
   });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(
-      `Challenge with id: ${challengeId} doesn't exist or is not in New status`,
+      `Challenge with id: ${challengeId} doesn't exist or is not eligible for deletion; deletion requires NEW status or a COMPLETED/CANCELLED status with is_test_challenge set to the exact string true`,
     );
   }
   // ensure user can modify challenge

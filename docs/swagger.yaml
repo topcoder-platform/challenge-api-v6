@@ -647,7 +647,10 @@ paths:
       tags:
         - Challenges
       description: Delete the challenge with the provided id.
-        Only challenges with status of "NEW" can be deleted.
+        Challenges with status "NEW" retain their existing deletion behavior. Challenges with a
+        "COMPLETED" or "CANCELLED*" status can also be deleted when their is_test_challenge metadata
+        value is the exact string "true". "DRAFT", "APPROVED", and "ACTIVE" challenges cannot use
+        this bypass. Normal deletion authorization checks still apply.
       security:
         - bearer: []
       produces:
@@ -2594,7 +2597,9 @@ definitions:
               description: >-
                 Metadata value. For submission_type, supported values are zip and url. For
                 allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
-                false are accepted; a missing entry behaves as false.
+                false are accepted; a missing entry behaves as false. For is_test_challenge, only
+                the exact strings true and false are accepted, and create requests that omit it
+                persist false.
           required:
             - name
             - value
@@ -2881,13 +2886,17 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends.
+                winning submissions after the challenge ends. For Design challenges,
+                submissionsViewable must also be true. Use is_test_challenge to mark production
+                test data that may be deleted after testing.
             value:
               type: string
               description: >-
                 Metadata value. For submission_type, supported values are zip and url. For
                 allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
-                false are accepted; a missing entry behaves as false.
+                false are accepted; a missing entry behaves as false. For is_test_challenge, only
+                the exact strings true and false are accepted, and create requests that omit it
+                persist false.
           required:
             - name
             - value
@@ -3058,13 +3067,18 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends.
+                winning submissions after the challenge ends. For Design challenges,
+                submissionsViewable must also be true. Use is_test_challenge to mark production
+                test data that may be deleted after testing.
             value:
               type: string
               description: >-
                 Metadata value. For submission_type, supported values are zip and url. For
                 allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
-                false are accepted; a missing entry behaves as false.
+                false are accepted; a missing entry behaves as false. For is_test_challenge, only
+                the exact strings true and false are accepted; omitted values behave as false. Its
+                effective value cannot change in an update that starts in or transitions to
+                COMPLETED or CANCELLED status; omitting metadata preserves the existing value.
           required:
             - name
             - value
@@ -3280,13 +3294,18 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends.
+                winning submissions after the challenge ends. For Design challenges,
+                submissionsViewable must also be true. Use is_test_challenge to mark production
+                test data that may be deleted after testing.
             value:
               type: string
               description: >-
                 Metadata value. For submission_type, supported values are zip and url. For
                 allowAllRegistrantsToDownloadWinningSubmissions, only the exact strings true and
-                false are accepted; a missing entry behaves as false.
+                false are accepted; a missing entry behaves as false. For is_test_challenge, only
+                the exact strings true and false are accepted; omitted values behave as false. Its
+                effective value cannot change in an update that starts in or transitions to
+                COMPLETED or CANCELLED status; omitting metadata preserves the existing value.
           required:
             - name
             - value

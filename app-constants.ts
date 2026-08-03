@@ -21,6 +21,7 @@ const prizeTypes = {
 const ChallengeMetadataNames = {
   ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS:
     "allowAllRegistrantsToDownloadWinningSubmissions",
+  IS_TEST_CHALLENGE: "is_test_challenge",
 };
 
 const BOOLEAN_METADATA_VALUES = ["true", "false"];
