@@ -2591,9 +2591,7 @@ definitions:
               description: >-
                 Metadata name. Use submission_type to override the challenge submission flow. Use
                 allowAllRegistrantsToDownloadWinningSubmissions to let all registrants download
-                winning submissions after the challenge ends. For Design challenges,
-                submissionsViewable must also be true. Use is_test_challenge to mark production
-                test data that may be deleted after testing.
+                winning submissions after the challenge ends.
             value:
               type: string
               description: >-
@@ -2687,6 +2685,7 @@ definitions:
           - placement
       checkpointWinners:
         type: array
+        description: Checkpoint winners are returned after Checkpoint Review closes, including while the challenge is active.
         items:
           properties:
             userId:

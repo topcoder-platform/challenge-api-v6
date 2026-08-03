@@ -698,6 +698,115 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("returns checkpoint winners after checkpoint review closes while keeping placement winners hidden", async () => {
+      const challengeId = data.challenge.id;
+      const checkpointPhase = await prisma.challengePhase.findFirstOrThrow({
+        where: { challengeId },
+      });
+      const originalPhase = _.pick(checkpointPhase, [
+        "name",
+        "isOpen",
+        "actualStartDate",
+        "actualEndDate",
+      ]);
+      const phaseStartDate = new Date(Date.now() - 60_000);
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: { status: ChallengeStatusEnum.ACTIVE },
+      });
+      await prisma.challengePhase.update({
+        where: { id: checkpointPhase.id },
+        data: {
+          name: "Checkpoint Review",
+          isOpen: true,
+          actualStartDate: phaseStartDate,
+          actualEndDate: null,
+        },
+      });
+      await prisma.challengeWinner.createMany({
+        data: [
+          {
+            challengeId,
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.CHECKPOINT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+          {
+            challengeId,
+            userId: 456,
+            handle: "placement-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.PLACEMENT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+        ],
+      });
+
+      try {
+        const openPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(_.isUndefined(openPhaseDetail.checkpointWinners), true);
+        openPhaseDetail.winners.should.deep.equal([]);
+
+        const openPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(openPhaseListing.result.length, 1);
+        should.equal(_.isUndefined(openPhaseListing.result[0].checkpointWinners), true);
+        should.equal(_.isUndefined(openPhaseListing.result[0].winners), true);
+
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: {
+            isOpen: false,
+            actualEndDate: new Date(),
+          },
+        });
+
+        const closedPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        closedPhaseDetail.checkpointWinners.should.deep.equal([
+          {
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+          },
+        ]);
+        closedPhaseDetail.winners.should.deep.equal([]);
+
+        const closedPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(closedPhaseListing.result.length, 1);
+        closedPhaseListing.result[0].checkpointWinners.should.deep.equal(
+          closedPhaseDetail.checkpointWinners,
+        );
+        should.equal(_.isUndefined(closedPhaseListing.result[0].winners), true);
+      } finally {
+        await prisma.challengeWinner.deleteMany({ where: { challengeId } });
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: originalPhase,
+        });
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { status: ChallengeStatusEnum.COMPLETED },
+        });
+      }
+    });
+
     it("returns latest-member submission counters for challenge detail and listing", async () => {
       const challengeId = data.challenge.id;
       await prisma.challenge.update({
@@ -747,6 +856,55 @@ describe("challenge service unit tests", () => {
             numOfCheckpointSubmissions: 0,
           },
         });
+      }
+    });
+
+    it("counts every Design submission as a separate concept", async () => {
+      const challengeId = data.challenge.id;
+      const originalTrack = data.challengeTrack.track;
+      await prisma.challengeTrack.update({
+        where: { id: data.challenge.trackId },
+        data: { track: "DESIGN" },
+      });
+
+      try {
+        await reviewClient.$executeRawUnsafe(`
+          INSERT INTO ${submissionTableName}
+            ("id", "challengeId", "memberId", "type", "status", "submittedDate")
+          VALUES
+            ('pm5761a1', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z'),
+            ('pm5761a2', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z'),
+            ('pm5761a3', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z'),
+            ('pm5761c1', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-04T00:00:00Z'),
+            ('pm5761c2', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-05T00:00:00Z')
+        `);
+
+        const detail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(detail.numOfSubmissions, 3);
+        should.equal(detail.numOfCheckpointSubmissions, 2);
+
+        const listing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(listing.result.length, 1);
+        should.equal(listing.result[0].numOfSubmissions, 3);
+        should.equal(listing.result[0].numOfCheckpointSubmissions, 2);
+      } finally {
+        try {
+          await reviewClient.$executeRawUnsafe(
+            `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${challengeId}'`,
+          );
+        } finally {
+          await prisma.challengeTrack.update({
+            where: { id: data.challenge.trackId },
+            data: { track: originalTrack },
+          });
+        }
       }
     });
 

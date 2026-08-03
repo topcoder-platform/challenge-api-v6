@@ -163,17 +163,24 @@ function ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data) {
 /**
  * Loads submission counters for challenge responses from the review submission table.
  *
- * Community app badges show the number of members with submissions, not the
- * number of attempts, so repeated uploads by the same member are counted once.
+ * Community app badges normally show the number of members with submissions,
+ * so repeated uploads by the same member are counted once. Design challenges
+ * count every submission because each upload can be a unique concept.
  *
  * @param {Array<String>} challengeIds challenge identifiers to count submissions for
+ * @param {Array<String>} designChallengeIds Design challenge identifiers that count every upload
  * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
  * counts keyed by challenge id
  * @throws {Error} when the review database query fails
  */
-async function getLatestSubmissionCountsByChallenge(challengeIds) {
+async function getLatestSubmissionCountsByChallenge(challengeIds, designChallengeIds = []) {
   const ids = _.uniq(
     (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const designIds = _.uniq(
+    (designChallengeIds || [])
       .map((challengeId) => _.toString(challengeId).trim())
       .filter((challengeId) => !!challengeId),
   );
@@ -187,16 +194,22 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
   const submissionTable = reviewSchema
     ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
     : Prisma.raw('"submission"');
+  const submissionIdentity = designIds.length
+    ? Prisma.sql`CASE
+        WHEN "challengeId" IN (${Prisma.join(designIds)}) THEN "id"
+        ELSE "memberId"
+      END`
+    : Prisma.sql`"memberId"`;
   const reviewClient = getReviewClient();
 
   const rows = await reviewClient.$queryRaw`
     SELECT
       "challengeId",
       COUNT(DISTINCT CASE
-        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfCheckpointSubmissions",
       COUNT(DISTINCT CASE
-        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfSubmissions"
     FROM ${submissionTable}
     WHERE "challengeId" IN (${Prisma.join(ids)})
@@ -215,7 +228,11 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
 }
 
 /**
- * Applies latest-member submission counts to challenge records before response conversion.
+ * Applies submission counts to challenge records before response conversion.
+ *
+ * Design challenges count every submission as a separate concept. Other tracks
+ * count distinct submitting members so replacement attempts do not inflate the
+ * displayed total.
  *
  * If the review query succeeds, challenges without submission rows are reset to
  * zero so stale stored counters are not shown. If the query cannot run, callers
@@ -232,8 +249,12 @@ async function applyLatestSubmissionCounts(challenges) {
 
   let countsByChallenge;
   try {
+    const designChallengeIds = records
+      .filter((challenge) => phaseHelper.isDesignTrack(challenge.track))
+      .map((challenge) => challenge.id);
     countsByChallenge = await getLatestSubmissionCountsByChallenge(
       records.map((challenge) => challenge.id),
+      designChallengeIds,
     );
   } catch (err) {
     logger.warn(`Failed to load latest submission counts: ${err.message}`);
@@ -908,8 +929,9 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
+const CHECKPOINT_REVIEW_PHASE_NAME = "checkpoint review";
 const REVIEW_PHASE_NAMES = Object.freeze([
-  "checkpoint review",
+  CHECKPOINT_REVIEW_PHASE_NAME,
   "checkpoint screening",
   "screening",
   "review",
@@ -922,6 +944,33 @@ const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Determines whether checkpoint winners are ready to be included in challenge responses.
+ * Detail and search response sanitization use this after Checkpoint Review has closed,
+ * while completed challenges preserve their existing winner visibility.
+ *
+ * @param {Object} challenge challenge data containing status and phase state
+ * @returns {Boolean} true when assigned checkpoint winners may be returned
+ * @throws {Error} this function does not throw
+ */
+function shouldExposeCheckpointWinners(challenge) {
+  if (challenge.status === ChallengeStatusEnum.COMPLETED) {
+    return true;
+  }
+  if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
+    return false;
+  }
+
+  return _.some(
+    challenge.phases,
+    (phase) =>
+      normalizePhaseNameForComparison(phase.name) === CHECKPOINT_REVIEW_PHASE_NAME &&
+      phase.isOpen !== true &&
+      !_.isNil(phase.actualStartDate) &&
+      !_.isNil(phase.actualEndDate),
+  );
 }
 
 function extractSubmissionId(submission) {
@@ -2379,6 +2428,8 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+    }
+    if (!shouldExposeCheckpointWinners(challenge)) {
       _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
@@ -3109,8 +3160,14 @@ async function getChallenge(currentUser, id, checkIfExists?: any) {
   }
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
-    _.unset(challenge, "winners");
-    _.unset(challenge, "checkpointWinners");
+    if (shouldExposeCheckpointWinners(challenge)) {
+      challenge.winners = _.filter(
+        challenge.winners,
+        (winner) => winner.type === PrizeSetTypeEnum.CHECKPOINT,
+      );
+    } else {
+      _.unset(challenge, "winners");
+    }
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
