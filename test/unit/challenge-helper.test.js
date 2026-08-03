@@ -226,4 +226,77 @@ describe("challenge metadata validation", () => {
       );
     }
   });
+
+  it("adds an explicit false default when is_test_challenge is omitted", () => {
+    challengeHelper.applyTestChallengeMetadataDefault(undefined).should.deep.equal([
+      {
+        name: "is_test_challenge",
+        value: "false",
+      },
+    ]);
+
+    challengeHelper.applyTestChallengeMetadataDefault([
+      {
+        name: "submission_type",
+        value: "zip",
+      },
+    ]).should.deep.equal([
+      {
+        name: "submission_type",
+        value: "zip",
+      },
+      {
+        name: "is_test_challenge",
+        value: "false",
+      },
+    ]);
+  });
+
+  it("preserves an explicit is_test_challenge value when applying the default", () => {
+    challengeHelper.applyTestChallengeMetadataDefault([
+      {
+        name: "is_test_challenge",
+        value: "true",
+      },
+    ]).should.deep.equal([
+      {
+        name: "is_test_challenge",
+        value: "true",
+      },
+    ]);
+  });
+
+  it("allows exact string boolean values for is_test_challenge", () => {
+    for (const value of ["true", "false"]) {
+      expect(() => challengeHelper.validateTestChallengeMetadata([
+        {
+          name: "is_test_challenge",
+          value,
+        },
+      ])).not.to.throw();
+    }
+  });
+
+  it("allows is_test_challenge to be omitted from update metadata", () => {
+    expect(() => challengeHelper.validateTestChallengeMetadata(undefined)).not.to.throw();
+    expect(() => challengeHelper.validateTestChallengeMetadata([
+      {
+        name: "submission_type",
+        value: "zip",
+      },
+    ])).not.to.throw();
+  });
+
+  it("rejects non-string or non-boolean is_test_challenge values", () => {
+    for (const value of [true, false, "TRUE", "yes", " true "]) {
+      expect(() => challengeHelper.validateTestChallengeMetadata([
+        {
+          name: "is_test_challenge",
+          value,
+        },
+      ])).to.throw(
+        "metadata is_test_challenge must be either true or false as a string"
+      );
+    }
+  });
 });
