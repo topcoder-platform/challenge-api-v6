@@ -303,6 +303,13 @@ Refer to the verification document `Verification.md`
 - Challenge `metadata` may include `submission_type` to override the community-app submission flow:
   `zip` shows the standard Topcoder zip upload page, and `url` shows the Topgear URL upload page.
   When omitted, consumers should keep their existing default behavior.
+- Challenge `metadata` uses the exact string values `true` and `false` for `is_test_challenge`.
+  Challenge creation adds `is_test_challenge: false` when it is omitted. `NEW` challenges retain
+  their existing deletion behavior. A `COMPLETED` or `CANCELLED*` challenge can be deleted when this
+  metadata value is exactly `true`; `DRAFT`, `APPROVED`, and `ACTIVE` challenges cannot use this
+  bypass. Any update that starts in or transitions to a completed or cancelled status cannot change
+  the effective `is_test_challenge` value; omitting metadata preserves it. Normal authorization
+  checks still apply.
 - API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.

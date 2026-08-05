@@ -413,6 +413,163 @@ describe('challenge phase service unit tests', () => {
       should.equal(challengePhase.duration, 7200)
     })
 
+    it('sends one localized phase-open notification to each opted-in resource', async () => {
+      const notifications = []
+      const requestedMemberIds = []
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetMemberById = helper.getMemberById
+      const originalSendPhaseChangeNotification = helper.sendPhaseChangeNotification
+      const openedAt = '2026-07-29T03:35:00.000Z'
+
+      helper.getChallengeResources = async () => [
+        {
+          memberId: '101',
+          memberEmail: ' Alice@Example.com ',
+          phaseChangeNotifications: true
+        },
+        {
+          memberId: 'duplicate',
+          memberEmail: 'alice@example.com',
+          phaseChangeNotifications: true
+        },
+        {
+          memberId: '102',
+          email: 'bob@example.com',
+          phaseChangeNotifications: true
+        },
+        {
+          memberId: 'opted-out',
+          memberEmail: 'opted-out@example.com',
+          phaseChangeNotifications: false
+        },
+        {
+          memberId: 'not-opted-in',
+          memberEmail: 'not-opted-in@example.com'
+        }
+      ]
+      helper.getMemberById = async memberId => {
+        requestedMemberIds.push(memberId)
+        return memberId === '101' ? { addresses: [{ city: 'Hobart' }] } : {}
+      }
+      helper.sendPhaseChangeNotification = async (type, recipients, payload) => {
+        notifications.push({ type, recipients, payload })
+      }
+
+      try {
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: true,
+            actualStartDate: openedAt
+          }
+        )
+
+        notifications.should.have.length(2)
+        notifications[0].type.should.equal('PHASE_CHANGE')
+        notifications[0].recipients.should.deep.equal(['alice@example.com'])
+        notifications[0].payload.phase_change.should.equal('Registration Open')
+        notifications[0].payload.localized_time.should.equal('July 29, 2026 13:35 AEST')
+        notifications[0].payload.phaseOpen.should.equal('Registration')
+        notifications[0].payload.phaseOpenDate.should.equal('July 29, 2026 13:35 AEST')
+        should.equal(notifications[0].payload.phaseClose, null)
+        should.equal(notifications[0].payload.phaseCloseDate, null)
+
+        notifications[1].recipients.should.deep.equal(['bob@example.com'])
+        notifications[1].payload.phase_change.should.equal('Registration Open')
+        notifications[1].payload.localized_time.should.equal('July 29, 2026 03:35 UTC')
+        notifications[1].payload.phaseOpenDate.should.equal('July 29, 2026 03:35 UTC')
+        requestedMemberIds.should.deep.equal(['101', '102'])
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getMemberById = originalGetMemberById
+        helper.sendPhaseChangeNotification = originalSendPhaseChangeNotification
+      }
+    })
+
+    it('sends a localized phase-closed notification with the legacy close fields', async () => {
+      const notifications = []
+      const originalGetChallengeResources = helper.getChallengeResources
+      const originalGetMemberById = helper.getMemberById
+      const originalSendPhaseChangeNotification = helper.sendPhaseChangeNotification
+      const closedAt = '2026-07-29T04:35:00.000Z'
+
+      await prisma.challengePhase.update({
+        where: { id: data.challengePhase1Id },
+        data: {
+          isOpen: true,
+          actualStartDate: new Date('2026-07-29T03:35:00.000Z'),
+          actualEndDate: null
+        }
+      })
+      helper.getChallengeResources = async () => [
+        {
+          memberId: '103',
+          memberEmail: 'closer@example.com',
+          phaseChangeNotifications: true
+        }
+      ]
+      helper.getMemberById = async () => ({ addresses: [{ city: 'Hobart' }] })
+      helper.sendPhaseChangeNotification = async (type, recipients, payload) => {
+        notifications.push({ type, recipients, payload })
+      }
+
+      try {
+        await service.partiallyUpdateChallengePhase(
+          authUser,
+          data.challenge.id,
+          data.challengePhase1Id,
+          {
+            isOpen: false,
+            actualEndDate: closedAt
+          }
+        )
+
+        notifications.should.have.length(1)
+        notifications[0].recipients.should.deep.equal(['closer@example.com'])
+        notifications[0].payload.phase_change.should.equal('Registration Closed')
+        notifications[0].payload.localized_time.should.equal('July 29, 2026 14:35 AEST')
+        notifications[0].payload.phaseClose.should.equal('Registration')
+        notifications[0].payload.phaseCloseDate.should.equal('July 29, 2026 14:35 AEST')
+        should.equal(notifications[0].payload.phaseOpen, null)
+        should.equal(notifications[0].payload.phaseOpenDate, null)
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources
+        helper.getMemberById = originalGetMemberById
+        helper.sendPhaseChangeNotification = originalSendPhaseChangeNotification
+      }
+    })
+
+    it('resolves member timezones with UTC fallback and maps reopen to Open', () => {
+      helper
+        .getMemberTimezone({ addresses: [{ city: 'Hobart' }] })
+        .should.equal('Australia/Hobart')
+      helper
+        .getMemberTimezone({
+          addresses: [{ city: 'Lindeman' }],
+          homeCountryCode: 'AUS'
+        })
+        .should.equal('Australia/Lindeman')
+      helper.getMemberTimezone({ addresses: [{ city: 'not-a-real-city' }] }).should.equal('UTC')
+      helper.getMemberTimezone({}).should.equal('UTC')
+      helper
+        .formatLocalizedPhaseTime('2026-07-29T03:35:00.000Z', {})
+        .should.equal('July 29, 2026 03:35 UTC')
+
+      const payload = helper.buildPhaseChangeEmailData({
+        challengeId: data.challenge.id,
+        challengeName: data.challenge.name,
+        phaseName: 'Checkpoint Submission',
+        operation: 'reopen',
+        at: '2026-07-29T03:35:00.000Z',
+        localizedTime: 'July 29, 2026 13:35 AEST'
+      })
+      payload.phase_change.should.equal('Checkpoint Submission Open')
+      payload.localized_time.should.equal('July 29, 2026 13:35 AEST')
+      payload.phaseOpenDate.should.equal('July 29, 2026 13:35 AEST')
+    })
+
     it('partially update challenge phase - closing sets actual end date', async () => {
       await prisma.challengePhase.update({
         where: { id: data.challengePhase1Id },

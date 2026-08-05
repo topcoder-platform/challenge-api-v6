@@ -88,6 +88,11 @@ const CANCELLED_CHALLENGE_STATUSES = new Set([
   ChallengeStatusEnum.CANCELLED_ZERO_REGISTRATIONS,
 ]);
 
+const TERMINAL_CHALLENGE_STATUSES = new Set([
+  ChallengeStatusEnum.COMPLETED,
+  ...CANCELLED_CHALLENGE_STATUSES,
+]);
+
 /**
  * Determines whether a challenge status is one of the terminal cancelled states.
  * @param {String} status challenge status from the update payload or stored challenge
@@ -98,19 +103,84 @@ function isCancelledChallengeStatus(status) {
 }
 
 /**
+ * Determines whether a challenge has reached a terminal status for test-data cleanup rules.
+ * Completed and every explicit cancelled status are terminal; draft, approved, active, deleted,
+ * and new challenges are not.
+ *
+ * @param {String} status challenge status from persistence
+ * @returns {Boolean} true for COMPLETED and CANCELLED* statuses
+ */
+function isTerminalChallengeStatus(status) {
+  return TERMINAL_CHALLENGE_STATUSES.has(status);
+}
+
+/**
+ * Reads the effective test-challenge flag from metadata using strict enabled semantics.
+ * Only the exact metadata pair `is_test_challenge: "true"` is enabled. Missing, false, and
+ * malformed values are disabled. Update protection and deletion eligibility use this method.
+ *
+ * @param {Array<Object>|undefined|null} metadata challenge metadata entries
+ * @returns {Boolean} true only when an exact enabled metadata entry exists
+ */
+function isTestChallengeMetadataEnabled(metadata) {
+  return _.some(metadata, {
+    name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+    value: "true",
+  });
+}
+
+/**
+ * Prevents changing test-data classification in updates that start or finish terminal.
+ * Metadata arrays replace the stored array on update, so supplying an array without the flag has
+ * an effective false value. Omitting the metadata property entirely preserves the stored value.
+ * This guard runs before project lookups or persistence in updateChallenge.
+ *
+ * @param {Object} challenge current persisted challenge response
+ * @param {Object} data raw validated update payload
+ * @returns {void}
+ * @throws {BadRequestError} when a terminal update changes the effective test-challenge flag
+ */
+function ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data) {
+  const currentStatus = _.get(challenge, "status");
+  const finalStatus = _.isNil(_.get(data, "status")) ? currentStatus : _.get(data, "status");
+  if (
+    _.isNil(data) ||
+    (!isTerminalChallengeStatus(currentStatus) && !isTerminalChallengeStatus(finalStatus)) ||
+    !Object.prototype.hasOwnProperty.call(data, "metadata")
+  ) {
+    return;
+  }
+
+  const currentFlag = isTestChallengeMetadataEnabled(_.get(challenge, "metadata"));
+  const requestedFlag = isTestChallengeMetadataEnabled(data.metadata);
+  if (currentFlag !== requestedFlag) {
+    throw new errors.BadRequestError(
+      "is_test_challenge metadata cannot be changed when a challenge is or becomes COMPLETED or CANCELLED",
+    );
+  }
+}
+
+/**
  * Loads submission counters for challenge responses from the review submission table.
  *
- * Community app badges show the number of members with submissions, not the
- * number of attempts, so repeated uploads by the same member are counted once.
+ * Community app badges normally show the number of members with submissions,
+ * so repeated uploads by the same member are counted once. Design challenges
+ * count every submission because each upload can be a unique concept.
  *
  * @param {Array<String>} challengeIds challenge identifiers to count submissions for
+ * @param {Array<String>} designChallengeIds Design challenge identifiers that count every upload
  * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
  * counts keyed by challenge id
  * @throws {Error} when the review database query fails
  */
-async function getLatestSubmissionCountsByChallenge(challengeIds) {
+async function getLatestSubmissionCountsByChallenge(challengeIds, designChallengeIds = []) {
   const ids = _.uniq(
     (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const designIds = _.uniq(
+    (designChallengeIds || [])
       .map((challengeId) => _.toString(challengeId).trim())
       .filter((challengeId) => !!challengeId),
   );
@@ -124,16 +194,22 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
   const submissionTable = reviewSchema
     ? Prisma.raw(`"${reviewSchema.replace(/"/g, '""')}"."submission"`)
     : Prisma.raw('"submission"');
+  const submissionIdentity = designIds.length
+    ? Prisma.sql`CASE
+        WHEN "challengeId" IN (${Prisma.join(designIds)}) THEN "id"
+        ELSE "memberId"
+      END`
+    : Prisma.sql`"memberId"`;
   const reviewClient = getReviewClient();
 
   const rows = await reviewClient.$queryRaw`
     SELECT
       "challengeId",
       COUNT(DISTINCT CASE
-        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfCheckpointSubmissions",
       COUNT(DISTINCT CASE
-        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN "memberId"
+        WHEN "type"::text <> ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfSubmissions"
     FROM ${submissionTable}
     WHERE "challengeId" IN (${Prisma.join(ids)})
@@ -152,7 +228,11 @@ async function getLatestSubmissionCountsByChallenge(challengeIds) {
 }
 
 /**
- * Applies latest-member submission counts to challenge records before response conversion.
+ * Applies submission counts to challenge records before response conversion.
+ *
+ * Design challenges count every submission as a separate concept. Other tracks
+ * count distinct submitting members so replacement attempts do not inflate the
+ * displayed total.
  *
  * If the review query succeeds, challenges without submission rows are reset to
  * zero so stale stored counters are not shown. If the query cannot run, callers
@@ -169,8 +249,12 @@ async function applyLatestSubmissionCounts(challenges) {
 
   let countsByChallenge;
   try {
+    const designChallengeIds = records
+      .filter((challenge) => phaseHelper.isDesignTrack(challenge.track))
+      .map((challenge) => challenge.id);
     countsByChallenge = await getLatestSubmissionCountsByChallenge(
       records.map((challenge) => challenge.id),
+      designChallengeIds,
     );
   } catch (err) {
     logger.warn(`Failed to load latest submission counts: ${err.message}`);
@@ -845,8 +929,9 @@ const challengeDomain = {
 const phaseAdvancer = new PhaseAdvancer(challengeDomain);
 
 const REVIEW_STATUS_BLOCKING = Object.freeze(["IN_PROGRESS", "COMPLETED"]);
+const CHECKPOINT_REVIEW_PHASE_NAME = "checkpoint review";
 const REVIEW_PHASE_NAMES = Object.freeze([
-  "checkpoint review",
+  CHECKPOINT_REVIEW_PHASE_NAME,
   "checkpoint screening",
   "screening",
   "review",
@@ -859,6 +944,33 @@ const AI_REVIEW_PHASE_NAME = "ai review";
 
 function normalizePhaseNameForComparison(phaseName) {
   return _.toString(phaseName).replace(/-/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Determines whether checkpoint winners are ready to be included in challenge responses.
+ * Detail and search response sanitization use this after Checkpoint Review has closed,
+ * while completed challenges preserve their existing winner visibility.
+ *
+ * @param {Object} challenge challenge data containing status and phase state
+ * @returns {Boolean} true when assigned checkpoint winners may be returned
+ * @throws {Error} this function does not throw
+ */
+function shouldExposeCheckpointWinners(challenge) {
+  if (challenge.status === ChallengeStatusEnum.COMPLETED) {
+    return true;
+  }
+  if (challenge.status !== ChallengeStatusEnum.ACTIVE) {
+    return false;
+  }
+
+  return _.some(
+    challenge.phases,
+    (phase) =>
+      normalizePhaseNameForComparison(phase.name) === CHECKPOINT_REVIEW_PHASE_NAME &&
+      phase.isOpen !== true &&
+      !_.isNil(phase.actualStartDate) &&
+      !_.isNil(phase.actualEndDate),
+  );
 }
 
 function extractSubmissionId(submission) {
@@ -2316,6 +2428,8 @@ async function searchChallenges(currentUser, criteria) {
   result.forEach((challenge) => {
     if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
       _.unset(challenge, "winners");
+    }
+    if (!shouldExposeCheckpointWinners(challenge)) {
       _.unset(challenge, "checkpointWinners");
     }
     if (!_hasAdminRole && !_.get(currentUser, "isMachine", false)) {
@@ -2418,11 +2532,13 @@ searchChallenges.schema = {
  * Create challenge.
  * Challenges billed to configured Topgear accounts skip manual budget approval and are auto-approved.
  * @param {Object} currentUser the user who perform operation
- * @param {Object} challenge the challenge to created
+ * @param {Object} challenge the challenge to create; omitted `is_test_challenge` metadata defaults
+ * to the exact string `false`
  * @param {String} userToken the user token
  * @returns {Object} the created challenge
  */
 async function createChallenge(currentUser, challenge, userToken) {
+  challenge.metadata = challengeHelper.applyTestChallengeMetadataDefault(challenge.metadata);
   const buildLogContext = () =>
     JSON.stringify({
       challengeName: challenge.name,
@@ -2849,8 +2965,11 @@ createChallenge.schema = {
           Joi.object().keys({
             name: Joi.string().required(),
             value: Joi.when("name", {
-              is: constants.ChallengeMetadataNames
-                .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+              is: Joi.valid(
+                constants.ChallengeMetadataNames
+                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              ),
               then: Joi.string()
                 .valid(...constants.BOOLEAN_METADATA_VALUES)
                 .strict()
@@ -3041,8 +3160,14 @@ async function getChallenge(currentUser, id, checkIfExists?: any) {
   }
 
   if (challenge.status !== ChallengeStatusEnum.COMPLETED) {
-    _.unset(challenge, "winners");
-    _.unset(challenge, "checkpointWinners");
+    if (shouldExposeCheckpointWinners(challenge)) {
+      challenge.winners = _.filter(
+        challenge.winners,
+        (winner) => winner.type === PrizeSetTypeEnum.CHECKPOINT,
+      );
+    } else {
+      _.unset(challenge, "winners");
+    }
   }
 
   // TODO: in the long run we wanna do a finer grained filtering of the payments
@@ -3530,10 +3655,13 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * When a challenge transitions to completed task status or a cancelled status,
  * payment generation is requested after the database update commits.
  * Challenges billed to configured Topgear accounts skip manual budget approval and remain approved.
+ * Updates that start in or transition to a completed/cancelled status may not change the effective
+ * `is_test_challenge` metadata value.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
  * @returns {Object} the updated challenge
+ * @throws {BadRequestError} if an update starting or finishing terminal changes the test flag
  */
 // Note: `options` may be a boolean for backward compatibility (emitEvent flag),
 // or an object { emitEvent?: boolean }.
@@ -3555,6 +3683,7 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   await helper.ensureChallengeWhitelistAccess(currentUser, challenge.id);
   enrichChallengeForResponse(challenge);
   prismaHelper.convertModelToResponse(challenge);
+  ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
   const auditUserId = _.toString(currentUser.userId);
   const payloadIncludesTerms =
@@ -4616,8 +4745,11 @@ updateChallenge.schema = {
             .keys({
               name: Joi.string().required(),
               value: Joi.when("name", {
-                is: constants.ChallengeMetadataNames
-                  .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                is: Joi.valid(
+                  constants.ChallengeMetadataNames
+                    .ALLOW_ALL_REGISTRANTS_TO_DOWNLOAD_WINNING_SUBMISSIONS,
+                  constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+                ),
                 then: Joi.string()
                   .valid(...constants.BOOLEAN_METADATA_VALUES)
                   .strict()
@@ -5369,19 +5501,41 @@ function sanitizeData(data, challenge) {
 }
 
 /**
- * Delete challenge.
+ * Delete a challenge in NEW status or terminal test data after completion/cancellation.
+ * The terminal-status bypass requires both a COMPLETED/CANCELLED* status and the exact metadata
+ * pair `is_test_challenge: "true"`. Draft, approved, and active challenges cannot use the bypass.
+ * Missing, false, or malformed values are disabled. Existing modification authorization checks
+ * are applied before deletion.
+ *
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @returns {Object} the deleted challenge
+ * @throws {NotFoundError} if the challenge does not exist or is not eligible for deletion
+ * @throws {ForbiddenError} if the caller cannot modify the challenge
  */
 async function deleteChallenge(currentUser, challengeId) {
   // Use findFirst for compound filters; findUnique only supports unique fields
   const challenge = await prisma.challenge.findFirst({
-    where: { id: challengeId, status: ChallengeStatusEnum.NEW },
+    where: {
+      id: challengeId,
+      OR: [
+        { status: ChallengeStatusEnum.NEW },
+        {
+          status: { in: Array.from(TERMINAL_CHALLENGE_STATUSES) },
+          metadata: {
+            some: {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            },
+          },
+        },
+      ],
+    },
+    include: { metadata: true },
   });
   if (_.isNil(challenge) || _.isNil(challenge.id)) {
     throw new errors.NotFoundError(
-      `Challenge with id: ${challengeId} doesn't exist or is not in New status`,
+      `Challenge with id: ${challengeId} doesn't exist or is not eligible for deletion; deletion requires NEW status or a COMPLETED/CANCELLED status with is_test_challenge set to the exact string true`,
     );
   }
   // ensure user can modify challenge

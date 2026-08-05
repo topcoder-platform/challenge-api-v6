@@ -293,6 +293,52 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("persists false is_test_challenge metadata when create omits the flag", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      challengeData.discussions[0].type = "CHALLENGE";
+      challengeData.prizeSets[0].type = PrizeSetTypeEnum.PLACEMENT;
+      challengeData.status = ChallengeStatusEnum.NEW;
+      const originalGetProject = projectHelper.getProject;
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      const originalPostBusEvent = helper.postBusEvent;
+      let createdChallengeId;
+
+      projectHelper.getProject = async () => ({ directProjectId: 33541 });
+      projectHelper.getProjectBillingInformation = async () => ({
+        billingAccountId: null,
+        markup: 0,
+      });
+      helper.postBusEvent = async () => {};
+
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: "sub", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN || "test-token",
+        );
+        createdChallengeId = result.id;
+
+        _.find(result.metadata, {
+          name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+        }).value.should.equal("false");
+
+        const persistedMetadata = await prisma.challengeMetadata.findFirst({
+          where: {
+            challengeId: result.id,
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+          },
+        });
+        persistedMetadata.value.should.equal("false");
+      } finally {
+        projectHelper.getProject = originalGetProject;
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        helper.postBusEvent = originalPostBusEvent;
+        if (createdChallengeId) {
+          await prisma.challenge.deleteMany({ where: { id: createdChallengeId } });
+        }
+      }
+    });
+
     it("locks draft challenge budget when the challenge is saved", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
       challengeData.status = ChallengeStatusEnum.DRAFT;
@@ -652,6 +698,115 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("returns checkpoint winners after checkpoint review closes while keeping placement winners hidden", async () => {
+      const challengeId = data.challenge.id;
+      const checkpointPhase = await prisma.challengePhase.findFirstOrThrow({
+        where: { challengeId },
+      });
+      const originalPhase = _.pick(checkpointPhase, [
+        "name",
+        "isOpen",
+        "actualStartDate",
+        "actualEndDate",
+      ]);
+      const phaseStartDate = new Date(Date.now() - 60_000);
+      await prisma.challenge.update({
+        where: { id: challengeId },
+        data: { status: ChallengeStatusEnum.ACTIVE },
+      });
+      await prisma.challengePhase.update({
+        where: { id: checkpointPhase.id },
+        data: {
+          name: "Checkpoint Review",
+          isOpen: true,
+          actualStartDate: phaseStartDate,
+          actualEndDate: null,
+        },
+      });
+      await prisma.challengeWinner.createMany({
+        data: [
+          {
+            challengeId,
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.CHECKPOINT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+          {
+            challengeId,
+            userId: 456,
+            handle: "placement-winner",
+            placement: 1,
+            type: PrizeSetTypeEnum.PLACEMENT,
+            createdBy: "test",
+            updatedBy: "test",
+          },
+        ],
+      });
+
+      try {
+        const openPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(_.isUndefined(openPhaseDetail.checkpointWinners), true);
+        openPhaseDetail.winners.should.deep.equal([]);
+
+        const openPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(openPhaseListing.result.length, 1);
+        should.equal(_.isUndefined(openPhaseListing.result[0].checkpointWinners), true);
+        should.equal(_.isUndefined(openPhaseListing.result[0].winners), true);
+
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: {
+            isOpen: false,
+            actualEndDate: new Date(),
+          },
+        });
+
+        const closedPhaseDetail = await service.getChallenge({ isMachine: true }, challengeId);
+        closedPhaseDetail.checkpointWinners.should.deep.equal([
+          {
+            userId: 123,
+            handle: "checkpoint-winner",
+            placement: 1,
+          },
+        ]);
+        closedPhaseDetail.winners.should.deep.equal([]);
+
+        const closedPhaseListing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(closedPhaseListing.result.length, 1);
+        closedPhaseListing.result[0].checkpointWinners.should.deep.equal(
+          closedPhaseDetail.checkpointWinners,
+        );
+        should.equal(_.isUndefined(closedPhaseListing.result[0].winners), true);
+      } finally {
+        await prisma.challengeWinner.deleteMany({ where: { challengeId } });
+        await prisma.challengePhase.update({
+          where: { id: checkpointPhase.id },
+          data: originalPhase,
+        });
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { status: ChallengeStatusEnum.COMPLETED },
+        });
+      }
+    });
+
     it("returns latest-member submission counters for challenge detail and listing", async () => {
       const challengeId = data.challenge.id;
       await prisma.challenge.update({
@@ -701,6 +856,55 @@ describe("challenge service unit tests", () => {
             numOfCheckpointSubmissions: 0,
           },
         });
+      }
+    });
+
+    it("counts every Design submission as a separate concept", async () => {
+      const challengeId = data.challenge.id;
+      const originalTrack = data.challengeTrack.track;
+      await prisma.challengeTrack.update({
+        where: { id: data.challenge.trackId },
+        data: { track: "DESIGN" },
+      });
+
+      try {
+        await reviewClient.$executeRawUnsafe(`
+          INSERT INTO ${submissionTableName}
+            ("id", "challengeId", "memberId", "type", "status", "submittedDate")
+          VALUES
+            ('pm5761a1', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z'),
+            ('pm5761a2', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z'),
+            ('pm5761a3', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z'),
+            ('pm5761c1', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-04T00:00:00Z'),
+            ('pm5761c2', '${challengeId}', 'member-1', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-05T00:00:00Z')
+        `);
+
+        const detail = await service.getChallenge({ isMachine: true }, challengeId);
+        should.equal(detail.numOfSubmissions, 3);
+        should.equal(detail.numOfCheckpointSubmissions, 2);
+
+        const listing = await service.searchChallenges(
+          { isMachine: true },
+          {
+            id: challengeId,
+            page: 1,
+            perPage: 10,
+          },
+        );
+        should.equal(listing.result.length, 1);
+        should.equal(listing.result[0].numOfSubmissions, 3);
+        should.equal(listing.result[0].numOfCheckpointSubmissions, 2);
+      } finally {
+        try {
+          await reviewClient.$executeRawUnsafe(
+            `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${challengeId}'`,
+          );
+        } finally {
+          await prisma.challengeTrack.update({
+            where: { id: data.challenge.trackId },
+            data: { track: originalTrack },
+          });
+        }
       }
     });
 
@@ -3027,6 +3231,509 @@ describe("challenge service unit tests", () => {
         return;
       }
       throw new Error("should not reach here");
+    });
+  });
+
+  describe("delete challenge tests", () => {
+    const challengeIds = [];
+    let originalEnsureUserCanModifyChallenge;
+    let originalPostBusEvent;
+
+    const createDeletionChallenge = async ({ status, testMetadataValue }) => {
+      const challengeId = uuid();
+      challengeIds.push(challengeId);
+      const metadata = _.isUndefined(testMetadataValue)
+        ? undefined
+        : {
+            create: {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: testMetadataValue,
+              createdBy: "delete-test",
+              updatedBy: "delete-test",
+            },
+          };
+
+      return prisma.challenge.create({
+        data: {
+          id: challengeId,
+          name: `Deletion coverage ${challengeId}`,
+          typeId: data.challenge.typeId,
+          trackId: data.challenge.trackId,
+          status,
+          tags: [],
+          groups: [],
+          currentPhaseNames: [],
+          createdBy: "delete-test",
+          updatedBy: "delete-test",
+          ...(_.isUndefined(metadata) ? {} : { metadata }),
+        },
+      });
+    };
+
+    beforeEach(() => {
+      originalEnsureUserCanModifyChallenge = helper.ensureUserCanModifyChallenge;
+      originalPostBusEvent = helper.postBusEvent;
+      helper.ensureUserCanModifyChallenge = async () => {};
+      helper.postBusEvent = async () => {};
+    });
+
+    afterEach(async () => {
+      helper.ensureUserCanModifyChallenge = originalEnsureUserCanModifyChallenge;
+      helper.postBusEvent = originalPostBusEvent;
+      await prisma.challenge.deleteMany({ where: { id: { in: challengeIds.splice(0) } } });
+    });
+
+    it("deletes a completed challenge with exact true test metadata", async () => {
+      const challenge = await createDeletionChallenge({
+        status: ChallengeStatusEnum.COMPLETED,
+        testMetadataValue: "true",
+      });
+
+      const result = await service.deleteChallenge(
+        { isMachine: true, userId: "delete-test" },
+        challenge.id,
+      );
+
+      should.equal(result.id, challenge.id);
+      _.find(result.metadata, {
+        name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+      }).value.should.equal("true");
+      should.equal(await prisma.challenge.count({ where: { id: challenge.id } }), 0);
+    });
+
+    it("deletes exact-true test challenges in every cancelled terminal status", async () => {
+      const cancelledStatuses = Object.values(ChallengeStatusEnum).filter((status) =>
+        status.startsWith("CANCELLED"),
+      );
+
+      for (const status of cancelledStatuses) {
+        const challenge = await createDeletionChallenge({
+          status,
+          testMetadataValue: "true",
+        });
+
+        await service.deleteChallenge(
+          { isMachine: true, userId: "delete-test" },
+          challenge.id,
+        );
+
+        should.equal(await prisma.challenge.count({ where: { id: challenge.id } }), 0);
+      }
+    });
+
+    it("preserves NEW challenge deletion regardless of test metadata", async () => {
+      const challenge = await createDeletionChallenge({
+        status: ChallengeStatusEnum.NEW,
+        testMetadataValue: "false",
+      });
+
+      await service.deleteChallenge({ isMachine: true, userId: "delete-test" }, challenge.id);
+
+      should.equal(await prisma.challenge.count({ where: { id: challenge.id } }), 0);
+    });
+
+    for (const testMetadataValue of [undefined, "false", "TRUE"]) {
+      it(`rejects non-NEW deletion with ${
+        _.isUndefined(testMetadataValue) ? "missing" : testMetadataValue
+      } test metadata`, async () => {
+        const challenge = await createDeletionChallenge({
+          status: ChallengeStatusEnum.COMPLETED,
+          testMetadataValue,
+        });
+
+        try {
+          await service.deleteChallenge(
+            { isMachine: true, userId: "delete-test" },
+            challenge.id,
+          );
+        } catch (error) {
+          should.equal(error.name, "NotFoundError");
+          should.equal(
+            error.message,
+            `Challenge with id: ${challenge.id} doesn't exist or is not eligible for deletion; deletion requires NEW status or a COMPLETED/CANCELLED status with is_test_challenge set to the exact string true`,
+          );
+          should.equal(await prisma.challenge.count({ where: { id: challenge.id } }), 1);
+          return;
+        }
+
+        throw new Error("should not reach here");
+      });
+    }
+
+    for (const status of [
+      ChallengeStatusEnum.DRAFT,
+      ChallengeStatusEnum.APPROVED,
+      ChallengeStatusEnum.ACTIVE,
+    ]) {
+      it(`rejects exact-true deletion while the challenge is ${status}`, async () => {
+        const challenge = await createDeletionChallenge({
+          status,
+          testMetadataValue: "true",
+        });
+
+        try {
+          await service.deleteChallenge(
+            { isMachine: true, userId: "delete-test" },
+            challenge.id,
+          );
+        } catch (error) {
+          should.equal(error.name, "NotFoundError");
+          should.equal(await prisma.challenge.count({ where: { id: challenge.id } }), 1);
+          return;
+        }
+
+        throw new Error("should not reach here");
+      });
+    }
+  });
+
+  describe("test challenge metadata update tests", () => {
+    const challengeIds = [];
+    let originalEnsureUserCanModifyChallenge;
+    let originalGenerateChallengePayments;
+    let originalGetChallengeResources;
+    let originalGetProjectBillingInformation;
+    let originalPostBusEvent;
+
+    const createMetadataUpdateChallenge = async ({ status, testMetadataValue }) => {
+      const challengeId = uuid();
+      challengeIds.push(challengeId);
+      const metadata = _.isUndefined(testMetadataValue)
+        ? undefined
+        : {
+            create: {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: testMetadataValue,
+              createdBy: "metadata-update-test",
+              updatedBy: "metadata-update-test",
+            },
+          };
+
+      return prisma.challenge.create({
+        data: {
+          id: challengeId,
+          name: `Metadata update coverage ${challengeId}`,
+          typeId: data.challenge.typeId,
+          trackId: data.challenge.trackId,
+          status,
+          tags: [],
+          groups: [],
+          currentPhaseNames: [],
+          createdBy: "metadata-update-test",
+          updatedBy: "metadata-update-test",
+          ...(_.isUndefined(metadata) ? {} : { metadata }),
+        },
+      });
+    };
+
+    beforeEach(() => {
+      originalEnsureUserCanModifyChallenge = helper.ensureUserCanModifyChallenge;
+      originalGenerateChallengePayments = helper.generateChallengePayments;
+      originalGetChallengeResources = helper.getChallengeResources;
+      originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      originalPostBusEvent = helper.postBusEvent;
+      projectHelper.getProjectBillingInformation = async () => ({
+        billingAccountId: null,
+        markup: 0,
+      });
+      helper.ensureUserCanModifyChallenge = async () => {};
+      helper.generateChallengePayments = async () => true;
+      helper.getChallengeResources = async () => [];
+      helper.postBusEvent = async () => {};
+    });
+
+    afterEach(async () => {
+      projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+      helper.ensureUserCanModifyChallenge = originalEnsureUserCanModifyChallenge;
+      helper.generateChallengePayments = originalGenerateChallengePayments;
+      helper.getChallengeResources = originalGetChallengeResources;
+      helper.postBusEvent = originalPostBusEvent;
+      await prisma.challenge.deleteMany({ where: { id: { in: challengeIds.splice(0) } } });
+    });
+
+    it("allows a non-terminal challenge to enable the test flag", async () => {
+      const challenge = await createMetadataUpdateChallenge({
+        status: ChallengeStatusEnum.DRAFT,
+      });
+
+      const result = await service.updateChallenge(
+        { isMachine: true, userId: "metadata-update-test" },
+        challenge.id,
+        {
+          metadata: [
+            {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            },
+          ],
+        },
+      );
+
+      _.find(result.metadata, {
+        name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+      }).value.should.equal("true");
+    });
+
+    const terminalTransitionMutationCases = [
+      {
+        name: "rejects missing-to-true while transitioning ACTIVE to COMPLETED",
+        initialStatus: ChallengeStatusEnum.ACTIVE,
+        initialValue: undefined,
+        finalStatus: ChallengeStatusEnum.COMPLETED,
+        requestedMetadata: [
+          {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "true",
+          },
+        ],
+      },
+      {
+        name: "rejects false-to-true while transitioning DRAFT to CANCELLED",
+        initialStatus: ChallengeStatusEnum.DRAFT,
+        initialValue: "false",
+        finalStatus: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+        requestedMetadata: [
+          {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "true",
+          },
+        ],
+      },
+      {
+        name: "rejects true-to-missing while transitioning ACTIVE to COMPLETED",
+        initialStatus: ChallengeStatusEnum.ACTIVE,
+        initialValue: "true",
+        finalStatus: ChallengeStatusEnum.COMPLETED,
+        requestedMetadata: [],
+      },
+      {
+        name: "rejects true-to-false while transitioning DRAFT to CANCELLED",
+        initialStatus: ChallengeStatusEnum.DRAFT,
+        initialValue: "true",
+        finalStatus: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+        requestedMetadata: [
+          {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "false",
+          },
+        ],
+      },
+    ];
+
+    for (const testCase of terminalTransitionMutationCases) {
+      it(testCase.name, async () => {
+        const challenge = await createMetadataUpdateChallenge({
+          status: testCase.initialStatus,
+          testMetadataValue: testCase.initialValue,
+        });
+
+        try {
+          await service.updateChallenge(
+            { isMachine: true, userId: "metadata-update-test" },
+            challenge.id,
+            {
+              status: testCase.finalStatus,
+              metadata: testCase.requestedMetadata,
+            },
+          );
+        } catch (error) {
+          should.equal(error.name, "BadRequestError");
+          should.equal(
+            error.message,
+            "is_test_challenge metadata cannot be changed when a challenge is or becomes COMPLETED or CANCELLED",
+          );
+          const persistedChallenge = await prisma.challenge.findUnique({
+            where: { id: challenge.id },
+            include: { metadata: true },
+          });
+          should.equal(persistedChallenge.status, testCase.initialStatus);
+          should.equal(
+            _.some(persistedChallenge.metadata, {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            }),
+            testCase.initialValue === "true",
+          );
+          return;
+        }
+
+        throw new Error("should not reach here");
+      });
+    }
+
+    const terminalTransitionPreservationCases = [
+      {
+        name: "allows explicit true preservation while transitioning ACTIVE to COMPLETED",
+        initialStatus: ChallengeStatusEnum.ACTIVE,
+        initialValue: "true",
+        finalStatus: ChallengeStatusEnum.COMPLETED,
+        requestedMetadata: [
+          {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "true",
+          },
+        ],
+      },
+      {
+        name: "allows omitted metadata while transitioning DRAFT test data to CANCELLED",
+        initialStatus: ChallengeStatusEnum.DRAFT,
+        initialValue: "true",
+        finalStatus: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+      },
+      {
+        name: "allows omitted metadata while transitioning ACTIVE ordinary data to COMPLETED",
+        initialStatus: ChallengeStatusEnum.ACTIVE,
+        initialValue: undefined,
+        finalStatus: ChallengeStatusEnum.COMPLETED,
+      },
+      {
+        name: "allows explicit false preservation while transitioning DRAFT to CANCELLED",
+        initialStatus: ChallengeStatusEnum.DRAFT,
+        initialValue: "false",
+        finalStatus: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+        requestedMetadata: [
+          {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "false",
+          },
+        ],
+      },
+    ];
+
+    for (const testCase of terminalTransitionPreservationCases) {
+      it(testCase.name, async () => {
+        const challenge = await createMetadataUpdateChallenge({
+          status: testCase.initialStatus,
+          testMetadataValue: testCase.initialValue,
+        });
+        const updateData = { status: testCase.finalStatus };
+        if (!_.isUndefined(testCase.requestedMetadata)) {
+          updateData.metadata = testCase.requestedMetadata;
+        }
+
+        const result = await service.updateChallenge(
+          { isMachine: true, userId: "metadata-update-test" },
+          challenge.id,
+          updateData,
+        );
+
+        should.equal(result.status, testCase.finalStatus);
+        should.equal(
+          _.some(result.metadata, {
+            name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+            value: "true",
+          }),
+          testCase.initialValue === "true",
+        );
+      });
+    }
+
+    it("rejects enabling the test flag on a completed ordinary challenge", async () => {
+      const challenge = await createMetadataUpdateChallenge({
+        status: ChallengeStatusEnum.COMPLETED,
+      });
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, userId: "metadata-update-test" },
+          challenge.id,
+          {
+            metadata: [
+              {
+                name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+                value: "true",
+              },
+            ],
+          },
+        );
+      } catch (error) {
+        should.equal(error.name, "BadRequestError");
+        should.equal(
+          error.message,
+          "is_test_challenge metadata cannot be changed when a challenge is or becomes COMPLETED or CANCELLED",
+        );
+        should.equal(
+          await prisma.challengeMetadata.count({ where: { challengeId: challenge.id } }),
+          0,
+        );
+        return;
+      }
+
+      throw new Error("should not reach here");
+    });
+
+    it("rejects removing the test flag from a cancelled test challenge", async () => {
+      const challenge = await createMetadataUpdateChallenge({
+        status: ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+        testMetadataValue: "true",
+      });
+
+      try {
+        await service.updateChallenge(
+          { isMachine: true, userId: "metadata-update-test" },
+          challenge.id,
+          { metadata: [] },
+        );
+      } catch (error) {
+        should.equal(error.name, "BadRequestError");
+        should.equal(
+          await prisma.challengeMetadata.count({
+            where: {
+              challengeId: challenge.id,
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            },
+          }),
+          1,
+        );
+        return;
+      }
+
+      throw new Error("should not reach here");
+    });
+
+    it("allows terminal metadata updates that keep an enabled test flag unchanged", async () => {
+      const challenge = await createMetadataUpdateChallenge({
+        status: ChallengeStatusEnum.COMPLETED,
+        testMetadataValue: "true",
+      });
+
+      const result = await service.updateChallenge(
+        { isMachine: true, userId: "metadata-update-test" },
+        challenge.id,
+        {
+          metadata: [
+            {
+              name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+              value: "true",
+            },
+            { name: "lifecycle-note", value: "updated" },
+          ],
+        },
+      );
+
+      _.find(result.metadata, { name: "lifecycle-note" }).value.should.equal("updated");
+    });
+
+    it("allows terminal metadata updates that keep a disabled test flag unchanged", async () => {
+      const challenge = await createMetadataUpdateChallenge({
+        status: ChallengeStatusEnum.CANCELLED_ZERO_SUBMISSIONS,
+      });
+
+      const result = await service.updateChallenge(
+        { isMachine: true, userId: "metadata-update-test" },
+        challenge.id,
+        { metadata: [{ name: "lifecycle-note", value: "updated" }] },
+      );
+
+      should.equal(
+        _.some(result.metadata, {
+          name: constants.ChallengeMetadataNames.IS_TEST_CHALLENGE,
+          value: "true",
+        }),
+        false,
+      );
+      _.find(result.metadata, { name: "lifecycle-note" }).value.should.equal("updated");
     });
   });
 

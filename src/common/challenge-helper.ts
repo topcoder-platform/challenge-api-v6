@@ -168,6 +168,69 @@ class ChallengeHelper {
     }
   }
 
+  /**
+   * Add the explicit false default for the metadata-backed test challenge flag.
+   * Challenge creation uses this before persistence so all newly created challenges have a
+   * deterministic `is_test_challenge` value. An existing entry is preserved unchanged so the
+   * subsequent validator can reject invalid values instead of silently replacing them.
+   *
+   * @param {Array<Object>|undefined|null} metadata challenge metadata entries
+   * @returns {Array<Object>} the original metadata entries plus the default flag when absent
+   * @throws {BadRequestError} if metadata is supplied with a non-array value
+   */
+  applyTestChallengeMetadataDefault(metadata) {
+    if (!_.isNil(metadata) && !_.isArray(metadata)) {
+      throw new errors.BadRequestError("metadata must be an array");
+    }
+
+    const resolvedMetadata = metadata || [];
+    const testChallengeEntry = _.find(resolvedMetadata, {
+      name: ChallengeMetadataNames.IS_TEST_CHALLENGE,
+    });
+    if (!_.isNil(testChallengeEntry)) {
+      return resolvedMetadata;
+    }
+
+    return [
+      ...resolvedMetadata,
+      {
+        name: ChallengeMetadataNames.IS_TEST_CHALLENGE,
+        value: "false",
+      },
+    ];
+  }
+
+  /**
+   * Validate the metadata-backed test challenge flag.
+   * Create and update request validation call this before metadata is persisted. The exact string
+   * representation keeps Challenge API responses and downstream payment checks consistent.
+   *
+   * @param {Array<Object>|undefined|null} metadata challenge metadata entries
+   * @returns {void}
+   * @throws {BadRequestError} if `is_test_challenge` is not the string `true` or `false`
+   */
+  validateTestChallengeMetadata(metadata) {
+    if (_.isNil(metadata)) {
+      return;
+    }
+
+    const testChallengeEntry = _.find(metadata, {
+      name: ChallengeMetadataNames.IS_TEST_CHALLENGE,
+    });
+    if (_.isNil(testChallengeEntry)) {
+      return;
+    }
+
+    if (
+      typeof testChallengeEntry.value !== "string" ||
+      !_.includes(BOOLEAN_METADATA_VALUES, testChallengeEntry.value)
+    ) {
+      throw new errors.BadRequestError(
+        "metadata is_test_challenge must be either true or false as a string"
+      );
+    }
+  }
+
   validatePrizeSetsAndGetPrizeType(prizeSets) {
     if (_.isEmpty(prizeSets)) return null;
 
@@ -266,6 +329,7 @@ class ChallengeHelper {
     // helper.ensureNoDuplicateOrNullElements(challenge.events, 'events')
     this.validateSubmissionTypeMetadata(challenge.metadata);
     this.validateRegisteredMemberWinningSubmissionDownloadMetadata(challenge.metadata);
+    this.validateTestChallengeMetadata(challenge.metadata);
 
     // check groups authorization
     if (challenge.groups && challenge.groups.length > 0) {
@@ -743,6 +807,7 @@ class ChallengeHelper {
     helper.ensureNoDuplicateOrNullElements(data.groups, "groups");
     this.validateSubmissionTypeMetadata(data.metadata);
     this.validateRegisteredMemberWinningSubmissionDownloadMetadata(data.metadata);
+    this.validateTestChallengeMetadata(data.metadata);
 
     if (data.projectId) {
       await ChallengeHelper.ensureProjectExist(data.projectId, currentUser);
