@@ -157,11 +157,22 @@ describe("challenge activation billing validation unit tests", () => {
     should.equal(shouldSkipChallengeApprovalFlow("80001061"), false);
   });
 
+  it("skips approval flow for Fun challenges", () => {
+    config.TOPGEAR_BILLING_ACCOUNTS_ID = [];
+
+    should.equal(shouldSkipChallengeApprovalFlow("80001061", true), true);
+    should.equal(shouldSkipChallengeApprovalFlow("80001061", false), false);
+  });
+
   it("does not block launch approval for configured Topgear billing accounts", () => {
     config.TOPGEAR_BILLING_ACCOUNTS_ID = ["80000062"];
 
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80000062"), false);
     should.equal(shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061"), true);
+    should.equal(
+      shouldBlockChallengeLaunchForApproval("PENDING_APPROVAL", "80001061", true),
+      false,
+    );
     should.equal(shouldBlockChallengeLaunchForApproval("APPROVED", "80001061"), false);
   });
 

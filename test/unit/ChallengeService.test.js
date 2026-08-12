@@ -284,7 +284,7 @@ describe("challenge service unit tests", () => {
       should.equal(result.legacyId, testChallengeData.legacyId);
       should.equal(result.forumId, testChallengeData.forumId);
       should.equal(result.status, testChallengeData.status);
-      should.equal(result.approvalStatus, "PENDING_APPROVAL");
+      should.equal(result.approvalStatus, "APPROVED");
       should.equal(result.funChallenge, testChallengeData.funChallenge);
       should.equal(result.createdBy, "testuser");
       should.exist(result.startDate);
@@ -2091,6 +2091,7 @@ describe("challenge service unit tests", () => {
       challengeData.name = `${challengeData.name} Billing Lock ${Date.now()}`;
       challengeData.legacyId = Math.floor(Math.random() * 1000000);
       challengeData.status = ChallengeStatusEnum.NEW;
+      challengeData.funChallenge = false;
       challengeData.prizeSets = [
         {
           type: PrizeSetTypeEnum.PLACEMENT,
@@ -2862,6 +2863,59 @@ describe("challenge service unit tests", () => {
         should.equal(updated.reviewers.length, 1);
         should.equal(updated.reviewers[0].scorecardId, "activation-scorecard");
       } finally {
+        await prisma.challenge.delete({ where: { id: activationChallenge.id } });
+      }
+    });
+
+    it("update challenge - auto-approves and activates a persisted pending Fun challenge", async () => {
+      const activationChallenge = await createActivationChallenge(ChallengeStatusEnum.DRAFT);
+      const originalGetChallengeResources = helper.getChallengeResources;
+      const originalGetM2MToken = m2mHelper.getM2MToken;
+      const originalAxiosGet = axios.get;
+      const originalPostBusEvent = helper.postBusEvent;
+      await prisma.challenge.update({
+        where: { id: activationChallenge.id },
+        data: {
+          approvalStatus: "PENDING_APPROVAL",
+          funChallenge: true,
+        },
+      });
+      helper.getChallengeResources = async () => [];
+      helper.postBusEvent = async () => {};
+      m2mHelper.getM2MToken = async () => "test-token";
+      axios.get = async (url, options) => {
+        if (_.toString(url) === config.RESOURCE_ROLES_API_URL) {
+          return { data: [], status: 200, headers: {} };
+        }
+        return originalAxiosGet(url, options);
+      };
+
+      try {
+        const updated = await service.updateChallenge(
+          { isMachine: true, sub: "sub-activate-fun", userId: 22838965 },
+          activationChallenge.id,
+          {
+            status: ChallengeStatusEnum.ACTIVE,
+            reviewers: [
+              {
+                phaseId: data.phase.id,
+                scorecardId: "activation-scorecard",
+                isMemberReview: true,
+                memberReviewerCount: 1,
+                shouldOpenOpportunity: false,
+              },
+            ],
+          },
+        );
+
+        should.equal(updated.status, ChallengeStatusEnum.ACTIVE);
+        should.equal(updated.approvalStatus, "APPROVED");
+        should.equal(updated.funChallenge, true);
+      } finally {
+        helper.getChallengeResources = originalGetChallengeResources;
+        helper.postBusEvent = originalPostBusEvent;
+        m2mHelper.getM2MToken = originalGetM2MToken;
+        axios.get = originalAxiosGet;
         await prisma.challenge.delete({ where: { id: activationChallenge.id } });
       }
     });
