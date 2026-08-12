@@ -563,13 +563,20 @@ function getApprovalFlowBillingAccountId(challenge, data?: any, projectBillingAc
 /**
  * Determines whether the challenge approval flow should be bypassed.
  *
- * Challenges billed to configured Topgear billing accounts are auto-approved
- * because they should not enter the manual budget approval flow.
+ * Fun challenges and challenges billed to configured Topgear billing accounts
+ * are auto-approved because they should not enter the manual budget approval flow.
  *
  * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @param {boolean} [funChallenge=false] Effective Fun challenge flag from the create or update.
  * @returns {boolean} `true` when challenge approval should be skipped.
+ * @throws This function does not throw.
+ * @remarks Used by challenge create, update, and launch validation to apply one approval policy.
  */
-function shouldSkipChallengeApprovalFlow(billingAccountId) {
+function shouldSkipChallengeApprovalFlow(billingAccountId, funChallenge = false) {
+  if (funChallenge === true) {
+    return true;
+  }
+
   const normalizedBillingAccountId = normalizeOptionalString(billingAccountId);
 
   if (!normalizedBillingAccountId) {
@@ -587,10 +594,13 @@ function shouldSkipChallengeApprovalFlow(billingAccountId) {
  *
  * @param {Object} target Challenge create or update payload to mutate.
  * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @param {boolean} [funChallenge=false] Effective Fun challenge flag from the create or update.
  * @returns {boolean} `true` when approval fields were forced to approved.
+ * @throws This function does not intentionally throw; callers provide a mutable challenge payload.
+ * @remarks Used before normal approval validation so bypassed challenges persist as approved.
  */
-function applyChallengeApprovalFlowBypass(target, billingAccountId) {
-  if (!shouldSkipChallengeApprovalFlow(billingAccountId)) {
+function applyChallengeApprovalFlowBypass(target, billingAccountId, funChallenge = false) {
+  if (!shouldSkipChallengeApprovalFlow(billingAccountId, funChallenge)) {
     return false;
   }
 
@@ -606,11 +616,18 @@ function applyChallengeApprovalFlowBypass(target, billingAccountId) {
  *
  * @param {string|null|undefined} approvalStatus Effective approval status.
  * @param {string|number|null|undefined} billingAccountId Billing-account identifier.
+ * @param {boolean} [funChallenge=false] Effective Fun challenge flag from the create or update.
  * @returns {boolean} `true` when launch should be blocked by approval state.
+ * @throws This function does not throw.
+ * @remarks Used when a challenge update transitions its status to Active.
  */
-function shouldBlockChallengeLaunchForApproval(approvalStatus, billingAccountId) {
+function shouldBlockChallengeLaunchForApproval(
+  approvalStatus,
+  billingAccountId,
+  funChallenge = false,
+) {
   return (
-    !shouldSkipChallengeApprovalFlow(billingAccountId) &&
+    !shouldSkipChallengeApprovalFlow(billingAccountId, funChallenge) &&
     normalizeApprovalStatus(approvalStatus) !== CHALLENGE_APPROVAL_STATUS.APPROVED
   );
 }
@@ -2530,7 +2547,8 @@ searchChallenges.schema = {
 
 /**
  * Create challenge.
- * Challenges billed to configured Topgear accounts skip manual budget approval and are auto-approved.
+ * Fun challenges and challenges billed to configured Topgear accounts skip manual budget approval
+ * and are auto-approved.
  * @param {Object} currentUser the user who perform operation
  * @param {Object} challenge the challenge to create; omitted `is_test_challenge` metadata defaults
  * to the exact string `false`
@@ -2645,6 +2663,7 @@ async function createChallenge(currentUser, challenge, userToken) {
   const skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
     challenge,
     approvalBillingAccountId,
+    challenge.funChallenge === true,
   );
 
   if (!skipsChallengeApprovalFlow) {
@@ -3654,7 +3673,8 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * Update challenge.
  * When a challenge transitions to completed task status or a cancelled status,
  * payment generation is requested after the database update commits.
- * Challenges billed to configured Topgear accounts skip manual budget approval and remain approved.
+ * Fun challenges and challenges billed to configured Topgear accounts skip manual budget approval
+ * and remain approved.
  * Updates that start in or transition to a completed/cancelled status may not change the effective
  * `is_test_challenge` metadata value.
  * @param {Object} currentUser the user who perform operation
@@ -3743,6 +3763,9 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   }
 
   data = preserveBillingMarkupForCopilotUpdate(currentUser, data, challenge);
+  const effectiveFunChallenge = _.isBoolean(data.funChallenge)
+    ? data.funChallenge
+    : challenge.funChallenge === true;
   const rawApprovalRejectionReason = _.toString(_.get(data, "approvalRejectionReason", ""));
 
   // Remove fields from data that are not allowed to be updated and that match the existing challenge
@@ -3762,6 +3785,7 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   const skipsChallengeApprovalFlow = applyChallengeApprovalFlowBypass(
     data,
     approvalBillingAccountId,
+    effectiveFunChallenge,
   );
 
   if (!skipsChallengeApprovalFlow) {
@@ -3844,7 +3868,11 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
 
   if (
     isStatusChangingToActive &&
-    shouldBlockChallengeLaunchForApproval(resolvedApprovalStatus, approvalBillingAccountId)
+    shouldBlockChallengeLaunchForApproval(
+      resolvedApprovalStatus,
+      approvalBillingAccountId,
+      effectiveFunChallenge,
+    )
   ) {
     throw new errors.BadRequestError(
       "Challenge launch is blocked until budget approval is Approved.",
