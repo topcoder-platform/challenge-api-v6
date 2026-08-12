@@ -125,8 +125,6 @@ async function createChallengeTimelineTemplate(authUser, data) {
   let template = await prisma.challengeTimelineTemplate.create({ data });
   template = _.omit(template, constants.auditFields);
 
-  // post bus event
-  await helper.postBusEvent(constants.Topics.ChallengeTimelineTemplateCreated, template);
   return template;
 }
 
