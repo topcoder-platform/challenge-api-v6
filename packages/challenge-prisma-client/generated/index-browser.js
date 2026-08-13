@@ -490,7 +490,8 @@ exports.Prisma.TimelineTemplatePhaseScalarFieldEnum = {
 
 exports.Prisma.MemberChallengeAccessScalarFieldEnum = {
   challengeId: 'challengeId',
-  memberId: 'memberId'
+  memberId: 'memberId',
+  roleId: 'roleId'
 };
 
 exports.Prisma.SortOrder = {
@@ -756,7 +757,8 @@ exports.Prisma.TimelineTemplatePhaseOrderByRelevanceFieldEnum = {
 
 exports.Prisma.MemberChallengeAccessOrderByRelevanceFieldEnum = {
   challengeId: 'challengeId',
-  memberId: 'memberId'
+  memberId: 'memberId',
+  roleId: 'roleId'
 };
 exports.ChallengeStatusEnum = exports.$Enums.ChallengeStatusEnum = {
   NEW: 'NEW',

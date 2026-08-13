@@ -35004,16 +35004,19 @@ export namespace Prisma {
   export type MemberChallengeAccessMinAggregateOutputType = {
     challengeId: string | null
     memberId: string | null
+    roleId: string | null
   }
 
   export type MemberChallengeAccessMaxAggregateOutputType = {
     challengeId: string | null
     memberId: string | null
+    roleId: string | null
   }
 
   export type MemberChallengeAccessCountAggregateOutputType = {
     challengeId: number
     memberId: number
+    roleId: number
     _all: number
   }
 
@@ -35021,16 +35024,19 @@ export namespace Prisma {
   export type MemberChallengeAccessMinAggregateInputType = {
     challengeId?: true
     memberId?: true
+    roleId?: true
   }
 
   export type MemberChallengeAccessMaxAggregateInputType = {
     challengeId?: true
     memberId?: true
+    roleId?: true
   }
 
   export type MemberChallengeAccessCountAggregateInputType = {
     challengeId?: true
     memberId?: true
+    roleId?: true
     _all?: true
   }
 
@@ -35103,6 +35109,7 @@ export namespace Prisma {
   export type MemberChallengeAccessGroupByOutputType = {
     challengeId: string
     memberId: string
+    roleId: string
     _count: MemberChallengeAccessCountAggregateOutputType | null
     _min: MemberChallengeAccessMinAggregateOutputType | null
     _max: MemberChallengeAccessMaxAggregateOutputType | null
@@ -35125,6 +35132,7 @@ export namespace Prisma {
   export type MemberChallengeAccessSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     challengeId?: boolean
     memberId?: boolean
+    roleId?: boolean
     challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["memberChallengeAccess"]>
 
@@ -35133,9 +35141,10 @@ export namespace Prisma {
   export type MemberChallengeAccessSelectScalar = {
     challengeId?: boolean
     memberId?: boolean
+    roleId?: boolean
   }
 
-  export type MemberChallengeAccessOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"challengeId" | "memberId", ExtArgs["result"]["memberChallengeAccess"]>
+  export type MemberChallengeAccessOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"challengeId" | "memberId" | "roleId", ExtArgs["result"]["memberChallengeAccess"]>
   export type MemberChallengeAccessInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     challenge?: boolean | ChallengeDefaultArgs<ExtArgs>
   }
@@ -35148,6 +35157,7 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       challengeId: string
       memberId: string
+      roleId: string
     }, ExtArgs["result"]["memberChallengeAccess"]>
     composites: {}
   }
@@ -35394,6 +35404,7 @@ export namespace Prisma {
   interface MemberChallengeAccessFieldRefs {
     readonly challengeId: FieldRef<"MemberChallengeAccess", 'String'>
     readonly memberId: FieldRef<"MemberChallengeAccess", 'String'>
+    readonly roleId: FieldRef<"MemberChallengeAccess", 'String'>
   }
     
 
@@ -36017,7 +36028,8 @@ export namespace Prisma {
 
   export const MemberChallengeAccessScalarFieldEnum: {
     challengeId: 'challengeId',
-    memberId: 'memberId'
+    memberId: 'memberId',
+    roleId: 'roleId'
   };
 
   export type MemberChallengeAccessScalarFieldEnum = (typeof MemberChallengeAccessScalarFieldEnum)[keyof typeof MemberChallengeAccessScalarFieldEnum]
@@ -36373,7 +36385,8 @@ export namespace Prisma {
 
   export const MemberChallengeAccessOrderByRelevanceFieldEnum: {
     challengeId: 'challengeId',
-    memberId: 'memberId'
+    memberId: 'memberId',
+    roleId: 'roleId'
   };
 
   export type MemberChallengeAccessOrderByRelevanceFieldEnum = (typeof MemberChallengeAccessOrderByRelevanceFieldEnum)[keyof typeof MemberChallengeAccessOrderByRelevanceFieldEnum]
@@ -38952,12 +38965,14 @@ export namespace Prisma {
     NOT?: MemberChallengeAccessWhereInput | MemberChallengeAccessWhereInput[]
     challengeId?: StringFilter<"MemberChallengeAccess"> | string
     memberId?: StringFilter<"MemberChallengeAccess"> | string
+    roleId?: StringFilter<"MemberChallengeAccess"> | string
     challenge?: XOR<ChallengeScalarRelationFilter, ChallengeWhereInput>
   }
 
   export type MemberChallengeAccessOrderByWithRelationInput = {
     challengeId?: SortOrder
     memberId?: SortOrder
+    roleId?: SortOrder
     challenge?: ChallengeOrderByWithRelationInput
     _relevance?: MemberChallengeAccessOrderByRelevanceInput
   }
@@ -38965,6 +38980,7 @@ export namespace Prisma {
   export type MemberChallengeAccessOrderByWithAggregationInput = {
     challengeId?: SortOrder
     memberId?: SortOrder
+    roleId?: SortOrder
     _count?: MemberChallengeAccessCountOrderByAggregateInput
     _max?: MemberChallengeAccessMaxOrderByAggregateInput
     _min?: MemberChallengeAccessMinOrderByAggregateInput
@@ -38976,6 +38992,7 @@ export namespace Prisma {
     NOT?: MemberChallengeAccessScalarWhereWithAggregatesInput | MemberChallengeAccessScalarWhereWithAggregatesInput[]
     challengeId?: StringWithAggregatesFilter<"MemberChallengeAccess"> | string
     memberId?: StringWithAggregatesFilter<"MemberChallengeAccess"> | string
+    roleId?: StringWithAggregatesFilter<"MemberChallengeAccess"> | string
   }
 
   export type ChallengeCreateInput = {
@@ -43727,16 +43744,19 @@ export namespace Prisma {
   export type MemberChallengeAccessCountOrderByAggregateInput = {
     challengeId?: SortOrder
     memberId?: SortOrder
+    roleId?: SortOrder
   }
 
   export type MemberChallengeAccessMaxOrderByAggregateInput = {
     challengeId?: SortOrder
     memberId?: SortOrder
+    roleId?: SortOrder
   }
 
   export type MemberChallengeAccessMinOrderByAggregateInput = {
     challengeId?: SortOrder
     memberId?: SortOrder
+    roleId?: SortOrder
   }
 
   export type ChallengeCreatecurrentPhaseNamesInput = {
@@ -46459,6 +46479,7 @@ export namespace Prisma {
     NOT?: MemberChallengeAccessWhereInput | MemberChallengeAccessWhereInput[]
     challengeId?: StringFilter<"MemberChallengeAccess"> | string
     memberId?: StringFilter<"MemberChallengeAccess"> | string
+    roleId?: StringFilter<"MemberChallengeAccess"> | string
     challenge?: XOR<ChallengeScalarRelationFilter, ChallengeWhereInput>
   }
 
@@ -47079,6 +47100,7 @@ export namespace Prisma {
     NOT?: MemberChallengeAccessScalarWhereInput | MemberChallengeAccessScalarWhereInput[]
     challengeId?: StringFilter<"MemberChallengeAccess"> | string
     memberId?: StringFilter<"MemberChallengeAccess"> | string
+    roleId?: StringFilter<"MemberChallengeAccess"> | string
   }
 
   export type ChallengeUserWhitelistUpsertWithWhereUniqueWithoutChallengeInput = {
@@ -53589,18 +53611,22 @@ export namespace Prisma {
 
   export type MemberChallengeAccessUpdateWithoutChallengeInput = {
     memberId?: StringFieldUpdateOperationsInput | string
+    roleId?: StringFieldUpdateOperationsInput | string
   }
 
   export type MemberChallengeAccessUncheckedUpdateWithoutChallengeInput = {
     memberId?: StringFieldUpdateOperationsInput | string
+    roleId?: StringFieldUpdateOperationsInput | string
   }
 
   export type MemberChallengeAccessUpdateManyMutationInput = {
     memberId?: StringFieldUpdateOperationsInput | string
+    roleId?: StringFieldUpdateOperationsInput | string
   }
 
   export type MemberChallengeAccessUncheckedUpdateManyWithoutChallengeInput = {
     memberId?: StringFieldUpdateOperationsInput | string
+    roleId?: StringFieldUpdateOperationsInput | string
   }
 
   export type ChallengeUserWhitelistUpdateWithoutChallengeInput = {

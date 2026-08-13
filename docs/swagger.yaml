@@ -53,6 +53,12 @@ paths:
         - Challenges
       description: |
         Retrieve challenges in the system.
+
+        `resourceRoleId` may be combined with `memberId` to restrict the member's
+        resource-associated challenges to one UUID resource role before challenge
+        filtering, sorting, totals, and pagination. It does not grant access: results
+        remain subject to the caller's whitelist, group, and task visibility. Anonymous
+        callers receive only challenges visible to anonymous users.
       security:
         - bearer: []
       produces:
@@ -354,6 +360,12 @@ paths:
           description: Filter challenges memberId has access to
           required: false
           type: string
+        - name: resourceRoleId
+          in: query
+          description: Filter the member resource association by exact resource-role UUID. Requires memberId. This only narrows results and does not grant challenge access.
+          required: false
+          type: string
+          format: UUID
         - name: sortBy
           in: query
           description: Sort the results by the field.
