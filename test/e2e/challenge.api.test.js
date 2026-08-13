@@ -738,6 +738,80 @@ describe('challenge API E2E tests', () => {
       should.equal(response.body.length, 0)
     })
 
+    it('role-filters member competitions before global sort, total and pagination', async () => {
+      const prefix = `Role Filter ${Date.now()}`
+      const roleFilteredChallenges = ['A', 'B', 'C'].map(suffix => ({
+        id: uuid(),
+        name: `${prefix} ${suffix}`
+      }))
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany
+      let capturedMemberAccessQuery
+
+      try {
+        for (const challenge of roleFilteredChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challenge.id,
+              name: challenge.name,
+              description: 'role-filter-e2e',
+              privateDescription: 'role-filter-e2e',
+              challengeSource: 'Topcoder',
+              descriptionFormat: 'html',
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: [],
+              groups: [],
+              status: ChallengeStatusEnum.ACTIVE,
+              createdBy: 'role-filter-e2e',
+              updatedBy: 'role-filter-e2e'
+            }
+          })
+        }
+        prisma.memberChallengeAccess.findMany = async query => {
+          capturedMemberAccessQuery = query
+          return [
+            ...roleFilteredChallenges.map(challenge => ({ challengeId: challenge.id })),
+            { challengeId: data.challenge.id }
+          ]
+        }
+
+        const response = await chai.request(app)
+          .get(basePath)
+          .set('Authorization', `Bearer ${config.M2M_READ_ACCESS_TOKEN}`)
+          .query({
+            memberId: 'role-filter-member',
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
+            search: prefix,
+            sortBy: 'name',
+            sortOrder: 'asc',
+            page: 2,
+            perPage: 1
+          })
+
+        should.equal(response.status, 200)
+        should.equal(response.headers['x-page'], '2')
+        should.equal(response.headers['x-per-page'], '1')
+        should.equal(response.headers['x-total'], '3')
+        should.equal(response.headers['x-total-pages'], '3')
+        should.equal(response.body.length, 1)
+        should.equal(response.body[0].name, `${prefix} B`)
+        capturedMemberAccessQuery.should.deep.equal({
+          where: {
+            memberId: 'role-filter-member',
+            roleId: config.SUBMITTER_ROLE_ID
+          },
+          select: { challengeId: true },
+          distinct: ['challengeId']
+        })
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany
+        await prisma.challenge.deleteMany({
+          where: { id: { in: roleFilteredChallenges.map(challenge => challenge.id) } }
+        })
+      }
+    })
+
     it('search challenges successfully 4 - with terms', async () => {
       const response = await chai.request(app)
         .get(basePath)
@@ -828,6 +902,24 @@ describe('challenge API E2E tests', () => {
         .query({ memberId: 'abcde' })
       should.equal(response.status, 400)
       should.equal(response.body.message, '"memberId" must be a number')
+    })
+
+    it('search challenges - invalid resourceRoleId', async () => {
+      const response = await chai.request(app)
+        .get(basePath)
+        .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
+        .query({ memberId: '40309246', resourceRoleId: 'invalid' })
+      should.equal(response.status, 400)
+      should.equal(response.body.message, '"resourceRoleId" must be a valid GUID')
+    })
+
+    it('search challenges - resourceRoleId requires memberId', async () => {
+      const response = await chai.request(app)
+        .get(basePath)
+        .set('Authorization', `Bearer ${config.ADMIN_TOKEN}`)
+        .query({ resourceRoleId: config.SUBMITTER_ROLE_ID })
+      should.equal(response.status, 400)
+      should.equal(response.body.message.includes('memberId'), true)
     })
 
     it('search challenges - invalid perPage', async () => {

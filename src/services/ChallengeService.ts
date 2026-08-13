@@ -1502,10 +1502,12 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
 
 /**
  * Specialized search path when filtering by a specific memberId. We pivot through the
- * Resource table to load the member's challenge ids, then apply the remaining filters in
- * manageable chunks so the database never has to process thousands of correlated joins.
+ * Resource table to load the member's challenge ids, optionally constrained to one resource
+ * role, then apply the remaining filters in manageable chunks so the database never has to
+ * process thousands of correlated joins.
  * @param {Object} options
  * @param {string} options.requestedMemberId
+ * @param {string|null} options.resourceRoleId UUID of the resource role that must match
  * @param {Object} options.challengeWhere Prisma where clause ({ AND: [...] })
  * @param {Object} options.sortFilter e.g. { startDate: "desc" }
  * @param {string} options.sortByProp normalized challenge column name
@@ -1518,6 +1520,7 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
  */
 async function searchChallengesViaMemberAccess({
   requestedMemberId,
+  resourceRoleId,
   challengeWhere,
   sortFilter,
   sortByProp,
@@ -1529,8 +1532,14 @@ async function searchChallengesViaMemberAccess({
 }) {
   const chunkSize = Number(process.env.SEARCH_MEMBER_CHUNK_SIZE || 500);
   const memberChallengeIdStart = Date.now();
+  const memberAccessWhere: { memberId: string; roleId?: string } = {
+    memberId: requestedMemberId,
+  };
+  if (resourceRoleId) {
+    memberAccessWhere.roleId = resourceRoleId;
+  }
   const memberChallengeIdRows = await prisma.memberChallengeAccess.findMany({
-    where: { memberId: requestedMemberId },
+    where: memberAccessWhere,
     select: { challengeId: true },
     distinct: ["challengeId"],
   });
@@ -1644,6 +1653,8 @@ async function searchChallengesViaMemberAccess({
 async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
   const perPage = criteria.perPage || 20;
+  const requestedMemberId = !_.isNil(criteria.memberId) ? _.toString(criteria.memberId) : null;
+  const resourceRoleId = criteria.resourceRoleId || null;
   const searchTimingEnabled =
     process.env.SEARCH_CHALLENGE_TIMING === "true" ||
     (typeof config.has === "function" &&
@@ -1674,7 +1685,7 @@ async function searchChallenges(currentUser, criteria) {
     // best-effort logging; don't block on serialization issues
     logger.info("SearchChallenges filter: <unable to serialize criteria>");
   }
-  if (!_.isUndefined(criteria.legacyId)) {
+  if (!_.isUndefined(criteria.legacyId) && !resourceRoleId) {
     const result = await searchByLegacyId(currentUser, criteria.legacyId, page, perPage);
     const sanitizedResult = result.map((challenge) =>
       helper.removeNullProperties(sanitizeBillingMarkupForCaller(currentUser, challenge)),
@@ -2082,7 +2093,6 @@ async function searchChallenges(currentUser, criteria) {
     }
   }
 
-  const requestedMemberId = !_.isNil(criteria.memberId) ? _.toString(criteria.memberId) : null;
   const currentUserMemberId =
     currentUser && !_hasAdminRole && !_isMachineToken ? _.toString(currentUser.userId) : null;
   const isSelfMemberSearch = Boolean(
@@ -2262,6 +2272,7 @@ async function searchChallenges(currentUser, criteria) {
       ? {
           memberAccessWhere: {
             memberId: requestedMemberId,
+            ...(resourceRoleId ? { roleId: resourceRoleId } : {}),
             challenge: prismaFilter.where,
           },
           orderBy: [
@@ -2309,6 +2320,7 @@ async function searchChallenges(currentUser, criteria) {
     if (requestedMemberId) {
       ({ total, challenges } = await searchChallengesViaMemberAccess({
         requestedMemberId,
+        resourceRoleId,
         challengeWhere: prismaFilter.where,
         sortFilter,
         sortByProp,
@@ -2528,6 +2540,7 @@ searchChallenges.schema = {
       updatedBy: Joi.string(),
       isLightweight: Joi.boolean().default(false),
       memberId: Joi.string(),
+      resourceRoleId: Joi.optionalId(),
       sortBy: Joi.string().valid(...allowedSortByValues),
       sortOrder: Joi.string().valid("asc", "desc"),
       groups: Joi.array().items(Joi.optionalId()).unique(),
@@ -2542,6 +2555,7 @@ searchChallenges.schema = {
       totalPrizesTo: Joi.number().min(0),
       tco: Joi.boolean().default(false),
     })
+    .with("resourceRoleId", "memberId")
     .unknown(true),
 };
 

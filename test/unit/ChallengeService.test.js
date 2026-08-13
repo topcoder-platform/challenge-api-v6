@@ -1239,9 +1239,13 @@ describe("challenge service unit tests", () => {
       const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
       const originalChallengeFindMany = prisma.challenge.findMany;
       let capturedWhere;
+      let capturedMemberAccessQuery;
 
       helper.getCompleteUserGroupTreeIds = async () => [];
-      prisma.memberChallengeAccess.findMany = async () => [{ challengeId: data.taskChallenge.id }];
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.taskChallenge.id }];
+      };
       prisma.challenge.findMany = async (query) => {
         capturedWhere = query.where;
         return [];
@@ -1254,6 +1258,11 @@ describe("challenge service unit tests", () => {
         );
 
         should.equal(result.total, 0);
+        capturedMemberAccessQuery.should.deep.equal({
+          where: { memberId: "different-member-id" },
+          select: { challengeId: true },
+          distinct: ["challengeId"],
+        });
         const taskVisibilityFilter = capturedWhere.AND.find(
           (filter) => filter.OR && filter.OR.some((condition) => condition.taskIsTask === false),
         );
@@ -1272,6 +1281,87 @@ describe("challenge service unit tests", () => {
         helper.getCompleteUserGroupTreeIds = originalGetCompleteUserGroupTreeIds;
         prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
         prisma.challenge.findMany = originalChallengeFindMany;
+      }
+    });
+
+    it("role-specific member search does not grant anonymous task visibility", async () => {
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      let capturedMemberAccessQuery;
+
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.taskChallenge.id }];
+      };
+
+      try {
+        const result = await service.searchChallenges(undefined, {
+          memberId: "anonymous-filter-member",
+          resourceRoleId: config.SUBMITTER_ROLE_ID,
+        });
+
+        should.equal(result.total, 0);
+        should.equal(result.result.length, 0);
+        capturedMemberAccessQuery.should.deep.equal({
+          where: {
+            memberId: "anonymous-filter-member",
+            roleId: config.SUBMITTER_ROLE_ID,
+          },
+          select: { challengeId: true },
+          distinct: ["challengeId"],
+        });
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
+      }
+    });
+
+    it("validates the role-specific member search contract", async () => {
+      try {
+        await service.searchChallenges(
+          { isMachine: true },
+          { memberId: "role-filter-member", resourceRoleId: "invalid" },
+        );
+        should.fail("Expected an invalid resource role UUID to be rejected");
+      } catch (error) {
+        error.message.should.equal('"criteria.resourceRoleId" must be a valid GUID');
+      }
+
+      try {
+        await service.searchChallenges(
+          { isMachine: true },
+          { resourceRoleId: config.SUBMITTER_ROLE_ID },
+        );
+        should.fail("Expected a resource role without memberId to be rejected");
+      } catch (error) {
+        error.message.should.include("memberId");
+      }
+    });
+
+    it("combines resource role and legacy challenge filters", async () => {
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      let capturedMemberAccessQuery;
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.challenge.id }];
+      };
+
+      try {
+        const result = await service.searchChallenges(
+          { isMachine: true },
+          {
+            memberId: "legacy-role-filter-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
+            legacyId: data.challenge.legacyId,
+          },
+        );
+
+        should.equal(result.total, 1);
+        should.equal(result.result[0].id, data.challenge.id);
+        capturedMemberAccessQuery.where.should.deep.equal({
+          memberId: "legacy-role-filter-member",
+          roleId: config.SUBMITTER_ROLE_ID,
+        });
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
       }
     });
 
@@ -1300,47 +1390,68 @@ describe("challenge service unit tests", () => {
       ];
       const statusChallengeIds = statusChallenges.map((challengeRow) => challengeRow.id);
       const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      const memberAccessQueries = [];
 
       try {
-        await Promise.all(
-          statusChallenges.map((challengeRow) =>
-            prisma.challenge.create({
-              data: {
-                id: challengeRow.id,
-                name: challengeRow.name,
-                description: "status-sort",
-                privateDescription: "status-sort",
-                challengeSource: "Topcoder",
-                descriptionFormat: "html",
-                timelineTemplate: { connect: { id: data.timelineTemplate.id } },
-                type: { connect: { id: data.challenge.typeId } },
-                track: { connect: { id: data.challenge.trackId } },
-                tags: [],
-                groups: [],
-                status: challengeRow.status,
-                createdBy: "testuser",
-                updatedBy: "testuser",
-              },
-            }),
-          ),
-        );
+        for (const challengeRow of statusChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challengeRow.id,
+              name: challengeRow.name,
+              description: "status-sort",
+              privateDescription: "status-sort",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: [],
+              groups: [],
+              status: challengeRow.status,
+              createdBy: "testuser",
+              updatedBy: "testuser",
+            },
+          });
+        }
 
-        prisma.memberChallengeAccess.findMany = async () =>
-          statusChallenges.map((challengeRow) => ({ challengeId: challengeRow.id }));
+        prisma.memberChallengeAccess.findMany = async (query) => {
+          memberAccessQueries.push(query);
+          return statusChallenges.map((challengeRow) => ({ challengeId: challengeRow.id }));
+        };
 
         const ascRes = await service.searchChallenges(
           { isMachine: true },
           {
             memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
             sortBy: "status",
             sortOrder: "asc",
             page: 1,
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(ascRes.result, "status"), [
+        _.map(ascRes.result, "status").should.deep.equal([
           ChallengeStatusEnum.ACTIVE,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.NEW,
+        ]);
+
+        const secondPage = await service.searchChallenges(
+          { isMachine: true },
+          {
+            memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
+            sortBy: "status",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+        should.equal(secondPage.total, 4);
+        should.equal(secondPage.page, 2);
+        should.equal(secondPage.perPage, 2);
+        _.map(secondPage.result, "status").should.deep.equal([
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.NEW,
         ]);
@@ -1355,7 +1466,7 @@ describe("challenge service unit tests", () => {
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(ascResNoMember.result, "status"), [
+        _.map(ascResNoMember.result, "status").should.deep.equal([
           ChallengeStatusEnum.ACTIVE,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
           ChallengeStatusEnum.COMPLETED,
@@ -1366,13 +1477,14 @@ describe("challenge service unit tests", () => {
           { isMachine: true },
           {
             memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
             sortBy: "status",
             sortOrder: "desc",
             page: 1,
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(descRes.result, "status"), [
+        _.map(descRes.result, "status").should.deep.equal([
           ChallengeStatusEnum.NEW,
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
@@ -1389,12 +1501,23 @@ describe("challenge service unit tests", () => {
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(descResNoMember.result, "status"), [
+        _.map(descResNoMember.result, "status").should.deep.equal([
           ChallengeStatusEnum.NEW,
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
           ChallengeStatusEnum.ACTIVE,
         ]);
+        memberAccessQueries.should.have.length(3);
+        memberAccessQueries.forEach((query) => {
+          query.should.deep.equal({
+            where: {
+              memberId: "status-sort-member",
+              roleId: config.SUBMITTER_ROLE_ID,
+            },
+            select: { challengeId: true },
+            distinct: ["challengeId"],
+          });
+        });
       } finally {
         prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
         await prisma.challenge.deleteMany({
