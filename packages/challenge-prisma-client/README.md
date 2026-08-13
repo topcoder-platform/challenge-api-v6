@@ -16,6 +16,19 @@ const activeCount = await client.challenge.count({
 await client.$disconnect();
 ```
 
+Callers that need bounded database work can pass PostgreSQL pool settings
+without constructing the Prisma 7 adapter themselves:
+
+```ts
+const client = createChallengePrismaClient(databaseUrl, {
+  driverOptions: {
+    connectionTimeoutMillis: 5000,
+    query_timeout: 5000,
+    statement_timeout: 5000,
+  },
+});
+```
+
 The client connects lazily. Applications own its lifecycle and must disconnect
 it during shutdown. An empty or non-string connection URL raises `TypeError`;
 Prisma reports its normal configuration and database errors during creation or

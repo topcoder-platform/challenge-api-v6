@@ -29,9 +29,11 @@ function getPostgresSchema(connectionString) {
  * setup and connection-string schema handling inside this package.
  *
  * @param {string} connectionString PostgreSQL URL for the challenge database.
- * @param {import('./generated').Prisma.PrismaClientOptions} [options] Optional
- * Prisma logging, transaction, and omit settings. The factory owns `adapter`
- * and `accelerateUrl`, so any JavaScript values supplied for them are ignored.
+ * @param {import('./generated').Prisma.PrismaClientOptions &
+ * {driverOptions?: import('pg').PoolConfig}} [options] Optional Prisma logging,
+ * transaction, and omit settings plus PostgreSQL pool/timeout settings. The
+ * factory owns `adapter`, `accelerateUrl`, and the driver connection string, so
+ * JavaScript values supplied for them are ignored.
  * @returns {import('./generated').PrismaClient} A lazily connected challenge
  * Prisma client. The caller must invoke `$disconnect()` during shutdown.
  * @throws {TypeError} When `connectionString` is not a non-empty string.
@@ -43,13 +45,16 @@ function createChallengePrismaClient(connectionString, options = {}) {
     throw new TypeError('Challenge database connection string is required');
   }
 
-  const clientOptions = { ...options };
+  const { driverOptions: suppliedDriverOptions = {}, ...clientOptions } =
+    options;
+  const driverOptions = { ...suppliedDriverOptions };
   delete clientOptions.adapter;
   delete clientOptions.accelerateUrl;
+  delete driverOptions.connectionString;
 
   const schema = getPostgresSchema(connectionString);
   const adapter = new PrismaPg(
-    { connectionString },
+    { ...driverOptions, connectionString },
     schema ? { schema } : undefined,
   );
 
