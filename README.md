@@ -37,11 +37,34 @@ remain compatible. Database access uses Prisma 7 with the PostgreSQL driver
 adapter. Domain events continue to be sent through the existing Bus API wrapper;
 this service does not connect to Kafka directly.
 
-The API runtime client is Prisma 7. The checked-in
-`packages/challenge-prisma-client` artifact remains on Prisma 6 for its existing
-downstream consumers, so the root generation command intentionally targets only
-the API client. Upgrading that shared artifact requires a coordinated downstream
-release.
+The API runtime client and the checked-in external client use Prisma 7. The
+external client has a stable package wrapper at
+`packages/challenge-prisma-client`; generated Prisma files live below its
+`generated` directory so regeneration cannot overwrite the public contract.
+
+## External Prisma client
+
+Services that need to aggregate challenge data directly can install the
+`packages/challenge-prisma-client` Git subdirectory as
+`@topcoder/challenge-api-v6`. The package exports all generated challenge
+models, enums, Prisma helpers, and `PrismaClient`, plus this supported factory:
+
+```ts
+import { createChallengePrismaClient } from '@topcoder/challenge-api-v6';
+
+const challenges = createChallengePrismaClient(process.env.CHALLENGE_DATABASE_URL, {
+  log: ['warn', 'error'],
+});
+```
+
+`createChallengePrismaClient(connectionString, options?)` creates a Prisma 7
+PostgreSQL driver adapter, preserves the optional `schema` query parameter in
+the connection URL, and returns a disconnected client that connects lazily on
+its first query. Call `$disconnect()` during application shutdown. The factory
+throws `TypeError` when `connectionString` is empty or not a string; Prisma may
+raise its normal configuration and database errors while creating or using the
+client. Connection-defining `adapter` and `accelerateUrl` options are owned by
+the factory and intentionally excluded from its options type.
 
 ## Configuration
 
@@ -90,7 +113,7 @@ configuration parameters.
 Run `nvm use` before pnpm commands. Make sure `DATABASE_URL` is set before any
 database operation or application startup.
 
-1. Install dependencies and generate the Prisma client: `pnpm install`
+1. Install dependencies and generate both Prisma clients: `pnpm install`
 2. Build the API: `pnpm build`
 3. Create or update local database tables: `pnpm create-tables`
 4. Seed tables: `pnpm seed-tables`
@@ -130,7 +153,8 @@ database operation or application startup.
    DATABASE_URL=
    ```
 
-   Then run `pnpm install`. The postinstall hook generates the Prisma 7 client.
+   Then run `pnpm install`. The postinstall hook generates both the internal and
+   external Prisma 7 clients.
 
 2. 🚢 Start docker-compose with services which are required to start Topcoder Challenges API locally
 
@@ -237,6 +261,13 @@ To run unit tests alone
 
 ```bash
 pnpm test
+```
+
+To smoke-test the packaged external Prisma factory without connecting to a
+database:
+
+```bash
+pnpm test:external-client
 ```
 
 To run unit tests with coverage report
