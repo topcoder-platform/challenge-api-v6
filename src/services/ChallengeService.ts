@@ -1042,9 +1042,32 @@ async function ensureAIPhaseCanBeClosed(challengeId, phaseName = 'AI Screening')
       reviewPrisma.$queryRaw(
         Prisma.sql`
           SELECT "id", "legacySubmissionId"
-          FROM ${submissionTable}
-          WHERE "challengeId" = ${challengeId}
-            AND "status"::text <> 'DELETED'
+          FROM (
+            SELECT
+              "id",
+              "legacySubmissionId",
+              ROW_NUMBER() OVER (
+                PARTITION BY COALESCE("memberId", "id")
+                ORDER BY
+                  "submittedDate" DESC NULLS LAST,
+                  "createdAt" DESC NULLS LAST,
+                  "updatedAt" DESC NULLS LAST,
+                  "id" DESC
+              ) AS "rowNumber"
+            FROM ${submissionTable}
+            WHERE "challengeId" = ${challengeId}
+              AND (
+                "status" IS NULL
+                OR "status"::text = 'ACTIVE'
+                OR "status"::text = 'AI_FAILED_REVIEW'
+              )
+              AND (
+                "type" IS NULL
+                OR UPPER(("type")::text) = 'CONTEST_SUBMISSION'
+              )
+              AND ("virusScan" IS NULL OR "virusScan" = TRUE)
+          ) latest
+          WHERE "rowNumber" = 1
         `,
       ),
       reviewPrisma.$queryRaw(
