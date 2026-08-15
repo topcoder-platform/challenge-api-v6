@@ -25,6 +25,7 @@ const prisma = getClient();
 const reviewSchema = config.get("REVIEW_DB_SCHEMA");
 const reviewTableName = `"${reviewSchema}"."review"`;
 const submissionTableName = `"${reviewSchema}"."submission"`;
+const aiReviewDecisionTableName = `"${reviewSchema}"."aiReviewDecision"`;
 const should = chai.should();
 let reviewClient;
 
@@ -108,7 +109,21 @@ describe("challenge service unit tests", () => {
       ALTER TABLE ${submissionTableName}
       ADD COLUMN IF NOT EXISTS "isLatest" boolean
     `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "virusScan" boolean
+    `);
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ${aiReviewDecisionTableName} (
+        "id" varchar(36) PRIMARY KEY,
+        "submissionId" varchar(64),
+        "configId" varchar(255),
+        "isFinal" boolean
+      )
+    `);
     await reviewClient.$executeRawUnsafe(`DELETE FROM ${submissionTableName}`);
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${aiReviewDecisionTableName}`);
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${aiReviewDecisionTableName}`);
 
     testChallengeData = {
       typeId: data.challenge.typeId,
@@ -3623,6 +3638,81 @@ describe("challenge service unit tests", () => {
         return;
       }
       throw new Error("should not reach here");
+    });
+  });
+
+  describe("AI phase closure tests", () => {
+    let originalGetAIReviewConfigByChallengeId;
+
+    beforeEach(() => {
+      originalGetAIReviewConfigByChallengeId = helper.getAIReviewConfigByChallengeId;
+    });
+
+    afterEach(async () => {
+      helper.getAIReviewConfigByChallengeId = originalGetAIReviewConfigByChallengeId;
+      await reviewClient.$executeRawUnsafe(
+        `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${data.challenge.id}'`,
+      );
+      await reviewClient.$executeRawUnsafe(
+        `DELETE FROM ${aiReviewDecisionTableName} WHERE "configId" = 'ai-config-test'`,
+      );
+      await prisma.challengeReviewer.deleteMany({ where: { challengeId: data.challenge.id } });
+    });
+
+    it("skips latest submissions that failed virus scan when checking AI phase closure readiness", async () => {
+      helper.getAIReviewConfigByChallengeId = async () => ({ id: "ai-config-test" });
+      await prisma.challengeReviewer.create({
+        data: {
+          id: uuid(),
+          challengeId: data.challenge.id,
+          scorecardId: "ai-scorecard-id",
+          isMemberReview: false,
+          aiWorkflowId: "workflow-1",
+          createdBy: "test",
+          updatedBy: "test",
+        },
+      });
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "virusScan")
+        VALUES
+          ('sub-1', '${data.challenge.id}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z', TRUE),
+          ('sub-2', '${data.challenge.id}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z', FALSE)
+      `);
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${aiReviewDecisionTableName}
+          ("id", "submissionId", "configId", "isFinal")
+        VALUES
+          ('dec-1', 'sub-1', 'ai-config-test', TRUE)
+      `);
+
+      await service.ensureAIPhaseCanBeClosed(data.challenge.id, "AI Screening");
+    });
+
+    it("allows AI phase closure when all latest submissions failed virus scan", async () => {
+      helper.getAIReviewConfigByChallengeId = async () => ({ id: "ai-config-test" });
+      await prisma.challengeReviewer.create({
+        data: {
+          id: uuid(),
+          challengeId: data.challenge.id,
+          scorecardId: "ai-scorecard-id",
+          isMemberReview: false,
+          aiWorkflowId: "workflow-2",
+          createdBy: "test",
+          updatedBy: "test",
+        },
+      });
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "virusScan")
+        VALUES
+          ('sub-3', '${data.challenge.id}', 'member-2', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z', FALSE)
+      `);
+
+      await service.ensureAIPhaseCanBeClosed(data.challenge.id, "AI Screening");
     });
   });
 
