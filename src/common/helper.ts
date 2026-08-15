@@ -1836,6 +1836,30 @@ async function getStandSkills(ids) {
 }
 
 /**
+ * Finds standardized skills whose names contain a member-entered search term.
+ * The endpoint is public and performs a case-insensitive match, so Challenge
+ * API can translate display names into the skill ids stored in ChallengeSkill.
+ *
+ * @param {String} term skill-name fragment.
+ * @param {Number} size maximum number of matching skills to return.
+ * @returns {Promise<Array<Object>>} matching standardized skill summaries.
+ * @throws Propagates standardized-skills API and network errors.
+ */
+async function searchStandSkills(term, size = 100) {
+  const normalizedTerm = _.toString(term).trim();
+  if (!normalizedTerm) {
+    return [];
+  }
+
+  const boundedSize = Math.max(1, Math.min(Number(size) || 100, 100));
+  const requestUrl = `${config.API_BASE_URL}/v5/standardized-skills/skills/fuzzymatch`
+    + `?term=${encodeURIComponent(normalizedTerm)}&size=${boundedSize}`;
+  logger.debug(`helper.searchStandSkills: GET ${requestUrl}`);
+  const res = await axios.get(requestUrl);
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+/**
  * Send self service notification
  * @param {String} type the notification type
  * @param {Array} recipients the array of recipients in { userId || email || handle } format
@@ -2105,6 +2129,7 @@ module.exports = {
   getMemberByHandle,
   getMembersByHandles,
   getStandSkills,
+  searchStandSkills,
   submitZendeskRequest,
   updateSelfServiceProjectInfo,
   getFromInternalCache,
