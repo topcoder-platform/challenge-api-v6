@@ -53,6 +53,7 @@ describe("challenge service unit tests", () => {
   let billingLockRequests;
   let originalLockChallengeBillingAccountAmount;
   let originalRerateChallengeSubmitterRatings;
+  let originalSearchStandSkills;
   const notFoundId = uuid();
   const authUser = {
     userId: "testuser",
@@ -215,11 +216,14 @@ describe("challenge service unit tests", () => {
     };
     originalRerateChallengeSubmitterRatings = helper.rerateChallengeSubmitterRatings;
     helper.rerateChallengeSubmitterRatings = async () => true;
+    originalSearchStandSkills = helper.searchStandSkills;
+    helper.searchStandSkills = async () => [];
   });
 
   afterEach(() => {
     projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
     helper.rerateChallengeSubmitterRatings = originalRerateChallengeSubmitterRatings;
+    helper.searchStandSkills = originalSearchStandSkills;
   });
 
   after(async () => {
@@ -1693,6 +1697,217 @@ describe("challenge service unit tests", () => {
       should.equal(result.result[0].id, data.challenge.id);
       should.equal(result.result[0].name, data.challenge.name);
     });
+
+    it("searches names, descriptions, tags and skills before count and pagination", async () => {
+      const searchToken = `UnifiedSearch${Date.now()}`;
+      const skillId = uuid();
+      const searchChallenges = [
+        {
+          id: uuid(),
+          name: `A Name ${searchToken}`,
+          description: "unrelated",
+          tags: [],
+        },
+        {
+          id: uuid(),
+          name: "B Description Only",
+          description: `contains ${searchToken.toUpperCase()} here`,
+          tags: [],
+        },
+        {
+          id: uuid(),
+          name: "C Tag Only",
+          description: "unrelated",
+          tags: [`prefix-${searchToken.toUpperCase()}-suffix`],
+        },
+        {
+          id: uuid(),
+          name: "D Skill Only",
+          description: "unrelated",
+          tags: [],
+          skillId,
+        },
+        {
+          id: uuid(),
+          name: "E No Match",
+          description: "unrelated",
+          tags: [],
+        },
+      ];
+      const searchChallengeIds = searchChallenges.map((challenge) => challenge.id);
+      const originalGetStandSkills = helper.getStandSkills;
+
+      helper.searchStandSkills = async (term) => {
+        should.equal(term, searchToken.toLowerCase());
+        return [{ id: skillId, name: searchToken }];
+      };
+      helper.getStandSkills = async (ids) =>
+        ids.map((id) => ({ id, name: id === skillId ? searchToken : `Skill ${id}` }));
+
+      try {
+        for (const challenge of searchChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challenge.id,
+              name: challenge.name,
+              description: challenge.description,
+              privateDescription: "unified-search",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: challenge.tags,
+              groups: [],
+              status: ChallengeStatusEnum.ACTIVE,
+              createdBy: "unified-search",
+              updatedBy: "unified-search",
+              ...(challenge.skillId
+                ? {
+                    skills: {
+                      create: {
+                        skillId: challenge.skillId,
+                        createdBy: "unified-search",
+                        updatedBy: "unified-search",
+                      },
+                    },
+                  }
+                : {}),
+            },
+          });
+        }
+
+        const result = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: searchChallengeIds,
+            search: searchToken.toLowerCase(),
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+
+        should.equal(result.total, 4);
+        should.equal(result.page, 2);
+        should.equal(result.perPage, 2);
+        _.map(result.result, "name").should.deep.equal(["C Tag Only", "D Skill Only"]);
+        result.result[1].skills.should.deep.equal([{ id: skillId, name: searchToken }]);
+      } finally {
+        helper.getStandSkills = originalGetStandSkills;
+        await prisma.challenge.deleteMany({
+          where: { id: { in: searchChallengeIds } },
+        });
+      }
+    }).timeout(10000);
+
+    it("treats AI as an exact tag track facet and ORs it with persisted tracks", async () => {
+      const developmentTrackId = uuid();
+      const designTrackId = uuid();
+      const facetChallengeIds = [uuid(), uuid(), uuid(), uuid()];
+
+      await prisma.challengeTrack.createMany({
+        data: [
+          {
+            id: developmentTrackId,
+            name: `Development AI facet ${Date.now()}`,
+            description: "Development track for AI facet search",
+            isActive: true,
+            track: "DEVELOPMENT",
+            abbreviation: "Dev",
+            createdBy: "ai-track-facet",
+            updatedBy: "ai-track-facet",
+          },
+          {
+            id: designTrackId,
+            name: `Design AI facet ${Date.now()}`,
+            description: "Design track for AI facet search",
+            isActive: true,
+            track: "DESIGN",
+            abbreviation: `Design-${designTrackId}`,
+            createdBy: "ai-track-facet",
+            updatedBy: "ai-track-facet",
+          },
+        ],
+      });
+
+      const facetChallenges = [
+        { id: facetChallengeIds[0], name: "A AI design", trackId: designTrackId, tags: ["AI"] },
+        { id: facetChallengeIds[1], name: "B Development", trackId: developmentTrackId, tags: [] },
+        { id: facetChallengeIds[2], name: "C AI design", trackId: designTrackId, tags: ["AI"] },
+        { id: facetChallengeIds[3], name: "D lowercase ai", trackId: designTrackId, tags: ["ai"] },
+      ];
+
+      try {
+        for (const challenge of facetChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challenge.id,
+              name: challenge.name,
+              description: "AI synthetic track facet test",
+              privateDescription: "AI synthetic track facet test",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: challenge.trackId } },
+              tags: challenge.tags,
+              groups: [],
+              status: ChallengeStatusEnum.ACTIVE,
+              createdBy: "ai-track-facet",
+              updatedBy: "ai-track-facet",
+            },
+          });
+        }
+
+        const aiOnly = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: facetChallengeIds,
+            tracks: ["AI"],
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 1,
+          },
+        );
+        should.equal(aiOnly.total, 2);
+        should.equal(aiOnly.page, 2);
+        should.equal(aiOnly.perPage, 1);
+        _.map(aiOnly.result, "name").should.deep.equal(["C AI design"]);
+
+        const aiAndDevelopment = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: facetChallengeIds,
+            tracks: ["AI", "Dev"],
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+        should.equal(aiAndDevelopment.total, 3);
+        should.equal(aiAndDevelopment.page, 2);
+        should.equal(aiAndDevelopment.perPage, 2);
+        _.map(aiAndDevelopment.result, "name").should.deep.equal(["C AI design"]);
+
+        const unknown = await service.searchChallenges(
+          { isMachine: true },
+          { ids: facetChallengeIds, tracks: ["NotARealTrack"] },
+        );
+        should.equal(unknown.total, 0);
+        should.equal(unknown.result.length, 0);
+      } finally {
+        await prisma.challenge.deleteMany({
+          where: { id: { in: facetChallengeIds } },
+        });
+        await prisma.challengeTrack.deleteMany({
+          where: { id: { in: [developmentTrackId, designTrackId] } },
+        });
+      }
+    }).timeout(10000);
 
     it("search challenges by approvalStatus case-insensitively", async () => {
       const result = await service.searchChallenges(

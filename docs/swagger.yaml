@@ -104,7 +104,9 @@ paths:
             format: UUID
         - name: trackIds
           in: query
-          description: Filter by multiple track IDs, exact match.
+          description: >-
+            Filter by multiple exact track IDs using OR semantics. IDs are also ORed with any
+            track or tracks facets supplied in the same request.
           required: false
           type: array
           items:
@@ -119,9 +121,13 @@ paths:
             type: string
         - name: tracks
           in: query
-          description: Filter by multiple track abbreviation, exact match. If tracks is provided, trackIds will be ignored
+          description: >-
+            Filter by track facets using OR semantics. Persisted track abbreviations are exact
+            matches; AI is a synthetic facet that matches the exact canonical AI challenge tag.
+            Unknown abbreviations match no challenges. All values are ORed with trackIds.
           required: false
           type: array
+          collectionFormat: brackets
           items:
             type: string
         - name: typeId
@@ -132,7 +138,9 @@ paths:
           format: UUID
         - name: trackId
           in: query
-          description: Filter by track id, exact match. If track is provided, trackId will be ignored
+          description: >-
+            Filter by one exact track ID. The ID is ORed with any track or tracks facets supplied
+            in the same request.
           required: false
           type: string
           format: UUID
@@ -143,7 +151,9 @@ paths:
           type: string
         - name: track
           in: query
-          description: Filter by track, case-insensitive, partial matches are allowed.
+          description: >-
+            Filter by one exact track abbreviation. AI is a synthetic facet that matches the exact
+            canonical AI challenge tag. An unknown abbreviation matches no challenges.
           required: false
           type: string
         - name: name

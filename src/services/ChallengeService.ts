@@ -64,6 +64,7 @@ const CHALLENGE_APPROVAL_ACTION_STATUSES = new Set([
 
 const DEFAULT_ESTIMATED_SUBMISSIONS_COUNT = 2;
 const CHECKPOINT_SUBMISSION_TYPE = "CHECKPOINT_SUBMISSION";
+const SYNTHETIC_AI_TRACK_FACET = "AI";
 
 // Provide aliases for friendlier sortBy query params
 const sortByAliases = {
@@ -1668,10 +1669,63 @@ async function searchChallengesViaMemberAccess({
 }
 
 /**
- * Search challenges
- * @param {Object} currentUser the user who perform operation
- * @param {Object} criteria the search criteria
- * @returns {Object} the search result
+ * Finds distinct authored tags with a case-insensitive match to the unified
+ * search term. Prisma's scalar-list `has` operator is exact and case-sensitive,
+ * so the parameterized SQL lookup supplies the actual authored values to the
+ * main Prisma `hasSome` filter without materializing every matching challenge id.
+ *
+ * @param {String} searchTerm unified challenge search term.
+ * @returns {Promise<Array<String>>} authored challenge tags that match.
+ * @throws Propagates Challenge database query errors.
+ */
+async function findChallengeTagsBySearch(searchTerm) {
+  const normalizedTerm = _.toString(searchTerm).trim();
+  if (!normalizedTerm) {
+    return [];
+  }
+
+  const rows: Array<{ value: string }> = await prisma.$queryRaw`
+    SELECT DISTINCT challenge_tag."value" AS "value"
+    FROM "Challenge" AS challenge
+    CROSS JOIN LATERAL unnest(challenge."tags") AS challenge_tag("value")
+    WHERE challenge_tag."value" ILIKE ${`%${normalizedTerm}%`}
+  `;
+  return rows.map((row) => row.value);
+}
+
+/**
+ * Resolves matching standardized skill names to the ids persisted by
+ * ChallengeSkill. Search remains available for title/description/tag matches
+ * when the external skills service is temporarily unavailable.
+ *
+ * @param {String} searchTerm unified challenge search term.
+ * @returns {Promise<Array<String>>} matching standardized skill ids.
+ * @throws Does not throw; skills-service failures degrade to no skill matches.
+ */
+async function findSkillIdsBySearch(searchTerm) {
+  try {
+    const skills = await helper.searchStandSkills(searchTerm);
+    return _.uniq(
+      (skills || [])
+        .map((skill) => _.toString(skill && skill.id).trim())
+        .filter((skillId) => !!skillId),
+    );
+  } catch (error) {
+    logger.warn(`Failed to resolve challenge search skills: ${error.message}`);
+    return [];
+  }
+}
+
+/**
+ * Searches visible challenges with database-level filtering, count, sorting,
+ * and pagination. Unified text search covers names, descriptions, authored
+ * tags, and standardized skills. Track facets use OR semantics and treat `AI`
+ * as the exact canonical AI tag rather than a persisted track abbreviation.
+ *
+ * @param {Object} currentUser caller identity used for visibility and member filters.
+ * @param {Object} criteria validated search, facet, sorting, and pagination values.
+ * @returns {Promise<Object>} paginated challenge rows and total metadata.
+ * @throws Propagates validation, visibility dependency, and database errors.
  */
 async function searchChallenges(currentUser, criteria) {
   const page = criteria.page || 1;
@@ -1763,8 +1817,25 @@ async function searchChallenges(currentUser, criteria) {
     );
   };
 
-  let includedTrackIds = _.isArray(criteria.trackIds) ? criteria.trackIds : [];
+  let includedTrackIds = _.isArray(criteria.trackIds) ? [...criteria.trackIds] : [];
   let includedTypeIds = _.isArray(criteria.typeIds) ? criteria.typeIds : [];
+
+  // Opportunities exposes AI alongside the persisted challenge-track abbreviations. AI is a
+  // synthetic facet backed by the canonical, exact `AI` tag; all requested track facets share
+  // OR semantics so that selecting AI plus a real track returns the union before pagination.
+  const rawTrackFacets = [
+    ...(!_.isNil(criteria.track) ? [criteria.track] : []),
+    ...(_.isArray(criteria.tracks) ? criteria.tracks : []),
+  ];
+  const requestedTrackFacets = _.uniq(
+    rawTrackFacets.map((track) => _.toString(track).trim()).filter((track) => track.length > 0),
+  );
+  const includesAiTrackFacet = requestedTrackFacets.some(
+    (track) => track.toUpperCase() === SYNTHETIC_AI_TRACK_FACET,
+  );
+  const persistedTrackFacets = requestedTrackFacets.filter(
+    (track) => track.toUpperCase() !== SYNTHETIC_AI_TRACK_FACET,
+  );
 
   if (criteria.type) {
     const typeSearchRes = await prisma.challengeType.findFirst({
@@ -1772,14 +1843,6 @@ async function searchChallenges(currentUser, criteria) {
     });
     if (typeSearchRes && _.get(typeSearchRes, "id")) {
       criteria.typeId = _.get(typeSearchRes, "id");
-    }
-  }
-  if (criteria.track) {
-    const trackSearchRes = await prisma.challengeTrack.findFirst({
-      where: { abbreviation: criteria.track },
-    });
-    if (trackSearchRes && _.get(trackSearchRes, "id")) {
-      criteria.trackId = _.get(trackSearchRes, "id");
     }
   }
   if (criteria.types) {
@@ -1794,10 +1857,10 @@ async function searchChallenges(currentUser, criteria) {
       );
     }
   }
-  if (criteria.tracks) {
+  if (persistedTrackFacets.length > 0) {
     const trackIds = await prisma.challengeTrack.findMany({
       select: { id: true },
-      where: { abbreviation: { in: criteria.tracks } },
+      where: { abbreviation: { in: persistedTrackFacets } },
     });
     if (trackIds.length > 0) {
       includedTrackIds = _.concat(
@@ -1812,6 +1875,7 @@ async function searchChallenges(currentUser, criteria) {
   if (criteria.trackId) {
     includedTrackIds.push(criteria.trackId);
   }
+  includedTrackIds = _.uniq(includedTrackIds);
 
   _.forIn(_.pick(criteria, matchPhraseKeys), (value, key) => {
     if (!_.isUndefined(value)) {
@@ -1865,33 +1929,61 @@ async function searchChallenges(currentUser, criteria) {
     });
   }
 
-  if (includedTrackIds.length > 0) {
-    prismaFilter.where.AND.push({
-      trackId: { in: includedTrackIds },
-    });
+  if (rawTrackFacets.length > 0) {
+    const trackFacetFilters: any[] = [];
+    if (includedTrackIds.length > 0) {
+      trackFacetFilters.push({ trackId: { in: includedTrackIds } });
+    }
+    if (includesAiTrackFacet) {
+      trackFacetFilters.push({ tags: { has: SYNTHETIC_AI_TRACK_FACET } });
+    }
+
+    if (trackFacetFilters.length === 0) {
+      // An unknown abbreviation must return no matches instead of silently removing the facet.
+      prismaFilter.where.AND.push({ id: { in: [] } });
+    } else if (trackFacetFilters.length === 1) {
+      prismaFilter.where.AND.push(trackFacetFilters[0]);
+    } else {
+      prismaFilter.where.AND.push({ OR: trackFacetFilters });
+    }
+  } else if (includedTrackIds.length > 0) {
+    prismaFilter.where.AND.push({ trackId: { in: includedTrackIds } });
   }
 
   if (criteria.search) {
-    prismaFilter.where.AND.push({
-      OR: [
-        {
-          name: {
-            contains: criteria.search,
-            mode: "insensitive",
+    const normalizedSearch = _.toString(criteria.search).trim();
+    const [searchSkillIds, searchTags] = await Promise.all([
+      findSkillIdsBySearch(normalizedSearch),
+      findChallengeTagsBySearch(normalizedSearch),
+    ]);
+    const searchConditions: any[] = [
+      {
+        name: {
+          contains: normalizedSearch,
+          mode: "insensitive",
+        },
+      },
+      {
+        description: {
+          contains: normalizedSearch,
+          mode: "insensitive",
+        },
+      },
+    ];
+    if (searchSkillIds.length > 0) {
+      searchConditions.push({
+        skills: {
+          some: {
+            skillId: { in: searchSkillIds },
           },
         },
-        {
-          description: { contains: criteria.search },
-          // TODO: Skills doesn't have name field in db.
-          /*
-      }, {
-        skills: { some: { name: { contains: criteria.search } } }
-      */
-        },
-        {
-          tags: { has: criteria.search },
-        },
-      ],
+      });
+    }
+    if (searchTags.length > 0) {
+      searchConditions.push({ tags: { hasSome: searchTags } });
+    }
+    prismaFilter.where.AND.push({
+      OR: searchConditions,
     });
   } else {
     if (criteria.name) {
