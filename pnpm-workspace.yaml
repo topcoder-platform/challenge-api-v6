@@ -1,5 +1,6 @@
 packages:
   - .
+  - packages/challenge-prisma-client
 
 # topcoder-bus-api-wrapper intentionally resolves tc-core-library-js from Git.
 # Preserve that established dependency graph when using pnpm 11's stricter defaults.
