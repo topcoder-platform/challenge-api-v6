@@ -93,7 +93,7 @@ workflows:
                 - security_july_2026
                 - PM-4478_add-ai-screening-phase-when-editing-after-launch
                 - review-context
-                - PM-4684_challenge-approval-flow
+                - PM-5919
             tags:
                 only: /^dev-.*/
 
