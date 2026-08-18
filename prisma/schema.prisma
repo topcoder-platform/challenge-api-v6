@@ -9,7 +9,7 @@ generator client {
 
 generator externalClient {
   provider = "prisma-client-js"
-  output   = "../packages/challenge-prisma-client"
+  output   = "../packages/challenge-prisma-client/generated"
   previewFeatures = ["fullTextSearchPostgres", "postgresqlExtensions", "views"]
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
@@ -202,6 +202,7 @@ model ChallengeUserWhitelist {
 view MemberChallengeAccess {
   challengeId String
   memberId    String
+  roleId      String
 
   challenge Challenge @relation(fields: [challengeId], references: [id])
 

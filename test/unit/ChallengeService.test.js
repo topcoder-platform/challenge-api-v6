@@ -25,6 +25,7 @@ const prisma = getClient();
 const reviewSchema = config.get("REVIEW_DB_SCHEMA");
 const reviewTableName = `"${reviewSchema}"."review"`;
 const submissionTableName = `"${reviewSchema}"."submission"`;
+const aiReviewDecisionTableName = `"${reviewSchema}"."aiReviewDecision"`;
 const should = chai.should();
 let reviewClient;
 
@@ -52,6 +53,7 @@ describe("challenge service unit tests", () => {
   let billingLockRequests;
   let originalLockChallengeBillingAccountAmount;
   let originalRerateChallengeSubmitterRatings;
+  let originalSearchStandSkills;
   const notFoundId = uuid();
   const authUser = {
     userId: "testuser",
@@ -107,7 +109,21 @@ describe("challenge service unit tests", () => {
       ALTER TABLE ${submissionTableName}
       ADD COLUMN IF NOT EXISTS "isLatest" boolean
     `);
+    await reviewClient.$executeRawUnsafe(`
+      ALTER TABLE ${submissionTableName}
+      ADD COLUMN IF NOT EXISTS "virusScan" boolean
+    `);
+    await reviewClient.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ${aiReviewDecisionTableName} (
+        "id" varchar(36) PRIMARY KEY,
+        "submissionId" varchar(64),
+        "configId" varchar(255),
+        "isFinal" boolean
+      )
+    `);
     await reviewClient.$executeRawUnsafe(`DELETE FROM ${submissionTableName}`);
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${aiReviewDecisionTableName}`);
+    await reviewClient.$executeRawUnsafe(`DELETE FROM ${aiReviewDecisionTableName}`);
 
     testChallengeData = {
       typeId: data.challenge.typeId,
@@ -200,11 +216,14 @@ describe("challenge service unit tests", () => {
     };
     originalRerateChallengeSubmitterRatings = helper.rerateChallengeSubmitterRatings;
     helper.rerateChallengeSubmitterRatings = async () => true;
+    originalSearchStandSkills = helper.searchStandSkills;
+    helper.searchStandSkills = async () => [];
   });
 
   afterEach(() => {
     projectHelper.lockChallengeBillingAccountAmount = originalLockChallengeBillingAccountAmount;
     helper.rerateChallengeSubmitterRatings = originalRerateChallengeSubmitterRatings;
+    helper.searchStandSkills = originalSearchStandSkills;
   });
 
   after(async () => {
@@ -1239,9 +1258,13 @@ describe("challenge service unit tests", () => {
       const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
       const originalChallengeFindMany = prisma.challenge.findMany;
       let capturedWhere;
+      let capturedMemberAccessQuery;
 
       helper.getCompleteUserGroupTreeIds = async () => [];
-      prisma.memberChallengeAccess.findMany = async () => [{ challengeId: data.taskChallenge.id }];
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.taskChallenge.id }];
+      };
       prisma.challenge.findMany = async (query) => {
         capturedWhere = query.where;
         return [];
@@ -1254,6 +1277,11 @@ describe("challenge service unit tests", () => {
         );
 
         should.equal(result.total, 0);
+        capturedMemberAccessQuery.should.deep.equal({
+          where: { memberId: "different-member-id" },
+          select: { challengeId: true },
+          distinct: ["challengeId"],
+        });
         const taskVisibilityFilter = capturedWhere.AND.find(
           (filter) => filter.OR && filter.OR.some((condition) => condition.taskIsTask === false),
         );
@@ -1272,6 +1300,87 @@ describe("challenge service unit tests", () => {
         helper.getCompleteUserGroupTreeIds = originalGetCompleteUserGroupTreeIds;
         prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
         prisma.challenge.findMany = originalChallengeFindMany;
+      }
+    });
+
+    it("role-specific member search does not grant anonymous task visibility", async () => {
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      let capturedMemberAccessQuery;
+
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.taskChallenge.id }];
+      };
+
+      try {
+        const result = await service.searchChallenges(undefined, {
+          memberId: "anonymous-filter-member",
+          resourceRoleId: config.SUBMITTER_ROLE_ID,
+        });
+
+        should.equal(result.total, 0);
+        should.equal(result.result.length, 0);
+        capturedMemberAccessQuery.should.deep.equal({
+          where: {
+            memberId: "anonymous-filter-member",
+            roleId: config.SUBMITTER_ROLE_ID,
+          },
+          select: { challengeId: true },
+          distinct: ["challengeId"],
+        });
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
+      }
+    });
+
+    it("validates the role-specific member search contract", async () => {
+      try {
+        await service.searchChallenges(
+          { isMachine: true },
+          { memberId: "role-filter-member", resourceRoleId: "invalid" },
+        );
+        should.fail("Expected an invalid resource role UUID to be rejected");
+      } catch (error) {
+        error.message.should.equal('"criteria.resourceRoleId" must be a valid GUID');
+      }
+
+      try {
+        await service.searchChallenges(
+          { isMachine: true },
+          { resourceRoleId: config.SUBMITTER_ROLE_ID },
+        );
+        should.fail("Expected a resource role without memberId to be rejected");
+      } catch (error) {
+        error.message.should.include("memberId");
+      }
+    });
+
+    it("combines resource role and legacy challenge filters", async () => {
+      const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      let capturedMemberAccessQuery;
+      prisma.memberChallengeAccess.findMany = async (query) => {
+        capturedMemberAccessQuery = query;
+        return [{ challengeId: data.challenge.id }];
+      };
+
+      try {
+        const result = await service.searchChallenges(
+          { isMachine: true },
+          {
+            memberId: "legacy-role-filter-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
+            legacyId: data.challenge.legacyId,
+          },
+        );
+
+        should.equal(result.total, 1);
+        should.equal(result.result[0].id, data.challenge.id);
+        capturedMemberAccessQuery.where.should.deep.equal({
+          memberId: "legacy-role-filter-member",
+          roleId: config.SUBMITTER_ROLE_ID,
+        });
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
       }
     });
 
@@ -1300,47 +1409,68 @@ describe("challenge service unit tests", () => {
       ];
       const statusChallengeIds = statusChallenges.map((challengeRow) => challengeRow.id);
       const originalMemberChallengeAccessFindMany = prisma.memberChallengeAccess.findMany;
+      const memberAccessQueries = [];
 
       try {
-        await Promise.all(
-          statusChallenges.map((challengeRow) =>
-            prisma.challenge.create({
-              data: {
-                id: challengeRow.id,
-                name: challengeRow.name,
-                description: "status-sort",
-                privateDescription: "status-sort",
-                challengeSource: "Topcoder",
-                descriptionFormat: "html",
-                timelineTemplate: { connect: { id: data.timelineTemplate.id } },
-                type: { connect: { id: data.challenge.typeId } },
-                track: { connect: { id: data.challenge.trackId } },
-                tags: [],
-                groups: [],
-                status: challengeRow.status,
-                createdBy: "testuser",
-                updatedBy: "testuser",
-              },
-            }),
-          ),
-        );
+        for (const challengeRow of statusChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challengeRow.id,
+              name: challengeRow.name,
+              description: "status-sort",
+              privateDescription: "status-sort",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: [],
+              groups: [],
+              status: challengeRow.status,
+              createdBy: "testuser",
+              updatedBy: "testuser",
+            },
+          });
+        }
 
-        prisma.memberChallengeAccess.findMany = async () =>
-          statusChallenges.map((challengeRow) => ({ challengeId: challengeRow.id }));
+        prisma.memberChallengeAccess.findMany = async (query) => {
+          memberAccessQueries.push(query);
+          return statusChallenges.map((challengeRow) => ({ challengeId: challengeRow.id }));
+        };
 
         const ascRes = await service.searchChallenges(
           { isMachine: true },
           {
             memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
             sortBy: "status",
             sortOrder: "asc",
             page: 1,
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(ascRes.result, "status"), [
+        _.map(ascRes.result, "status").should.deep.equal([
           ChallengeStatusEnum.ACTIVE,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
+          ChallengeStatusEnum.COMPLETED,
+          ChallengeStatusEnum.NEW,
+        ]);
+
+        const secondPage = await service.searchChallenges(
+          { isMachine: true },
+          {
+            memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
+            sortBy: "status",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+        should.equal(secondPage.total, 4);
+        should.equal(secondPage.page, 2);
+        should.equal(secondPage.perPage, 2);
+        _.map(secondPage.result, "status").should.deep.equal([
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.NEW,
         ]);
@@ -1355,7 +1485,7 @@ describe("challenge service unit tests", () => {
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(ascResNoMember.result, "status"), [
+        _.map(ascResNoMember.result, "status").should.deep.equal([
           ChallengeStatusEnum.ACTIVE,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
           ChallengeStatusEnum.COMPLETED,
@@ -1366,13 +1496,14 @@ describe("challenge service unit tests", () => {
           { isMachine: true },
           {
             memberId: "status-sort-member",
+            resourceRoleId: config.SUBMITTER_ROLE_ID,
             sortBy: "status",
             sortOrder: "desc",
             page: 1,
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(descRes.result, "status"), [
+        _.map(descRes.result, "status").should.deep.equal([
           ChallengeStatusEnum.NEW,
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
@@ -1389,12 +1520,23 @@ describe("challenge service unit tests", () => {
             perPage: 10,
           },
         );
-        should.deepEqual(_.map(descResNoMember.result, "status"), [
+        _.map(descResNoMember.result, "status").should.deep.equal([
           ChallengeStatusEnum.NEW,
           ChallengeStatusEnum.COMPLETED,
           ChallengeStatusEnum.CANCELLED_CLIENT_REQUEST,
           ChallengeStatusEnum.ACTIVE,
         ]);
+        memberAccessQueries.should.have.length(3);
+        memberAccessQueries.forEach((query) => {
+          query.should.deep.equal({
+            where: {
+              memberId: "status-sort-member",
+              roleId: config.SUBMITTER_ROLE_ID,
+            },
+            select: { challengeId: true },
+            distinct: ["challengeId"],
+          });
+        });
       } finally {
         prisma.memberChallengeAccess.findMany = originalMemberChallengeAccessFindMany;
         await prisma.challenge.deleteMany({
@@ -1555,6 +1697,217 @@ describe("challenge service unit tests", () => {
       should.equal(result.result[0].id, data.challenge.id);
       should.equal(result.result[0].name, data.challenge.name);
     });
+
+    it("searches names, descriptions, tags and skills before count and pagination", async () => {
+      const searchToken = `UnifiedSearch${Date.now()}`;
+      const skillId = uuid();
+      const searchChallenges = [
+        {
+          id: uuid(),
+          name: `A Name ${searchToken}`,
+          description: "unrelated",
+          tags: [],
+        },
+        {
+          id: uuid(),
+          name: "B Description Only",
+          description: `contains ${searchToken.toUpperCase()} here`,
+          tags: [],
+        },
+        {
+          id: uuid(),
+          name: "C Tag Only",
+          description: "unrelated",
+          tags: [`prefix-${searchToken.toUpperCase()}-suffix`],
+        },
+        {
+          id: uuid(),
+          name: "D Skill Only",
+          description: "unrelated",
+          tags: [],
+          skillId,
+        },
+        {
+          id: uuid(),
+          name: "E No Match",
+          description: "unrelated",
+          tags: [],
+        },
+      ];
+      const searchChallengeIds = searchChallenges.map((challenge) => challenge.id);
+      const originalGetStandSkills = helper.getStandSkills;
+
+      helper.searchStandSkills = async (term) => {
+        should.equal(term, searchToken.toLowerCase());
+        return [{ id: skillId, name: searchToken }];
+      };
+      helper.getStandSkills = async (ids) =>
+        ids.map((id) => ({ id, name: id === skillId ? searchToken : `Skill ${id}` }));
+
+      try {
+        for (const challenge of searchChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challenge.id,
+              name: challenge.name,
+              description: challenge.description,
+              privateDescription: "unified-search",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: challenge.tags,
+              groups: [],
+              status: ChallengeStatusEnum.ACTIVE,
+              createdBy: "unified-search",
+              updatedBy: "unified-search",
+              ...(challenge.skillId
+                ? {
+                    skills: {
+                      create: {
+                        skillId: challenge.skillId,
+                        createdBy: "unified-search",
+                        updatedBy: "unified-search",
+                      },
+                    },
+                  }
+                : {}),
+            },
+          });
+        }
+
+        const result = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: searchChallengeIds,
+            search: searchToken.toLowerCase(),
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+
+        should.equal(result.total, 4);
+        should.equal(result.page, 2);
+        should.equal(result.perPage, 2);
+        _.map(result.result, "name").should.deep.equal(["C Tag Only", "D Skill Only"]);
+        result.result[1].skills.should.deep.equal([{ id: skillId, name: searchToken }]);
+      } finally {
+        helper.getStandSkills = originalGetStandSkills;
+        await prisma.challenge.deleteMany({
+          where: { id: { in: searchChallengeIds } },
+        });
+      }
+    }).timeout(10000);
+
+    it("treats AI as an exact tag track facet and ORs it with persisted tracks", async () => {
+      const developmentTrackId = uuid();
+      const designTrackId = uuid();
+      const facetChallengeIds = [uuid(), uuid(), uuid(), uuid()];
+
+      await prisma.challengeTrack.createMany({
+        data: [
+          {
+            id: developmentTrackId,
+            name: `Development AI facet ${Date.now()}`,
+            description: "Development track for AI facet search",
+            isActive: true,
+            track: "DEVELOPMENT",
+            abbreviation: "Dev",
+            createdBy: "ai-track-facet",
+            updatedBy: "ai-track-facet",
+          },
+          {
+            id: designTrackId,
+            name: `Design AI facet ${Date.now()}`,
+            description: "Design track for AI facet search",
+            isActive: true,
+            track: "DESIGN",
+            abbreviation: `Design-${designTrackId}`,
+            createdBy: "ai-track-facet",
+            updatedBy: "ai-track-facet",
+          },
+        ],
+      });
+
+      const facetChallenges = [
+        { id: facetChallengeIds[0], name: "A AI design", trackId: designTrackId, tags: ["AI"] },
+        { id: facetChallengeIds[1], name: "B Development", trackId: developmentTrackId, tags: [] },
+        { id: facetChallengeIds[2], name: "C AI design", trackId: designTrackId, tags: ["AI"] },
+        { id: facetChallengeIds[3], name: "D lowercase ai", trackId: designTrackId, tags: ["ai"] },
+      ];
+
+      try {
+        for (const challenge of facetChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challenge.id,
+              name: challenge.name,
+              description: "AI synthetic track facet test",
+              privateDescription: "AI synthetic track facet test",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: challenge.trackId } },
+              tags: challenge.tags,
+              groups: [],
+              status: ChallengeStatusEnum.ACTIVE,
+              createdBy: "ai-track-facet",
+              updatedBy: "ai-track-facet",
+            },
+          });
+        }
+
+        const aiOnly = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: facetChallengeIds,
+            tracks: ["AI"],
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 1,
+          },
+        );
+        should.equal(aiOnly.total, 2);
+        should.equal(aiOnly.page, 2);
+        should.equal(aiOnly.perPage, 1);
+        _.map(aiOnly.result, "name").should.deep.equal(["C AI design"]);
+
+        const aiAndDevelopment = await service.searchChallenges(
+          { isMachine: true },
+          {
+            ids: facetChallengeIds,
+            tracks: ["AI", "Dev"],
+            sortBy: "name",
+            sortOrder: "asc",
+            page: 2,
+            perPage: 2,
+          },
+        );
+        should.equal(aiAndDevelopment.total, 3);
+        should.equal(aiAndDevelopment.page, 2);
+        should.equal(aiAndDevelopment.perPage, 2);
+        _.map(aiAndDevelopment.result, "name").should.deep.equal(["C AI design"]);
+
+        const unknown = await service.searchChallenges(
+          { isMachine: true },
+          { ids: facetChallengeIds, tracks: ["NotARealTrack"] },
+        );
+        should.equal(unknown.total, 0);
+        should.equal(unknown.result.length, 0);
+      } finally {
+        await prisma.challenge.deleteMany({
+          where: { id: { in: facetChallengeIds } },
+        });
+        await prisma.challengeTrack.deleteMany({
+          where: { id: { in: [developmentTrackId, designTrackId] } },
+        });
+      }
+    }).timeout(10000);
 
     it("search challenges by approvalStatus case-insensitively", async () => {
       const result = await service.searchChallenges(
@@ -3285,6 +3638,81 @@ describe("challenge service unit tests", () => {
         return;
       }
       throw new Error("should not reach here");
+    });
+  });
+
+  describe("AI phase closure tests", () => {
+    let originalGetAIReviewConfigByChallengeId;
+
+    beforeEach(() => {
+      originalGetAIReviewConfigByChallengeId = helper.getAIReviewConfigByChallengeId;
+    });
+
+    afterEach(async () => {
+      helper.getAIReviewConfigByChallengeId = originalGetAIReviewConfigByChallengeId;
+      await reviewClient.$executeRawUnsafe(
+        `DELETE FROM ${submissionTableName} WHERE "challengeId" = '${data.challenge.id}'`,
+      );
+      await reviewClient.$executeRawUnsafe(
+        `DELETE FROM ${aiReviewDecisionTableName} WHERE "configId" = 'ai-config-test'`,
+      );
+      await prisma.challengeReviewer.deleteMany({ where: { challengeId: data.challenge.id } });
+    });
+
+    it("skips latest submissions that failed virus scan when checking AI phase closure readiness", async () => {
+      helper.getAIReviewConfigByChallengeId = async () => ({ id: "ai-config-test" });
+      await prisma.challengeReviewer.create({
+        data: {
+          id: uuid(),
+          challengeId: data.challenge.id,
+          scorecardId: "ai-scorecard-id",
+          isMemberReview: false,
+          aiWorkflowId: "workflow-1",
+          createdBy: "test",
+          updatedBy: "test",
+        },
+      });
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "virusScan")
+        VALUES
+          ('sub-1', '${data.challenge.id}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-01T00:00:00Z', TRUE),
+          ('sub-2', '${data.challenge.id}', 'member-1', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-02T00:00:00Z', FALSE)
+      `);
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${aiReviewDecisionTableName}
+          ("id", "submissionId", "configId", "isFinal")
+        VALUES
+          ('dec-1', 'sub-1', 'ai-config-test', TRUE)
+      `);
+
+      await service.ensureAIPhaseCanBeClosed(data.challenge.id, "AI Screening");
+    });
+
+    it("allows AI phase closure when all latest submissions failed virus scan", async () => {
+      helper.getAIReviewConfigByChallengeId = async () => ({ id: "ai-config-test" });
+      await prisma.challengeReviewer.create({
+        data: {
+          id: uuid(),
+          challengeId: data.challenge.id,
+          scorecardId: "ai-scorecard-id",
+          isMemberReview: false,
+          aiWorkflowId: "workflow-2",
+          createdBy: "test",
+          updatedBy: "test",
+        },
+      });
+
+      await reviewClient.$executeRawUnsafe(`
+        INSERT INTO ${submissionTableName}
+          ("id", "challengeId", "memberId", "type", "status", "submittedDate", "virusScan")
+        VALUES
+          ('sub-3', '${data.challenge.id}', 'member-2', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z', FALSE)
+      `);
+
+      await service.ensureAIPhaseCanBeClosed(data.challenge.id, "AI Screening");
     });
   });
 
