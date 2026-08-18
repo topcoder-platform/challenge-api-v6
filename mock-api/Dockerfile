@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile \
     && rm -f dist/tsconfig.build.tsbuildinfo \
     && node --check mock-api/app.js \
     && node --check mock-api/config/default.js \
-    && pnpm prune --prod \
+    && CI=true pnpm prune --prod \
     && find node_modules -type f \
         \( -name yarn.lock -o -name package-lock.json -o -name pnpm-lock.yaml \
         -o -name npm-shrinkwrap.json \) -delete \
