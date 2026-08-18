@@ -15,7 +15,7 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
 RUN pnpm lint && pnpm build \
     && rm -rf dist/src/scripts dist/src/phase-management/mocks \
     && rm -f dist/tsconfig.build.tsbuildinfo
-RUN pnpm prune --prod \
+RUN CI=true pnpm prune --prod \
     && find node_modules -type f \
         \( -name yarn.lock -o -name package-lock.json -o -name pnpm-lock.yaml \
         -o -name npm-shrinkwrap.json \) -delete \
