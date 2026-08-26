@@ -568,6 +568,8 @@ describe('challenge phase service unit tests', () => {
       payload.phase_change.should.equal('Checkpoint Submission Open')
       payload.localized_time.should.equal('July 29, 2026 13:35 AEST')
       payload.phaseOpenDate.should.equal('July 29, 2026 13:35 AEST')
+      payload.support.should.equal(config.SUPPORT_APP_URL)
+      payload.supportUrl.should.equal(config.SUPPORT_APP_URL)
     })
 
     it('partially update challenge phase - closing sets actual end date', async () => {
