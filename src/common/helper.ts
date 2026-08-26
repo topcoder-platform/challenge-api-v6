@@ -1967,6 +1967,8 @@ function buildPhaseChangeEmailData({
     phaseCloseDate: isClose ? displayedTime : null,
     localized_time: displayedTime,
     phase_change: phaseChange,
+    support: config.SUPPORT_APP_URL,
+    supportUrl: config.SUPPORT_APP_URL,
   };
 }
 
