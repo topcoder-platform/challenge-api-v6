@@ -1,6 +1,8 @@
 /**
  * This service provides operations of challenge.
  */
+import type { PrismaClient as ForumsPrismaClient } from "@topcoder/forums-api-v6/packages/forums-prisma-client";
+
 const _ = require("lodash");
 const Joi = require("joi");
 const { Prisma } = require("@prisma/client");
@@ -18,6 +20,7 @@ const phaseHelper = require("../common/phase-helper");
 const projectHelper = require("../common/project-helper");
 const challengeHelper = require("../common/challenge-helper");
 const { getReviewClient } = require("../common/review-prisma");
+const { getForumsClient } = require("../common/forums-prisma");
 
 const PhaseAdvancer = require("../phase-management/PhaseAdvancer");
 
@@ -269,6 +272,104 @@ async function applyLatestSubmissionCounts(challenges) {
     };
     challenge.numOfSubmissions = counts.numOfSubmissions;
     challenge.numOfCheckpointSubmissions = counts.numOfCheckpointSubmissions;
+  });
+}
+
+/**
+ * Loads non-deleted forum-post counters for challenge responses using the Forums
+ * API's exported Prisma client.
+ *
+ * Counts include starter posts and replies on active challenge topics. Soft-
+ * deleted topics and posts are excluded to match the Forums API's topic-summary
+ * `postsCount` behavior.
+ *
+ * @param {Array<String>} challengeIds challenge identifiers to count posts for
+ * @param {Object} [client] optional Forums Prisma client used by tests or callers
+ * that already own a client
+ * @returns {Promise<Map<String, Number>>} post counts keyed by challenge id
+ * @throws {Error} when a configured Forums database query fails
+ */
+async function getForumPostCountsByChallenge(
+  challengeIds,
+  client?: ForumsPrismaClient,
+) {
+  const ids = _.uniq(
+    (challengeIds || [])
+      .map((challengeId) => _.toString(challengeId).trim())
+      .filter((challengeId) => !!challengeId),
+  );
+  const countsByChallenge = new Map();
+
+  if (!ids.length || (!client && !config.FORUMS_DB_URL)) {
+    return countsByChallenge;
+  }
+
+  const forumsClient: ForumsPrismaClient = client || getForumsClient();
+  const forumTopics = await forumsClient.topic.findMany({
+    where: {
+      challengeId: { in: ids },
+      deletedAt: null,
+    },
+    select: {
+      challengeId: true,
+      _count: {
+        select: {
+          posts: {
+            where: { deletedAt: null },
+          },
+        },
+      },
+    },
+  });
+
+  forumTopics.forEach((topic) => {
+    const challengeId = _.toString(topic.challengeId);
+    countsByChallenge.set(
+      challengeId,
+      (countsByChallenge.get(challengeId) || 0) + Number(topic._count.posts || 0),
+    );
+  });
+
+  return countsByChallenge;
+}
+
+/**
+ * Applies live forum-post counts to challenge records before response
+ * conversion.
+ *
+ * Missing configuration and Forums query failures leave every response at
+ * zero, allowing challenge reads to remain available when the optional Forums
+ * database is unavailable.
+ *
+ * @param {Array<Object>} challenges challenge records being returned by the API
+ * @param {Object} [client] optional Forums Prisma client used by tests or callers
+ * that already own a client
+ * @returns {Promise<void>} resolves after counters are applied or a best-effort
+ * lookup is skipped
+ */
+async function applyForumPostCounts(challenges, client?: ForumsPrismaClient) {
+  const records = (challenges || []).filter((challenge) => challenge && challenge.id);
+  records.forEach((challenge) => {
+    challenge.numOfPosts = 0;
+  });
+
+  if (!records.length || (!client && !config.FORUMS_DB_URL)) {
+    return;
+  }
+
+  let countsByChallenge;
+  try {
+    countsByChallenge = await getForumPostCountsByChallenge(
+      records.map((challenge) => challenge.id),
+      client,
+    );
+  } catch (err) {
+    logger.warn(`Failed to load forum post counts: ${err.message}`);
+    return;
+  }
+
+  records.forEach((challenge) => {
+    challenge.numOfPosts = countsByChallenge.get(_.toString(challenge.id)) || 0;
   });
 }
 
@@ -1517,6 +1618,8 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
     throw err;
   }
 
+  await applyForumPostCounts(challenges);
+
   _.forEach(challenges, (c) => {
     prismaHelper.convertModelToResponse(c);
     enrichChallengeForResponse(c, c.track, c.type);
@@ -2519,7 +2622,10 @@ async function searchChallenges(currentUser, criteria) {
       });
     }
 
-    await applyLatestSubmissionCounts(challenges);
+    await Promise.all([
+      applyLatestSubmissionCounts(challenges),
+      applyForumPostCounts(challenges),
+    ]);
 
     challenges.forEach((challenge) => {
       prismaHelper.convertModelToResponse(challenge);
@@ -3323,7 +3429,10 @@ async function getChallenge(currentUser, id, checkIfExists?: any) {
     _.unset(challenge, "payments");
   }
 
-  await applyLatestSubmissionCounts([challenge]);
+  await Promise.all([
+    applyLatestSubmissionCounts([challenge]),
+    applyForumPostCounts([challenge]),
+  ]);
 
   prismaHelper.convertModelToResponse(challenge);
 
@@ -6010,6 +6119,8 @@ module.exports = {
     validateChallengeActivationBillingAccount,
     getLatestSubmissionCountsByChallenge,
     applyLatestSubmissionCounts,
+    getForumPostCountsByChallenge,
+    applyForumPostCounts,
   },
   searchChallenges,
   createChallenge,

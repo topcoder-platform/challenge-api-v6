@@ -9,6 +9,7 @@ const config = require('config');
 const expressApplication = require('./app');
 const logger = require('./src/common/logger');
 const { getClient } = require('./src/common/prisma');
+const { disconnectForumsClient } = require('./src/common/forums-prisma');
 
 let shutdownStarted = false;
 
@@ -60,7 +61,7 @@ function installFatalErrorHandlers(): void {
 }
 
 /**
- * Gracefully closes Nest's HTTP server and the shared Prisma client.
+ * Gracefully closes Nest's HTTP server and the shared Prisma clients.
  *
  * Signal handlers call this once for SIGTERM or SIGINT. A ten-second fallback
  * preserves the previous forced-shutdown bound if either close operation stalls.
@@ -84,9 +85,9 @@ async function gracefulShutdown(app: INestApplication, signal: NodeJS.Signals): 
 
   try {
     await app.close();
-    logger.info('HTTP server closed. Disconnecting Prisma...');
-    await getClient().$disconnect();
-    logger.info('Prisma disconnected. Exiting.');
+    logger.info('HTTP server closed. Disconnecting Prisma clients...');
+    await Promise.all([getClient().$disconnect(), disconnectForumsClient()]);
+    logger.info('Prisma clients disconnected. Exiting.');
     clearTimeout(timeout);
     process.exit(0);
   } catch (error) {

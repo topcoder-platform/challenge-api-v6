@@ -312,6 +312,50 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("counts non-deleted posts across active challenge forum topics", async () => {
+      const calls = [];
+      const client = {
+        topic: {
+          findMany: async (query) => {
+            calls.push(query);
+            return [
+              { challengeId: "challenge-a", _count: { posts: 2 } },
+              { challengeId: "challenge-a", _count: { posts: 3 } },
+              { challengeId: "challenge-b", _count: { posts: 1 } },
+            ];
+          },
+        },
+      };
+
+      const challenges = [
+        { id: "challenge-a" },
+        { id: "challenge-b" },
+        { id: "challenge-c" },
+      ];
+      await service.__testables.applyForumPostCounts(challenges, client);
+
+      should.equal(calls.length, 1);
+      calls[0].should.deep.equal({
+        where: {
+          challengeId: { in: ["challenge-a", "challenge-b", "challenge-c"] },
+          deletedAt: null,
+        },
+        select: {
+          challengeId: true,
+          _count: {
+            select: {
+              posts: {
+                where: { deletedAt: null },
+              },
+            },
+          },
+        },
+      });
+      should.equal(challenges[0].numOfPosts, 5);
+      should.equal(challenges[1].numOfPosts, 1);
+      should.equal(challenges[2].numOfPosts, 0);
+    });
+
     it("persists false is_test_challenge metadata when create omits the flag", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
       challengeData.discussions[0].type = "CHALLENGE";

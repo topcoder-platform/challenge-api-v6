@@ -25,8 +25,8 @@ export const getPostgresSchema = (
 /**
  * Creates the Prisma 7 PostgreSQL driver adapter used by challenge API clients.
  *
- * Both the primary challenge client and the lazy review client use this helper
- * so their existing connection URLs retain Prisma's `schema` query-parameter
+ * The primary challenge client and lazy review and forums clients use this
+ * helper so their connection URLs retain Prisma's `schema` query-parameter
  * behavior after moving from the native query engine to `@prisma/adapter-pg`.
  *
  * @param connectionString PostgreSQL connection URL from the existing service
@@ -38,7 +38,7 @@ export const getPostgresSchema = (
  */
 export const createPostgresAdapter = (
   connectionString: string | undefined,
-  environmentVariable: 'DATABASE_URL' | 'REVIEW_DB_URL',
+  environmentVariable: 'DATABASE_URL' | 'REVIEW_DB_URL' | 'FORUMS_DB_URL',
 ): PrismaPg => {
   if (!connectionString) {
     throw new Error(`${environmentVariable} is not configured`);

@@ -147,6 +147,7 @@ module.exports = {
 
   // Database connection overrides
   REVIEW_DB_URL: process.env.REVIEW_DB_URL,
+  FORUMS_DB_URL: process.env.FORUMS_DB_URL || process.env.FORUMS_DATABASE_URL,
   // Database schemas for direct counts (shared DB)
   RESOURCES_DB_SCHEMA: process.env.RESOURCES_DB_SCHEMA || "resources",
   REVIEW_DB_SCHEMA: process.env.REVIEW_DB_SCHEMA || "reviews",
