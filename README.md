@@ -103,6 +103,10 @@ The following parameters can be set in config files or in env variables:
 - DATABASE_URL: PostgreSQL connection URL for the challenge database
 - REVIEW_DB_URL: optional PostgreSQL connection URL for review data; existing
   deployments may continue to omit it when review-database access is not used
+- FORUMS_DB_URL: optional PostgreSQL connection URL used to populate live
+  `numOfPosts` challenge response counters. `FORUMS_DATABASE_URL` is
+  accepted as a compatibility alias. When neither variable is configured or
+  the Forums lookup fails, challenge reads remain available and return zero.
 
 You can find sample `.env` files inside the `/docs` directory.
 The TypeScript, NestJS, and Prisma 7 migration does not introduce or rename any

@@ -2746,6 +2746,9 @@ definitions:
       numOfRegistrants:
         type: integer
         description: number of registrants
+      numOfPosts:
+        type: integer
+        description: number of non-deleted posts on active challenge forum topics
       currentPhaseNames:
         type: array
         items:
