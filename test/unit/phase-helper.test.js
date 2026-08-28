@@ -817,4 +817,88 @@ describe('phase helper unit tests', () => {
 
     throw new Error('should not reach here')
   })
+  it('schedules created phases along the predecessor chain regardless of template row order', async () => {
+    const registrationPhaseId = 'registration-phase'
+    const submissionPhaseId = 'submission-phase'
+    const appealsPhaseId = 'appeals-phase'
+    const oneDay = 24 * 60 * 60
+    const startDate = '2026-09-01T00:00:00.000Z'
+
+    // The DB returns TimelineTemplatePhase rows in unspecified order, so hand them over
+    // reversed: Appeals arrives before the predecessors it depends on.
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: submissionPhaseId, name: 'Submission', description: 'Submission phase' },
+        { id: appealsPhaseId, name: 'Appeals', description: 'Appeals phase' }
+      ],
+      [
+        { phaseId: appealsPhaseId, predecessor: submissionPhaseId, defaultDuration: oneDay },
+        { phaseId: submissionPhaseId, predecessor: registrationPhaseId, defaultDuration: oneDay },
+        { phaseId: registrationPhaseId, defaultDuration: oneDay }
+      ]
+    )
+
+    const createdPhases = await phaseHelper.populatePhasesForChallengeCreation(
+      [],
+      startDate,
+      'timeline-template-id'
+    )
+
+    const byName = new Map(createdPhases.map((phase) => [phase.name, phase]))
+
+    byName.get('Registration').scheduledStartDate.should.equal(startDate)
+    byName.get('Registration').scheduledEndDate.should.equal('2026-09-02T00:00:00.000Z')
+    byName.get('Submission').scheduledStartDate.should.equal('2026-09-02T00:00:00.000Z')
+    byName.get('Submission').scheduledEndDate.should.equal('2026-09-03T00:00:00.000Z')
+    byName.get('Appeals').scheduledStartDate.should.equal('2026-09-03T00:00:00.000Z')
+    byName.get('Appeals').scheduledEndDate.should.equal('2026-09-04T00:00:00.000Z')
+
+    // Challenges are read back ordered by scheduledEndDate, so Appeals must land last.
+    const namesByEndDate = createdPhases
+      .slice()
+      .sort((a, b) => a.scheduledEndDate.localeCompare(b.scheduledEndDate))
+      .map((phase) => phase.name)
+
+    namesByEndDate.should.deep.equal(['Registration', 'Submission', 'Appeals'])
+  })
+
+  it('leaves created phases unscheduled when the predecessor chain has no resolvable root', async () => {
+    const registrationPhaseId = 'registration-phase'
+    const reviewPhaseId = 'review-phase'
+    const appealsPhaseId = 'appeals-phase'
+    const oneDay = 24 * 60 * 60
+    const startDate = '2026-09-01T00:00:00.000Z'
+
+    // Review points at a phase absent from the template, so neither Review nor the
+    // Appeals phase hanging off it can be scheduled.
+    stubPhaseLookups(
+      [
+        { id: registrationPhaseId, name: 'Registration', description: 'Registration phase' },
+        { id: reviewPhaseId, name: 'Review', description: 'Review phase' },
+        { id: appealsPhaseId, name: 'Appeals', description: 'Appeals phase' }
+      ],
+      [
+        { phaseId: appealsPhaseId, predecessor: reviewPhaseId, defaultDuration: oneDay },
+        { phaseId: reviewPhaseId, predecessor: 'phase-not-in-template', defaultDuration: oneDay },
+        { phaseId: registrationPhaseId, defaultDuration: oneDay }
+      ]
+    )
+
+    const createdPhases = await phaseHelper.populatePhasesForChallengeCreation(
+      [],
+      startDate,
+      'timeline-template-id'
+    )
+
+    createdPhases.should.have.lengthOf(3)
+    const byName = new Map(createdPhases.map((phase) => [phase.name, phase]))
+
+    byName.get('Registration').scheduledStartDate.should.equal(startDate)
+    // Previously these fell back to moment(undefined), scheduling them at "now".
+    for (const name of ['Review', 'Appeals']) {
+      chai.expect(byName.get(name).scheduledStartDate).to.be.undefined
+      chai.expect(byName.get(name).scheduledEndDate).to.be.undefined
+    }
+  })
 })

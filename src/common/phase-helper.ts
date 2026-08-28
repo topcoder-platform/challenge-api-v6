@@ -272,6 +272,57 @@ function findPhaseUpdate(newPhases, phase) {
   return _.find(newPhases, (p) => p.phaseId === phase.phaseId);
 }
 
+/**
+ * Order timeline template phases so every phase follows its predecessor.
+ *
+ * TimelineTemplatePhase rows carry no ordering column, so the database returns them
+ * in unspecified physical order. Scheduling resolves predecessor dates in a single
+ * pass, which is only correct when a predecessor is processed before its dependents.
+ *
+ * @param {Array<Object>} phases template phases, each with phaseId and optional predecessor
+ * @returns {Array<Object>} phases in dependency order; phases unreachable from a root
+ *   (dangling predecessor or cycle) are appended last, keeping their relative order
+ */
+function orderPhasesByPredecessorChain(phases) {
+  if (!Array.isArray(phases)) {
+    return [];
+  }
+
+  const knownPhaseIds = new Set(_.map(phases, "phaseId"));
+  const childrenOf = new Map();
+  _.each(phases, (phase) => {
+    if (_.isNil(phase.predecessor) || !knownPhaseIds.has(phase.predecessor)) {
+      return;
+    }
+    const siblings = childrenOf.get(phase.predecessor) || [];
+    siblings.push(phase);
+    childrenOf.set(phase.predecessor, siblings);
+  });
+
+  const ordered = [];
+  const visited = new Set();
+  const queue = _.filter(phases, (phase) => _.isNil(phase.predecessor));
+  while (queue.length > 0) {
+    const phase = queue.shift();
+    if (visited.has(phase)) {
+      continue;
+    }
+    visited.add(phase);
+    ordered.push(phase);
+    queue.push(...(childrenOf.get(phase.phaseId) || []));
+  }
+
+  // Phases with a dangling predecessor, or caught in a cycle, are never reachable from
+  // a root. Keep them so the caller still emits them, unscheduled, as it did before.
+  _.each(phases, (phase) => {
+    if (!visited.has(phase)) {
+      ordered.push(phase);
+    }
+  });
+
+  return ordered;
+}
+
 class ChallengePhaseHelper {
   phaseDefinitionMap: any = {};
   timelineTemplateMap: any = {};
@@ -281,10 +332,13 @@ class ChallengePhaseHelper {
       throw new errors.BadRequestError(`Invalid timeline template ID: ${timelineTemplateId}`);
     }
     const { timelineTempate } = await this.getTemplateAndTemplateMap(timelineTemplateId);
-    console.log("Selected timeline template", JSON.stringify(timelineTempate));
     const { phaseDefinitionMap } = await this.getPhaseDefinitionsAndMap();
+    // The template rows have no stored order, so walk the predecessor chain instead of
+    // trusting the order the database happened to return them in.
+    const orderedTemplate = orderPhasesByPredecessorChain(timelineTempate);
+    console.log("Selected timeline template", JSON.stringify(orderedTemplate));
     let fixedStartDate = undefined;
-    const finalPhases = _.map(timelineTempate, (phaseFromTemplate) => {
+    const finalPhases = _.map(orderedTemplate, (phaseFromTemplate) => {
       const phaseDefinition = phaseDefinitionMap.get(phaseFromTemplate.phaseId);
       const phaseFromInput = _.find(phases, (p) => p.phaseId === phaseFromTemplate.phaseId);
       const phase = {
@@ -324,23 +378,29 @@ class ChallengePhaseHelper {
       return phase;
     });
     for (const phase of finalPhases) {
-      if (_.isUndefined(phase.predecessor)) {
+      if (_.isNil(phase.predecessor)) {
         continue;
       }
       const precedecessorPhase = _.find(finalPhases, {
         phaseId: phase.predecessor,
       });
-      if (!_.isNil(precedecessorPhase)) {
-        if (phase.name === "Iterative Review") {
-          phase.scheduledStartDate = precedecessorPhase.scheduledStartDate;
-        } else {
-          phase.scheduledStartDate = precedecessorPhase.scheduledEndDate;
-        }
-        phase.scheduledEndDate = moment(phase.scheduledStartDate)
-          .add(phase.duration, "seconds")
-          .toDate()
-          .toISOString();
+      if (_.isNil(precedecessorPhase)) {
+        continue;
       }
+      const inheritedStartDate =
+        phase.name === "Iterative Review"
+          ? precedecessorPhase.scheduledStartDate
+          : precedecessorPhase.scheduledEndDate;
+      // An unresolved predecessor would make moment() fall back to the current time,
+      // scheduling this phase before the challenge even starts. Leave it unscheduled.
+      if (_.isNil(inheritedStartDate)) {
+        continue;
+      }
+      phase.scheduledStartDate = inheritedStartDate;
+      phase.scheduledEndDate = moment(phase.scheduledStartDate)
+        .add(phase.duration, "seconds")
+        .toDate()
+        .toISOString();
     }
     return finalPhases;
   }
