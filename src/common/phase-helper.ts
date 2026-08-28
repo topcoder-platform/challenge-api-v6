@@ -418,11 +418,14 @@ class ChallengePhaseHelper {
     const { phaseDefinitionMap } = await this.getPhaseDefinitionsAndMap();
     const challengePhaseIds = new Set(_.map(challengePhases, "phaseId"));
 
-    // Ensure deterministic processing order based on the timeline template sequence
-    // DB returns phases ordered by dates, which can cause "fixedStartDate" logic below
-    // to incorrectly push earlier phases forward. Sorting by template order prevents that.
+    // Ensure deterministic processing order based on the timeline template sequence.
+    // TimelineTemplatePhase rows carry no ordering column, so the database returns them
+    // in unspecified physical order; walk the predecessor chain instead of trusting that
+    // order, otherwise a dependent phase can be processed before its predecessor and get
+    // scheduled against a stale predecessor date (same issue PM-6007 fixed for creation).
+    const orderedTemplatePhases = orderPhasesByPredecessorChain(timelineTempate);
     const orderIndex = new Map();
-    _.each(timelineTempate, (tplPhase, idx) => orderIndex.set(tplPhase.phaseId, idx));
+    _.each(orderedTemplatePhases, (tplPhase, idx) => orderIndex.set(tplPhase.phaseId, idx));
     const submissionPhaseName = SUBMISSION_PHASE_PRIORITY.find((name) =>
       _.some(challengePhases, (phase) => phase.name === name)
     );
