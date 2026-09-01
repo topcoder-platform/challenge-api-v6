@@ -3,10 +3,56 @@
  */
 const _ = require("lodash");
 require("dotenv").config();
+
+const DEFAULT_CORS_ALLOWED_ORIGINS = [
+  "https://www.topcoder.com",
+  "https://www.topcoder-dev.com",
+  "https://platform.topcoder.com",
+  "https://platform.topcoder-dev.com",
+];
+
+/**
+ * Parses the comma-separated browser origins accepted by the API CORS policy.
+ *
+ * @param {string | undefined} configuredOrigins value supplied through CORS_ALLOWED_ORIGINS
+ * @returns {string[]} canonical, exact origins used by the Express CORS callback
+ * @throws {Error} when an entry is not an HTTPS origin, or an HTTP localhost origin for local development
+ * @example parseCorsAllowedOrigins("https://platform.topcoder.com,http://localhost:3000")
+ */
+const parseCorsAllowedOrigins = (configuredOrigins) => {
+  const values = configuredOrigins
+    ? configuredOrigins.split(",")
+    : DEFAULT_CORS_ALLOWED_ORIGINS;
+
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      let parsed;
+      try {
+        parsed = new URL(value);
+      } catch {
+        throw new Error(`Invalid CORS_ALLOWED_ORIGINS entry: ${value}`);
+      }
+
+      const isLocalHttpOrigin =
+        parsed.protocol === "http:" &&
+        ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+      if (parsed.protocol !== "https:" && !isLocalHttpOrigin) {
+        throw new Error(`CORS origin must use HTTPS or local HTTP: ${value}`);
+      }
+      if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+        throw new Error(`CORS entry must contain only an origin: ${value}`);
+      }
+      return parsed.origin;
+    });
+};
+
 module.exports = {
   READONLY: process.env.READONLY === "true" || false,
   LOG_LEVEL: process.env.LOG_LEVEL || "debug",
   PORT: process.env.PORT || 3000,
+  CORS_ALLOWED_ORIGINS: parseCorsAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS),
   // used to properly set the header response to api calls for services behind a load balancer
   API_BASE_URL: process.env.API_BASE_URL || `http://localhost:3000`,
   API_VERSION: process.env.API_VERSION || "v6",

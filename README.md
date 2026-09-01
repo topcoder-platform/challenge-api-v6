@@ -22,7 +22,7 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/en/) 26.4.0 (use the version in `.nvmrc`)
+- [Node.js](https://nodejs.org/en/) 26.5.1 (use the version in `.nvmrc`)
 - [pnpm](https://pnpm.io/) 11.15.1
 - [AWS S3](https://aws.amazon.com/s3/)
 - [Docker](https://www.docker.com/)
@@ -74,6 +74,8 @@ The following parameters can be set in config files or in env variables:
 - READONLY: sets the API in read-only mode. POST/PUT/PATCH/DELETE operations will return 403 Forbidden
 - LOG_LEVEL: the log level, default is 'debug'
 - PORT: the server port, default is 3000
+- CORS_ALLOWED_ORIGINS: comma-separated exact HTTPS browser origins allowed to
+  call the API; HTTP is accepted only for localhost development origins
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
 - AUTH0_URL: AUTH0 URL, used to get M2M token
@@ -131,7 +133,7 @@ database operation or application startup.
 
 ## Local Deployment
 
-0. Select the repository's Node 26.4.0 version with
+0. Select the repository's Node 26.5.1 version with
 
    ```bash
    nvm use
