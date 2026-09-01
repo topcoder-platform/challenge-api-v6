@@ -28,6 +28,23 @@ describe("importHistoricalMarathonMatches description sourcing", () => {
     expect(markdown).not.toContain("/ASCII34/");
   });
 
+  test("decodes one entity layer without allowing encoded markup to reappear", () => {
+    expect(
+      convertComponentXmlToMarkdown(
+        "<problem><statement>&amp;lt;iframe src=&quot;https://evil.example&quot;&amp;gt;safe</statement></problem>"
+      )
+    ).toContain("&lt;iframe src=\"https://evil.example\"&gt;safe");
+  });
+
+  test("removes nested and unterminated markup fragments deterministically", () => {
+    const markdown = convertComponentXmlToMarkdown(
+      "<problem><statement>before <ifra<ignored>me src='https://evil.example'>inside</iframe> after <script</statement></problem>"
+    );
+
+    expect(markdown).toContain("before me src='https://evil.example'>inside after");
+    expect(markdown).not.toMatch(/<(?:iframe|script)/i);
+  });
+
   test("resolves html problem text with html description format", () => {
     expect(
       resolveDescriptionCandidateFromCounters({

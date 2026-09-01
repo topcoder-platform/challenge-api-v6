@@ -212,10 +212,10 @@ Input options:
   --component-file <file>            Legacy component file (default: component_1.json)
   --problem-file <file>              Legacy problem file (default: problem_1.json)
   --long-component-state-file <file> Legacy long_component_state file (default: long_component_state_1.json)
-  --round-registration-pattern <re>  Regex for round_registration files (default: ^round_registration_\\d+\\.json$)
-  --user-pattern <re>                Regex for user files (default: ^user_\\d+\\.json$)
-  --long-submission-pattern <re>     Regex for long_submission files (default: ^long_submission_\\d+\\.json$)
-  --long-comp-result-pattern <re>    Regex for long_comp_result files (default: ^long_comp_result_\\d+\\.json$)
+  --round-registration-pattern <re>  Safe numbered-file regex (default: ^round_registration_\\d+\\.json$)
+  --user-pattern <re>                Safe numbered-file regex (default: ^user_\\d+\\.json$)
+  --long-submission-pattern <re>     Safe numbered-file regex (default: ^long_submission_\\d+\\.json$)
+  --long-comp-result-pattern <re>    Safe numbered-file regex (default: ^long_comp_result_\\d+\\.json$)
 
 Apply mode:
   --apply                            Apply reconciliation writes (challenge + phase create path)
