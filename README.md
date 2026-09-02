@@ -355,9 +355,14 @@ Refer to the verification document `Verification.md`
   public query only narrows results and never grants access: anonymous callers
   retain anonymous visibility, and authenticated callers remain subject to
   whitelist, group, and task rules based on the caller. For “My competitions,”
-  pass the configured Submitter resource-role UUID. Deploy migration
-  `20260813130000_add_role_to_member_access_view` before this service version,
-  because the generated Prisma client expects the view's new `roleId` column.
+  pass only `memberId` when every challenge resource association (including
+  Submitter, Copilot, and Manager) should remain visible; add the configured
+  Submitter resource-role UUID only for registration-specific searches. Public
+  active listings can use `hasCurrentPhase=true` to exclude scheduled ACTIVE
+  challenges without excluding challenges that have moved into Review. Deploy
+  migration `20260813130000_add_role_to_member_access_view` before this service
+  version, because the generated Prisma client expects the view's new `roleId`
+  column.
 - API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.

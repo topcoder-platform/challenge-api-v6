@@ -1210,6 +1210,56 @@ describe("challenge service unit tests", () => {
   });
 
   describe("search challenges tests", () => {
+    it("filters active listings to challenges with any current phase", async () => {
+      const challengeId = data.challenge.id;
+      const originalChallenge = await prisma.challenge.findUniqueOrThrow({
+        where: { id: challengeId },
+        select: { currentPhaseNames: true },
+      });
+      const originalPhases = await prisma.challengePhase.findMany({
+        where: { challengeId },
+        select: { id: true, isOpen: true },
+      });
+
+      try {
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { currentPhaseNames: [] },
+        });
+        await prisma.challengePhase.updateMany({
+          where: { challengeId },
+          data: { isOpen: false },
+        });
+
+        const withoutCurrentPhase = await service.searchChallenges(
+          { isMachine: true },
+          { hasCurrentPhase: true, id: challengeId, page: 1, perPage: 10 },
+        );
+        should.equal(withoutCurrentPhase.total, 0);
+
+        await prisma.challengePhase.update({
+          where: { id: originalPhases[0].id },
+          data: { isOpen: true },
+        });
+        const withOpenPhase = await service.searchChallenges(
+          { isMachine: true },
+          { hasCurrentPhase: true, id: challengeId, page: 1, perPage: 10 },
+        );
+        should.equal(withOpenPhase.total, 1);
+      } finally {
+        await prisma.$transaction(originalPhases.map((phase) =>
+          prisma.challengePhase.update({
+            where: { id: phase.id },
+            data: { isOpen: phase.isOpen },
+          }),
+        ));
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { currentPhaseNames: originalChallenge.currentPhaseNames },
+        });
+      }
+    });
+
     it("search challenges successfully by legacyId", async () => {
       const res = await service.searchChallenges(
         { isMachine: true },
