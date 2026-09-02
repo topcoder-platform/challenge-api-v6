@@ -2199,6 +2199,18 @@ async function searchChallenges(currentUser, criteria) {
       ],
     });
   }
+  if (criteria.hasCurrentPhase) {
+    prismaFilter.where.AND.push({
+      OR: [
+        { currentPhaseNames: { isEmpty: false } },
+        {
+          phases: {
+            some: { isOpen: true },
+          },
+        },
+      ],
+    });
+  }
   if (criteria.createdDateStart) {
     prismaFilter.where.AND.push({
       createdAt: { gte: criteria.createdDateStart },
@@ -2745,6 +2757,7 @@ searchChallenges.schema = {
       endDateStart: Joi.date(),
       endDateEnd: Joi.date(),
       currentPhaseName: Joi.string(),
+      hasCurrentPhase: Joi.boolean(),
       createdDateStart: Joi.date(),
       createdDateEnd: Joi.date(),
       updatedDateStart: Joi.date(),
