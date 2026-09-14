@@ -22,7 +22,7 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/en/) 26.4.0 (use the version in `.nvmrc`)
+- [Node.js](https://nodejs.org/en/) 26.5.1 (use the version in `.nvmrc`)
 - [pnpm](https://pnpm.io/) 11.15.1
 - [AWS S3](https://aws.amazon.com/s3/)
 - [Docker](https://www.docker.com/)
@@ -74,6 +74,8 @@ The following parameters can be set in config files or in env variables:
 - READONLY: sets the API in read-only mode. POST/PUT/PATCH/DELETE operations will return 403 Forbidden
 - LOG_LEVEL: the log level, default is 'debug'
 - PORT: the server port, default is 3000
+- CORS_ALLOWED_ORIGINS: comma-separated exact HTTPS browser origins allowed to
+  call the API; HTTP is accepted only for localhost development origins
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
 - AUTH0_URL: AUTH0 URL, used to get M2M token
@@ -103,6 +105,10 @@ The following parameters can be set in config files or in env variables:
 - DATABASE_URL: PostgreSQL connection URL for the challenge database
 - REVIEW_DB_URL: optional PostgreSQL connection URL for review data; existing
   deployments may continue to omit it when review-database access is not used
+- FORUMS_DB_URL: optional PostgreSQL connection URL used to populate live
+  `numOfPosts` challenge response counters. `FORUMS_DATABASE_URL` is
+  accepted as a compatibility alias. When neither variable is configured or
+  the Forums lookup fails, challenge reads remain available and return zero.
 
 You can find sample `.env` files inside the `/docs` directory.
 The TypeScript, NestJS, and Prisma 7 migration does not introduce or rename any
@@ -127,7 +133,7 @@ database operation or application startup.
 
 ## Local Deployment
 
-0. Select the repository's Node 26.4.0 version with
+0. Select the repository's Node 26.5.1 version with
 
    ```bash
    nvm use
@@ -349,9 +355,14 @@ Refer to the verification document `Verification.md`
   public query only narrows results and never grants access: anonymous callers
   retain anonymous visibility, and authenticated callers remain subject to
   whitelist, group, and task rules based on the caller. For “My competitions,”
-  pass the configured Submitter resource-role UUID. Deploy migration
-  `20260813130000_add_role_to_member_access_view` before this service version,
-  because the generated Prisma client expects the view's new `roleId` column.
+  pass only `memberId` when every challenge resource association (including
+  Submitter, Copilot, and Manager) should remain visible; add the configured
+  Submitter resource-role UUID only for registration-specific searches. Public
+  active listings can use `hasCurrentPhase=true` to exclude scheduled ACTIVE
+  challenges without excluding challenges that have moved into Review. Deploy
+  migration `20260813130000_add_role_to_member_access_view` before this service
+  version, because the generated Prisma client expects the view's new `roleId`
+  column.
 - API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.

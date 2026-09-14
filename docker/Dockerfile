@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:26.4.0-alpine3.23 AS build-base
+ARG NODE_VERSION=26.5.1
+ARG PNPM_VERSION=11.15.1
+
+FROM node:${NODE_VERSION}-alpine AS build-base
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache openssl
 WORKDIR /challenge-api
-RUN npm install --global pnpm@11.15.1
+RUN npm install --global pnpm@${PNPM_VERSION}
 
 FROM build-base AS build
 
@@ -25,12 +28,13 @@ RUN CI=true pnpm prune --prod \
         node_modules/.pnpm-workspace-state-v1.json \
         node_modules/.pnpm/lock.yaml
 
-FROM node:26.4.0-alpine3.23 AS runtime
+FROM alpine:3.24 AS runtime
 
+ARG NODE_VERSION
 RUN apk upgrade --no-cache \
-    && apk add --no-cache openssl \
-    && rm -rf /usr/local/lib/node_modules/npm \
-    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+    && apk add --no-cache ca-certificates nodejs-current=${NODE_VERSION}-r0 openssl \
+    && addgroup -S app \
+    && adduser -S -D -u 10001 -G app app
 
 WORKDIR /challenge-api
 
@@ -41,16 +45,15 @@ ENV NODE_OPTIONS="--report-on-fatalerror --report-uncaught-exception --report-si
 # Copy only the compiled application, production dependencies, runtime
 # configuration, and Prisma migration assets. Development dependencies, source,
 # repository metadata, and lockfiles never enter the production image.
-COPY --from=build --chown=node:node /challenge-api/node_modules ./node_modules
-COPY --from=build --chown=node:node /challenge-api/dist ./dist
-COPY --from=build --chown=node:node /challenge-api/config ./config
-COPY --from=build --chown=node:node /challenge-api/docs/swagger.yaml ./docs/swagger.yaml
-COPY --from=build --chown=node:node /challenge-api/prisma ./prisma
-COPY --from=build --chown=node:node /challenge-api/prisma.config.ts ./prisma.config.ts
-COPY --from=build /challenge-api/docker/entrypoint.sh /entrypoint.sh
-RUN chmod 0555 /entrypoint.sh \
-    && mkdir -p /challenge-api/reports \
-    && chown node:node /challenge-api/reports
+COPY --from=build --chown=app:app /challenge-api/node_modules ./node_modules
+COPY --from=build --chown=app:app /challenge-api/dist ./dist
+COPY --from=build --chown=app:app /challenge-api/config ./config
+COPY --from=build --chown=app:app /challenge-api/docs/swagger.yaml ./docs/swagger.yaml
+COPY --from=build --chown=app:app /challenge-api/prisma ./prisma
+COPY --from=build --chown=app:app /challenge-api/prisma.config.ts ./prisma.config.ts
+COPY --from=build --chown=app:app --chmod=0555 /challenge-api/docker/entrypoint.sh /entrypoint.sh
+RUN mkdir -p /challenge-api/reports \
+    && chown app:app /challenge-api/reports
 
-USER node
+USER app
 ENTRYPOINT ["/entrypoint.sh"]

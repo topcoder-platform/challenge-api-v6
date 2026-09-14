@@ -1,8 +1,11 @@
-FROM node:26.4.0-alpine3.23 AS build
+ARG NODE_VERSION=26.5.1
+ARG PNPM_VERSION=11.15.1
+
+FROM node:${NODE_VERSION}-alpine AS build
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache openssl \
-    && npm install --global pnpm@11.15.1
+    && npm install --global pnpm@${PNPM_VERSION}
 
 WORKDIR /challenge-api
 COPY . .
@@ -23,24 +26,24 @@ RUN pnpm install --frozen-lockfile \
         node_modules/.pnpm-workspace-state-v1.json \
         node_modules/.pnpm/lock.yaml
 
-FROM node:26.4.0-alpine3.23 AS runtime
+FROM alpine:3.24 AS runtime
 
+ARG NODE_VERSION
 RUN apk upgrade --no-cache \
-    && apk add --no-cache openssl \
-    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/pnpm \
-    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/pnpm \
-        /usr/local/bin/pnpx /usr/local/bin/corepack
+    && apk add --no-cache ca-certificates nodejs-current=${NODE_VERSION}-r0 openssl \
+    && addgroup -S app \
+    && adduser -S -D -u 10001 -G app app
 
 WORKDIR /challenge-api
 
 # The mock uses the compiled Challenge Prisma adapter for its one DB-backed
 # endpoint; all other endpoints are static. Copy only production dependencies,
 # compiled runtime code, and the mock's JavaScript/configuration.
-COPY --from=build --chown=node:node /challenge-api/node_modules ./node_modules
-COPY --from=build --chown=node:node /challenge-api/dist ./dist
-COPY --from=build --chown=node:node /challenge-api/mock-api/app.js ./mock-api/app.js
-COPY --from=build --chown=node:node /challenge-api/mock-api/config ./mock-api/config
+COPY --from=build --chown=app:app /challenge-api/node_modules ./node_modules
+COPY --from=build --chown=app:app /challenge-api/dist ./dist
+COPY --from=build --chown=app:app /challenge-api/mock-api/app.js ./mock-api/app.js
+COPY --from=build --chown=app:app /challenge-api/mock-api/config ./mock-api/config
 
-USER node
+USER app
 WORKDIR /challenge-api/mock-api
 CMD ["node", "app.js"]

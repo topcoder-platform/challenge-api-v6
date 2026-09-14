@@ -277,6 +277,11 @@ paths:
           description: Filter by name of the current phase
           required: false
           type: string
+        - name: hasCurrentPhase
+          in: query
+          description: Filter to challenges with at least one currently open phase
+          required: false
+          type: boolean
         - name: createdDateStart
           in: query
           description: Filter by created date (lower bound of date range)
@@ -2746,6 +2751,9 @@ definitions:
       numOfRegistrants:
         type: integer
         description: number of registrants
+      numOfPosts:
+        type: integer
+        description: number of non-deleted posts on active challenge forum topics
       currentPhaseNames:
         type: array
         items:

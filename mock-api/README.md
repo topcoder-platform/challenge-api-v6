@@ -2,7 +2,7 @@
 
 
 ## Dependencies
-- Node.js 26.4.0 (use the version in the repository's `.nvmrc`)
+- Node.js 26.5.1 (use the version in the repository's `.nvmrc`)
 - Root Challenge API dependencies installed with pnpm 11.15.1
 
 
@@ -21,5 +21,6 @@ There are following config params:
 
 The local start command registers the root TypeScript runtime. The production
 image instead uses the compiled Challenge API Prisma client and contains no
-TypeScript source or development dependencies. Set the existing `DATABASE_URL`
-when exercising mock endpoints that read challenge data.
+TypeScript source or development dependencies. Its Alpine 3.24 runtime uses the
+patched system Node.js/OpenSSL packages and runs as non-root UID 10001. Set the
+existing `DATABASE_URL` when exercising mock endpoints that read challenge data.

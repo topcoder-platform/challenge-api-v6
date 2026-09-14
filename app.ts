@@ -26,6 +26,20 @@ const { ForbiddenError } = require("./src/common/errors");
 
 // setup express app
 const app = express();
+const corsAllowedOrigins = new Set(config.CORS_ALLOWED_ORIGINS);
+
+/**
+ * Applies the exact-origin CORS allowlist while permitting non-browser requests
+ * that do not send an Origin header.
+ *
+ * @param {string | undefined} requestOrigin browser Origin header supplied by cors middleware
+ * @param {(error: Error | null, allowed?: boolean) => void} callback cors decision callback
+ * @returns {void} The allow/deny decision is delivered through callback.
+ * @throws {Error} This callback does not throw; unlisted origins are denied.
+ */
+const validateCorsOrigin = (requestOrigin, callback) => {
+  callback(null, requestOrigin === undefined || corsAllowedOrigins.has(requestOrigin));
+};
 
 // Use extended query parsing so bracket syntax like types[]=F2F is handled as arrays
 app.set("query parser", "extended");
@@ -47,7 +61,7 @@ app.use(
 
 app.use(
   cors({
-    origin: "*",
+    origin: validateCorsOrigin,
     exposedHeaders: [
       "X-Prev-Page",
       "X-Next-Page",

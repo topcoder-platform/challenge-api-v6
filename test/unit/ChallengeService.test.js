@@ -312,6 +312,50 @@ describe("challenge service unit tests", () => {
       should.equal(result.numOfRegistrants, 0);
     });
 
+    it("counts non-deleted posts across active challenge forum topics", async () => {
+      const calls = [];
+      const client = {
+        topic: {
+          findMany: async (query) => {
+            calls.push(query);
+            return [
+              { challengeId: "challenge-a", _count: { posts: 2 } },
+              { challengeId: "challenge-a", _count: { posts: 3 } },
+              { challengeId: "challenge-b", _count: { posts: 1 } },
+            ];
+          },
+        },
+      };
+
+      const challenges = [
+        { id: "challenge-a" },
+        { id: "challenge-b" },
+        { id: "challenge-c" },
+      ];
+      await service.__testables.applyForumPostCounts(challenges, client);
+
+      should.equal(calls.length, 1);
+      calls[0].should.deep.equal({
+        where: {
+          challengeId: { in: ["challenge-a", "challenge-b", "challenge-c"] },
+          deletedAt: null,
+        },
+        select: {
+          challengeId: true,
+          _count: {
+            select: {
+              posts: {
+                where: { deletedAt: null },
+              },
+            },
+          },
+        },
+      });
+      should.equal(challenges[0].numOfPosts, 5);
+      should.equal(challenges[1].numOfPosts, 1);
+      should.equal(challenges[2].numOfPosts, 0);
+    });
+
     it("persists false is_test_challenge metadata when create omits the flag", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
       challengeData.discussions[0].type = "CHALLENGE";
@@ -1166,6 +1210,56 @@ describe("challenge service unit tests", () => {
   });
 
   describe("search challenges tests", () => {
+    it("filters active listings to challenges with any current phase", async () => {
+      const challengeId = data.challenge.id;
+      const originalChallenge = await prisma.challenge.findUniqueOrThrow({
+        where: { id: challengeId },
+        select: { currentPhaseNames: true },
+      });
+      const originalPhases = await prisma.challengePhase.findMany({
+        where: { challengeId },
+        select: { id: true, isOpen: true },
+      });
+
+      try {
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { currentPhaseNames: [] },
+        });
+        await prisma.challengePhase.updateMany({
+          where: { challengeId },
+          data: { isOpen: false },
+        });
+
+        const withoutCurrentPhase = await service.searchChallenges(
+          { isMachine: true },
+          { hasCurrentPhase: true, id: challengeId, page: 1, perPage: 10 },
+        );
+        should.equal(withoutCurrentPhase.total, 0);
+
+        await prisma.challengePhase.update({
+          where: { id: originalPhases[0].id },
+          data: { isOpen: true },
+        });
+        const withOpenPhase = await service.searchChallenges(
+          { isMachine: true },
+          { hasCurrentPhase: true, id: challengeId, page: 1, perPage: 10 },
+        );
+        should.equal(withOpenPhase.total, 1);
+      } finally {
+        await prisma.$transaction(originalPhases.map((phase) =>
+          prisma.challengePhase.update({
+            where: { id: phase.id },
+            data: { isOpen: phase.isOpen },
+          }),
+        ));
+        await prisma.challenge.update({
+          where: { id: challengeId },
+          data: { currentPhaseNames: originalChallenge.currentPhaseNames },
+        });
+      }
+    });
+
     it("search challenges successfully by legacyId", async () => {
       const res = await service.searchChallenges(
         { isMachine: true },

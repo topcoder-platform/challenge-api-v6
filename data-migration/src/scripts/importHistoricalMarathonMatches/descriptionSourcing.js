@@ -16,14 +16,28 @@ const normalizeLegacyText = (value) => {
 
 const isUsableProblemText = (value) => Boolean(normalizeLegacyText(value));
 
+const HTML_ENTITY_VALUES = Object.freeze({
+  lt: "<",
+  gt: ">",
+  amp: "&",
+  quot: '"',
+  "#39": "'",
+  nbsp: " ",
+});
+
+/**
+ * Decodes one layer of the legacy named HTML entities supported by the importer.
+ *
+ * @param {string | null | undefined} value encoded legacy problem text
+ * @returns {string} text with one non-recursive entity-decoding pass applied
+ * @throws {Error} This helper does not throw; unknown entities remain unchanged.
+ */
 const decodeHtmlEntities = (value) =>
-  String(value || "")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&nbsp;/gi, " ");
+  String(value || "").replace(/&(lt|gt|amp|quot|#39|nbsp);/gi, (entity, name) =>
+    Object.prototype.hasOwnProperty.call(HTML_ENTITY_VALUES, name.toLowerCase())
+      ? HTML_ENTITY_VALUES[name.toLowerCase()]
+      : entity
+  );
 
 /**
  * Decodes legacy `/ASCII123/` placeholders from Informix exports.
@@ -160,7 +174,56 @@ const stripXmlScaffolding = (value) =>
     .replace(/<\?xml[\s\S]*?\?>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ");
 
-const stripAllTags = (value) => String(value || "").replace(/<[^>]+>/g, " ");
+/**
+ * Removes markup with a deterministic scanner so nested tag fragments cannot
+ * combine into a new HTML element after sanitization.
+ *
+ * @param {string | null | undefined} value legacy XML or HTML fragment
+ * @returns {string} text outside markup tags, preserving literal less-than signs used in prose
+ * @throws {Error} This helper does not throw; an unterminated tag is discarded through end of input.
+ */
+const stripAllTags = (value) => {
+  const source = String(value || "");
+  let result = "";
+  let insideTag = false;
+  let quote = null;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (!insideTag) {
+      const next = source[index + 1];
+      const startsMarkup =
+        character === "<" &&
+        (next === "/" ||
+          next === "!" ||
+          next === "?" ||
+          (next >= "A" && next <= "Z") ||
+          (next >= "a" && next <= "z"));
+      if (startsMarkup) {
+        insideTag = true;
+        quote = null;
+      } else {
+        result += character;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === ">") {
+      insideTag = false;
+      result += " ";
+    }
+  }
+
+  return result;
+};
 
 const looksLikeHtmlContent = (value) => {
   const normalized = normalizeLegacyText(value);
@@ -237,10 +300,8 @@ const convertRichTextSectionToMarkdown = (value) => {
     .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<\/li>/gi, "\n")
     .replace(/<\/(p|div|section|example|note|item)>/gi, "\n\n")
-    .replace(/<(p|div|section|example|note|item)\b[^>]*>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n");
+    .replace(/<(p|div|section|example|note|item)\b[^>]*>/gi, "");
+  text = stripAllTags(text).replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n");
 
   let markdown = normalizeWhitespacePreservingCodeBlocks(text);
   codeBlocks.forEach((codeBlock, index) => {
