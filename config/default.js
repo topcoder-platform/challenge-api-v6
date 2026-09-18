@@ -201,6 +201,10 @@ module.exports = {
     ? parseInt(process.env.CHALLENGE_SERVICE_PRISMA_TIMEOUT, 10)
     : 10000,
   CHALLENGE_URL: process.env.CHALLENGE_URL || "https://www.topcoder-dev.com/challenges",
+  // Base URL of a challenge in the opportunities app; the challenge forum lives on its "forum" tab
+  OPPORTUNITIES_CHALLENGE_URL:
+    process.env.OPPORTUNITIES_CHALLENGE_URL ||
+    "https://www.topcoder-dev.com/opportunities/challenge",
   SUPPORT_APP_URL: process.env.SUPPORT_APP_URL || "https://support.topcoder-dev.com",
   PHASE_CHANGE_SENDGRID_TEMPLATE_ID: process.env.PHASE_CHANGE_SENDGRID_TEMPLATE_ID || "",
 };

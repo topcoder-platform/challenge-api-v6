@@ -402,6 +402,71 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("defines the topcoder forum discussion on create and includes it in the bus event", async () => {
+      const challengeData = _.cloneDeep(testChallengeData);
+      // caller-supplied (legacy vanilla) discussions are replaced by the API-defined one
+      challengeData.discussions[0].type = "CHALLENGE";
+      challengeData.prizeSets[0].type = PrizeSetTypeEnum.PLACEMENT;
+      challengeData.status = ChallengeStatusEnum.NEW;
+      const originalGetProject = projectHelper.getProject;
+      const originalGetProjectBillingInformation = projectHelper.getProjectBillingInformation;
+      const originalPostBusEvent = helper.postBusEvent;
+      const busEvents = [];
+      let createdChallengeId;
+
+      projectHelper.getProject = async () => ({ directProjectId: 33541 });
+      projectHelper.getProjectBillingInformation = async () => ({
+        billingAccountId: null,
+        markup: 0,
+      });
+      helper.postBusEvent = async (topic, payload) => {
+        busEvents.push({ topic, payload: _.cloneDeep(payload) });
+      };
+
+      try {
+        const result = await service.createChallenge(
+          { isMachine: true, sub: "sub", userId: "testuser" },
+          challengeData,
+          config.M2M_FULL_ACCESS_TOKEN || "test-token",
+        );
+        createdChallengeId = result.id;
+        const expectedUrl = `${config.OPPORTUNITIES_CHALLENGE_URL}/${result.id}?tab=forum`;
+
+        should.equal(result.discussions.length, 1);
+        const discussion = result.discussions[0];
+        should.exist(discussion.id);
+        should.equal(discussion.name, testChallengeData.name);
+        should.equal(discussion.type, "CHALLENGE");
+        should.equal(discussion.provider, constants.DiscussionProviders.TOPCODER);
+        should.equal(discussion.url, expectedUrl);
+
+        const persisted = await prisma.challengeDiscussion.findMany({
+          where: { challengeId: result.id },
+        });
+        should.equal(persisted.length, 1);
+        should.equal(persisted[0].discussionId, discussion.id);
+        should.equal(persisted[0].provider, constants.DiscussionProviders.TOPCODER);
+        should.equal(persisted[0].url, expectedUrl);
+
+        const createdEvent = _.find(busEvents, { topic: constants.Topics.ChallengeCreated });
+        should.exist(createdEvent);
+        should.equal(createdEvent.payload.discussions.length, 1);
+        should.equal(createdEvent.payload.discussions[0].id, discussion.id);
+        should.equal(
+          createdEvent.payload.discussions[0].provider,
+          constants.DiscussionProviders.TOPCODER,
+        );
+        should.equal(createdEvent.payload.discussions[0].url, expectedUrl);
+      } finally {
+        projectHelper.getProject = originalGetProject;
+        projectHelper.getProjectBillingInformation = originalGetProjectBillingInformation;
+        helper.postBusEvent = originalPostBusEvent;
+        if (createdChallengeId) {
+          await prisma.challenge.deleteMany({ where: { id: createdChallengeId } });
+        }
+      }
+    });
+
     it("locks draft challenge budget when the challenge is saved", async () => {
       const challengeData = _.cloneDeep(testChallengeData);
       challengeData.status = ChallengeStatusEnum.DRAFT;
