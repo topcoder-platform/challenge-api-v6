@@ -3504,6 +3504,10 @@ definitions:
       - id
   Discussion:
     type: object
+    description: |
+      Challenge forum discussion. On challenge creation the API defines this itself
+      (provider "topcoder", URL of the challenge's forum tab in the opportunities app),
+      ignoring any discussions in the request body.
     properties:
       id:
         type: string
@@ -3516,10 +3520,12 @@ definitions:
           - challenge
       provider:
         type: string
+        example: topcoder
       url:
         type: string
         format: url
         description: Only M2M tokens can modify this
+        example: https://www.topcoder.com/opportunities/challenge/6a5da7b6-3841-43cb-ae9d-98416bea0d9d?tab=forum
       options:
         type: array
         description: Only M2M tokens can modify this
