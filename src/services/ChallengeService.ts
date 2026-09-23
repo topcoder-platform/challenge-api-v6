@@ -3076,8 +3076,15 @@ async function createChallenge(currentUser, challenge, userToken) {
   if (challenge.tags == null) challenge.tags = [];
   if (challenge.startDate != null) challenge.startDate = challenge.startDate;
   if (challenge.endDate != null) challenge.endDate = challenge.endDate;
-  if (challenge.discussions == null) challenge.discussions = [];
   if (challenge.skills == null) challenge.skills = [];
+
+  // The challenge forum is hosted by the opportunities app, so the discussion is defined here in
+  // full (provider, name and URL). Any discussions supplied by the caller are replaced; the
+  // challenge-forum-processor that used to fill in the URL from the created event is retired.
+  const challengeId = uuid();
+  challenge.discussions = [
+    challengeHelper.buildChallengeForumDiscussion(challengeId, challenge.name),
+  ];
 
   challenge.metadata = challenge.metadata.map((m) => ({
     name: m.name,
@@ -3113,7 +3120,7 @@ async function createChallenge(currentUser, challenge, userToken) {
     )} prizeSetCount=${_.get(challenge, "prizeSets.length", 0)}`,
   );
   const ret = await prisma.challenge.create({
-    data: prismaModel,
+    data: { id: challengeId, ...prismaModel },
     include: includeReturnFields,
   });
   logger.info(`createChallenge: challenge record created (id=${ret.id}) ${buildLogContext()}`);

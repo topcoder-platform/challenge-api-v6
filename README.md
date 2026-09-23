@@ -102,6 +102,8 @@ The following parameters can be set in config files or in env variables:
 - SCOPES: the configurable M2M token scopes, refer `config/default.js` for more details
 - M2M_AUDIT_HANDLE: the audit name used when perform create/update operation using M2M token
 - FORUM_TITLE_LENGTH_LIMIT: the forum title length limit
+- OPPORTUNITIES_CHALLENGE_URL: base URL of a challenge in the opportunities app; the challenge
+  discussion URL is built from it as `<OPPORTUNITIES_CHALLENGE_URL>/<challengeId>?tab=forum`
 - DATABASE_URL: PostgreSQL connection URL for the challenge database
 - REVIEW_DB_URL: optional PostgreSQL connection URL for review data; existing
   deployments may continue to omit it when review-database access is not used

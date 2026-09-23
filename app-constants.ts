@@ -26,6 +26,12 @@ const ChallengeMetadataNames = {
 
 const BOOLEAN_METADATA_VALUES = ["true", "false"];
 
+// Provider of challenge discussions. Forums are hosted by the opportunities app,
+// which replaced the Vanilla forums created by the retired challenge-forum-processor.
+const DiscussionProviders = {
+  TOPCODER: "topcoder",
+};
+
 const validChallengeParams = {
   UpdatedBy: "updatedBy",
   Updated: "updatedAt",
@@ -176,6 +182,7 @@ module.exports = {
   prizeTypes,
   ChallengeMetadataNames,
   BOOLEAN_METADATA_VALUES,
+  DiscussionProviders,
   validChallengeParams,
   EVENT_ORIGINATOR,
   EVENT_MIME_TYPE,

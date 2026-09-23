@@ -12,8 +12,13 @@ const axios = require("axios");
 const { getM2MToken } = require("./m2m-helper");
 const { hasAdminRole } = require("./role-helper");
 const { ensureAcessibilityToModifiedGroups } = require("./group-helper");
-const { ChallengeStatusEnum } = require("@prisma/client");
-const { ChallengeMetadataNames, BOOLEAN_METADATA_VALUES } = require("../../app-constants");
+const { v4: uuid } = require("uuid");
+const { ChallengeStatusEnum, DiscussionTypeEnum } = require("@prisma/client");
+const {
+  ChallengeMetadataNames,
+  BOOLEAN_METADATA_VALUES,
+  DiscussionProviders,
+} = require("../../app-constants");
 
 const SUBMISSION_PHASE_PRIORITY = ["Topgear Submission", "Topcoder Submission", "Submission"];
 const CHECKPOINT_SUBMISSION_PHASE_NAME = "Checkpoint Submission";
@@ -346,6 +351,27 @@ class ChallengeHelper {
     if (challenge.constraints) {
       await ChallengeHelper.validateChallengeConstraints(challenge.constraints);
     }
+  }
+
+  /**
+   * Build the discussion that links a challenge to its forum in the opportunities app.
+   *
+   * The forum is served by the opportunities app on the challenge page's "forum" tab, so the
+   * discussion is fully defined at creation time. The retired challenge-forum-processor no
+   * longer creates a Vanilla forum and writes the URL back.
+   *
+   * @param {String} challengeId the challenge id
+   * @param {String} challengeName the challenge name
+   * @returns {Object} the discussion payload
+   */
+  buildChallengeForumDiscussion(challengeId, challengeName) {
+    return {
+      id: uuid(),
+      name: _.toString(challengeName).substring(0, config.FORUM_TITLE_LENGTH_LIMIT),
+      type: DiscussionTypeEnum.CHALLENGE,
+      provider: DiscussionProviders.TOPCODER,
+      url: `${config.OPPORTUNITIES_CHALLENGE_URL}/${challengeId}?tab=forum`,
+    };
   }
 
   /**
