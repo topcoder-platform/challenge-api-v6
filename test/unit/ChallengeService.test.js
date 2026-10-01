@@ -1543,6 +1543,80 @@ describe("challenge service unit tests", () => {
       }
     });
 
+    it("keeps missing end dates last and date ties stable across public and member result pages", async () => {
+      const idPrefix = uuid().slice(0, 24);
+      const endDateChallenges = [
+        { suffix: "6", endDate: null },
+        { suffix: "4", endDate: new Date("2026-09-29T10:00:00Z") },
+        { suffix: "5", endDate: new Date("2026-09-28T10:00:00Z") },
+        { suffix: "2", endDate: new Date("2026-09-30T10:00:00Z") },
+        { suffix: "1", endDate: null },
+        { suffix: "3", endDate: new Date("2026-09-29T10:00:00Z") },
+      ].map((challengeRow) => ({
+        ...challengeRow,
+        id: `${idPrefix}${challengeRow.suffix.padStart(12, "0")}`,
+      }));
+      const challengeIds = endDateChallenges.map((challengeRow) => challengeRow.id);
+      const originalMemberAccessFindMany = prisma.memberChallengeAccess.findMany;
+
+      try {
+        for (const challengeRow of endDateChallenges) {
+          await prisma.challenge.create({
+            data: {
+              id: challengeRow.id,
+              name: `End date sort ${challengeRow.suffix}`,
+              endDate: challengeRow.endDate,
+              description: "end-date-sort",
+              privateDescription: "end-date-sort",
+              challengeSource: "Topcoder",
+              descriptionFormat: "html",
+              timelineTemplate: { connect: { id: data.timelineTemplate.id } },
+              type: { connect: { id: data.challenge.typeId } },
+              track: { connect: { id: data.challenge.trackId } },
+              tags: [],
+              groups: [],
+              status: ChallengeStatusEnum.COMPLETED,
+              createdBy: "testuser",
+              updatedBy: "testuser",
+            },
+          });
+        }
+
+        prisma.memberChallengeAccess.findMany = async () => challengeIds.map((challengeId) => ({ challengeId }));
+
+        for (const memberId of [undefined, "end-date-sort-member"]) {
+          for (const sortOrder of ["desc", "asc"]) {
+            const expectedSuffixes = sortOrder === "desc"
+              ? ["2", "3", "4", "5", "1", "6"]
+              : ["5", "3", "4", "2", "1", "6"];
+            const expectedIds = expectedSuffixes.map((suffix) => `${idPrefix}${suffix.padStart(12, "0")}`);
+            const criteria = {
+              ids: challengeIds,
+              ...(memberId ? { memberId } : {}),
+              status: ChallengeStatusEnum.COMPLETED,
+              sortBy: "endDate",
+              sortOrder,
+            };
+            const fullResult = await service.searchChallenges(undefined, { ...criteria, page: 1, perPage: 10 });
+            _.map(fullResult.result, "id").should.deep.equal(expectedIds);
+            should.equal(fullResult.total, 6);
+
+            const pagedIds = [];
+            for (const page of [1, 2, 3]) {
+              const result = await service.searchChallenges(undefined, { ...criteria, page, perPage: 2 });
+              should.equal(result.total, 6);
+              _.map(result.result, "id").should.deep.equal(expectedIds.slice((page - 1) * 2, page * 2));
+              pagedIds.push(...result.result.map((challengeRow) => challengeRow.id));
+            }
+            pagedIds.should.deep.equal(expectedIds);
+          }
+        }
+      } finally {
+        prisma.memberChallengeAccess.findMany = originalMemberAccessFindMany;
+        await prisma.challenge.deleteMany({ where: { id: { in: challengeIds } } });
+      }
+    });
+
     it("search challenges sorts status alphabetically for member and non-member searches", async () => {
       const statusChallenges = [
         {

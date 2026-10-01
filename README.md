@@ -365,6 +365,12 @@ Refer to the verification document `Verification.md`
   migration `20260813130000_add_role_to_member_access_view` before this service
   version, because the generated Prisma client expects the view's new `roleId`
   column.
+- Past competition lists can use `status=COMPLETED&sortBy=endDate&sortOrder=desc`
+  to show the most recently completed challenges first. End-date sorting places
+  missing dates last in either direction, retaining those challenges in the
+  results and totals. Equal dates (including missing dates) are ordered by
+  ascending challenge id before pagination, consistently for public and
+  member-filtered searches.
 - API base configuration points to v6 in dev/local and v5 in prod (for compatibility):
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.

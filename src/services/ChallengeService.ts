@@ -1632,6 +1632,8 @@ async function searchByLegacyId(currentUser, legacyId, page, perPage) {
  * Resource table to load the member's challenge ids, optionally constrained to one resource
  * role, then apply the remaining filters in manageable chunks so the database never has to
  * process thousands of correlated joins.
+ * End-date ordering keeps missing dates last in either direction and breaks ties by id,
+ * matching the public database search before selecting the requested page.
  * @param {Object} options
  * @param {string} options.requestedMemberId
  * @param {string|null} options.resourceRoleId UUID of the resource role that must match
@@ -1734,7 +1736,20 @@ async function searchChallengesViaMemberAccess({
   };
 
   const sortDirection = sortOrderProp === "asc" ? 1 : -1;
-  summaryRecords.sort((a, b) => compareValues(a[sortByProp], b[sortByProp]) * sortDirection);
+  summaryRecords.sort((a, b) => {
+    if (sortByProp === "endDate") {
+      const aMissingDate = _.isNil(a.endDate);
+      const bMissingDate = _.isNil(b.endDate);
+      if (aMissingDate !== bMissingDate) {
+        return aMissingDate ? 1 : -1;
+      }
+      if (aMissingDate && bMissingDate) {
+        return a.id.localeCompare(b.id);
+      }
+    }
+    const comparison = compareValues(a[sortByProp], b[sortByProp]) * sortDirection;
+    return comparison || (sortByProp === "endDate" ? a.id.localeCompare(b.id) : 0);
+  });
 
   const total = summaryRecords.length;
   const offset = (page - 1) * perPage;
@@ -1824,6 +1839,8 @@ async function findSkillIdsBySearch(searchTerm) {
  * and pagination. Unified text search covers names, descriptions, authored
  * tags, and standardized skills. Track facets use OR semantics and treat `AI`
  * as the exact canonical AI tag rather than a persisted track abbreviation.
+ * End-date sorts keep undated challenges last and use ascending ids to make
+ * equal dates deterministic across pages, including member-filtered searches.
  *
  * @param {Object} currentUser caller identity used for visibility and member filters.
  * @param {Object} criteria validated search, facet, sorting, and pagination values.
@@ -2485,7 +2502,10 @@ async function searchChallenges(currentUser, criteria) {
   }
 
   const sortFilter = {};
-  sortFilter[sortByProp] = sortOrderProp;
+  sortFilter[sortByProp] = sortByProp === "endDate"
+    ? { sort: sortOrderProp, nulls: "last" }
+    : sortOrderProp;
+  const orderBy = sortByProp === "endDate" ? [sortFilter, { id: "asc" }] : [sortFilter];
 
   const challengeInclude = buildChallengeInclude(currentUserMemberId);
 
@@ -2493,7 +2513,7 @@ async function searchChallenges(currentUser, criteria) {
     ...prismaFilter,
     take: perPage,
     skip: (page - 1) * perPage,
-    orderBy: [sortFilter],
+    orderBy,
     include: challengeInclude,
   };
 
@@ -2505,11 +2525,7 @@ async function searchChallenges(currentUser, criteria) {
             ...(resourceRoleId ? { roleId: resourceRoleId } : {}),
             challenge: prismaFilter.where,
           },
-          orderBy: [
-            {
-              challenge: sortFilter,
-            },
-          ],
+          orderBy: orderBy.map((sortClause) => ({ challenge: sortClause })),
           pagination: {
             page,
             perPage,
