@@ -383,7 +383,7 @@ paths:
           format: UUID
         - name: sortBy
           in: query
-          description: Sort the results by the field.
+          description: Sort the results by the field. End-date sorting places missing end dates last in either direction and breaks equal-date ties by ascending challenge id before pagination, including member-filtered searches.
           required: false
           type: string
           enum:
