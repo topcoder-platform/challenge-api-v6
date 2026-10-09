@@ -300,3 +300,202 @@ describe("challenge metadata validation", () => {
     }
   });
 });
+
+describe("active timeline template switch", () => {
+  const moment = require("moment");
+  const phaseHelper = require("../../src/common/phase-helper");
+  const originalGetTemplateAndTemplateMap = phaseHelper.getTemplateAndTemplateMap;
+  const originalGetPhaseDefinitionsAndMap = phaseHelper.getPhaseDefinitionsAndMap;
+  const oneDay = 24 * 60 * 60;
+  const phaseDefinitions = [
+    { id: "registration-phase", name: "Registration" },
+    { id: "submission-phase", name: "Submission" },
+    { id: "ai-screening-phase", name: "AI Screening" },
+    { id: "ai-review-phase", name: "AI Review" },
+    { id: "review-phase", name: "Review" },
+    { id: "appeals-phase", name: "Appeals" },
+    { id: "appeals-response-phase", name: "Appeals Response" },
+    { id: "approval-phase", name: "Approval" },
+  ].map((phase) => ({ ...phase, description: `${phase.name} phase` }));
+  const templates = {
+    "default-template": [
+      { phaseId: "registration-phase", defaultDuration: 5 * oneDay },
+      { phaseId: "submission-phase", defaultDuration: 5 * oneDay },
+      { phaseId: "review-phase", predecessor: "submission-phase", defaultDuration: 2 * oneDay },
+      { phaseId: "appeals-phase", predecessor: "review-phase", defaultDuration: oneDay },
+      {
+        phaseId: "appeals-response-phase",
+        predecessor: "appeals-phase",
+        defaultDuration: oneDay / 2,
+      },
+    ],
+    // Same row order as the AI Only template on dev.
+    "ai-only-template": [
+      { phaseId: "registration-phase", defaultDuration: 5 * oneDay },
+      { phaseId: "ai-review-phase", predecessor: "submission-phase", defaultDuration: oneDay },
+      { phaseId: "submission-phase", defaultDuration: 5 * oneDay },
+      { phaseId: "approval-phase", predecessor: "ai-review-phase", defaultDuration: oneDay / 2 },
+    ],
+  };
+  const aiReviewers = [
+    {
+      isMemberReview: false,
+      aiWorkflowId: "workflow-1",
+      phaseId: "review-phase",
+      scorecardId: "ai-scorecard",
+    },
+  ];
+  const startDate = moment().subtract(1, "day").toDate().toISOString();
+  const submissionEndDate = moment(startDate).add(5, "days").toDate().toISOString();
+
+  beforeEach(() => {
+    const phaseDefinitionMap = new Map(phaseDefinitions.map((phase) => [phase.id, phase]));
+    phaseHelper.getPhaseDefinitionsAndMap = async () => ({ phaseDefinitions, phaseDefinitionMap });
+    phaseHelper.getTemplateAndTemplateMap = async (timelineTemplateId) => ({
+      timelineTempate: templates[timelineTemplateId],
+      timelineTemplateMap: new Map(
+        templates[timelineTemplateId].map((phase) => [phase.phaseId, phase])
+      ),
+    });
+  });
+
+  afterEach(() => {
+    phaseHelper.getTemplateAndTemplateMap = originalGetTemplateAndTemplateMap;
+    phaseHelper.getPhaseDefinitionsAndMap = originalGetPhaseDefinitionsAndMap;
+  });
+
+  /**
+   * Builds a persisted challenge phase scheduled after its predecessor.
+   */
+  function buildPhase(phaseId, name, scheduledStartDate, duration, extra = {}) {
+    return {
+      id: `challenge-${phaseId}`,
+      phaseId,
+      name,
+      duration,
+      isOpen: false,
+      predecessor: null,
+      constraints: [],
+      scheduledStartDate,
+      scheduledEndDate: moment(scheduledStartDate).add(duration, "seconds").toDate().toISOString(),
+      ...extra,
+    };
+  }
+
+  const openPhase = { isOpen: true, actualStartDate: startDate };
+
+  /**
+   * Switches the persisted phases to the given template like updateChallenge does.
+   */
+  async function switchTimeline(challengePhases, timelineTemplateId) {
+    const templatePhases = await phaseHelper.populatePhasesForChallengeCreation(
+      undefined,
+      startDate,
+      timelineTemplateId
+    );
+
+    return challengeHelper.populatePhasesForActiveTimelineTemplateSwitch(
+      challengePhases,
+      templatePhases,
+      {
+        reviewers: aiReviewers,
+        timelineTemplateId,
+        scheduleOptions: { allowActivePhaseShortening: false, preventPhaseShortening: true },
+      }
+    );
+  }
+
+  it("moves an active AI only challenge to the AI gating timeline without restarting open phases", async () => {
+    const aiReviewStartDate = submissionEndDate;
+    const phases = await switchTimeline(
+      [
+        buildPhase("registration-phase", "Registration", startDate, 5 * oneDay, openPhase),
+        buildPhase("submission-phase", "Submission", startDate, 5 * oneDay, openPhase),
+        buildPhase("ai-review-phase", "AI Review", aiReviewStartDate, oneDay, {
+          predecessor: "submission-phase",
+        }),
+        buildPhase(
+          "approval-phase",
+          "Approval",
+          moment(aiReviewStartDate).add(1, "day").toDate().toISOString(),
+          oneDay / 2,
+          { predecessor: "ai-review-phase" }
+        ),
+      ],
+      "default-template"
+    );
+    const byName = new Map(phases.map((phase) => [phase.name, phase]));
+
+    expect(phases.map((phase) => phase.name)).to.deep.equal([
+      "Registration",
+      "Submission",
+      "AI Screening",
+      "Review",
+      "Appeals",
+      "Appeals Response",
+    ]);
+    expect(byName.get("Submission")).to.include({
+      id: "challenge-submission-phase",
+      isOpen: true,
+      actualStartDate: startDate,
+      scheduledEndDate: submissionEndDate,
+    });
+    expect(byName.get("AI Screening")).to.include({
+      predecessor: "submission-phase",
+      scheduledStartDate: submissionEndDate,
+    });
+    expect(byName.get("Review")).to.include({
+      predecessor: "ai-screening-phase",
+      scheduledStartDate: byName.get("AI Screening").scheduledEndDate,
+    });
+    expect(byName.get("Appeals").scheduledStartDate).to.equal(
+      byName.get("Review").scheduledEndDate
+    );
+  });
+
+  it("moves an active AI gating challenge to the AI only timeline", async () => {
+    const aiScreeningEndDate = moment(submissionEndDate).add(4, "hours").toDate().toISOString();
+    const reviewEndDate = moment(aiScreeningEndDate).add(2, "days").toDate().toISOString();
+    const appealsEndDate = moment(reviewEndDate).add(1, "day").toDate().toISOString();
+    const phases = await switchTimeline(
+      [
+        buildPhase("registration-phase", "Registration", startDate, 5 * oneDay, openPhase),
+        buildPhase("submission-phase", "Submission", startDate, 5 * oneDay, openPhase),
+        buildPhase("ai-screening-phase", "AI Screening", submissionEndDate, 4 * 60 * 60, {
+          predecessor: "submission-phase",
+        }),
+        buildPhase("review-phase", "Review", aiScreeningEndDate, 2 * oneDay, {
+          predecessor: "ai-screening-phase",
+        }),
+        buildPhase("appeals-phase", "Appeals", reviewEndDate, oneDay, {
+          predecessor: "review-phase",
+        }),
+        buildPhase("appeals-response-phase", "Appeals Response", appealsEndDate, oneDay / 2, {
+          predecessor: "appeals-phase",
+        }),
+      ],
+      "ai-only-template"
+    );
+    const byName = new Map(phases.map((phase) => [phase.name, phase]));
+
+    expect(Array.from(byName.keys()).sort()).to.deep.equal([
+      "AI Review",
+      "Approval",
+      "Registration",
+      "Submission",
+    ]);
+    expect(byName.get("Submission")).to.include({
+      id: "challenge-submission-phase",
+      isOpen: true,
+      actualStartDate: startDate,
+    });
+    expect(byName.get("AI Review")).to.include({
+      predecessor: "submission-phase",
+      scheduledStartDate: submissionEndDate,
+    });
+    expect(byName.get("Approval")).to.include({
+      predecessor: "ai-review-phase",
+      scheduledStartDate: byName.get("AI Review").scheduledEndDate,
+    });
+  });
+});
