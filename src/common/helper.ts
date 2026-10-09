@@ -1973,7 +1973,10 @@ function buildPhaseChangeEmailData({
 }
 
 /**
- * Send phase change notification
+ * Send phase change notification.
+ * Publishes one email event per recipient so member email addresses are never
+ * shared in a single To field. A failed publish is logged and does not stop the
+ * remaining recipients from being notified.
  * @param {String} type the notification type
  * @param {Array} recipients the array of recipients emails
  * @param {Object} data the data
@@ -2000,14 +2003,20 @@ async function sendPhaseChangeNotification(type, recipients, data) {
       return;
     }
 
-    await postBusEvent("external.action.email", {
-      from: config.EMAIL_FROM,
-      replyTo: config.EMAIL_FROM,
-      recipients: safeRecipients,
-      data: data,
-      sendgrid_template_id: settings.sendgridTemplateId,
-      version: "v3",
-    });
+    for (const recipient of safeRecipients) {
+      try {
+        await postBusEvent("external.action.email", {
+          from: config.EMAIL_FROM,
+          replyTo: config.EMAIL_FROM,
+          recipients: [recipient],
+          data: data,
+          sendgrid_template_id: settings.sendgridTemplateId,
+          version: "v3",
+        });
+      } catch (e) {
+        logger.debug(`Failed to post notification ${type} to a recipient: ${e.message}`);
+      }
+    }
   } catch (e) {
     logger.debug(`Failed to post notification ${type}: ${e.message}`);
   }
