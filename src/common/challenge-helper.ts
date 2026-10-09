@@ -824,6 +824,55 @@ class ChallengeHelper {
     });
   }
 
+  /**
+   * Rebuild the phases of an ACTIVE challenge that moves to another timeline template because its
+   * AI review mode switched between AI_ONLY and AI_GATING.
+   * Phases shared with the new template keep their record id, open state and actual dates, the
+   * other template phases are added, and phases outside the new template are dropped. AI reviewers
+   * get their AI Screening phase back when the new template has no AI Review phase. Phases that
+   * have not started are then rescheduled after their predecessors with the regular update rules.
+   *
+   * @param {Array<Object>} challengePhases phases persisted on the challenge before the update
+   * @param {Array<Object>} templatePhases phases created from the new timeline template
+   * @param {Object} options rebuild options
+   * @param {Array<Object>} options.requestedPhases phase updates from the request payload, if any
+   * @param {Array<Object>} options.reviewers challenge reviewers after the update
+   * @param {String} options.timelineTemplateId id of the new timeline template
+   * @param {Object} options.scheduleOptions phase shortening rules passed to
+   *   populatePhasesForChallengeUpdate
+   * @param {Object} options.prisma Prisma client passed to addAIScreeningPhaseForChallenge
+   * @param {Function} options.logDebugMessage optional logging function
+   * @returns {Promise<Array<Object>>} the phases to persist on the challenge
+   * @throws {BadRequestError} when the rebuilt schedule breaks the phase shortening rules
+   */
+  async populatePhasesForActiveTimelineTemplateSwitch(
+    challengePhases,
+    templatePhases,
+    options: any = {}
+  ) {
+    const challenge = {
+      phases: _.map(templatePhases, (templatePhase) => {
+        const existingPhase = _.find(
+          challengePhases,
+          (phase) => phase.phaseId === templatePhase.phaseId
+        );
+        return _.isNil(existingPhase) ? templatePhase : _.cloneDeep(existingPhase);
+      }),
+      reviewers: _.cloneDeep(options.reviewers || []),
+    };
+
+    // No-op for the AI Only template: its AI Review phase replaces AI Screening.
+    await this.addAIScreeningPhaseForChallenge(challenge, options.prisma, options.logDebugMessage);
+
+    return phaseHelper.populatePhasesForChallengeUpdate(
+      challenge.phases,
+      options.requestedPhases,
+      options.timelineTemplateId,
+      false,
+      options.scheduleOptions
+    );
+  }
+
   async validateChallengeUpdateRequest(currentUser, challenge, data, challengeResources) {
     if (process.env.LOCAL != "true") {
       await helper.ensureUserCanModifyChallenge(currentUser, challenge, challengeResources);

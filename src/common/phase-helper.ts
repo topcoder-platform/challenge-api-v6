@@ -560,6 +560,26 @@ class ChallengePhaseHelper {
     );
   }
 
+  /**
+   * Check whether a challenge has started a phase that a timeline template does not contain.
+   * Moving the challenge to that template would drop the started phase, so an ACTIVE challenge
+   * only follows an AI review mode switch while this returns false (before its review starts).
+   *
+   * @param {Array<Object>} challengePhases current challenge phases
+   * @param {String} timelineTemplateId id of the timeline template the challenge would move to
+   * @returns {Promise<Boolean>} true when a phase outside the template is open or has started
+   * @throws {NotFoundError} when the timeline template does not exist
+   */
+  async hasStartedPhasesOutsideTemplate(challengePhases, timelineTemplateId) {
+    const { timelineTemplateMap } = await this.getTemplateAndTemplateMap(timelineTemplateId);
+    return _.some(
+      challengePhases,
+      (phase) =>
+        !timelineTemplateMap.has(phase.phaseId) &&
+        (phase.isOpen === true || !_.isNil(phase.actualStartDate))
+    );
+  }
+
   handlePhasesAfterCancelling(phases) {
     return _.map(phases, (phase) => {
       const shouldClosePhase = _.includes(

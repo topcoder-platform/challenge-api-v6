@@ -3951,6 +3951,10 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * and remain approved.
  * Updates that start in or transition to a completed/cancelled status may not change the effective
  * `is_test_challenge` metadata value.
+ * The timeline template follows the AI review mode: AI_ONLY challenges use the AI Only template and
+ * other challenges on it revert to their default template. This runs on draft saves, activation and
+ * saves of ACTIVE AI-reviewed challenges. An ACTIVE challenge keeps the phases it already ran and
+ * only switches until its review phase starts.
  * @param {Object} currentUser the user who perform operation
  * @param {String} challengeId the challenge id
  * @param {Object} data the challenge data to be updated
@@ -4323,24 +4327,46 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
     }
   }
 
+  const hasAIReviewers = (reviewers) =>
+    Array.isArray(reviewers) &&
+    reviewers.some(
+      (reviewer) =>
+        reviewer &&
+        reviewer.isMemberReview === false &&
+        !_.isNil(reviewer.aiWorkflowId) &&
+        _.toString(reviewer.aiWorkflowId).trim() !== "",
+    );
+
   // Auto-select the AI Only timeline template for AI_ONLY challenges, and revert to the
-  // default template when the AI_ONLY config is removed. Runs on draft saves and activation.
+  // default template when the AI_ONLY config is removed. Runs on draft saves, activation, and
+  // saves of ACTIVE AI-reviewed challenges. An ACTIVE challenge only moves while none of the
+  // phases the new template drops have started, i.e. until its review phase starts.
   const isDraftSave = [ChallengeStatusEnum.NEW, ChallengeStatusEnum.DRAFT].includes(challenge.status) && !isStatusChangingToActive;
+  const isActiveAiReviewSave =
+    challenge.status === ChallengeStatusEnum.ACTIVE &&
+    (_.isNil(data.status) || data.status === ChallengeStatusEnum.ACTIVE) &&
+    (hasAIReviewers(challenge.reviewers) ||
+      hasAIReviewers(data.reviewers) ||
+      challenge.timelineTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID);
+  const isTimelineSyncSave = isDraftSave || isActiveAiReviewSave;
   let cachedActivationAiConfig = null;
   let aiConfigFetched = false;
-  if (isStatusChangingToActive || isDraftSave) {
+  // An ACTIVE challenge moves to the template that matches its AI review mode.
+  let isActiveTimelineTemplateSwitch = false;
+  if (isStatusChangingToActive || isTimelineSyncSave) {
     try {
       cachedActivationAiConfig = await helper.getAIReviewConfigByChallengeId(challengeId);
       aiConfigFetched = true;
       const currentTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
+      let syncedTimelineTemplateId = null;
       if (cachedActivationAiConfig?.mode === 'AI_ONLY') {
         if (currentTemplateId !== config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
           logger.debug(
             `updateChallenge: AI_ONLY mode detected, switching to AI Only timeline template (challengeId=${challengeId})`,
           );
-          data.timelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
+          syncedTimelineTemplateId = config.AI_ONLY_TIMELINE_TEMPLATE_ID;
         }
-      } else if (isDraftSave && currentTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
+      } else if (isTimelineSyncSave && currentTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID) {
         // AI_ONLY config was removed; revert to the default template for this challenge's type+track
         const defaultTemplates = await ChallengeTimelineTemplateService.searchChallengeTimelineTemplates({
           typeId: challenge.typeId,
@@ -4352,12 +4378,31 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
           logger.debug(
             `updateChallenge: AI_ONLY config removed, reverting to default timeline template ${defaultTemplate.timelineTemplateId} (challengeId=${challengeId})`,
           );
-          data.timelineTemplateId = defaultTemplate.timelineTemplateId;
+          syncedTimelineTemplateId = defaultTemplate.timelineTemplateId;
         } else {
           logger.debug(
             `updateChallenge: AI_ONLY config removed but no default template found for typeId=${challenge.typeId} trackId=${challenge.trackId}; keeping current template (challengeId=${challengeId})`,
           );
         }
+      }
+      if (syncedTimelineTemplateId && isActiveAiReviewSave) {
+        if (
+          await phaseHelper.hasStartedPhasesOutsideTemplate(
+            challenge.phases,
+            syncedTimelineTemplateId,
+          )
+        ) {
+          logger.debug(
+            `updateChallenge: review already started, keeping timeline template ${challenge.timelineTemplateId} (challengeId=${challengeId})`,
+          );
+          syncedTimelineTemplateId = null;
+        } else {
+          isActiveTimelineTemplateSwitch =
+            syncedTimelineTemplateId !== challenge.timelineTemplateId;
+        }
+      }
+      if (syncedTimelineTemplateId) {
+        data.timelineTemplateId = syncedTimelineTemplateId;
       }
     } catch (_err) {
       // non-fatal: if AI config fetch fails, proceed without template override
@@ -4371,12 +4416,17 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   const finalStatus = data.status || challenge.status;
   const finalTimelineTemplateId = data.timelineTemplateId || challenge.timelineTemplateId;
   let timelineTemplateChanged = false;
-  const isAiOnlyTemplateSwitch = cachedActivationAiConfig?.mode === 'AI_ONLY';
+  // ACTIVE challenges only take the template change validated above.
+  const isAutoTimelineTemplateChangeAllowed =
+    !isActiveAiReviewSave || isActiveTimelineTemplateSwitch;
+  const isAiOnlyTemplateSwitch =
+    cachedActivationAiConfig?.mode === 'AI_ONLY' && isAutoTimelineTemplateChangeAllowed;
   // True when the AI_ONLY config was removed and we are auto-reverting the template back to default.
   // Requires a confirmed fetch (aiConfigFetched) so we don't revert on transient API failures.
   const isAiOnlyTemplateRevert =
     aiConfigFetched &&
-    isDraftSave &&
+    isTimelineSyncSave &&
+    isAutoTimelineTemplateChangeAllowed &&
     challenge.timelineTemplateId === config.AI_ONLY_TIMELINE_TEMPLATE_ID &&
     cachedActivationAiConfig?.mode !== 'AI_ONLY';
   if (
@@ -4452,6 +4502,22 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
         newStartDate,
         finalTimelineTemplateId,
       );
+      if (isActiveTimelineTemplateSwitch) {
+        // Keep the phases that already ran (Registration, Submission) instead of restarting them.
+        newPhases = await challengeHelper.populatePhasesForActiveTimelineTemplateSwitch(
+          originalChallengePhases,
+          newPhases,
+          {
+            requestedPhases: data.phases,
+            reviewers: !_.isNil(data.reviewers) ? data.reviewers : challenge.reviewers,
+            timelineTemplateId: finalTimelineTemplateId,
+            scheduleOptions: { allowActivePhaseShortening, preventPhaseShortening },
+            prisma,
+            logDebugMessage: (message) =>
+              logger.debug(`updateChallenge(timeline switch): ${message} (challengeId=${challengeId})`),
+          },
+        );
+      }
     } else {
       newPhases = await phaseHelper.populatePhasesForChallengeUpdate(
         challenge.phases,
@@ -4470,15 +4536,6 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
     phasesUpdated = true;
     phasesForUpdate = _.cloneDeep(data.phases);
   }
-  const hasAIReviewers = (reviewers) =>
-    Array.isArray(reviewers) &&
-    reviewers.some(
-      (reviewer) =>
-        reviewer &&
-        reviewer.isMemberReview === false &&
-        !_.isNil(reviewer.aiWorkflowId) &&
-        _.toString(reviewer.aiWorkflowId).trim() !== "",
-    );
 
   const hadAIReviewersBeforeUpdate = hasAIReviewers(challenge.reviewers);
   const hasAIReviewersAfterUpdate = hasAIReviewers(
