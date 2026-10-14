@@ -901,4 +901,41 @@ describe('phase helper unit tests', () => {
       chai.expect(byName.get(name).scheduledEndDate).to.be.undefined
     }
   })
+
+  it('reports started phases that a timeline template does not contain', async () => {
+    stubPhaseLookups(
+      [],
+      [
+        { phaseId: 'registration-phase', defaultDuration: 86400 },
+        { phaseId: 'submission-phase', defaultDuration: 86400 },
+        { phaseId: 'ai-review-phase', predecessor: 'submission-phase', defaultDuration: 86400 }
+      ]
+    )
+    const startedPhase = (phaseId) => ({
+      phaseId,
+      isOpen: false,
+      actualStartDate: '2026-09-01T00:00:00.000Z'
+    })
+
+    const sharedPhasesStarted = await phaseHelper.hasStartedPhasesOutsideTemplate(
+      [
+        startedPhase('registration-phase'),
+        { ...startedPhase('submission-phase'), isOpen: true },
+        { phaseId: 'ai-screening-phase', isOpen: false },
+        { phaseId: 'review-phase', isOpen: false }
+      ],
+      'ai-only-template'
+    )
+    const droppedPhaseStarted = await phaseHelper.hasStartedPhasesOutsideTemplate(
+      [
+        startedPhase('submission-phase'),
+        { phaseId: 'ai-screening-phase', isOpen: true, actualStartDate: '2026-09-02T00:00:00.000Z' },
+        { phaseId: 'review-phase', isOpen: false }
+      ],
+      'ai-only-template'
+    )
+
+    sharedPhasesStarted.should.equal(false)
+    droppedPhaseStarted.should.equal(true)
+  })
 })
