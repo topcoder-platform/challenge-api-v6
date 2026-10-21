@@ -1,3 +1,5 @@
+> Isolated Keycloak migration branch. See [configuration and rollout requirements](docs/keycloak-m2m.md). Do not deploy before workload onboarding.
+
 # Topcoder Challenge API
 
 This microservice provides access and interaction with all sorts of Challenge data.
@@ -78,12 +80,12 @@ The following parameters can be set in config files or in env variables:
   call the API; HTTP is accepted only for localhost development origins
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
-- AUTH0_URL: AUTH0 URL, used to get M2M token
-- AUTH0_PROXY_SERVER_URL: AUTH0 proxy server URL, used to get M2M token
-- AUTH0_AUDIENCE: AUTH0 audience, used to get M2M token
-- TOKEN_CACHE_TIME: AUTH0 token cache time, used to get M2M token
-- AUTH0_CLIENT_ID: AUTH0 client id, used to get M2M token
-- AUTH0_CLIENT_SECRET: AUTH0 client secret, used to get M2M token
+- KEYCLOAK_TOKEN_URL: managed Keycloak endpoint for M2M issuance
+- M2M_PROVIDER: must be `keycloak` on this migration branch
+- KEYCLOAK_ISSUER: exact M2M realm issuer
+- KEYCLOAK_AUDIENCE: expected M2M API audience
+- KEYCLOAK_CLIENT_ID: workload-specific client ID
+- KEYCLOAK_CLIENT_SECRET: workload secret from encrypted storage
 - BUSAPI_URL: Bus API URL
 - KAFKA_ERROR_TOPIC: Kafka error topic used by bus API wrapper
 - AMAZON.AWS_ACCESS_KEY_ID: The Amazon certificate key to use when connecting.
@@ -100,7 +102,7 @@ The following parameters can be set in config files or in env variables:
 - COPILOT_RESOURCE_ROLE_IDS: copilot resource role ids allowed to upload attachment
 - HEALTH_CHECK_TIMEOUT: health check timeout in milliseconds
 - SCOPES: the configurable M2M token scopes, refer `config/default.js` for more details
-- M2M_AUDIT_HANDLE: the audit name used when perform create/update operation using M2M token
+- Service audit fields contain `service:<clientId>`; services do not impersonate a member.
 - FORUM_TITLE_LENGTH_LIMIT: the forum title length limit
 - OPPORTUNITIES_CHALLENGE_URL: base URL of a challenge in the opportunities app; the challenge
   discussion URL is built from it as `<OPPORTUNITIES_CHALLENGE_URL>/<challengeId>?tab=forum`
@@ -142,15 +144,16 @@ database operation or application startup.
    ```
 
 1. ⚙ Local config
-   In the `challenge-api` root directory create `.env` file with the next environment variables. Values for **Auth0 config** should be shared with you on the forum.<br>
+   In the `challenge-api` root directory create `.env` file with the next environment variables. Use workload-specific Keycloak credentials from encrypted storage; retain separate member issuer configuration.<br>
 
    ```bash
-   # Auth0 config
-   AUTH0_URL=
-   AUTH0_PROXY_SERVER_URL=
-   AUTH0_AUDIENCE=
-   AUTH0_CLIENT_ID=
-   AUTH0_CLIENT_SECRET=
+   # Keycloak service configuration
+   KEYCLOAK_TOKEN_URL=
+   M2M_PROVIDER=keycloak
+   KEYCLOAK_ISSUER=
+   KEYCLOAK_AUDIENCE=
+   KEYCLOAK_CLIENT_ID=
+   KEYCLOAK_CLIENT_SECRET=
    ```
 
    - Values from this file are automatically used by the application and Prisma commands.
@@ -221,8 +224,8 @@ database operation or application startup.
 
 5. Configure external integrations
 
-   Authenticated operations and event publication use the existing Auth0 and
-   Bus API settings. Configure `AUTH0_*` and `BUSAPI_URL` for environments that
+   Authenticated service operations and event publication use Keycloak and
+   Bus API settings. Configure `KEYCLOAK_*` and `M2M_PROVIDER=keycloak` and `BUSAPI_URL` for environments that
    exercise those paths. Topics disabled by the existing topic configuration are
    skipped exactly as before; no local Kafka connection is required.
 

@@ -8,9 +8,9 @@ describe("challenge whitelist helper", () => {
     expect(helper.shouldApplyChallengeWhitelist({ isMachine: true })).to.equal(false);
   });
 
-  it("does not apply challenge user whitelist checks to whitelist-only M2M callers", () => {
+  it("applies challenge user whitelist checks to a standalone bypass property", () => {
     expect(helper.shouldApplyChallengeWhitelist({ bypassChallengeWhitelist: true })).to.equal(
-      false,
+      true,
     );
   });
 

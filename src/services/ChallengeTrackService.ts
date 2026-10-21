@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of challenge types.
  */
@@ -141,6 +142,8 @@ async function checkTrackAbrv(abbreviation) {
  * @param {Object} authUser auth user
  * @param {Object} type the challenge type to created
  * @returns {Object} the created challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createChallengeTrack(authUser, type) {
   await checkTrackName(type.name);
@@ -151,8 +154,8 @@ async function createChallengeTrack(authUser, type) {
       isLegacy: false,
       ...type,
       track: normalizedTrack,
-      createdBy: authUser.userId,
-      updatedBy: authUser.userId,
+      createdBy: getAuditActor(authUser),
+      updatedBy: getAuditActor(authUser),
     },
   });
   ret = _.omit(ret, constants.auditFields);
@@ -203,6 +206,8 @@ getChallengeTrack.schema = {
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function fullyUpdateChallengeTrack(authUser, id, data) {
   const type = await getChallengeTrack(id);
@@ -226,7 +231,7 @@ async function fullyUpdateChallengeTrack(authUser, id, data) {
   if (_.isUndefined(data.isLegacy)) {
     data.isLegacy = false;
   }
-  data.updatedBy = authUser.userId;
+  data.updatedBy = getAuditActor(authUser);
   let ret = await prisma.challengeTrack.update({
     where: { id },
     data,
@@ -262,6 +267,8 @@ fullyUpdateChallengeTrack.schema = {
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function partiallyUpdateChallengeTrack(authUser, id, data) {
   const type = await getChallengeTrack(id);
@@ -274,7 +281,7 @@ async function partiallyUpdateChallengeTrack(authUser, id, data) {
   if (!_.isUndefined(data.track)) {
     data.track = normalizeTrackValue(data.track);
   }
-  data.updatedBy = authUser.userId;
+  data.updatedBy = getAuditActor(authUser);
   let ret = await prisma.challengeTrack.update({
     where: { id },
     data: _.extend(type, data),

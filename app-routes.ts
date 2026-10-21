@@ -11,94 +11,40 @@ const helper = require("./src/common/helper");
 const errors = require("./src/common/errors");
 const logger = require("./src/common/logger");
 const routes = require("./src/routes");
-const authenticator = require("tc-core-library-js").middleware.jwtAuthenticator;
+const { authenticate, hasRequiredScopes } = require("./src/common/auth");
 
 /**
- * Returns whether a normalized auth user has interactive roles.
- *
- * @param {Object} authUser the decoded auth user from the authenticator
- * @returns {Boolean} true when the caller has one or more user roles
- */
-function hasInteractiveRoles(authUser) {
-  const roles = _.get(authUser, "roles");
-  return _.isArray(roles) ? roles.length > 0 : !!roles;
-}
-
-/**
- * Read the scope claim from an auth user.
- *
- * The shared authenticator normally copies Auth0's `scope` string into
- * `scopes`, but this also handles callers already carrying either shape or
- * Auth0 RBAC `permissions`.
- *
- * @param {Object} authUser the decoded auth user from the authenticator
- * @returns {Array|String|undefined} scopes from the token
+ * Reads normalized service scopes for route diagnostics. Takes the verified principal;
+ * returns its scope array, or an empty array for other identities; does not throw.
  */
 function getAuthUserScopes(authUser) {
-  if (!authUser) {
-    return undefined;
-  }
-  return (
-    authUser.scopes ||
-    authUser.permissions ||
-    _.find(authUser, (value, key) => {
-      return key.indexOf("scope") !== -1;
-    })
-  );
+  return isM2MAuthUser(authUser) ? authUser.scopes : [];
 }
 
 /**
- * Determine whether an auth user represents an M2M caller.
- *
- * Some valid client-credentials tokens are decoded with scopes but without the
- * `isMachine` flag. Treat no-role scoped callers as M2M so route-level scope
- * checks, not user group membership, decide access.
- *
- * @param {Object} authUser the decoded auth user from the authenticator
- * @returns {Boolean} true when the caller should be handled as M2M
+ * Checks the identity produced by shared validation, without inferring from raw claims.
+ * @param authUser Verified principal. @returns True for a service. Does not throw.
  */
 function isM2MAuthUser(authUser) {
-  return !!(
-    authUser &&
-    (_.get(authUser, "isMachine", false) ||
-      (getAuthUserScopes(authUser) && !hasInteractiveRoles(authUser)))
-  );
+  return authUser?.kind === "service" && authUser.isMachine === true;
 }
 
 /**
- * Check whether an M2M caller has any scope required by the route definition.
- *
- * @param {Object} def route definition from src/routes.ts
- * @param {Object} authUser the decoded auth user from the authenticator
- * @returns {Boolean} true when one required route scope is present
+ * Checks explicit route scope alternatives without mutating the principal.
+ * @param def Route metadata. @param authUser Verified principal.
+ * @returns True for an exact approved service scope. Missing scope metadata denies; no throws.
  */
 function hasRequiredM2MScopes(def, authUser) {
-  const scopes = getAuthUserScopes(authUser);
-  return !!(def.scopes && scopes && helper.checkIfExists(def.scopes, scopes));
+  return hasRequiredScopes(def, authUser);
 }
 
-/**
- * Normalize a valid M2M caller to the shape expected by service authorization.
- *
- * @param {Object} def route definition from src/routes.ts
- * @param {Object} authUser the decoded auth user from the authenticator
- * @returns {Boolean} true when the caller has required M2M scopes
- */
-function normalizeM2MAuthUser(def, authUser) {
-  if (!isM2MAuthUser(authUser) || !hasRequiredM2MScopes(def, authUser)) {
-    return false;
-  }
-  const scopes = getAuthUserScopes(authUser);
-  authUser.isMachine = true;
-  authUser.scopes = _.isString(scopes) ? scopes.split(" ") : scopes;
-  return true;
-}
-
+/** Redacts credential fields from a diagnostic value; returns safe JSON data or an error marker; never throws. */
 const sanitizeForLog = (value) => {
   const seen = new WeakSet();
   try {
     return JSON.parse(
       JSON.stringify(value, (key, val) => {
+        if (/token|authorization|secret|password/i.test(key)) return "<redacted>";
         if (typeof val === "object" && val !== null) {
           if (seen.has(val)) return "<circular>";
           seen.add(val);
@@ -140,7 +86,7 @@ function configureRoutes(app) {
           req._id = uuid();
           req.signature = `${req._id}-${def.controller}#${def.method}`;
           logger.info(
-            `Started request handling, ${req.signature} ${req.method} ${req.originalUrl} controller=${def.controller}.${def.method} query=${safeInspect(
+            `Started request handling, ${req.signature} ${req.method} ${req.originalUrl.split("?")[0]} controller=${def.controller}.${def.method} query=${safeInspect(
               req.query
             )} params=${safeInspect(req.params)} body=${safeInspect(req.body)}`
           );
@@ -159,13 +105,13 @@ function configureRoutes(app) {
       if (def.auth) {
         // add Authenticator/Authorization check if route has auth
         actions.push((req, res, next) => {
-          authenticator(_.pick(config, ["AUTH_SECRET", "VALID_ISSUERS"]))(req, res, next);
+          authenticate(req, res, next);
         });
 
         actions.push((req, res, next) => {
           if (isM2MAuthUser(req.authUser)) {
             // M2M
-            if (!normalizeM2MAuthUser(def, req.authUser)) {
+            if (!hasRequiredM2MScopes(def, req.authUser)) {
               logger.warn(
                 `[${getSignature(req)}] Machine token scope mismatch. required=${safeInspect(
                   def.scopes
@@ -177,8 +123,6 @@ function configureRoutes(app) {
                                               Provided scopes: ${JSON.stringify(getAuthUserScopes(req.authUser))}`)
               );
             } else {
-              req.authUser.handle = config.M2M_AUDIT_HANDLE;
-              req.authUser.userId = config.M2M_AUDIT_USERID;
               req.userToken = req.headers.authorization.split(" ")[1];
               logger.info(
                 `[${getSignature(req)}] Authenticated M2M token scopes=${safeInspect(
@@ -232,35 +176,9 @@ function configureRoutes(app) {
       } else {
         // public API, but still try to authenticate token if provided, but allow missing/invalid token
         actions.push((req, res, next) => {
-          const hasToken =
-            !!req.headers.authorization || !!_.get(req, "query.token") || !!req.authUser;
-          if (!hasToken) {
-            return next();
-          }
-          const interceptRes: any = {};
-          interceptRes.status = () => interceptRes;
-          interceptRes.json = () => interceptRes;
-          interceptRes.send = (payload) => {
-            logger.info(
-              `[${getSignature(req)}] Public route: authenticator send called payload=${safeInspect(
-                payload
-              )}`
-            );
-            return next();
-          };
-          const authMw = authenticator(_.pick(config, ["AUTH_SECRET", "VALID_ISSUERS"]));
-          let finished = false;
-          const bailoutTimer = setTimeout(() => {
-            if (finished) return;
-            finished = true;
-            next();
-          }, 8000);
-          authMw(req, interceptRes, (...args) => {
-            if (finished) return;
-            finished = true;
-            clearTimeout(bailoutTimer);
-            next(...args);
-          });
+          if (!req.headers.authorization) return next();
+          // Public routes retain anonymous access after invalid credentials; the adapter clears identity.
+          authenticate(req, res, () => next());
         });
 
         actions.push((req, res, next) => {
@@ -268,13 +186,8 @@ function configureRoutes(app) {
             logger.info(`[${getSignature(req)}] Public route: no authUser context`);
             next();
           } else if (isM2MAuthUser(req.authUser)) {
-            if (!normalizeM2MAuthUser(def, req.authUser)) {
-              logger.info(
-                `[${getSignature(req)}] Public route: preserving machine token whitelist bypass despite scope mismatch`
-              );
-              req.authUser = {
-                bypassChallengeWhitelist: true,
-              };
+            if (!hasRequiredM2MScopes(def, req.authUser)) {
+              return next(new errors.ForbiddenError("Insufficient service scopes"));
             } else {
               logger.info(`[${getSignature(req)}] Public route: valid machine token attached`);
             }
@@ -316,12 +229,12 @@ function configureRoutes(app) {
   // Check if the route is not found or HTTP method is not supported
   app.use((req, res) => {
     if (routes[req.baseUrl]) {
-      logger.warn(`Unsupported method ${req.method} for ${req.originalUrl}`);
+      logger.warn(`Unsupported method ${req.method} for ${req.originalUrl.split("?")[0]}`);
       res.status(HttpStatus.METHOD_NOT_ALLOWED).json({
         message: "The requested HTTP method is not supported.",
       });
     } else {
-      logger.warn(`Route not found for ${req.method} ${req.originalUrl}`);
+      logger.warn(`Route not found for ${req.method} ${req.originalUrl.split("?")[0]}`);
       res.status(HttpStatus.NOT_FOUND).json({
         message: "The requested resource cannot be found.",
       });
@@ -332,8 +245,7 @@ function configureRoutes(app) {
 module.exports = configureRoutes;
 module.exports.__testables = {
   getAuthUserScopes,
-  hasInteractiveRoles,
   hasRequiredM2MScopes,
+  sanitizeForLog,
   isM2MAuthUser,
-  normalizeM2MAuthUser,
 };

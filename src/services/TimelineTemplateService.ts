@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of timeline template.
  */
@@ -95,6 +96,8 @@ async function checkName(name) {
  * @param {Object} authUser auth user
  * @param {Object} timelineTemplate the timeline template to created
  * @returns {Object} the created timeline template
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createTimelineTemplate(authUser, timelineTemplate) {
   await checkName(timelineTemplate.name);
@@ -103,7 +106,7 @@ async function createTimelineTemplate(authUser, timelineTemplate) {
   await PhaseService.validatePhases(timelineTemplate.phases);
 
   const phases = timelineTemplate.phases;
-  const auditUserId = String(authUser.userId);
+  const auditUserId = getAuditActor(authUser);
   _.forEach(phases, (p) => {
     p.createdBy = auditUserId;
     p.updatedBy = auditUserId;
@@ -174,6 +177,8 @@ getTimelineTemplate.schema = {
  * @param {Object} data the timeline template data to be updated
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated timeline template
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function update(authUser, timelineTemplateId, data, isFull?: boolean) {
   const timelineTemplate = await getTimelineTemplate(timelineTemplateId);
@@ -201,7 +206,7 @@ async function update(authUser, timelineTemplateId, data, isFull?: boolean) {
   } else {
     data = { ...timelineTemplate, ...data };
   }
-  const auditUserId = String(authUser.userId);
+  const auditUserId = getAuditActor(authUser);
   data.updatedBy = auditUserId;
   data.phases = {
     create: _.forEach(data.phases, (p) => {

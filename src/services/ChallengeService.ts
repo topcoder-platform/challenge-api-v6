@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of challenge.
  */
@@ -1465,6 +1466,8 @@ getDefaultReviewers.schema = { currentUser: Joi.any(), criteria: Joi.any() };
  * Set default reviewers for a given typeId and trackId
  * @param {Object} currentUser
  * @param {Object} data { typeId, trackId, reviewers }
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function setDefaultReviewers(currentUser, data) {
   const schema = Joi.object()
@@ -1528,7 +1531,7 @@ async function setDefaultReviewers(currentUser, data) {
     }
   }
 
-  const userId = _.toString(currentUser && currentUser.userId ? currentUser.userId : "system");
+  const userId = getAuditActor(currentUser);
   const auditFields = { createdBy: userId, updatedBy: userId };
 
   // Validate phase names exist
@@ -3960,6 +3963,8 @@ function prepareTaskCompletionData(challenge, challengeResources, data) {
  * @param {Object} data the challenge data to be updated
  * @returns {Object} the updated challenge
  * @throws {BadRequestError} if an update starting or finishing terminal changes the test flag
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 // Note: `options` may be a boolean for backward compatibility (emitEvent flag),
 // or an object { emitEvent?: boolean }.
@@ -3983,7 +3988,7 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
   prismaHelper.convertModelToResponse(challenge);
   ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data);
   const originalChallengePhases = _.cloneDeep(challenge.phases || []);
-  const auditUserId = _.toString(currentUser.userId);
+  const auditUserId = getAuditActor(currentUser);
   const payloadIncludesTerms =
     !_.isNil(data) && Object.prototype.hasOwnProperty.call(data, "terms");
   const originalTermsValue = payloadIncludesTerms ? data.terms : undefined;
@@ -4892,7 +4897,7 @@ async function updateChallenge(currentUser, challengeId, data, options: any = {}
     currentUser,
     _.omit(data, ["cancelReason"]),
   );
-  updateData.updatedBy = _.toString(currentUser.userId);
+  updateData.updatedBy = getAuditActor(currentUser);
   // reset createdBy
   delete updateData.createdBy;
   if (!_.isNil(updateData.phases)) {
@@ -5871,6 +5876,8 @@ function sanitizeData(data, challenge) {
  * @returns {Object} the deleted challenge
  * @throws {NotFoundError} if the challenge does not exist or is not eligible for deletion
  * @throws {ForbiddenError} if the caller cannot modify the challenge
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function deleteChallenge(currentUser, challengeId) {
   // Use findFirst for compound filters; findUnique only supports unique fields
@@ -5951,8 +5958,8 @@ async function advancePhase(currentUser, challengeId, data) {
   );
 
   const auditFields = {
-    createdBy: _.toString(currentUser.userId),
-    updatedBy: _.toString(currentUser.userId),
+    createdBy: getAuditActor(currentUser),
+    updatedBy: getAuditActor(currentUser),
   };
   if (!phaseAdvancerResult.success) {
     return phaseAdvancerResult;

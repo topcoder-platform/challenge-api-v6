@@ -1,3 +1,4 @@
+const { getAuditActor } = require("./audit");
 const _ = require("lodash");
 const Decimal = require("decimal.js");
 const constants = require("../../app-constants");
@@ -71,10 +72,12 @@ function convertChallengePhaseSchema(challenge, result, auditFields) {
  * @param {Object} currentUser current user
  * @param {Object} challenge challenge schema
  * @returns prisma model data to create/update challenge
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 function convertChallengeSchemaToPrisma(currentUser, challenge) {
-  // used id used in createdBy and updatedBy
-  const userId = _.toString(currentUser.userId);
+  // Audit attribution is separate from member authorization.
+  const userId = getAuditActor(currentUser);
   const auditFields = {
     createdBy: userId,
     updatedBy: userId,

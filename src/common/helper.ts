@@ -764,15 +764,14 @@ async function userHasFullAccess(challengeId, userId, challengeResources) {
  * Check if a user has write/full/copilot access to a project.
  * @param {Number|String} projectId the project id
  * @param {Object} currentUser the current user
+ * Verified service principals do not require a member ID; missing member IDs deny interactive callers.
  * @returns {Promise<Boolean>} true if user has project access
  */
 async function userHasProjectWriteAccess(projectId, currentUser) {
-  if (!projectId || !currentUser || !currentUser.userId) {
-    return false;
-  }
-  if (currentUser.isMachine || hasAdminRole(currentUser)) {
-    return true;
-  }
+  if (!projectId || !currentUser) return false;
+  if (currentUser.kind === "service" && currentUser.isMachine === true) return true;
+  if (!currentUser.userId) return false;
+  if (hasAdminRole(currentUser)) return true;
   try {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
@@ -799,15 +798,14 @@ async function userHasProjectWriteAccess(projectId, currentUser) {
  * Check if a user is a project manager for a project.
  * @param {Number|String} projectId the project id
  * @param {Object} currentUser the current user
+ * Verified service principals do not require a member ID; missing member IDs deny interactive callers.
  * @returns {Promise<Boolean>} true if user has project manager access
  */
 async function userHasProjectManagerAccess(projectId, currentUser) {
-  if (!projectId || !currentUser || !currentUser.userId) {
-    return false;
-  }
-  if (currentUser.isMachine || hasAdminRole(currentUser)) {
-    return true;
-  }
+  if (!projectId || !currentUser) return false;
+  if (currentUser.kind === "service" && currentUser.isMachine === true) return true;
+  if (!currentUser.userId) return false;
+  if (hasAdminRole(currentUser)) return true;
   try {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
@@ -834,15 +832,14 @@ async function userHasProjectManagerAccess(projectId, currentUser) {
  * Check if a user is a project manager or copilot for a project.
  * @param {Number|String} projectId the project id
  * @param {Object} currentUser the current user
+ * Verified service principals do not require a member ID; missing member IDs deny interactive callers.
  * @returns {Promise<Boolean>} true if user has project task-view access
  */
 async function userHasProjectTaskViewAccess(projectId, currentUser) {
-  if (!projectId || !currentUser || !currentUser.userId) {
-    return false;
-  }
-  if (currentUser.isMachine || hasAdminRole(currentUser)) {
-    return true;
-  }
+  if (!projectId || !currentUser) return false;
+  if (currentUser.kind === "service" && currentUser.isMachine === true) return true;
+  if (!currentUser.userId) return false;
+  if (hasAdminRole(currentUser)) return true;
   try {
     const project = await projectHelper.getProject(projectId, currentUser);
     const member = _.find(
@@ -1071,24 +1068,20 @@ function ensureNoDuplicateOrNullElements(arr, name) {
 }
 
 /**
- * Get Bus API Client
- * @return {Object} Bus API Client Instance
+ * Gets the cached Bus client using the shared Keycloak factory through its legacy option names.
+ * Takes no arguments; returns the wrapper client. Invalid Keycloak configuration throws.
  */
 function getBusApiClient() {
   // if there is no bus API client instance, then create a new instance
   if (!busApiClient) {
-    busApiClient = busApi(
-      _.pick(config, [
-        "AUTH0_URL",
-        "AUTH0_AUDIENCE",
-        "TOKEN_CACHE_TIME",
-        "AUTH0_CLIENT_ID",
-        "AUTH0_CLIENT_SECRET",
-        "BUSAPI_URL",
-        "KAFKA_ERROR_TOPIC",
-        "AUTH0_PROXY_SERVER_URL",
-      ]),
-    );
+    busApiClient = busApi({
+      AUTH0_URL: config.KEYCLOAK_TOKEN_URL,
+      AUTH0_AUDIENCE: config.KEYCLOAK_AUDIENCE,
+      AUTH0_CLIENT_ID: config.KEYCLOAK_CLIENT_ID,
+      AUTH0_CLIENT_SECRET: config.KEYCLOAK_CLIENT_SECRET,
+      BUSAPI_URL: config.BUSAPI_URL,
+      KAFKA_ERROR_TOPIC: config.KAFKA_ERROR_TOPIC,
+    });
   }
 
   return busApiClient;
@@ -1264,18 +1257,15 @@ async function validateChallengeTerms(terms = []) {
 /**
  * Determine whether challenge whitelist checks apply for a request.
  * Interactive users, including admins and anonymous callers, must be evaluated;
- * M2M callers are allowed to bypass this user-facing access control. Public
- * routes may preserve `bypassChallengeWhitelist` for valid machine tokens that
- * are not otherwise attached as full M2M callers.
+ * Scope-authorized M2M callers use the shared validator's machine flag to bypass
+ * this user-facing control. Public routes reject insufficient machine scopes;
+ * a standalone bypassChallengeWhitelist property never grants access.
  *
  * @param {Object} currentUser the user who performs the operation
  * @returns {Boolean} true when whitelist rules should be applied
  */
 function shouldApplyChallengeWhitelist(currentUser) {
-  return (
-    !_.get(currentUser, "isMachine", false) &&
-    !_.get(currentUser, "bypassChallengeWhitelist", false)
-  );
+  return !_.get(currentUser, "isMachine", false);
 }
 
 /**

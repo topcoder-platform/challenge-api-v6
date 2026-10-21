@@ -33,42 +33,25 @@ describe("Challenge route access", () => {
     });
   });
 
-  it("normalizes valid no-role scoped tokens as M2M callers", () => {
-    const authUser = {
-      scope: "read:challenges",
-    };
-
-    expect(__testables.isM2MAuthUser(authUser)).to.equal(true);
-    expect(
-      __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
-    ).to.equal(true);
-    expect(authUser.isMachine).to.equal(true);
-    expect(authUser.scopes).to.deep.equal(["read:challenges"]);
+  it("accepts only a verified service with an exact route scope", () => {
+    const principal = Object.freeze({kind:"service",isMachine:true,scopes:["read:challenges"],roles:[],clientId:"test-client"});
+    expect(__testables.isM2MAuthUser(principal)).to.equal(true);
+    expect(__testables.hasRequiredM2MScopes(routes["/challenges/:challengeId"].get,principal)).to.equal(true);
+    expect(__testables.hasRequiredM2MScopes({scopes:["write:challenges"]},principal)).to.equal(false);
+    expect(__testables.hasRequiredM2MScopes({},principal)).to.equal(false);
+    expect(principal.userId).to.equal(undefined);
   });
 
-  it("normalizes valid no-role permission tokens as M2M callers", () => {
-    const authUser = {
-      permissions: ["read:challenges"],
-    };
-
-    expect(__testables.isM2MAuthUser(authUser)).to.equal(true);
-    expect(
-      __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
-    ).to.equal(true);
-    expect(authUser.isMachine).to.equal(true);
-    expect(authUser.scopes).to.deep.equal(["read:challenges"]);
+  it("does not classify raw scopes, permissions, or a standalone machine flag as a service", () => {
+    for(const principal of [{scope:"read:challenges"},{permissions:["read:challenges"]},{isMachine:true},
+      {kind:"user",isMachine:false,roles:[constants.UserRoles.User],scopes:["read:challenges"]}]) {
+      expect(__testables.isM2MAuthUser(principal)).to.equal(false);
+      expect(__testables.hasRequiredM2MScopes(routes["/challenges/:challengeId"].get,principal)).to.equal(false);
+    }
   });
 
-  it("does not normalize role-bearing users with scopes as M2M callers", () => {
-    const authUser = {
-      roles: [constants.UserRoles.User],
-      scope: "read:challenges",
-    };
-
-    expect(__testables.isM2MAuthUser(authUser)).to.equal(false);
-    expect(
-      __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
-    ).to.equal(false);
-    expect(authUser.isMachine).to.equal(undefined);
+  it("redacts query tokens and nested credential fields in diagnostics", () => {
+    expect(__testables.sanitizeForLog({token:"sensitive",query:{access_token:"sensitive",name:"sample"}}))
+      .to.deep.equal({token:"<redacted>",query:{access_token:"<redacted>",name:"sample"}});
   });
 });

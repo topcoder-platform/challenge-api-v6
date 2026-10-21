@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations for default challenge reviewers.
  */
@@ -278,11 +279,13 @@ function normalizePayload(data: any = {}, isPartial = false) {
  * @param {Object} authUser authenticated user
  * @param {Object} data payload
  * @returns {Promise<Object>} created record
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createDefaultChallengeReviewer(authUser, data) {
   const references = await validateRelatedEntities(data);
 
-  const userId = _.toString(authUser && authUser.userId ? authUser.userId : "system");
+  const userId = getAuditActor(authUser);
   const payload = normalizePayload(data);
   if (references.phaseById) {
     payload.phaseName = references.phaseById.name;
@@ -376,6 +379,8 @@ getDefaultChallengeReviewer.schema = {
  * @param {String} id record id
  * @param {Object} data payload
  * @returns {Promise<Object>} updated record
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function fullyUpdateDefaultChallengeReviewer(authUser, id, data) {
   await getDefaultChallengeReviewer(id);
@@ -387,7 +392,7 @@ async function fullyUpdateDefaultChallengeReviewer(authUser, id, data) {
   } else if (references.phaseByName) {
     payload.phaseName = references.phaseByName.name;
   }
-  payload.updatedBy = _.toString(authUser && authUser.userId ? authUser.userId : "system");
+  payload.updatedBy = getAuditActor(authUser);
 
   let ret = await prisma.defaultChallengeReviewer.update({
     where: { id },
@@ -438,6 +443,8 @@ fullyUpdateDefaultChallengeReviewer.schema = {
  * @param {String} id record id
  * @param {Object} data payload
  * @returns {Promise<Object>} updated record
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function partiallyUpdateDefaultChallengeReviewer(authUser, id, data) {
   const existing = await getDefaultChallengeReviewer(id);
@@ -488,7 +495,7 @@ async function partiallyUpdateDefaultChallengeReviewer(authUser, id, data) {
     }
   }
 
-  payload.updatedBy = _.toString(authUser && authUser.userId ? authUser.userId : "system");
+  payload.updatedBy = getAuditActor(authUser);
 
   let ret = await prisma.defaultChallengeReviewer.update({
     where: { id },

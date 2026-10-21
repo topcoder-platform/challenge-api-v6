@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of challenge type timeline template.
  */
@@ -80,6 +81,8 @@ searchChallengeTimelineTemplates.schema = {
  * @param {Object} authUser auth user
  * @param {String} typeId the type ID
  * @param {String} trackId the track ID
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function unsetDefaultTimelineTemplate(authUser, typeId, trackId) {
   const records = await searchChallengeTimelineTemplates({
@@ -94,7 +97,7 @@ async function unsetDefaultTimelineTemplate(authUser, typeId, trackId) {
     await fullyUpdateChallengeTimelineTemplate(authUser, record.id, {
       ...record,
       isDefault: false,
-      updatedBy: authUser.userId,
+      updatedBy: getAuditActor(authUser),
     });
   }
 }
@@ -104,6 +107,8 @@ async function unsetDefaultTimelineTemplate(authUser, typeId, trackId) {
  * @param {Object} authUser auth user
  * @param {Object} data the data to create challenge type timeline template
  * @returns {Object} the created challenge type timeline template
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createChallengeTimelineTemplate(authUser, data) {
   // check duplicate
@@ -119,8 +124,8 @@ async function createChallengeTimelineTemplate(authUser, data) {
   if (data.isDefault) {
     await unsetDefaultTimelineTemplate(authUser, data.typeId, data.trackId);
   }
-  data.createdBy = authUser.userId;
-  data.updatedBy = authUser.userId;
+  data.createdBy = getAuditActor(authUser);
+  data.updatedBy = getAuditActor(authUser);
 
   let template = await prisma.challengeTimelineTemplate.create({ data });
   template = _.omit(template, constants.auditFields);
@@ -167,6 +172,8 @@ getChallengeTimelineTemplate.schema = {
  * @param {String} challengeTimelineTemplateId the challenge type timeline template id
  * @param {Object} data the challenge type timeline template data to be updated
  * @returns {Object} the updated challenge type timeline template
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function fullyUpdateChallengeTimelineTemplate(authUser, challengeTimelineTemplateId, data) {
   const record = await getChallengeTimelineTemplate(challengeTimelineTemplateId);
@@ -194,7 +201,7 @@ async function fullyUpdateChallengeTimelineTemplate(authUser, challengeTimelineT
   if (data.isDefault) {
     await unsetDefaultTimelineTemplate(authUser, data.typeId, data.trackId);
   }
-  data.updatedBy = authUser.userId;
+  data.updatedBy = getAuditActor(authUser);
 
   let ret = await prisma.challengeTimelineTemplate.update({
     data,

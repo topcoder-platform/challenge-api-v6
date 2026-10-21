@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of attachments.
  */
@@ -60,11 +61,13 @@ async function _getChallengeAttachment(challengeId, attachmentId) {
  * @param {String} challengeId the challenge id
  * @param {Array} attachments the attachments to be created
  * @returns {Object} the created attachment
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createAttachment(currentUser, challengeId, attachments) {
   const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
   await helper.ensureUserCanModifyChallenge(currentUser, challenge);
-  const userId = currentUser.userId;
+  const userId = getAuditActor(currentUser);
   const newAttachments = [];
   for (const attachment of attachments) {
     validateUrl(attachment.url);
@@ -122,6 +125,8 @@ getAttachment.schema = {
  * @param {Object} data the attachment data to be updated
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated attachment
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function update(currentUser, challengeId, attachmentId, data, isFull?: boolean) {
   const { challenge, attachment } = await _getChallengeAttachment(challengeId, attachmentId);
@@ -133,7 +138,7 @@ async function update(currentUser, challengeId, attachmentId, data, isFull?: boo
     data.fileSize = data.fileSize || attachment.fileSize;
     data.description = data.description || attachment.description;
   }
-  data.updatedBy = currentUser.userId;
+  data.updatedBy = getAuditActor(currentUser);
 
   let ret = await prisma.attachment.update({
     data,

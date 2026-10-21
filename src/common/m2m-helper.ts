@@ -1,21 +1,23 @@
-const _ = require("lodash");
-const config = require("config");
-const m2mAuth = require("tc-core-library-js").auth.m2m;
+const { auth } = require("tc-core-library-js");
 
+/**
+ * Shared outbound Keycloak token provider for downstream Challenge API calls.
+ * One core factory retains its verified-token cache for this service process.
+ */
 class M2MHelper {
   static m2m = null;
 
+  /** Initializes the shared factory; no arguments/return value; invalid configuration throws. */
   constructor() {
-    M2MHelper.m2m = m2mAuth(
-      _.pick(config, ["AUTH0_URL", "AUTH0_AUDIENCE", "TOKEN_CACHE_TIME", "AUTH0_PROXY_SERVER_URL"])
-    );
+    M2MHelper.m2m = auth.m2m();
   }
+
   /**
-   * Get M2M token.
-   * @returns {Promise<String>} the M2M token
+   * Obtains a verified token using configured Keycloak credentials and approved scopes.
+   * Takes no arguments; returns Promise<string>; issuance/verification errors propagate.
    */
   getM2MToken() {
-    return M2MHelper.m2m.getMachineToken(config.AUTH0_CLIENT_ID, config.AUTH0_CLIENT_SECRET);
+    return M2MHelper.m2m.getMachineToken();
   }
 }
 

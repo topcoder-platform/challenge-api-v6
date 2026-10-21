@@ -1115,12 +1115,9 @@ describe("challenge service unit tests", () => {
         );
         should.equal(machine.id, createdChallengeData.id);
 
-        const whitelistBypassOnly = await service.getChallenge(
-          { bypassChallengeWhitelist: true },
-          createdChallengeData.id,
-          true,
-        );
-        should.equal(whitelistBypassOnly.id, createdChallengeData.id);
+        await require("node:assert/strict").rejects(service.getChallenge(
+          { bypassChallengeWhitelist: true }, createdChallengeData.id, true,
+        ), error => error.name === "ForbiddenError");
 
         try {
           await service.getChallenge(
@@ -1890,8 +1887,8 @@ describe("challenge service unit tests", () => {
           { bypassChallengeWhitelist: true },
           { id: data.challenge.id },
         );
-        should.equal(whitelistBypassOnly.total, 1);
-        should.equal(whitelistBypassOnly.result[0].id, data.challenge.id);
+        should.equal(whitelistBypassOnly.total, 0);
+        should.equal(whitelistBypassOnly.result.length, 0);
       } finally {
         await prisma.challengeUserWhitelist.deleteMany({
           where: { challengeId: data.challenge.id },

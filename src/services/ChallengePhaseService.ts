@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of challenge phases.
  */
@@ -651,6 +652,8 @@ getChallengePhase.schema = {
  * @returns {Object} the updated challengePhase
  * @throws {ForbiddenError} when the current user cannot modify the challenge
  * @throws {BadRequestError} when phase schedule shortening violates track or timing rules
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data) {
   const challenge = await getChallengeForPhaseAccess(challengeId);
@@ -902,7 +905,7 @@ async function partiallyUpdateChallengePhase(currentUser, challengeId, id, data)
   }
 
   // Update ChallengePhase
-  const currentUserId = String(currentUser.userId);
+  const currentUserId = getAuditActor(currentUser);
   data.updatedBy = currentUserId;
   if (!_.isNil(data.scheduledEndDate)) {
     const startInput = !_.isNil(data.scheduledStartDate)
@@ -1169,6 +1172,8 @@ partiallyUpdateChallengePhase.schema = {
  * @param {String} id the phase id
  * @returns {Object} the deleted challenge phase
  * @throws {ForbiddenError} when the current user cannot modify the challenge
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function deleteChallengePhase(currentUser, challengeId, id) {
   const challenge = await getChallengeForPhaseAccess(challengeId);
@@ -1188,7 +1193,7 @@ async function deleteChallengePhase(currentUser, challengeId, id) {
         // if result.predecessor exists, update successor's predecessor to predecessor of current challenge phase
         // otherwise update successor's predecessor to null
         predecessor: result.predecessor || null,
-        updatedBy: String(currentUser.userId),
+        updatedBy: getAuditActor(currentUser),
       },
       where: {
         challengeId,

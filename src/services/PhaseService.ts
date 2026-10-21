@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of phases.
  */
@@ -72,11 +73,13 @@ async function checkName(name) {
  * @param {Object} authUser auth user
  * @param {Object} phase the phase to created
  * @returns {Object} the created phase
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createPhase(authUser, phase) {
   await checkName(phase.name);
-  phase.createdBy = authUser.userId;
-  phase.updatedBy = authUser.userId;
+  phase.createdBy = getAuditActor(authUser);
+  phase.updatedBy = getAuditActor(authUser);
   let ret = await prisma.phase.create({ data: phase });
   ret = _.omit(ret, constants.auditFields);
   // post bus event
@@ -121,6 +124,8 @@ getPhase.schema = {
  * @param {Object} data the phase data to be updated
  * @param {Boolean} isFull the flag indicate it is a fully update operation.
  * @returns {Object} the updated phase
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function update(authUser, phaseId, data, isFull?: boolean) {
   const phase = await getPhase(phaseId);
@@ -134,7 +139,7 @@ async function update(authUser, phaseId, data, isFull?: boolean) {
       data.description = null;
     }
   }
-  data.updatedBy = authUser.userId;
+  data.updatedBy = getAuditActor(authUser);
   let ret = await prisma.phase.update({
     where: { id: phaseId },
     data,

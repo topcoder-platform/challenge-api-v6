@@ -1,3 +1,4 @@
+const { getAuditActor } = require("../common/audit");
 /**
  * This service provides operations of challenge types.
  */
@@ -137,6 +138,8 @@ async function checkTypeLegacyId(legacyId, excludeId?) {
  * @param {Object} authUser auth user info
  * @param {Object} type the challenge type to created
  * @returns {Object} the created challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function createChallengeType(authUser, type) {
   await checkTypeName(type.name);
@@ -146,8 +149,8 @@ async function createChallengeType(authUser, type) {
     data: {
       isLegacy: false,
       ...type,
-      createdBy: authUser.userId,
-      updatedBy: authUser.userId,
+      createdBy: getAuditActor(authUser),
+      updatedBy: getAuditActor(authUser),
     },
   });
   ret = _.omit(ret, constants.auditFields);
@@ -198,6 +201,8 @@ getChallengeType.schema = {
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function fullyUpdateChallengeType(authUser, id, data) {
   const type = await getChallengeType(id);
@@ -222,7 +227,7 @@ async function fullyUpdateChallengeType(authUser, id, data) {
   let ret = await prisma.challengeType.update({
     data: {
       ...data,
-      updatedBy: authUser.userId,
+      updatedBy: getAuditActor(authUser),
     },
     where: { id },
   });
@@ -254,6 +259,8 @@ fullyUpdateChallengeType.schema = {
  * @param {String} id the challenge type id
  * @param {Object} data the challenge type data to be updated
  * @returns {Object} the updated challenge type
+ * Service audit attribution uses service:<clientId> without a member identity.
+ * @throws TypeError when a service caller lacks a verified client ID.
  */
 async function partiallyUpdateChallengeType(authUser, id, data) {
   const type = await getChallengeType(id);
@@ -266,7 +273,7 @@ async function partiallyUpdateChallengeType(authUser, id, data) {
   if (!_.isUndefined(data.legacyId) && type.legacyId !== data.legacyId) {
     await checkTypeLegacyId(data.legacyId, id);
   }
-  data.updatedBy = authUser.userId;
+  data.updatedBy = getAuditActor(authUser);
   let ret = await prisma.challengeType.update({
     where: { id },
     data: _.extend(type, data),
