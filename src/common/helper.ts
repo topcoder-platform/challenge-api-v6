@@ -1641,10 +1641,10 @@ async function getGroupById(groupId) {
  * Get challenge submissions
  * @param {String} challengeId the challenge id
  * @returns {Promise<Array>} the submission
+ * Uses this service's M2M token, which is never logged.
  */
 async function getChallengeSubmissions(challengeId) {
   const token = await m2mHelper.getM2MToken();
-  console.log(`Token: ${token}`);
   let allSubmissions = [];
   // get search is paginated, we need to get all pages' data
   let page = 1;
