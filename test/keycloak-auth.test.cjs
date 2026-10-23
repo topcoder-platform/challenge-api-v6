@@ -4,7 +4,7 @@ const { createHmac } = require('node:crypto');
 const { test } = require('node:test');
 
 Object.assign(process.env, {
-  M2M_PROVIDER: 'keycloak',
+  USE_KEYCLOAK: 'true',
   KEYCLOAK_ISSUER: 'https://keycloak.example.test/realms/test',
   KEYCLOAK_AUDIENCE: 'https://api.example.test',
   KEYCLOAK_TOKEN_URL: 'https://keycloak.example.test/m2m/token',

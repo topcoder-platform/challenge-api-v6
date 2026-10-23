@@ -59,11 +59,18 @@ module.exports = {
   AUTH_SECRET: process.env.AUTH_SECRET,
   VALID_ISSUERS: process.env.VALID_ISSUERS || '[]',
 
-  // Used only by explicitly configured Keycloak workloads.
+  // M2M token settings. USE_KEYCLOAK (read by tc-core-library-js) picks the provider:
+  // "true" uses the KEYCLOAK_* values; unset, empty or "false" uses the AUTH0_* values.
   KEYCLOAK_TOKEN_URL: process.env.KEYCLOAK_TOKEN_URL,
   KEYCLOAK_AUDIENCE: process.env.KEYCLOAK_AUDIENCE,
   KEYCLOAK_CLIENT_ID: process.env.KEYCLOAK_CLIENT_ID,
   KEYCLOAK_CLIENT_SECRET: process.env.KEYCLOAK_CLIENT_SECRET,
+  AUTH0_URL: process.env.AUTH0_URL,
+  AUTH0_PROXY_SERVER_URL: process.env.AUTH0_PROXY_SERVER_URL,
+  AUTH0_AUDIENCE: process.env.AUTH0_AUDIENCE || "https://www.topcoder-dev.com",
+  TOKEN_CACHE_TIME: process.env.TOKEN_CACHE_TIME,
+  AUTH0_CLIENT_ID: process.env.AUTH0_CLIENT_ID,
+  AUTH0_CLIENT_SECRET: process.env.AUTH0_CLIENT_SECRET,
 
   // bus API config params
   BUSAPI_URL: process.env.BUSAPI_URL || "https://api.topcoder-dev.com/v5",

@@ -21,8 +21,9 @@ info:
 
     ## Access levels
 
-    - Keycloak service tokens are validated by the shared core library and require
-    an explicit matching route scope. Member tokens retain separate role authorization.
+    - Service (M2M) tokens, from Keycloak or Auth0 as configured by USE_KEYCLOAK, are
+    validated by the shared core library and require an explicit matching route scope.
+    Member tokens retain separate role authorization.
 
     - Only admins and copilots can create/update an entity.
 

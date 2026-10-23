@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d
+  tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09
   '@babel/core@<=7.29.0': 7.29.6
   '@hono/node-server@<2.0.11': 2.0.11
   ajv@<6.14.0: 6.15.0
@@ -140,8 +140,8 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(express@5.2.1(supports-color@5.5.0))
       tc-core-library-js:
-        specifier: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d
-        version: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
+        specifier: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09
+        version: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
       topcoder-bus-api-wrapper:
         specifier: github:topcoder-platform/tc-bus-api-wrapper#master
         version: '@topcoder-platform/topcoder-bus-api-wrapper@https://codeload.github.com/topcoder-platform/tc-bus-api-wrapper/tar.gz/297a9c0adcdb97661257e7825bee9c3f5578b833(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)'
@@ -3914,9 +3914,9 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
-  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d:
-    resolution: {tarball: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d}
-    version: 4.0.0-keycloak.0
+  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09:
+    resolution: {tarball: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09}
+    version: 4.0.0-keycloak.1
     engines: {node: '>=18.19'}
 
   terser-webpack-plugin@5.6.1:
@@ -5966,7 +5966,7 @@ snapshots:
       joi: 18.2.3
       lodash: 4.18.1
       superagent: 10.2.3(supports-color@5.5.0)
-      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
+      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -7234,7 +7234,7 @@ snapshots:
       reflect-metadata: 0.2.2
       rxjs: 7.8.2
       tc-bus-api-wrapper: '@topcoder-platform/topcoder-bus-api-wrapper@https://codeload.github.com/topcoder-platform/tc-bus-api-wrapper/tar.gz/297a9c0adcdb97661257e7825bee9c3f5578b833(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)'
-      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
+      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
     transitivePeerDependencies:
       - '@fastify/static'
       - '@nestjs/microservices'
@@ -8704,7 +8704,7 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c262f4aca971904f308085bdeaaed35cdf3cfa7d(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0):
+  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0):
     dependencies:
       axios: 1.18.1(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
       bunyan: 1.8.15

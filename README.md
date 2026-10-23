@@ -80,12 +80,19 @@ The following parameters can be set in config files or in env variables:
   call the API; HTTP is accepted only for localhost development origins
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
-- KEYCLOAK_TOKEN_URL: managed Keycloak endpoint for M2M issuance
-- M2M_PROVIDER: must be `keycloak` on this migration branch
-- KEYCLOAK_ISSUER: exact M2M realm issuer
-- KEYCLOAK_AUDIENCE: expected M2M API audience
-- KEYCLOAK_CLIENT_ID: workload-specific client ID
-- KEYCLOAK_CLIENT_SECRET: workload secret from encrypted storage
+- USE_KEYCLOAK: `true` gets M2M tokens from Keycloak (`KEYCLOAK_*`); unset, empty or `false`
+  uses Auth0 (`AUTH0_*`). Any other value fails at startup. See [docs/keycloak-m2m.md](docs/keycloak-m2m.md)
+- KEYCLOAK_TOKEN_URL: managed Keycloak endpoint for M2M issuance (Keycloak mode)
+- KEYCLOAK_ISSUER: exact M2M realm issuer (required in Keycloak mode)
+- KEYCLOAK_AUDIENCE: expected M2M API audience (required in Keycloak mode)
+- KEYCLOAK_CLIENT_ID: workload-specific client ID (Keycloak mode)
+- KEYCLOAK_CLIENT_SECRET: workload secret from encrypted storage (Keycloak mode)
+- AUTH0_URL: AUTH0 URL, used to get M2M token (Auth0 mode)
+- AUTH0_PROXY_SERVER_URL: AUTH0 proxy server URL, used to get M2M token (Auth0 mode, default `AUTH0_URL`)
+- AUTH0_AUDIENCE: AUTH0 audience, used to get M2M token (Auth0 mode, default `https://www.topcoder-dev.com`)
+- TOKEN_CACHE_TIME: AUTH0 token cache time, passed to the Bus API wrapper (Auth0 mode)
+- AUTH0_CLIENT_ID: AUTH0 client id, used to get M2M token (Auth0 mode)
+- AUTH0_CLIENT_SECRET: AUTH0 client secret, used to get M2M token (Auth0 mode)
 - BUSAPI_URL: Bus API URL
 - KAFKA_ERROR_TOPIC: Kafka error topic used by bus API wrapper
 - AMAZON.AWS_ACCESS_KEY_ID: The Amazon certificate key to use when connecting.
@@ -144,16 +151,23 @@ database operation or application startup.
    ```
 
 1. ⚙ Local config
-   In the `challenge-api` root directory create `.env` file with the next environment variables. Use workload-specific Keycloak credentials from encrypted storage; retain separate member issuer configuration.<br>
+   In the `challenge-api` root directory create `.env` file with the next environment variables. Use workload-specific Keycloak credentials from encrypted storage; retain separate member issuer configuration. Values for **Auth0 config** should be shared with you on the forum.<br>
 
    ```bash
-   # Keycloak service configuration
+   # M2M provider: true = Keycloak, unset/false = Auth0
+   USE_KEYCLOAK=true
+   # Keycloak service configuration (USE_KEYCLOAK=true)
    KEYCLOAK_TOKEN_URL=
-   M2M_PROVIDER=keycloak
    KEYCLOAK_ISSUER=
    KEYCLOAK_AUDIENCE=
    KEYCLOAK_CLIENT_ID=
    KEYCLOAK_CLIENT_SECRET=
+   # Auth0 config (USE_KEYCLOAK unset or false)
+   AUTH0_URL=
+   AUTH0_PROXY_SERVER_URL=
+   AUTH0_AUDIENCE=
+   AUTH0_CLIENT_ID=
+   AUTH0_CLIENT_SECRET=
    ```
 
    - Values from this file are automatically used by the application and Prisma commands.
@@ -224,9 +238,10 @@ database operation or application startup.
 
 5. Configure external integrations
 
-   Authenticated service operations and event publication use Keycloak and
-   Bus API settings. Configure `KEYCLOAK_*` and `M2M_PROVIDER=keycloak` and `BUSAPI_URL` for environments that
-   exercise those paths. Topics disabled by the existing topic configuration are
+   Authenticated service operations and event publication use the M2M provider
+   selected by `USE_KEYCLOAK` and the Bus API settings. Configure `USE_KEYCLOAK=true`
+   with `KEYCLOAK_*`, or `AUTH0_*` with `USE_KEYCLOAK` unset or `false`, and `BUSAPI_URL`
+   for environments that exercise those paths. Topics disabled by the existing topic configuration are
    skipped exactly as before; no local Kafka connection is required.
 
 6. 🚀 Start Topcoder Challenge API

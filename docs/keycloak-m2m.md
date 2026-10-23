@@ -5,10 +5,36 @@ workload and its callers are ready. Existing DEV services continue using Auth0.
 The core dependency is pinned to a reviewed Keycloak prerelease commit, including
 transitive wrapper uses through the pnpm override. No npm latest dependency is used.
 
-Required settings are `M2M_PROVIDER=keycloak`, `KEYCLOAK_ISSUER`,
-`KEYCLOAK_AUDIENCE`, and `KEYCLOAK_TOKEN_URL`; issuing workloads additionally need
-`KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_SECRET` from their own encrypted secret
-references. Optional `KEYCLOAK_SCOPE` narrows the client's approved defaults.
+The core is pinned to `tc-core-library-js` commit `e844764` (4.0.0-keycloak.1) in
+`package.json` and the `pnpm-workspace.yaml` override, and `pnpm-lock.yaml` resolves
+that single version, including the copy `topcoder-bus-api-wrapper` uses.
+
+## Provider switch: `USE_KEYCLOAK`
+
+`USE_KEYCLOAK=true` makes this service get its M2M tokens from Keycloak, using
+`KEYCLOAK_TOKEN_URL`, `KEYCLOAK_AUDIENCE`, `KEYCLOAK_CLIENT_ID` and
+`KEYCLOAK_CLIENT_SECRET` (optional `KEYCLOAK_SCOPE` narrows the client's defaults).
+`KEYCLOAK_ISSUER` is also required. Unset or `false` restores the Auth0 behaviour from
+before the migration: `src/common/m2m-helper.ts` (projects, resources, submissions and
+other downstream calls) and the Bus client in `src/common/helper.ts` use `AUTH0_URL`,
+`AUTH0_AUDIENCE` (default `https://www.topcoder-dev.com`), `AUTH0_PROXY_SERVER_URL`
+(default `AUTH0_URL`), `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET`; `TOKEN_CACHE_TIME`
+is passed to the Bus wrapper as before.
+
+`tc-core-library-js` reads the flag (`auth.useKeycloak`), `M2MHelper` passes the Auth0
+settings to `auth.m2m`, and the Bus client gets its settings from `auth.wrapperSettings`,
+so the service and the core always agree. Any value other than `true`/`false` fails at
+startup. In DEV the flag is `/config/common/global-appvar/USE_KEYCLOAK`.
+
+Incoming machine tokens: with `true`, Keycloak tokens are accepted, plus Auth0 tokens
+while `LEGACY_M2M_ISSUERS`/`LEGACY_M2M_AUDIENCE` are set. With `false`, Auth0 tokens
+are accepted through `LEGACY_M2M_*`, plus Keycloak tokens while `KEYCLOAK_ISSUER` and
+`KEYCLOAK_AUDIENCE` are set, so callers that have not switched yet keep working.
+
+**Rollback:** set `USE_KEYCLOAK=false` and force a new deployment so tasks re-read SSM.
+No code or dependency change is needed. Keep the Auth0 settings above in SSM until
+Keycloak has been accepted.
+
 The DEV issuer is `https://keycloak.topcoder-dev.com/realms/topcoder-m2m-dev`,
 audience `https://api.topcoder-dev.com`, and managed endpoint
 `https://keycloak.topcoder-dev.com/m2m/token`. The managed endpoint passed DEV deployment acceptance; enable this configuration
@@ -18,8 +44,8 @@ Member sessions remain Auth0. Keep `VALID_ISSUERS` and `AUTH_SECRET` where legac
 member HMAC tokens are supported. Set `AUTH_USER_AUDIENCES` to a JSON array, or
 explicitly retain existing user-token audience behavior with
 `ALLOW_LEGACY_USER_AUDIENCE=true`. Never apply that exception to M2M tokens.
-During an approved overlap, `LEGACY_M2M_ISSUERS` and `LEGACY_M2M_AUDIENCE` allow
-old Auth0 machine tokens to pass the same normalizer. Issuance remains Keycloak-only.
+`LEGACY_M2M_ISSUERS` and `LEGACY_M2M_AUDIENCE` let Auth0 machine tokens pass the same
+normalizer (see the provider switch above).
 
 `tc-core-library-js` owns signature, issuer, audience, lifetime, and machine/user
 classification. Service adapters must use its verified `kind`, `isMachine`, and
@@ -31,9 +57,9 @@ grants machine access. No permissive fallback or synthetic token path is availab
 Before rollout run this project's `nvm use`, `pnpm lint`, `pnpm build`, and targeted
 authentication tests. Validate real authorized/unauthorized routes with both a
 Keycloak service token and a member token, including wrong audiences and insufficient
-scopes. Switch only after every downstream receiver accepts the issuer. Rollback
-requires the prior application/dependency and credentials with equivalent grants;
-never automatically retry issuance against Auth0.
+scopes. Switch only after every downstream receiver accepts the issuer. The core never
+retries a failed Keycloak request against Auth0; rolling back is the explicit
+`USE_KEYCLOAK=false` change above.
 
 The Express adapter retains string member IDs and never invents a member ID for
 a service. All route machine checks use common `hasScopes` with explicit any-scope
@@ -50,7 +76,9 @@ Legacy query-token support remains, but query credential fields and URL queries 
 excluded from route diagnostics. Remove query-token use from callers during rollout.
 
 Validation: `pnpm test:keycloak` covers the compiled adapter and actual route
-middleware with signed RSA tokens. To test persisted audit attribution, run
+middleware with signed RSA tokens. `test/unit/m2m-provider.test.js` (part of `pnpm test`)
+checks that `USE_KEYCLOAK=false` or unset sends the Auth0 settings to the token provider
+and Bus wrapper, and that `true` sends the Keycloak settings. To test persisted audit attribution, run
 `DATABASE_URL=<disposable PostgreSQL URL> node --test test/keycloak-audit.integration.cjs`
 after applying the schema to that disposable database. The test creates and removes
 its own phase; do not use shared DEV/production databases.

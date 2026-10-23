@@ -11,6 +11,7 @@ const config = require("config");
 const axios = require("axios");
 const axiosRetry = require("axios-retry").default;
 const busApi = require("topcoder-bus-api-wrapper");
+const { auth } = require("tc-core-library-js");
 const NodeCache = require("node-cache");
 const HttpStatus = require("http-status-codes");
 const cityTimezones = require("city-timezones");
@@ -1068,17 +1069,34 @@ function ensureNoDuplicateOrNullElements(arr, name) {
 }
 
 /**
- * Gets the cached Bus client using the shared Keycloak factory through its legacy option names.
- * Takes no arguments; returns the wrapper client. Invalid Keycloak configuration throws.
+ * Gets the cached Bus client. The wrapper always takes AUTH0_* option names; their values
+ * come from `auth.wrapperSettings`, so they follow USE_KEYCLOAK:
+ * - `true`: KEYCLOAK_TOKEN_URL, KEYCLOAK_AUDIENCE, KEYCLOAK_CLIENT_ID and KEYCLOAK_CLIENT_SECRET.
+ * - unset, empty or `false`: AUTH0_URL, AUTH0_AUDIENCE, AUTH0_PROXY_SERVER_URL,
+ *   AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET and TOKEN_CACHE_TIME, as before the migration.
+ * Used by postBusEvent. Takes no arguments; returns the wrapper client.
+ * @throws {TypeError} when USE_KEYCLOAK is not true/false.
+ * @throws {Error} when the wrapper rejects missing or invalid settings for the active provider.
  */
 function getBusApiClient() {
   // if there is no bus API client instance, then create a new instance
   if (!busApiClient) {
     busApiClient = busApi({
-      AUTH0_URL: config.KEYCLOAK_TOKEN_URL,
-      AUTH0_AUDIENCE: config.KEYCLOAK_AUDIENCE,
-      AUTH0_CLIENT_ID: config.KEYCLOAK_CLIENT_ID,
-      AUTH0_CLIENT_SECRET: config.KEYCLOAK_CLIENT_SECRET,
+      ...auth.wrapperSettings(
+        _.pick(config, [
+          "AUTH0_URL",
+          "AUTH0_AUDIENCE",
+          "AUTH0_CLIENT_ID",
+          "AUTH0_CLIENT_SECRET",
+          "AUTH0_PROXY_SERVER_URL",
+          "KEYCLOAK_TOKEN_URL",
+          "KEYCLOAK_AUDIENCE",
+          "KEYCLOAK_CLIENT_ID",
+          "KEYCLOAK_CLIENT_SECRET",
+        ]),
+      ),
+      // Only the Auth0 configuration passed TOKEN_CACHE_TIME to the wrapper.
+      ...(auth.useKeycloak() ? {} : _.pick(config, ["TOKEN_CACHE_TIME"])),
       BUSAPI_URL: config.BUSAPI_URL,
       KAFKA_ERROR_TOPIC: config.KAFKA_ERROR_TOPIC,
     });
