@@ -94,7 +94,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",
-    "tc-core-library-js": "https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/e844764e1c2cadcc01fd5e05029590319802af09",
+    "tc-core-library-js": "https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/112d54a3ed66423e7305e94e174937823e76124e",
     "topcoder-bus-api-wrapper": "github:topcoder-platform/tc-bus-api-wrapper#master",
     "uuid": "^14.0.1",
     "winston": "^3.18.3",

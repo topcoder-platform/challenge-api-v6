@@ -5,7 +5,7 @@ workload and its callers are ready. Existing DEV services continue using Auth0.
 The core dependency is pinned to a reviewed Keycloak prerelease commit, including
 transitive wrapper uses through the pnpm override. No npm latest dependency is used.
 
-The core is pinned to `tc-core-library-js` commit `e844764` (4.0.0-keycloak.1) in
+The core is pinned to `tc-core-library-js` commit `112d54a` (4.0.0-keycloak.2) in
 `package.json` and the `pnpm-workspace.yaml` override, and `pnpm-lock.yaml` resolves
 that single version, including the copy `topcoder-bus-api-wrapper` uses.
 
