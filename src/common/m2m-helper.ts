@@ -1,6 +1,6 @@
 const _ = require("lodash");
 const config = require("config");
-const m2mAuth = require("tc-core-library-js").createM2MClient;
+const m2mAuth = require("tc-core-library-js").auth.m2m;
 
 class M2MHelper {
   static m2m = null;
