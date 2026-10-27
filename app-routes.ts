@@ -11,7 +11,7 @@ const helper = require("./src/common/helper");
 const errors = require("./src/common/errors");
 const logger = require("./src/common/logger");
 const routes = require("./src/routes");
-const authenticator = require("tc-core-library-js").createJwtAuthenticator;
+const authenticator = require("tc-core-library-js").middleware.jwtAuthenticator;
 
 /**
  * Returns whether a normalized auth user has interactive roles.
@@ -50,14 +50,19 @@ function getAuthUserScopes(authUser) {
 /**
  * Determine whether an auth user represents an M2M caller.
  *
- * Only the shared verifier may classify a caller as a machine. Scope presence
- * alone does not authenticate a client-credentials grant.
+ * Some valid client-credentials tokens are decoded with scopes but without the
+ * `isMachine` flag. Treat no-role scoped callers as M2M so route-level scope
+ * checks, not user group membership, decide access.
  *
  * @param {Object} authUser the decoded auth user from the authenticator
  * @returns {Boolean} true when the caller should be handled as M2M
  */
 function isM2MAuthUser(authUser) {
-  return authUser?.isMachine === true;
+  return !!(
+    authUser &&
+    (_.get(authUser, "isMachine", false) ||
+      (getAuthUserScopes(authUser) && !hasInteractiveRoles(authUser)))
+  );
 }
 
 /**
