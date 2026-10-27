@@ -28,6 +28,20 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
 
+## Container build
+
+Run `./build.sh challenge-api-v6` to build the production image locally. The
+Dockerfile pins Node 26.5.1 and Alpine 3.24 for both stages. The runtime copies
+the Node binary from the same official Node image used by the build stage,
+installs its runtime libraries, and checks the resulting Node version during
+the image build. This avoids depending on an old `nodejs-current` APK remaining
+available in Alpine's package repository. npm and pnpm remain in the build stage;
+the application runs as the existing non-root `app` user.
+
+When changing Node or Alpine, update the Dockerfile arguments together with
+`.nvmrc` and verify the full image build. `PNPM_VERSION` is explicitly passed
+into the build stage so the configured package-manager version is respected.
+
 ## Technology
 
 The API is written in TypeScript and runs on NestJS 11 with the Express adapter.
