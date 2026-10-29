@@ -140,7 +140,7 @@ importers:
         version: 5.0.1(express@5.2.1(supports-color@5.5.0))
       tc-core-library-js:
         specifier: github:topcoder-platform/tc-core-library-js#v4.0.0-rc.1
-        version: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/6c326fea0abfccb5ae29dff2ac5bce01aabc1fa4(supports-color@5.5.0)
+        version: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/a25576b8b038211d1ba910eca2d900271ba6659d(supports-color@5.5.0)
       uuid:
         specifier: ^14.0.1
         version: 14.0.1
@@ -4039,8 +4039,8 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
-  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/6c326fea0abfccb5ae29dff2ac5bce01aabc1fa4:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/6c326fea0abfccb5ae29dff2ac5bce01aabc1fa4}
+  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/a25576b8b038211d1ba910eca2d900271ba6659d:
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/a25576b8b038211d1ba910eca2d900271ba6659d}
     version: 4.0.0-rc.1
     engines: {node: '>=22.13'}
 
@@ -7576,7 +7576,7 @@ snapshots:
       prisma: 7.10.1(@types/node@26.1.1)(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
       reflect-metadata: 0.2.2
       rxjs: 7.8.2
-      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/6c326fea0abfccb5ae29dff2ac5bce01aabc1fa4(supports-color@5.5.0)
+      tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/a25576b8b038211d1ba910eca2d900271ba6659d(supports-color@5.5.0)
     transitivePeerDependencies:
       - '@fastify/static'
       - '@nestjs/microservices'
@@ -9024,7 +9024,7 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/6c326fea0abfccb5ae29dff2ac5bce01aabc1fa4(supports-color@5.5.0):
+  tc-core-library-js@https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/a25576b8b038211d1ba910eca2d900271ba6659d(supports-color@5.5.0):
     dependencies:
       '@types/jsonwebtoken': 9.0.10
       jsonwebtoken: 9.0.3
