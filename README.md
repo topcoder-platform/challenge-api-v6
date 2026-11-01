@@ -92,6 +92,10 @@ The following parameters can be set in config files or in env variables:
 - PORT: the server port, default is 3000
 - CORS_ALLOWED_ORIGINS: comma-separated exact HTTPS browser origins allowed to
   call the API; HTTP is accepted only for localhost development origins
+  (overrides the defaults). When overriding this value, include
+  `https://support.topcoder.com` in production and
+  `https://support.topcoder-dev.com` in development so the Support app can load
+  active challenges when opening a request.
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
 - AUTH0_URL: AUTH0 URL, used to get M2M token
