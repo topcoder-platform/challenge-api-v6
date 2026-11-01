@@ -9,6 +9,8 @@ const DEFAULT_CORS_ALLOWED_ORIGINS = [
   "https://www.topcoder-dev.com",
   "https://platform.topcoder.com",
   "https://platform.topcoder-dev.com",
+  "https://support.topcoder.com",
+  "https://support.topcoder-dev.com",
 ];
 
 /**
