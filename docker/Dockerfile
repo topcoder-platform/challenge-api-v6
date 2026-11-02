@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_VERSION=26.5.1
+ARG NODE_VERSION=26.12.1
 ARG ALPINE_VERSION=3.24
 ARG PNPM_VERSION=11.15.1
 
@@ -20,6 +20,7 @@ FROM build-base AS build
 COPY . .
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     pnpm install --frozen-lockfile
+RUN pnpm run test:dependency-compat
 RUN pnpm lint && pnpm build \
     && rm -rf dist/src/scripts dist/src/phase-management/mocks \
     && rm -f dist/tsconfig.build.tsbuildinfo

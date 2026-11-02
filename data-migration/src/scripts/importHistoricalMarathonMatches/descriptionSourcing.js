@@ -300,7 +300,9 @@ const convertRichTextSectionToMarkdown = (value) => {
     .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<\/li>/gi, "\n")
     .replace(/<\/(p|div|section|example|note|item)>/gi, "\n\n")
-    .replace(/<(p|div|section|example|note|item)\b[^>]*>/gi, "");
+    // Preserve a separator: deleting a tag can join two surrounding fragments
+    // into a new HTML tag before the final deterministic markup scanner.
+    .replace(/<(p|div|section|example|note|item)\b[^>]*>/gi, " ");
   text = stripAllTags(text).replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n");
 
   let markdown = normalizeWhitespacePreservingCodeBlocks(text);
