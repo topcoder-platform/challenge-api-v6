@@ -57,6 +57,16 @@ describe("importHistoricalMarathonMatches description sourcing", () => {
     });
   });
 
+  test("does not assemble active tags across removed block elements", () => {
+    const markdown = convertComponentXmlToMarkdown(
+      "<problem><statement>before <ifra<p>me src='https://evil.example'>inside</iframe> after</statement></problem>"
+    );
+
+    expect(markdown).toContain("before");
+    expect(markdown).toContain("after");
+    expect(markdown).not.toMatch(/<iframe\b/i);
+  });
+
   test("resolves component markdown with markdown description format", () => {
     expect(
       resolveDescriptionCandidateFromCounters({
