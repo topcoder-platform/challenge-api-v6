@@ -1,23 +1,37 @@
 # OIDC deployment migration
 
-This change replaces the Auth0 credential broker and SSM-to-shell deployment path with the released [deployment suite v2.0.0](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.0). CI fetches `refs/tags/v2.0.0` and verifies its commit is `dba6d24f8f53653a174d522ed177af66d1e28059`. Build and deployment run in separate jobs. The deployer cannot read Parameter Store, Secrets Manager or decrypt KMS data, including through another assumed role. ECS continues resolving the existing runtime secret references using the execution role.
+This pipeline uses [deployment suite v2.0.0](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.0). CI fetches `refs/tags/v2.0.0` and verifies commit `dba6d24f8f53653a174d522ed177af66d1e28059`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
 
-## Production target
+## Deployment manifests
 
-The read-only inventory on 2026-11-03 verified account `409275337247`, cluster `tc-challenge-serverless`, service `challenge-api-v6`, family `challenge-api-v6`, and container `challenge-api-v6`. `prod.json` preserves the observed task/execution roles and names the proposed service-specific deployment role. `prod-baseline.json` records references only; it contains no parameter values. Do not recreate the service or replace its complete task definition from this baseline.
+`dev.json` contains the actual development service, repository and role identifiers verified through read-only AWS inspection on 2026-11-04. `prod.json` contains the production identifiers observed on 2026-11-03. The existing runtime roles are preserved. These files contain the minimal non-secret identifiers required by the deployer; no credentials or parameter values belong here.
 
-## Infrastructure prerequisites, applied separately by an administrator
+This PR targets `develop`. That branch builds and deploys to dev using `dev.json` and the restricted `challenge-api-v6-dev-deploy` context. Production uses `prod.json`, the `master` branch and a manual approval gate. Other branches build only. Changing the PR base does not change these deployment filters.
 
-1. In each account, register the CircleCI OIDC issuer `https://oidc.circleci.com/org/947bef5e-1669-415d-b83c-4fc85155b7df` with client ID `947bef5e-1669-415d-b83c-4fc85155b7df`. The current production account has only the legacy Auth0 provider. Do not remove that provider until all its consumers have migrated.
-2. Review and install `iam/prod-role.cloudformation.json` with an administrator/IaC identity. It creates the proposed deployment role and applies the same least-privilege policy as a permissions boundary. The trust binds this CircleCI project, repository, checkout branch and configuration branch. It does not grant infrastructure creation to CircleCI.
-3. Configure ECR repository `challenge-api-v6` with unconditional `IMMUTABLE` tags and supported scan-on-push. Existing tags are not retagged. The release fails for MEDIUM/HIGH/CRITICAL/UNDEFINED findings, failed scans, or a mismatched digest.
-4. In the infrastructure that owns the task definition, add the reviewed container check from `prod-healthcheck.json`, keeping all roles, runtime secret references, resources, mounts and sidecars. Verify the health endpoint against the running container in dev first. Preserve circuit-breaker rollback and positive desired capacity. Remove any `RESET_DB` secret binding and plaintext secret environment entries before adoption. Keep the execution role's runtime read permissions scoped to the references that service needs.
-5. Create restricted `challenge-api-v6-dev-deploy` and `challenge-api-v6-prod-deploy` CircleCI contexts without Auth0/static AWS credentials. Restrict production to the reviewed `master` checkout and configuration ref, authorized operators, and approval job. Remove legacy credentials from project settings too: removing `org-global` alone does not remove project-level variables. Confirm `CIRCLE_OIDC_TOKEN_V3` is issued. Disable secret access for forks and SSH debugging in deployment jobs.
+## Private infrastructure provisioning
 
-## Development acceptance before merge/release
+IAM policy/trust templates, provider definitions and detailed AWS/runtime-reference baselines are maintained separately from this public application repository. They are not fetched or installed by the deployment job. Preserve their reviewed definitions in a private infrastructure repository or administrative artifact store and provision them with an administrator identity before enabling deployment.
 
-The saved dev AWS session had expired during preparation. No dev cluster, role or family has been guessed. **This PR is a draft until an administrator verifies and commits `deploy/dev.json` for account `811668436784` and branch `develop`, with corresponding narrow IAM policy/trust.** Use the same schema as `prod.json`, but inspect the actual dev resources and roles; do not replace just the account number. The dev job fails closed while its manifest is absent. Branches other than `develop` and `master` build only and receive no deployment context.
+For dev, the read-only inspection found:
 
-Run the shared offline suite, validate the CircleCI config and IAM policies, and test a dev release plus an unhealthy-image rollback. Verify CloudTrail contains no SSM/Secrets Manager calls from the deployment principal. Remove its old broker grants only after migration. Check the runtime secret references and roles stayed unchanged. Production requires the manual approval job and a passing digest/scan/health verification.
+- The expected service has two running tasks and circuit-breaker rollback enabled.
+- The CircleCI OIDC provider and service-specific deployment role do not exist yet.
+- ECR tags are mutable. Enhanced continuous image scanning is already enabled at the registry level.
+- The task has no explicit container health check. Its load-balancer check uses `/v6/challenges/health` on container port 3000; `dev-healthcheck.json` proposes that same check.
+- Existing runtime references can be preserved without fetching their values. CircleCI context existence and restrictions have not been verified through the AWS session.
 
-The pinned executor is `cimg/aws@sha256:4cf3768db00ddf9bc439b8c84e8a60c11a14edf81c8baf76f74132144f8340d5`. Python/AWS CLI/Buildx/Git compatibility was tested with the shared offline suite. No package installation or service build runs in the deployment job. The Dockerfile retains the existing in-image quality gates. This PR does not deploy, change IAM, rotate credentials, or claim a successful live rollout.
+Provision the account's CircleCI OIDC provider once, then the exact role named in `dev.json` with a matching permissions boundary. Bind trust to the recorded organization/project/repository and the exact `develop` checkout and configuration refs. Restrict PassRole to the existing runtime roles. The role and boundary must explicitly deny `ssm:*`, `secretsmanager:*`, `kms:Decrypt` and `sts:AssumeRole*`; a session-policy deny alone is insufficient.
+
+Set the existing ECR repository to unconditional `IMMUTABLE` tags while preserving its enhanced scanning configuration. Add the proposed container health check through the infrastructure that owns the task definition, preserving its runtime references, roles, capacity and other settings. Keep execution-role secret access scoped to the application's required references.
+
+Create/restrict `challenge-api-v6-dev-deploy` without Auth0/static AWS credentials. Confirm OIDC v3 issuance, restrict source/config refs and operators, and remove legacy credentials from project settings as well as contexts. Production prerequisites remain separate; do not apply the production manifest with the dev session.
+
+## Dev acceptance
+
+The manifest is now populated, but the first deployment remains blocked on the infrastructure/context prerequisites above. Validate wrong-project/ref denial, a successful dev release and an unhealthy-image rollback. Verify the deployment principal makes no SSM/Secrets Manager calls and that runtime roles/references remain unchanged. Remove old broker grants only after their other consumers migrate.
+
+The current deployed image's ECR scan response was `ACTIVE` with a scan timestamp but no severity-count map. The v2.0.0 gate rejects that response. Verify the new candidate returns a supported, recent completed scan response, or review a shared-suite scanner fix before rollout; do not bypass the gate. The release rejects MEDIUM/HIGH/CRITICAL/UNDEFINED findings, missing/failed scans and mismatched image digests.
+
+Validation: CircleCI config validation; v2 manifest validation; AWS IAM Access Analyzer and CloudFormation template validation of the private definitions; explicit-deny policy simulations; and a read-only task compatibility check with the proposed health check. The compatibility check preserves both runtime roles and every existing secret reference. These are not live deployment or rollback tests.
+
+No AWS or CircleCI resources were modified while preparing this configuration. No credentials or parameter values were read into the repository.
