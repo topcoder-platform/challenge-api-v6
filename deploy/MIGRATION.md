@@ -10,7 +10,7 @@ This PR targets `develop`. That branch builds and deploys to dev using `dev.json
 
 ## Private infrastructure provisioning
 
-IAM policy/trust templates, provider definitions and detailed AWS/runtime-reference baselines are maintained separately from this public application repository. They are not fetched or installed by the deployment job. Preserve their reviewed definitions in a private infrastructure repository or administrative artifact store and provision them with an administrator identity before enabling deployment.
+IAM policy/trust templates, provider definitions and detailed AWS/runtime-reference baselines are maintained separately from this public application repository. They are not fetched or installed by the deployment job. The reviewed definitions and dev provisioning instructions are maintained in [v6-services-iac](https://github.com/topcoder-platform/v6-services-iac/tree/main/services/challenge-api-v6). Provision them with an administrator identity before enabling deployment.
 
 For dev, the read-only inspection found:
 
@@ -35,3 +35,7 @@ The current deployed image's ECR scan response was `ACTIVE` with a scan timestam
 Validation: CircleCI config validation; v2 manifest validation; AWS IAM Access Analyzer and CloudFormation template validation of the private definitions; explicit-deny policy simulations; and a read-only task compatibility check with the proposed health check. The compatibility check preserves both runtime roles and every existing secret reference. These are not live deployment or rollback tests.
 
 No AWS or CircleCI resources were modified while preparing this configuration. No credentials or parameter values were read into the repository.
+
+## Infrastructure source
+
+IAM templates and detailed AWS baselines are maintained in the private [v6-services-iac service directory](https://github.com/topcoder-platform/v6-services-iac/tree/main/services/challenge-api-v6). Provision infrastructure separately with an administrator identity; application CI does not fetch that repository or install IAM. Required application manifests and health-check proposals remain here.
