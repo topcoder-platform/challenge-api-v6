@@ -28,8 +28,8 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.39.1",
-        "eslint": "^9.39.1",
-        "eslint-plugin-jest": "^29.2.1",
+        "eslint": "^10.14.0",
+        "eslint-plugin-jest": "^29.17.0",
         "globals": "^16.5.0",
         "jest": "^30.2.0",
         "prisma": "~7.1.0"
@@ -39,12 +39,15 @@
         "yarn": "1.22.19"
     },
     "overrides": {
-        "@hono/node-server": "2.0.11",
+        "@hono/node-server": "2.1.3",
         "deepmerge-ts": "8.0.0",
         "effect": "3.22.0",
-        "glob": "10.5.0",
-        "hono": "4.12.34",
+        "glob": "14.0.2",
+        "hono": "4.13.11",
         "lodash": "4.18.1",
-        "valibot": "1.4.2"
+        "valibot": "1.4.2",
+        "mysql2": "3.23.1",
+        "brace-expansion": "5.0.12",
+        "minimatch": "11.0.1"
     }
 }

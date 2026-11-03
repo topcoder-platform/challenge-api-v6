@@ -11,7 +11,7 @@ const helper = require("./src/common/helper");
 const errors = require("./src/common/errors");
 const logger = require("./src/common/logger");
 const routes = require("./src/routes");
-const authenticator = require("tc-core-library-js").middleware.jwtAuthenticator;
+const authenticator = require("tc-core-library-js").createJwtAuthenticator;
 
 /**
  * Returns whether a normalized auth user has interactive roles.
@@ -50,19 +50,14 @@ function getAuthUserScopes(authUser) {
 /**
  * Determine whether an auth user represents an M2M caller.
  *
- * Some valid client-credentials tokens are decoded with scopes but without the
- * `isMachine` flag. Treat no-role scoped callers as M2M so route-level scope
- * checks, not user group membership, decide access.
+ * Only the shared verifier may classify a caller as a machine. Scope presence
+ * alone does not authenticate a client-credentials grant.
  *
  * @param {Object} authUser the decoded auth user from the authenticator
  * @returns {Boolean} true when the caller should be handled as M2M
  */
 function isM2MAuthUser(authUser) {
-  return !!(
-    authUser &&
-    (_.get(authUser, "isMachine", false) ||
-      (getAuthUserScopes(authUser) && !hasInteractiveRoles(authUser)))
-  );
+  return authUser?.isMachine === true;
 }
 
 /**
@@ -125,6 +120,8 @@ const getSignature = (req) => req.signature || req._reqLogId || "no-signature";
  * @param app the express app
  */
 function configureRoutes(app) {
+  // Share issuer/audience configuration and the JWKS cache across all routes.
+  const authenticate = authenticator(_.pick(config, ["AUTH_SECRET", "VALID_ISSUERS", "JWT_AUDIENCE", "AUTH0_AUDIENCE"]));
   // Load all routes
   _.each(routes, (verbs, path) => {
     _.each(verbs, (def, verb) => {
@@ -159,7 +156,7 @@ function configureRoutes(app) {
       if (def.auth) {
         // add Authenticator/Authorization check if route has auth
         actions.push((req, res, next) => {
-          authenticator(_.pick(config, ["AUTH_SECRET", "VALID_ISSUERS"]))(req, res, next);
+          authenticate(req, res, next);
         });
 
         actions.push((req, res, next) => {
@@ -237,30 +234,23 @@ function configureRoutes(app) {
           if (!hasToken) {
             return next();
           }
-          const interceptRes: any = {};
-          interceptRes.status = () => interceptRes;
-          interceptRes.json = () => interceptRes;
-          interceptRes.send = (payload) => {
-            logger.info(
-              `[${getSignature(req)}] Public route: authenticator send called payload=${safeInspect(
-                payload
-              )}`
-            );
-            return next();
-          };
-          const authMw = authenticator(_.pick(config, ["AUTH_SECRET", "VALID_ISSUERS"]));
           let finished = false;
-          const bailoutTimer = setTimeout(() => {
-            if (finished) return;
-            finished = true;
-            next();
-          }, 8000);
-          authMw(req, interceptRes, (...args) => {
+          /** Completes optional authentication once and cancels its timeout.
+           * @param error Optional middleware error. @returns Nothing; delegates errors to Express.
+           */
+          const finish = (error?: Error) => {
             if (finished) return;
             finished = true;
             clearTimeout(bailoutTimer);
-            next(...args);
-          });
+            next(error);
+          };
+          const bailoutTimer = setTimeout(() => finish(), 8000);
+          const interceptRes: any = {};
+          interceptRes.status = () => interceptRes;
+          interceptRes.json = () => finish();
+          interceptRes.send = () => finish();
+          interceptRes.end = () => finish();
+          authenticate(req, interceptRes, finish);
         });
 
         actions.push((req, res, next) => {
