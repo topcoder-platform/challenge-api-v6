@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "environment": "dev",
+  "accountId": "811668436784",
+  "region": "us-east-1",
+  "deployRoleArn": "arn:aws:iam::811668436784:role/challenge-api-v6-dev-deploy",
+  "taskRoleArn": "arn:aws:iam::811668436784:role/challenge-v5-container-role",
+  "executionRoleArn": "arn:aws:iam::811668436784:role/ecsTaskExecutionRole",
+  "cluster": "tc-challenge-serverless",
+  "service": "challenge-api-v6",
+  "taskFamily": "challenge-api-v6",
+  "circleciOrgId": "947bef5e-1669-415d-b83c-4fc85155b7df",
+  "circleciProjectId": "60625525-912d-4f8d-8f50-ee9f24159e60",
+  "repository": "github.com/topcoder-platform/challenge-api-v6",
+  "branch": "develop",
+  "images": {
+    "challenge-api-v6": "challenge-api-v6"
+  }
+}
