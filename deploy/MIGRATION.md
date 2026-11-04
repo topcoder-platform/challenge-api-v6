@@ -1,6 +1,6 @@
 # OIDC deployment migration
 
-This pipeline uses [deployment suite v2.0.4](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.4). CI fetches `refs/tags/v2.0.4` and verifies commit `6b7df14171a5002b1291e549e85f06a30f091486`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
+This pipeline uses [deployment suite v2.0.5](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.5). CI fetches `refs/tags/v2.0.5` and verifies commit `bff574ab5c0b46773e25d2af1eff76675fba2ba5`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
 
 ## Deployment manifests
 
@@ -23,13 +23,15 @@ Installation and verification records are maintained in the [private infrastruct
 
 ## Dev acceptance
 
-The dev infrastructure/context setup is complete. The v2.0.3 pipeline authenticated through OIDC, passed service/task preflight, pushed an immutable image and verified its manifest, then was denied access to enhanced scan results. Administrator inspection confirmed a fresh scan with explicitly empty findings. ECS was not updated and the existing service remains healthy.
+The dev infrastructure/context setup is complete. The v2.0.4 pipeline authenticated through OIDC, published an immutable image and passed the enhanced scan gate. ECS then rejected task registration because the untagged definition was submitted with `tags: []`. ECS was not updated and the existing service remains healthy.
 
-This pipeline pins v2.0.4, including [PR #44](https://github.com/topcoder-platform/tc-deploy-scripts/pull/44). The STS session now permits the Inspector findings/coverage reads required by ECR enhanced scanning. The dev role and permissions boundary have already been updated through the private infrastructure repository. These two read-only actions are limited to the deployment region; AWS does not support repository-level restrictions for them, so they can read account-wide scan metadata in that region. Parameter Store, Secrets Manager, KMS decryption and role chaining remain explicitly denied. No Inspector configuration/write permissions are granted. Production provisioning remains separate.
+This pipeline pins v2.0.5. [PR #45](https://github.com/topcoder-platform/tc-deploy-scripts/pull/45) omits empty registration tags while preserving existing tags and checking read-back equality. AWS failures now identify the service and operation without exposing request data or raw CLI output. No IAM changes are required for this fix.
 
-The release also retains the earlier clean-image scan parsing, AWS CLI input and circuit-breaker compatibility fixes. Scan completion, 24-hour freshness and MEDIUM/HIGH/CRITICAL/UNDEFINED thresholds remain enforced. CI fetches the exact release tag and verifies the commit above. All 76 tests pass in the pinned executor, and merged-commit GitHub CI passes. IAM validation and live simulations confirm the regional reads and retained secret-access denies.
+The release retains [PR #44](https://github.com/topcoder-platform/tc-deploy-scripts/pull/44). The STS session permits the Inspector findings/coverage reads required by ECR enhanced scanning. The dev role and permissions boundary have already been updated through the private infrastructure repository. These two read-only actions are limited to the deployment region; AWS does not support repository-level restrictions for them, so they can read account-wide scan metadata in that region. Parameter Store, Secrets Manager, KMS decryption and role chaining remain explicitly denied. No Inspector configuration/write permissions are granted. Production provisioning remains separate.
 
-Merge into `develop` to retry deployment. Verify scan access under the updated OIDC session, a successful healthy release, wrong-project/ref denial and an unhealthy-image rollback. Verify the deployment principal makes no SSM/Secrets Manager calls and that runtime roles/references remain unchanged. Do not bypass the scan gate. Remove old broker grants only after their other consumers migrate.
+The release also retains the earlier clean-image scan parsing, AWS CLI input and circuit-breaker compatibility fixes. Scan completion, 24-hour freshness and MEDIUM/HIGH/CRITICAL/UNDEFINED thresholds remain enforced. CI fetches the exact release tag and verifies the commit above. All 82 tests pass in the pinned executor, and merged-commit GitHub CI passes. IAM validation and live simulations confirm the regional reads and retained secret-access denies.
+
+Merge into `develop` to retry deployment. OIDC authentication and scan gating are now verified. Check successful task registration and a healthy release, wrong-project/ref denial and an unhealthy-image rollback. Verify the deployment principal makes no SSM/Secrets Manager calls and that runtime roles/references remain unchanged. Do not bypass the scan gate. Remove old broker grants only after their other consumers migrate.
 
 Only the dev prerequisites described above have been applied. No credentials or parameter values were read into the repository. Detailed installation, failure and verification evidence remains in the private infrastructure repository.
 
