@@ -8,14 +8,14 @@ commands:
   checkout-suite:
     steps:
     - run:
-        name: Verify deployment suite v2.0.1
+        name: Verify deployment suite v2.0.2
         command: |
           set -euo pipefail
           git init --quiet /tmp/tc-deploy-scripts
           git -C /tmp/tc-deploy-scripts remote add origin https://github.com/topcoder-platform/tc-deploy-scripts.git
-          git -C /tmp/tc-deploy-scripts fetch --quiet --depth 1 origin refs/tags/v2.0.1
+          git -C /tmp/tc-deploy-scripts fetch --quiet --depth 1 origin refs/tags/v2.0.2
           git -C /tmp/tc-deploy-scripts checkout --quiet --detach FETCH_HEAD
-          test "$(git -C /tmp/tc-deploy-scripts rev-parse HEAD)" = 4025ac9963c38581f6a19bc1369bf634b22e0245
+          test "$(git -C /tmp/tc-deploy-scripts rev-parse HEAD)" = 59324c58a1b2fa325b665695e39e4fba62886214
 jobs:
   build:
     executor: reviewed
