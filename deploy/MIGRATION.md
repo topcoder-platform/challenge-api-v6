@@ -1,6 +1,6 @@
 # OIDC deployment migration
 
-This pipeline uses [deployment suite v2.0.0](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.0). CI fetches `refs/tags/v2.0.0` and verifies commit `dba6d24f8f53653a174d522ed177af66d1e28059`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
+This pipeline uses [deployment suite v2.0.1](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.1). CI fetches `refs/tags/v2.0.1` and verifies commit `4025ac9963c38581f6a19bc1369bf634b22e0245`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
 
 ## Deployment manifests
 
@@ -23,11 +23,11 @@ Installation and verification records are maintained in the [private infrastruct
 
 ## Dev acceptance
 
-The dev infrastructure/context setup is complete, but the first deployment remains blocked on the shared scanner fix and release pin described below. Validate wrong-project/ref denial, a successful dev release and an unhealthy-image rollback. Verify the deployment principal makes no SSM/Secrets Manager calls and that runtime roles/references remain unchanged. Remove old broker grants only after their other consumers migrate.
+The dev infrastructure/context setup is complete and this pipeline now pins the released scan compatibility fix. Merge into `develop` to exercise the first OIDC image deployment. Validate wrong-project/ref denial, a successful dev release and an unhealthy-image rollback. Verify the deployment principal makes no SSM/Secrets Manager calls and that runtime roles/references remain unchanged. Remove old broker grants only after their other consumers migrate.
 
-ECR omits the optional severity-count map for this clean image and returns an explicit empty findings list. Read-only Inspector inspection confirmed successful coverage and zero active findings. [tc-deploy-scripts PR #41](https://github.com/topcoder-platform/tc-deploy-scripts/pull/41) handles that response only when it identifies the exact requested image, explicitly contains no findings, and has no remaining page. It retains the completed-status, 24-hour freshness and MEDIUM/HIGH/CRITICAL/UNDEFINED gates, and needs no new IAM permissions.
+ECR omits the optional severity-count map for this clean image and returns an explicit empty findings list. Read-only Inspector inspection confirmed successful coverage and zero active findings. [Deployment suite v2.0.1](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.1), containing merged PR #41, handles that response only when it identifies the exact requested image, explicitly contains no findings, and has no remaining page. It retains the completed-status, 24-hour freshness and MEDIUM/HIGH/CRITICAL/UNDEFINED gates, and needs no new IAM permissions.
 
-**Before merging this PR:** merge the shared fix, publish a new patch release, and update this pipeline's fetched tag and verified commit. This PR still pins v2.0.0, which rejects the observed response. Do not retag v2.0.0 or bypass the scan gate. The existing image's scan is over 24 hours old and remains ineligible for release; the first candidate needs a fresh scan. The shared fix passes 69 tests locally and in the pinned executor, plus GitHub CI.
+The shared fix is merged and released as v2.0.1. This pipeline fetches its exact tag and verifies the release commit above. The existing image's scan is over 24 hours old and remains ineligible for release; the first candidate needs a fresh scan. Do not bypass the scan gate. The release passes 69 tests locally and in the pinned executor, plus merged-commit GitHub CI. The original v2.0.0 tag is unchanged.
 
 Validation: CircleCI config validation; v2 manifest validation; AWS IAM Access Analyzer and CloudFormation template validation of the private definitions; explicit-deny policy simulations; and a read-only task compatibility check with the proposed health check. The compatibility check preserves both runtime roles and every existing secret reference. The administrator-applied health-check revision has completed a healthy rollout with the existing image; the new CircleCI OIDC image-deployment pipeline and unhealthy-image rollback have not yet been exercised.
 
