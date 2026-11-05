@@ -79,7 +79,7 @@ describe('route JWT configuration', () => {
   });
 
   it('accepts browser RSA tokens using JWT_AUDIENCE', async () => {
-    const token = jwt.sign({ userId: '42', roles: ['User'] }, privateKey, { algorithm: 'RS256', keyid: 'test-key', issuer, audience: 'browser-client', expiresIn: 300 });
+    const token = jwt.sign({ emailVerified: true, userId: '42', roles: ['User'] }, privateKey, { algorithm: 'RS256', keyid: 'test-key', issuer, audience: 'browser-client', expiresIn: 300 });
     const result = await verify(token);
     assert.equal(result.status, 200);
     assert.equal(result.user.isMachine, false);
@@ -93,12 +93,12 @@ describe('route JWT configuration', () => {
   });
 
   it('retains legacy HS256 human tokens without an audience', async () => {
-    const token = jwt.sign({ userId: '42', roles: ['User'] }, secret, { issuer, expiresIn: 300 });
+    const token = jwt.sign({ emailVerified: true, userId: '42', roles: ['User'] }, secret, { issuer, expiresIn: 300 });
     assert.equal((await verify(token)).status, 200);
   });
 
   it('rejects an untrusted audience', async () => {
-    const token = jwt.sign({ userId: '42' }, privateKey, { algorithm: 'RS256', keyid: 'test-key', issuer, audience: 'another-api', expiresIn: 300 });
+    const token = jwt.sign({ emailVerified: true, userId: '42' }, privateKey, { algorithm: 'RS256', keyid: 'test-key', issuer, audience: 'another-api', expiresIn: 300 });
     assert.equal((await verify(token)).status, 401);
   });
 
@@ -108,7 +108,7 @@ describe('route JWT configuration', () => {
   });
 
   it('rejects an invalid signature', async () => {
-    const token = jwt.sign({ userId: '42' }, 'incorrect-secret-at-least-32-bytes', { issuer, expiresIn: 300 });
+    const token = jwt.sign({ emailVerified: true, userId: '42' }, 'incorrect-secret-at-least-32-bytes', { issuer, expiresIn: 300 });
     assert.equal((await verify(token)).status, 401);
   });
 });
