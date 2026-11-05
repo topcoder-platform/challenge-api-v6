@@ -863,6 +863,62 @@ describe('phase helper unit tests', () => {
     namesByEndDate.should.deep.equal(['Registration', 'Submission', 'Appeals'])
   })
 
+  for (const shiftDays of [0, 1]) {
+    it(`preserves a draft schedule shifted by ${shiftDays} days when template rows are unordered (PM-6714)`, async () => {
+      const day = 24 * 60 * 60
+      const startDate = '2026-11-05T04:13:31.728Z'
+      const dateAt = (days) => new Date(Date.parse(startDate) + days * day * 1000).toISOString()
+      const challengePhases = [
+        { phaseId: 'registration', name: 'Registration', start: 0, end: 5 },
+        { phaseId: 'submission', name: 'Submission', start: 0, end: 5 },
+        { phaseId: 'review', name: 'Review', predecessor: 'submission', start: 5, end: 7 },
+        { phaseId: 'appeals', name: 'Appeals', predecessor: 'review', start: 7, end: 8 },
+        { phaseId: 'appeals-response', name: 'Appeals Response', predecessor: 'appeals', start: 8, end: 8.5 }
+      ].map(({ start, end, ...phase }) => ({
+        ...phase,
+        id: `${phase.phaseId}-row`,
+        isOpen: false,
+        duration: (end - start) * day,
+        scheduledStartDate: dateAt(start),
+        scheduledEndDate: dateAt(end)
+      }))
+      // Appeals arrives first, before the two root phases and its own predecessor.
+      // Previously its start date pushed Registration/Submission past their end dates.
+      const templatePhases = [3, 2, 4, 1, 0].map((index) => {
+        const phase = challengePhases[index]
+        return { phaseId: phase.phaseId, predecessor: phase.predecessor, defaultDuration: phase.duration }
+      })
+      stubPhaseLookups(
+        challengePhases.map((phase) => ({ id: phase.phaseId, name: phase.name, description: phase.name })),
+        templatePhases
+      )
+      const shiftDate = (date) => new Date(Date.parse(date) + shiftDays * day * 1000).toISOString()
+      const updates = challengePhases.map((phase) => ({
+        id: phase.id,
+        phaseId: phase.phaseId,
+        duration: phase.duration,
+        scheduledStartDate: new Date(shiftDate(phase.scheduledStartDate)),
+        scheduledEndDate: new Date(shiftDate(phase.scheduledEndDate))
+      }))
+
+      const updatedPhases = await phaseHelper.populatePhasesForChallengeUpdate(
+        challengePhases,
+        updates,
+        'timeline-template-id',
+        false
+      )
+
+      updatedPhases.should.have.lengthOf(challengePhases.length)
+      for (const original of challengePhases) {
+        const updated = updatedPhases.find((phase) => phase.id === original.id)
+        updated.scheduledStartDate.should.equal(shiftDate(original.scheduledStartDate))
+        updated.scheduledEndDate.should.equal(shiftDate(original.scheduledEndDate))
+        updated.duration.should.equal(original.duration)
+        updated.isOpen.should.equal(false)
+      }
+    })
+  }
+
   it('leaves created phases unscheduled when the predecessor chain has no resolvable root', async () => {
     const registrationPhaseId = 'registration-phase'
     const reviewPhaseId = 'review-phase'
