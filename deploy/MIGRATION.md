@@ -1,6 +1,6 @@
 # OIDC deployment migration
 
-This pipeline uses [deployment suite v2.0.5](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.5). CI fetches `refs/tags/v2.0.5` and verifies commit `bff574ab5c0b46773e25d2af1eff76675fba2ba5`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
+This pipeline uses [deployment suite v2.0.9](https://github.com/topcoder-platform/tc-deploy-scripts/releases/tag/v2.0.9). CI fetches `refs/tags/v2.0.9` and verifies commit `dc06de730f068a230efa9d5f4d4d9c80782d3bfb`. Builds and deployments run in separate jobs. The proposed deployment role, permissions boundary and STS session deny Parameter Store, Secrets Manager, KMS decryption and role chaining. ECS resolves runtime secret references through its execution role.
 
 ## Deployment manifests
 
@@ -25,7 +25,7 @@ Installation and verification records are maintained in the [private infrastruct
 
 The dev infrastructure/context setup is complete. The v2.0.4 pipeline authenticated through OIDC, published an immutable image and passed the enhanced scan gate. ECS then rejected task registration because the untagged definition was submitted with `tags: []`. ECS was not updated and the existing service remains healthy.
 
-This pipeline pins v2.0.5. [PR #45](https://github.com/topcoder-platform/tc-deploy-scripts/pull/45) omits empty registration tags while preserving existing tags and checking read-back equality. AWS failures now identify the service and operation without exposing request data or raw CLI output. No IAM changes are required for this fix.
+This pipeline pins v2.0.9. [PR #45](https://github.com/topcoder-platform/tc-deploy-scripts/pull/45) omits empty registration tags while preserving existing tags and checking read-back equality. AWS failures now identify the service and operation without exposing request data or raw CLI output. No IAM changes are required for this fix.
 
 The release retains [PR #44](https://github.com/topcoder-platform/tc-deploy-scripts/pull/44). The STS session permits the Inspector findings/coverage reads required by ECR enhanced scanning. The dev role and permissions boundary have already been updated through the private infrastructure repository. These two read-only actions are limited to the deployment region; AWS does not support repository-level restrictions for them, so they can read account-wide scan metadata in that region. Parameter Store, Secrets Manager, KMS decryption and role chaining remain explicitly denied. No Inspector configuration/write permissions are granted. Production provisioning remains separate.
 
