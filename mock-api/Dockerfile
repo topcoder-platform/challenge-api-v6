@@ -1,7 +1,12 @@
 ARG NODE_VERSION=26.5.1
+ARG ALPINE_VERSION=3.24
 ARG PNPM_VERSION=11.15.1
 
-FROM node:${NODE_VERSION}-alpine AS build
+FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS node-base
+
+FROM node-base AS build
+
+ARG PNPM_VERSION
 
 RUN apk upgrade --no-cache \
     && apk add --no-cache openssl \
@@ -26,11 +31,15 @@ RUN pnpm install --frozen-lockfile \
         node_modules/.pnpm-workspace-state-v1.json \
         node_modules/.pnpm/lock.yaml
 
-FROM alpine:3.24 AS runtime
+FROM alpine:${ALPINE_VERSION} AS runtime
 
+# Match the production image: use the build's Node binary instead of an APK
+# revision that Alpine may remove when it publishes a newer Node patch.
+COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 ARG NODE_VERSION
 RUN apk upgrade --no-cache \
-    && apk add --no-cache ca-certificates nodejs-current=${NODE_VERSION}-r0 openssl \
+    && apk add --no-cache ca-certificates libatomic libstdc++ openssl \
+    && test "$(node --version)" = "v${NODE_VERSION}" \
     && addgroup -S app \
     && adduser -S -D -u 10001 -G app app
 

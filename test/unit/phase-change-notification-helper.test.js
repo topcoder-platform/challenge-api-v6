@@ -4,7 +4,7 @@ const { expect } = require("chai");
 const constants = require("../../app-constants");
 
 const helperPath = require.resolve("../../src/common/helper");
-const busApiPath = require.resolve("topcoder-bus-api-wrapper");
+const busApiPath = require.resolve("tc-core-library-js");
 
 describe("phase change notification helper", () => {
   const settings = constants.PhaseChangeNotificationSettings.PHASE_CHANGE;
@@ -25,14 +25,14 @@ describe("phase change notification helper", () => {
       id: busApiPath,
       filename: busApiPath,
       loaded: true,
-      exports: () => ({
+      exports: { ...require(busApiPath), createM2MClient: () => ({ getMachineToken: async () => "test-token" }), createBusApiClient: () => ({
         postEvent: async (message) => {
           if (failingRecipients.has(message.payload.recipients[0])) {
             throw new Error("bus unavailable");
           }
           postedEvents.push(message);
         },
-      }),
+      }) },
     };
     delete require.cache[helperPath];
     helper = require(helperPath);

@@ -33,30 +33,36 @@ describe("Challenge route access", () => {
     });
   });
 
-  it("normalizes valid no-role scoped tokens as M2M callers", () => {
+  it("does not classify scope-only tokens as M2M callers", () => {
     const authUser = {
       scope: "read:challenges",
     };
 
-    expect(__testables.isM2MAuthUser(authUser)).to.equal(true);
+    expect(__testables.isM2MAuthUser(authUser)).to.equal(false);
     expect(
       __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
-    ).to.equal(true);
-    expect(authUser.isMachine).to.equal(true);
-    expect(authUser.scopes).to.deep.equal(["read:challenges"]);
+    ).to.equal(false);
+    expect(authUser.isMachine).to.equal(undefined);
+    expect(authUser.scopes).to.equal(undefined);
   });
 
-  it("normalizes valid no-role permission tokens as M2M callers", () => {
+  it("does not classify permission-only tokens as M2M callers", () => {
     const authUser = {
       permissions: ["read:challenges"],
     };
 
-    expect(__testables.isM2MAuthUser(authUser)).to.equal(true);
+    expect(__testables.isM2MAuthUser(authUser)).to.equal(false);
     expect(
       __testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser),
-    ).to.equal(true);
+    ).to.equal(false);
+    expect(authUser.isMachine).to.equal(undefined);
+    expect(authUser.scopes).to.equal(undefined);
+  });
+
+  it("retains the machine classification established by the shared verifier", () => {
+    const authUser = { isMachine: true, scopes: ["read:challenges"] };
+    expect(__testables.normalizeM2MAuthUser(routes["/challenges/:challengeId"].get, authUser)).to.equal(true);
     expect(authUser.isMachine).to.equal(true);
-    expect(authUser.scopes).to.deep.equal(["read:challenges"]);
   });
 
   it("does not normalize role-bearing users with scopes as M2M callers", () => {

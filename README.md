@@ -28,6 +28,22 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
 
+## Container build
+
+Run `./build.sh challenge-api-v6` to build the production image locally. The
+production and `mock-api/Dockerfile` images pin Node 26.5.1 and Alpine 3.24 for
+both stages. Build the mock with `docker build -f mock-api/Dockerfile -t challenge-api-v6-mock .`.
+The runtime copies
+the Node binary from the same official Node image used by the build stage,
+installs its runtime libraries, and checks the resulting Node version during
+the image build. This avoids depending on an old `nodejs-current` APK remaining
+available in Alpine's package repository. npm and pnpm remain in the build stage;
+the application runs as the existing non-root `app` user.
+
+When changing Node or Alpine, update the Dockerfile arguments together with
+`.nvmrc` and verify the full image build. `PNPM_VERSION` is explicitly passed
+into the build stage so the configured package-manager version is respected.
+
 ## Technology
 
 The API is written in TypeScript and runs on NestJS 11 with the Express adapter.
@@ -76,6 +92,10 @@ The following parameters can be set in config files or in env variables:
 - PORT: the server port, default is 3000
 - CORS_ALLOWED_ORIGINS: comma-separated exact HTTPS browser origins allowed to
   call the API; HTTP is accepted only for localhost development origins
+  (overrides the defaults). When overriding this value, include
+  `https://support.topcoder.com` in production and
+  `https://support.topcoder-dev.com` in development so the Support app can load
+  active challenges when opening a request.
 - AUTH_SECRET: The authorization secret used during token verification.
 - VALID_ISSUERS: The valid issuer of tokens.
 - AUTH0_URL: AUTH0 URL, used to get M2M token
@@ -375,3 +395,50 @@ Refer to the verification document `Verification.md`
   - Dev: `work-manager/config/constants/development.js`.
   - Local: `work-manager/config/constants/local.js`.
   - Prod: `work-manager/config/constants/production.js`.
+
+## Shared authentication and bus client (v6 refresh)
+
+This branch uses `tc-core-library-js` **4.0.0-rc.1**. Use its named
+`createJwtVerifier` / `createJwtAuthenticator`, `createM2MClient`, and
+`createBusApiClient` exports for shared authentication and bus API publishing.
+Service-specific roles, scopes, sessions and ownership checks remain in this service.
+The former bus wrapper dependency and local JWT cryptography must not be reintroduced.
+
+RSA verification requires an exact configured issuer and audience (`JWT_AUDIENCE`
+for client tokens, `AUTH0_AUDIENCE` for machine/API tokens, or this service's explicit
+issuer-policy settings). HMAC secrets must be at least 32 bytes; no default secret
+is supplied. Expiry is enforced. Machine identity comes from the shared verifier,
+not the presence of scopes. Supply real development credentials through the service's
+existing environment configuration before deployment.
+
+Bus publishers use `createBusApiClient(config).postEvent(event)` with the existing
+event envelope and optional key. Configure `BUSAPI_URL` for v6 and the existing
+OAuth credentials/token provider. The client uses bounded HTTPS requests and does
+not retry POSTs automatically. Application retry/outbox behavior remains local.
+
+See the [core migration guide](https://github.com/topcoder-platform/tc-core-library-js/blob/v4.0.0-rc.1/MIGRATION.md)
+for the API mapping, compatibility requirements, and rollout scope.
+
+The `@topcoder/forums-api-v6` database client dependency is pinned to its matching refresh commit so it cannot pull the legacy core or bus wrapper back into this dependency graph.
+
+## Shared JWT deployment configuration
+
+Development deployments load `/config/common/global-appvar` alongside the service's
+application parameters. JWT verification uses the same four settings as the other
+v6 services: `VALID_ISSUERS` (JSON array or comma-separated exact issuers),
+`AUTH_SECRET` (the existing shared HS256 signing key, at least 32 UTF-8 bytes),
+`JWT_AUDIENCE` (the browser application's audience), and `AUTH0_AUDIENCE` (the
+machine/API audience). RSA keys are fetched over HTTPS from the trusted issuer's
+`/.well-known/jwks.json`. Audience settings must reach the shared verifier; OAuth
+client IDs/secrets used for outbound requests are independent of JWT audiences.
+
+The development browser audience is `BXWXUWnilVUPdN01t2Se29Tw2ZYNGZvH`, and the
+machine audience is `https://m2m.topcoder-dev.com/`. Use the existing Parameter Store
+secret rather than creating a per-service key. Reconcile any service-specific
+overrides of these four keys with the global values before deployment. Parameters
+are consumed on deployment/task startup; changing Parameter Store alone does not
+replace running tasks. Existing role, scope, ownership and active-session checks
+continue after JWT verification.
+
+Protected and optional-authentication routes share one authenticator instance,
+including its bounded JWKS cache.

@@ -17,6 +17,8 @@
     "winston": "^3.18.3"
   },
   "overrides": {
-    "body-parser": "2.3.0"
+    "body-parser": "2.4.0",
+    "proxy-addr": "2.0.8",
+    "qs": "6.16.1"
   }
 }
