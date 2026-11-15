@@ -270,6 +270,7 @@ async function createData () {
   })
 
   adminToken = jwt.sign({
+    emailVerified: true,
     roles: [
       'Topcoder User',
       'Connect Support',
@@ -292,6 +293,7 @@ async function createData () {
   }, config.get('AUTH_SECRET')) 
   // adminToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlcyI6WyJUb3Bjb2RlciBVc2VyIiwiQ29ubmVjdCBTdXBwb3J0IiwiYWRtaW5pc3RyYXRvciIsInRlc3RSb2xlIiwiYWFhIiwidG9ueV90ZXN0XzEiLCJDb25uZWN0IE1hbmFnZXIiLCJDb25uZWN0IEFkbWluIiwiY29waWxvdCIsIkNvbm5lY3QgQ29waWxvdCBNYW5hZ2VyIl0sImlzcyI6Imh0dHBzOi8vYXBpLnRvcGNvZGVyLWRldi5jb20iLCJoYW5kbGUiOiJUb255SiIsImV4cCI6MTc4OTAwODYyMywidXNlcklkIjoiODU0Nzg5OSIsImlhdCI6MTU0OTc5MTYxMSwiZW1haWwiOiJ0amVmdHMrZml4QHRvcGNvZGVyLmNvbSIsImp0aSI6ImY5NGQxZTI2LTNkMGUtNDZjYS04MTE1LTg3NTQ1NDRhMDhmMSJ9.bMzIZ7YlDVhIauGtYTcL4bwW1eyYnOvqZUMb_ZNcX0E'
   userToken = jwt.sign({
+    emailVerified: true,
     roles: [
       'Topcoder User'
     ],
