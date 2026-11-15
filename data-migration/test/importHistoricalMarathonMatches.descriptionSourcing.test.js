@@ -78,4 +78,18 @@ describe("importHistoricalMarathonMatches description sourcing", () => {
       source: "legacy-component-text-markdown",
     });
   });
+
+  test.each(["tt", "code", "type", "b", "strong", "i", "em", "sup"])(
+    "keeps a separator when an empty %s element interrupts an HTML tag",
+    (tag) => {
+      const markdown = convertComponentXmlToMarkdown(
+        `<problem><statement>before &lt;${tag}></${tag}>iframe src='https://evil.example'&gt;after</statement></problem>`
+      );
+
+      expect(markdown).toContain("before");
+      expect(markdown).toContain("after");
+      expect(markdown).toContain("iframe src='https://evil.example'>after");
+      expect(markdown).not.toMatch(/<iframe\b/i);
+    }
+  );
 });

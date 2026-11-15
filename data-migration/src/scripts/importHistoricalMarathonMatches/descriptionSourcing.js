@@ -283,19 +283,19 @@ const convertRichTextSectionToMarkdown = (value) => {
     .replace(/<br\s*\/?>\s*(?:<\/br>)?/gi, "\n")
     .replace(/<(tt|code|type)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_, __, content) => {
       const inline = toInlineText(content);
-      return inline ? `\`${inline}\`` : "";
+      return inline ? `\`${inline}\`` : " ";
     })
     .replace(/<(b|strong)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_, __, content) => {
       const inline = toInlineText(content);
-      return inline ? `**${inline}**` : "";
+      return inline ? `**${inline}**` : " ";
     })
     .replace(/<(i|em)\b[^>]*>([\s\S]*?)<\/\1>/gi, (_, __, content) => {
       const inline = toInlineText(content);
-      return inline ? `*${inline}*` : "";
+      return inline ? `*${inline}*` : " ";
     })
     .replace(/<sup\b[^>]*>([\s\S]*?)<\/sup>/gi, (_, content) => {
       const inline = toInlineText(content);
-      return inline ? `^${inline}^` : "";
+      return inline ? `^${inline}^` : " ";
     })
     .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<\/li>/gi, "\n")
