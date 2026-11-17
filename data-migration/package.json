@@ -39,11 +39,11 @@
         "yarn": "1.22.19"
     },
     "overrides": {
-        "@hono/node-server": "2.1.3",
+        "@hono/node-server": "2.1.8",
         "deepmerge-ts": "8.0.0",
         "effect": "3.22.0",
         "glob": "14.0.2",
-        "hono": "4.13.11",
+        "hono": "4.13.18",
         "lodash": "4.18.1",
         "valibot": "1.4.2",
         "mysql2": "3.23.1",
