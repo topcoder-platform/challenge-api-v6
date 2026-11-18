@@ -13,7 +13,7 @@ allowBuilds:
 
 overrides:
   # Keep linked service packages on the same hardened JWT verifier as this API.
-  tc-core-library-js: github:topcoder-platform/tc-core-library-js#v4.0.0-rc.2
+  tc-core-library-js: https://codeload.github.com/topcoder-platform/tc-core-library-js/tar.gz/c2df92b2227089909ab6e229df0ec6b658bb431a
   'baseline-browser-mapping': 2.11.0
   'browserslist': 4.28.8
   'proxy-addr': 2.0.8
