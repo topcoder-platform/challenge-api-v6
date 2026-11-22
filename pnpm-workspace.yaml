@@ -12,6 +12,7 @@ allowBuilds:
   dtrace-provider: false
 
 overrides:
+  'effect@^3': 3.22.1
   # Keep linked service packages on the same hardened JWT verifier as this API.
   tc-core-library-js: github:topcoder-platform/tc-core-library-js#v4.0.0-rc.2
   'baseline-browser-mapping': 2.11.0

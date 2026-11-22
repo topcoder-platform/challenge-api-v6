@@ -41,7 +41,7 @@ FROM alpine:${ALPINE_VERSION} AS runtime
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/node
 ARG NODE_VERSION
 RUN apk upgrade --no-cache \
-    && apk add --no-cache 'zlib>=1.4-r0' ca-certificates libatomic libstdc++ openssl \
+    && apk add --no-cache 'libcrypto3>=3.5.9-r1' 'libssl3>=3.5.9-r1' 'zlib>=1.4-r0' ca-certificates libatomic libstdc++ openssl \
     && test "$(node --version)" = "v${NODE_VERSION}" \
     && addgroup -S app \
     && adduser -S -D -u 10001 -G app app
