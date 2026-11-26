@@ -1,3 +1,4 @@
+const { createPostgresAdapter } = require('../src/postgres-adapter');
 const { PrismaClient, ChallengeStatusEnum, DiscussionTypeEnum, PrizeSetTypeEnum, ChallengeTrackEnum } = require('@prisma/client');
 const { loadData } = require('../src/utils/dataLoader');
 const path = require('path');
@@ -7,7 +8,7 @@ const { parseStringArray } = require('../src/utils/helper');
 
 
 jest.setTimeout(30000); // Set timeout to 30 seconds
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: createPostgresAdapter(process.env.DATABASE_URL) });
 const statusMap = {
     "New": ChallengeStatusEnum.NEW,
     "Draft": ChallengeStatusEnum.DRAFT,

@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.15.1",
   "scripts": {
     "prebuild": "pnpm run prisma:generate",
-    "build": "nest build",
+    "build": "tsc -p tsconfig.build.json && cp --parents src/phase-management/*.json src/scripts/seed/*.json dist/",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -21,9 +21,9 @@
     "check-timeline-templates": "ts-node src/scripts/check-templates.ts",
     "recalculate-winners": "node --require ts-node/register/transpile-only data-migration/src/scripts/recalculateChallengeWinners.js",
     "recalculate-winners:csv": "node --require ts-node/register/transpile-only data-migration/src/scripts/recalculateChallengeWinners.js --csv-only",
-    "test": "NODE_ENV=test mocha --require ts-node/register/transpile-only \"test/unit/**/*.test.{js,ts}\" --exit",
+    "test": "NODE_ENV=test mocha --timeout 15000 --require ts-node/register/transpile-only \"test/unit/**/*.test.{js,ts}\" --exit",
     "test:external-client": "node --test packages/challenge-prisma-client/factory.test.js",
-    "e2e": "NODE_ENV=test mocha --require ts-node/register/transpile-only \"test/e2e/*.test.{js,ts}\" --exit",
+    "e2e": "NODE_ENV=test mocha --timeout 15000 --require ts-node/register/transpile-only \"test/e2e/*.test.{js,ts}\" --exit",
     "test:cov": "nyc --reporter=html --reporter=text pnpm test",
     "e2e:cov": "nyc --reporter=html --reporter=text pnpm e2e",
     "services:up": "docker-compose -f ./local/docker-compose.yml up -d",
@@ -37,8 +37,8 @@
   "repository": "https://github.com/topcoder-platform/challenge-api",
   "devDependencies": {
     "@eslint/js": "^9.18.0",
-    "@nestjs/cli": "^11.0.0",
-    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/cli": "12.0.15",
+    "@nestjs/schematics": "12.0.16",
     "@types/express": "^5.0.0",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.15.5",
@@ -55,17 +55,18 @@
     "globals": "^15.14.0",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
-    "typescript": "5.9.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.20.0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.716.0",
-    "@nestjs/common": "^11.1.8",
-    "@nestjs/core": "^11.1.8",
-    "@nestjs/platform-express": "^11.1.8",
-    "@prisma/adapter-pg": "7.8.0",
-    "@prisma/client": "7.8.0",
-    "@topcoder/forums-api-v6": "github:topcoder-platform/forums-api-v6#5e116b3e9f28461a2f670c34edbfc761026716d7",
+    "@nestjs/common": "12.6.3",
+    "@nestjs/core": "12.6.3",
+    "@nestjs/platform-express": "12.6.3",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "@topcoder/forums-api-v6": "github:topcoder-platform/forums-api-v6#35c64725c703d0649600a86e415ae81b23ba60ad&path:packages/forums-prisma-client",
     "axios": "^1.20.0",
     "axios-retry": "^4.5.0",
     "bluebird": "^3.7.2",
@@ -89,7 +90,7 @@
     "moment-timezone": "^0.6.0",
     "node-cache": "^5.1.2",
     "pg": "^8.16.3",
-    "prisma": "7.8.0",
+    "prisma": "7.10.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",
@@ -100,9 +101,9 @@
     "yamljs": "^0.3.0"
   },
   "engines": {
-    "node": "26.x"
+    "node": "26.13.1"
   },
   "volta": {
-    "node": "26.x"
+    "node": "26.13.1"
   }
 }

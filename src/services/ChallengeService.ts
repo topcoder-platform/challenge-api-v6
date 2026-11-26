@@ -1,7 +1,7 @@
 /**
  * This service provides operations of challenge.
  */
-import type { PrismaClient as ForumsPrismaClient } from "@topcoder/forums-api-v6/packages/forums-prisma-client";
+import type { PrismaClient as ForumsPrismaClient } from "@topcoder/forums-api-v6";
 
 const _ = require("lodash");
 const Joi = require("joi");

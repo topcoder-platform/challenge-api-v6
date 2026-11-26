@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const { createPostgresAdapter } = require('../postgres-adapter');
 "use strict";
 
 const path = require("path");
@@ -94,7 +95,7 @@ const run = async () => {
 
   if (shouldAttemptDatabaseDiscovery) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
-    prisma = new PrismaClient();
+    prisma = new PrismaClient({ adapter: createPostgresAdapter(process.env.DATABASE_URL) });
   }
   if (memberDbUrl) {
     const { PrismaClient } = requireFromRoot("@prisma/client");
@@ -103,11 +104,7 @@ const run = async () => {
       prisma && databaseUrl && memberDbUrl === databaseUrl
         ? prisma
         : new PrismaClient({
-          datasources: {
-            db: {
-              url: memberDbUrl,
-            },
-          },
+          adapter: createPostgresAdapter(memberDbUrl),
         });
   }
   if (options.apply && !reviewDbUrl) {
@@ -120,11 +117,7 @@ const run = async () => {
       prisma && databaseUrl && reviewDbUrl === databaseUrl
         ? prisma
         : new PrismaClient({
-          datasources: {
-            db: {
-              url: reviewDbUrl,
-            },
-          },
+          adapter: createPostgresAdapter(reviewDbUrl),
         });
   }
 

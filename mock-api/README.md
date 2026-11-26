@@ -2,7 +2,7 @@
 
 
 ## Dependencies
-- Node.js 26.5.1 (use the version in the repository's `.nvmrc`)
+- Node.js 26.13.1 (use the version in the repository's `.nvmrc`)
 - Root Challenge API dependencies installed with pnpm 11.15.1
 
 
