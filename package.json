@@ -66,7 +66,7 @@
     "@nestjs/platform-express": "12.6.3",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
-    "@topcoder/forums-api-v6": "github:topcoder-platform/forums-api-v6#35c64725c703d0649600a86e415ae81b23ba60ad&path:packages/forums-prisma-client",
+    "@topcoder/forums-api-v6": "github:topcoder-platform/forums-api-v6#7edbf544043b7970b65e8a1941a8e04589b18b21&path:packages/forums-prisma-client",
     "axios": "^1.20.0",
     "axios-retry": "^4.5.0",
     "bluebird": "^3.7.2",
