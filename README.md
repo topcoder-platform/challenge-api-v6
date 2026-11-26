@@ -31,7 +31,7 @@ Dev: [![CircleCI](https://circleci.com/gh/topcoder-platform/challenge-api/tree/d
 ## Container build
 
 Run `./build.sh challenge-api-v6` to build the production image locally. The
-production and `mock-api/Dockerfile` images pin Node 26.5.1 and Alpine 3.24 for
+production and `mock-api/Dockerfile` images pin Node 26.13.1 and Alpine 3.24 for
 both stages. Build the mock with `docker build -f mock-api/Dockerfile -t challenge-api-v6-mock .`.
 The runtime copies
 the Node binary from the same official Node image used by the build stage,
@@ -155,7 +155,7 @@ database operation or application startup.
 
 ## Local Deployment
 
-0. Select the repository's Node 26.5.1 version with
+0. Select the repository's Node 26.13.1 version with
 
    ```bash
    nvm use

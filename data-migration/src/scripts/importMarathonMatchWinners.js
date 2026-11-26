@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const { createPostgresAdapter } = require('../postgres-adapter');
 "use strict";
 
 /**
@@ -590,11 +591,11 @@ async function main() {
     return;
   }
 
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({ adapter: createPostgresAdapter(process.env.DATABASE_URL) });
   const memberClient =
     options.memberDbUrl === process.env.DATABASE_URL
       ? prisma
-      : new PrismaClient({ datasources: { db: { url: options.memberDbUrl } } });
+      : new PrismaClient({ adapter: createPostgresAdapter(options.memberDbUrl) });
 
   let rl = null;
   const getReadline = () => {

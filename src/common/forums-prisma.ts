@@ -1,7 +1,7 @@
 import {
   Prisma,
   PrismaClient,
-} from '@topcoder/forums-api-v6/packages/forums-prisma-client';
+} from '@topcoder/forums-api-v6';
 import { createPostgresAdapter } from './prisma-adapter';
 
 const config = require('config');

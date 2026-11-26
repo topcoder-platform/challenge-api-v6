@@ -20,8 +20,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@prisma/adapter-pg": "7.8.0",
-    "@prisma/client-runtime-utils": "7.8.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client-runtime-utils": "7.10.1",
     "pg": "8.16.3"
   }
 }

@@ -1,3 +1,4 @@
+const { createPostgresAdapter } = require('./postgres-adapter');
 const { PrismaClient, Prisma } = require('@prisma/client');
 const configModule = require('./config');
 const fs = require('fs');
@@ -44,11 +45,7 @@ class MigrationManager {
     };
     
     this.prisma = userConfig.prismaClient || new PrismaClient({
-      datasources: {
-        db: {
-          url: this.config.DATABASE_URL
-        }
-      }
+      adapter: createPostgresAdapter(this.config.DATABASE_URL)
     });
     
     this.dependencies = {};
