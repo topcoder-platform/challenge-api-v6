@@ -67,8 +67,8 @@ importers:
         specifier: 7.10.1
         version: 7.10.1(@typescript/typescript6@6.0.2)(prisma@7.10.1(@types/node@26.1.1)(@types/react@19.2.17)(@typescript/typescript6@6.0.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       '@topcoder/forums-api-v6':
-        specifier: github:topcoder-platform/forums-api-v6#35c64725c703d0649600a86e415ae81b23ba60ad&path:packages/forums-prisma-client
-        version: prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/35c64725c703d0649600a86e415ae81b23ba60ad#path:packages/forums-prisma-client
+        specifier: github:topcoder-platform/forums-api-v6#7edbf544043b7970b65e8a1941a8e04589b18b21&path:packages/forums-prisma-client
+        version: prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/7edbf544043b7970b65e8a1941a8e04589b18b21#path:packages/forums-prisma-client
       axios:
         specifier: 1.20.0
         version: 1.20.0(debug@4.4.3(supports-color@5.5.0))(supports-color@5.5.0)
@@ -3607,8 +3607,8 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/35c64725c703d0649600a86e415ae81b23ba60ad#path:packages/forums-prisma-client:
-    resolution: {gitHosted: true, integrity: sha512-RzY6dU9okzIsLI0HJAp4upTY2088x1lS+zFxYD1KwV8GUBNi/V9L526qAMb7rGOdmKcCaiEhH7E2QCnDQv2M4g==, path: packages/forums-prisma-client, tarball: https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/35c64725c703d0649600a86e415ae81b23ba60ad}
+  prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/7edbf544043b7970b65e8a1941a8e04589b18b21#path:packages/forums-prisma-client:
+    resolution: {gitHosted: true, integrity: sha512-w6kO+Kh/ZKvSyyTMjb8PazY/o51195dEE/mtGhy27GLA77tJ3tu99cfBxbbhAoSNVOnaZQYfSdwVf1auKM31SQ==, path: packages/forums-prisma-client, tarball: https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/7edbf544043b7970b65e8a1941a8e04589b18b21}
     version: 7.10.1
 
   prisma@7.10.1:
@@ -8361,7 +8361,7 @@ snapshots:
 
   prettier@3.7.4: {}
 
-  prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/35c64725c703d0649600a86e415ae81b23ba60ad#path:packages/forums-prisma-client:
+  prisma-client-8b145d316a03460c3572ad5af2d2d6742bd79e4fbf9dcb2b8e29bca301f35781@https://codeload.github.com/topcoder-platform/forums-api-v6/tar.gz/7edbf544043b7970b65e8a1941a8e04589b18b21#path:packages/forums-prisma-client:
     dependencies:
       '@prisma/client-runtime-utils': 7.10.1
 
