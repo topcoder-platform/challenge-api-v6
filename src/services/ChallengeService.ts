@@ -173,8 +173,9 @@ function ensureTerminalTestChallengeMetadataIsUnchanged(challenge, data) {
  *
  * @param {Array<String>} challengeIds challenge identifiers to count submissions for
  * @param {Array<String>} designChallengeIds Design challenge identifiers that count every upload
- * @returns {Promise<Map<String, { numOfSubmissions: Number, numOfCheckpointSubmissions: Number }>>}
- * counts keyed by challenge id
+ * The detail tab also needs all non-deleted uploads (including checkpoints)
+ * and their distinct authors, independent of track and latest-attempt status.
+ * @returns {Promise<Map>} counts keyed by challenge id
  * @throws {Error} when the review database query fails
  */
 async function getLatestSubmissionCountsByChallenge(challengeIds, designChallengeIds = []) {
@@ -209,6 +210,8 @@ async function getLatestSubmissionCountsByChallenge(challengeIds, designChalleng
   const rows = await reviewClient.$queryRaw`
     SELECT
       "challengeId",
+      COUNT(*) FILTER (WHERE "status" <> 'DELETED')::int AS "totalSubmissions",
+      COUNT(DISTINCT "memberId") FILTER (WHERE "status" <> 'DELETED')::int AS "numOfSubmitters",
       COUNT(DISTINCT CASE
         WHEN "type"::text = ${CHECKPOINT_SUBMISSION_TYPE} THEN ${submissionIdentity}
       END)::int AS "numOfCheckpointSubmissions",
@@ -223,6 +226,8 @@ async function getLatestSubmissionCountsByChallenge(challengeIds, designChalleng
 
   rows.forEach((row) => {
     countsByChallenge.set(_.toString(row.challengeId), {
+      totalSubmissions: row.totalSubmissions,
+      numOfSubmitters: row.numOfSubmitters,
       numOfSubmissions: Number(row.numOfSubmissions || 0),
       numOfCheckpointSubmissions: Number(row.numOfCheckpointSubmissions || 0),
     });
@@ -267,9 +272,13 @@ async function applyLatestSubmissionCounts(challenges) {
 
   records.forEach((challenge) => {
     const counts = countsByChallenge.get(_.toString(challenge.id)) || {
+      totalSubmissions: 0,
+      numOfSubmitters: 0,
       numOfSubmissions: 0,
       numOfCheckpointSubmissions: 0,
     };
+    challenge.totalSubmissions = counts.totalSubmissions;
+    challenge.numOfSubmitters = counts.numOfSubmitters;
     challenge.numOfSubmissions = counts.numOfSubmissions;
     challenge.numOfCheckpointSubmissions = counts.numOfCheckpointSubmissions;
   });

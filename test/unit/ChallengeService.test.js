@@ -954,6 +954,7 @@ describe("challenge service unit tests", () => {
           ('pm4831b1', '${challengeId}', 'member-2', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-03T00:00:00Z'),
           ('pm4831c1', '${challengeId}', 'member-3', 'CONTEST_SUBMISSION', 'ACTIVE', '2026-01-04T00:00:00Z'),
           ('pm4831d1', '${challengeId}', 'member-4', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-05T00:00:00Z'),
+          ('pm4831a3', '${challengeId}', 'member-1', 'CONTEST_SUBMISSION', 'DELETED', '2026-01-06T00:00:00Z'),
           ('pm4831d2', '${challengeId}', 'member-4', 'CHECKPOINT_SUBMISSION', 'ACTIVE', '2026-01-06T00:00:00Z')
       `);
 
@@ -961,6 +962,8 @@ describe("challenge service unit tests", () => {
         const detail = await service.getChallenge({ isMachine: true }, challengeId);
         should.equal(detail.numOfSubmissions, 3);
         should.equal(detail.numOfCheckpointSubmissions, 1);
+        should.equal(detail.totalSubmissions, 6);
+        should.equal(detail.numOfSubmitters, 4);
 
         const listing = await service.searchChallenges(
           { isMachine: true },
@@ -1010,6 +1013,8 @@ describe("challenge service unit tests", () => {
         const detail = await service.getChallenge({ isMachine: true }, challengeId);
         should.equal(detail.numOfSubmissions, 3);
         should.equal(detail.numOfCheckpointSubmissions, 2);
+        should.equal(detail.totalSubmissions, 5);
+        should.equal(detail.numOfSubmitters, 1);
 
         const listing = await service.searchChallenges(
           { isMachine: true },
