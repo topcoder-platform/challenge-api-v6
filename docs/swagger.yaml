@@ -2748,6 +2748,14 @@ definitions:
       numOfSubmissions:
         type: integer
         description: number of submissions
+      totalSubmissions:
+        type: integer
+        readOnly: true
+        description: Number of non-deleted member submissions across all submission types and attempts.
+      numOfSubmitters:
+        type: integer
+        readOnly: true
+        description: Number of distinct members with a non-deleted submission.
       numOfRegistrants:
         type: integer
         description: number of registrants
